@@ -29,7 +29,6 @@ class Haskell λ where
    type FieldDeclaration λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type FieldBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type FieldPattern λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type FunctionDeclaration λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type CaseAlternative λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
 
    type Constructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
@@ -82,8 +81,8 @@ class Haskell λ where
    constructorExpression :: s (Constructor l l d d) -> Expression λ l d s
    caseExpression :: s (Expression l l d d) -> [s (CaseAlternative l l d d)] -> Expression λ l d s
    doExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
-   infixExpression :: s (Expression l l d d) -> QualifiedName l -> s (Expression l l d d) -> Expression λ l d s
-   leftSectionExpression :: s (Expression l l d d) -> QualifiedName l -> Expression λ l d s
+   infixExpression :: s (Expression l l d d) -> QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
+   leftSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
    lambdaExpression :: [s (Pattern l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    letExpression :: [s (Declaration l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    listComprehension :: s (Expression l l d d) -> NonEmpty (s (Statement l l d d)) -> Expression λ l d s
@@ -92,7 +91,7 @@ class Haskell λ where
    negate :: Expression λ l d s
    recordExpression :: s (Expression l l d d) -> [s (FieldBinding l l d d)] -> Expression λ l d s
    referenceExpression :: QualifiedName λ -> Expression λ l d d
-   rightSectionExpression :: QualifiedName l -> s (Expression l l d d) -> Expression λ l d s
+   rightSectionExpression :: QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
    sequenceExpression :: s (Expression l l d d) -> Maybe (s (Expression l l d d)) -> Maybe (s (Expression l l d d))
                       -> Expression λ l d s
    tupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s
@@ -100,7 +99,7 @@ class Haskell λ where
 
    asPattern :: Name λ -> s (Pattern l l d d) -> Pattern λ l d s
    constructorPattern :: s (Constructor l l d d) -> [s (Pattern l l d d)] -> Pattern λ l d s
-   infixPattern :: s (Pattern l l d d) -> QualifiedName l -> s (Pattern l l d d) -> Pattern λ l d s
+   infixPattern :: s (Pattern l l d d) -> QualifiedName λ -> s (Pattern l l d d) -> Pattern λ l d s
    irrefutablePattern :: s (Pattern l l d d) -> Pattern λ l d s
    listPattern :: [s (Pattern l l d d)] -> Pattern λ l d s
    literalPattern :: s (Value l l d d) -> Pattern λ l d s
