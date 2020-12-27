@@ -383,7 +383,9 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
    expression = Abstract.typedExpression <$> wrap infixExpression <* delimiter "::" <*> wrap typeTerm
                 <|> infixExpression,
-   infixExpression = Abstract.infixExpression <$> wrap lExpression <*> qualifiedOperator <*> wrap infixExpression
+   infixExpression = Abstract.infixExpression <$> wrap lExpression
+                                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                                              <*> wrap infixExpression
                      <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> wrap infixExpression
                      <|> lExpression,
    lExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->" <*> wrap expression
@@ -407,8 +409,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                    <* delimiter ".." <*> optional (wrap expression)
                                <|> Abstract.listComprehension <$> wrap expression
                                    <* delimiter "|" <*> wrap statement `sepByNonEmpty` comma)
-                 <|> parens (Abstract.leftSectionExpression <$> wrap infixExpression <*> qualifiedOperator
-                             <|> Abstract.rightSectionExpression <$> qualifiedOperator <*> wrap infixExpression)
+                 <|> parens (Abstract.rightSectionExpression <$> wrap infixExpression <*> qualifiedOperator
+                             <|> Abstract.leftSectionExpression <$> qualifiedOperator <*> wrap infixExpression)
                  <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
                                                          <$> wrap (Abstract.constructorReference
                                                                    <$> qualifiedConstructor))
@@ -492,7 +494,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pattern,
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
                         <|> Abstract.unitConstructor <$ delimiter "(" <* delimiter ")"
-                        <|> Abstract.listConstructor <$ delimiter "[" <* delimiter "]"
+                        <|> Abstract.emptyListConstructor <$ delimiter "[" <* delimiter "]"
                         <|> Abstract.tupleConstructor . length <$> parens (some comma),
 
 -- pat 	→ 	lpat qconop pat 	    (infix constructor)
@@ -669,7 +671,7 @@ qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol)
 
 decimal, octal, hexadecimal, exponent :: Parser g Text Text
 integer :: LexicalParsing (Parser g Text) => Parser g Text Integer
-float :: LexicalParsing (Parser g Text) => Parser g Text Double
+float :: LexicalParsing (Parser g Text) => Parser g Text Rational
 decimal = takeCharsWhile1 Char.isDigit
 octal = takeCharsWhile1 Char.isOctDigit
 hexadecimal = takeCharsWhile1 Char.isHexDigit

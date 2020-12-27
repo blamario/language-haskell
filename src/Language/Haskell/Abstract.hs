@@ -81,8 +81,8 @@ class Haskell λ where
    constructorExpression :: s (Constructor l l d d) -> Expression λ l d s
    caseExpression :: s (Expression l l d d) -> [s (CaseAlternative l l d d)] -> Expression λ l d s
    doExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
-   infixExpression :: s (Expression l l d d) -> QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
-   leftSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
+   infixExpression :: s (Expression l l d d) -> s (Expression l l d d) -> s (Expression l l d d) -> Expression λ l d s
+   leftSectionExpression :: QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
    lambdaExpression :: [s (Pattern l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    letExpression :: [s (Declaration l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    listComprehension :: s (Expression l l d d) -> NonEmpty (s (Statement l l d d)) -> Expression λ l d s
@@ -91,7 +91,7 @@ class Haskell λ where
    negate :: Expression λ l d s
    recordExpression :: s (Expression l l d d) -> [s (FieldBinding l l d d)] -> Expression λ l d s
    referenceExpression :: QualifiedName λ -> Expression λ l d d
-   rightSectionExpression :: QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
+   rightSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
    sequenceExpression :: s (Expression l l d d) -> Maybe (s (Expression l l d d)) -> Maybe (s (Expression l l d d))
                       -> Expression λ l d s
    tupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s
@@ -118,7 +118,7 @@ class Haskell λ where
    typeVariable :: Name λ -> Type λ l d s
 
    constructorReference :: QualifiedName λ -> Constructor λ l d s
-   listConstructor :: Constructor λ l d s
+   emptyListConstructor :: Constructor λ l d s
    tupleConstructor :: Int -> Constructor λ l d s
    unitConstructor :: Constructor λ l d s
 
@@ -157,7 +157,7 @@ class Haskell λ where
    letStatement :: [s (Declaration l l d d)] -> Statement λ l d s
 
    charLiteral :: Char -> Value λ l d s
-   floatingLiteral :: Double -> Value λ l d s
+   floatingLiteral :: Rational -> Value λ l d s
    integerLiteral :: Integer -> Value λ l d s
    stringLiteral :: Text -> Value λ l d s
 

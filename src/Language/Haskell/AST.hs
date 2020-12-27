@@ -115,7 +115,7 @@ instance Abstract.Haskell Language where
    typeVariable = TypeVariable
 
    constructorReference = ConstructorReference
-   listConstructor = ListConstructor
+   emptyListConstructor = EmptyListConstructor
    tupleConstructor = TupleConstructor
    unitConstructor = UnitConstructor
 
@@ -204,8 +204,9 @@ data Expression λ l d s =
    | ConstructorExpression (s (Abstract.Constructor l l d d))
    | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
    | DoExpression (s (Abstract.GuardedExpression l l d d))
-   | InfixExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
-   | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
+   | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+                     (s (Abstract.Expression l l d d))
+   | LeftSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
    | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
@@ -214,7 +215,7 @@ data Expression λ l d s =
    | Negate
    | RecordExpression (s (Abstract.Expression l l d d)) [s (Abstract.FieldBinding l l d d)]
    | ReferenceExpression (Abstract.QualifiedName λ)
-   | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+   | RightSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
@@ -298,13 +299,13 @@ data CaseAlternative λ l d s =
 
 data Constructor λ l (d :: * -> *) (s :: * -> *) =
    ConstructorReference (QualifiedName λ)
-   | ListConstructor
+   | EmptyListConstructor
    | TupleConstructor Int
    | UnitConstructor
 
 data Value λ l (d :: * -> *) (s :: * -> *) =
    CharLiteral Char
-   | FloatingLiteral Double
+   | FloatingLiteral Rational
    | IntegerLiteral Integer
    | StringLiteral Text
 
