@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, OverloadedStrings, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
+{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 
 module Language.Haskell.Template where
 
@@ -8,16 +8,77 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
+import Text.PrettyPrint (render)
 
 import qualified Transformation
 
-import Language.Haskell.TH
 import Language.Haskell.AST
+import Language.Haskell.TH
 
-import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.TH.PprLib as Ppr
+import Language.Haskell.TH.PprLib ((<+>), ($$))
+import Language.Haskell.TH.Ppr as Ppr (ppr)
 
-data ToTemplate f = ToTemplate
+pprint :: PrettyViaTH a => a -> String
+pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
+
+class PrettyViaTH a where
+   prettyViaTH :: a -> Ppr.Doc
+
+instance PrettyViaTH a => PrettyViaTH (x, a) where
+   prettyViaTH = prettyViaTH . snd
+
+instance PrettyViaTH (Module Language Language ((,) x) ((,) x)) where
+   prettyViaTH (AnonymousModule imports declarations) =
+      Ppr.vcat ((prettyViaTH <$> imports) ++ (prettyViaTH <$> declarations))
+   prettyViaTH (NamedModule name exports imports declarations) =
+      Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
+      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language ((,) x) ((,) x))
+      where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH <$> xs))
+
+instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
+   prettyViaTH (ExportClassOrType name members) =
+      prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+   prettyViaTH (ExportVar name) = prettyViaTH name
+   prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
+
+instance PrettyViaTH (Import Language Language ((,) x) ((,) x)) where
+   prettyViaTH (Import qualified name alias imports) =
+      Ppr.text "import" <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
+      <+> maybe Ppr.empty ((Ppr.text "as" <+>) . prettyViaTH) alias
+      <+> maybe Ppr.empty prettyViaTH imports
+
+instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) where
+   prettyViaTH (ImportSpecification inclusive items) =
+      (if inclusive then id else (Ppr.text "hiding" <+>))
+      $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH <$> items)
+
+instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
+   prettyViaTH (ImportClassOrType name members) =
+      prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+   prettyViaTH (ImportVar name) = prettyViaTH name
+
+instance PrettyViaTH (Members Language) where
+   prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> names)
+   prettyViaTH AllMembers = Ppr.text ".."
+   
+instance PrettyViaTH (Declaration Language Language ((,) x) ((,) x)) where
+   prettyViaTH x = Ppr.vcat (Ppr.ppr <$> declarationTemplates snd x)
+
+instance PrettyViaTH (Expression Language Language ((,) x) ((,) x)) where
+   prettyViaTH x = Ppr.ppr (expressionTemplate snd x)
+
+instance PrettyViaTH (ModuleName l) where
+   prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ nameText <$> toList mods)
+
+instance PrettyViaTH (AST.Name l) where
+   prettyViaTH x = Ppr.pprName (nameTemplate x)
+
+instance PrettyViaTH (QualifiedName l) where
+   prettyViaTH x = Ppr.pprName (qnameTemplate x)
+
 
 expressionTemplate :: (forall a. f a -> a) -> Expression Language Language f f -> Exp
 expressionTemplate get (ApplyExpression f x) = AppE (expressionTemplate get $ get f) (expressionTemplate get $ get x)
@@ -204,10 +265,10 @@ nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
    | not (Text.null local), c <- Text.head local, Char.isUpper c || c == ':' = ConE (qnameTemplate name)
    | otherwise = VarE (qnameTemplate name)
 
-nameTemplate :: AST.Name Language -> TH.Name
+nameTemplate :: AST.Name l -> TH.Name
 nameTemplate (Name s) = mkName (unpack s)
 
-qnameTemplate :: AST.QualifiedName Language -> TH.Name
+qnameTemplate :: AST.QualifiedName l -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])

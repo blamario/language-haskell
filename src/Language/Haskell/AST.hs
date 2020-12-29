@@ -54,8 +54,8 @@ instance Abstract.Haskell Language where
    reExportModule = ReExportModule
 
    importDeclaration = Import
-   excludedImports = ImportSpecification True
-   includedImports = ImportSpecification False
+   excludedImports = ImportSpecification False
+   includedImports = ImportSpecification True
    importClassOrType = ImportClassOrType
    importVar = ImportVar
 
