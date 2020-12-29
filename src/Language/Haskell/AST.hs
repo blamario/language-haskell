@@ -272,6 +272,7 @@ data ImportSpecification λ l d s = ImportSpecification Bool [s (Abstract.Import
 data ImportItem λ l (d :: * -> *) (s :: * -> *) =
    ImportClassOrType (Name λ) (Maybe (Members λ))
    | ImportVar (Name λ)
+   deriving (Eq, Show)
 
 data Export λ l (d :: * -> *) (s :: * -> *) =
    ExportClassOrType (QualifiedName λ) (Maybe (Members λ))
@@ -285,10 +286,11 @@ data Context λ l d s =
    | NoContext
 
 data DataConstructor λ l d s =
-   Constructor (Name λ) ([s (Abstract.Type l l d d)])
-   | RecordConstructor (Name λ) ([s (Abstract.FieldDeclaration l l d d)])
+   Constructor (Name λ) [s (Abstract.Type l l d d)]
+   | RecordConstructor (Name λ) [s (Abstract.FieldDeclaration l l d d)]
 
 data DerivingClause λ l (d :: * -> *) (s :: * -> *) = SimpleDerive (QualifiedName λ)
+                                                      deriving (Eq, Show)
 
 data FieldDeclaration λ l d s = ConstructorFields (NonEmpty (Name λ)) (s (Abstract.Type l l d d))
 data FieldBinding λ l d s = FieldBinding (QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -302,23 +304,26 @@ data Constructor λ l (d :: * -> *) (s :: * -> *) =
    | EmptyListConstructor
    | TupleConstructor Int
    | UnitConstructor
+   deriving (Eq, Show)
 
 data Value λ l (d :: * -> *) (s :: * -> *) =
    CharLiteral Char
    | FloatingLiteral Rational
    | IntegerLiteral Integer
    | StringLiteral Text
+   deriving (Eq, Show)
 
-data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall
-data CallSafety λ = SafeCall | UnsafeCall
+data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall deriving (Eq, Show)
+data CallSafety λ = SafeCall | UnsafeCall deriving (Eq, Show)
 
-data Fixity λ = InfixNonAssociative | InfixLeft | InfixRight
+data Fixity λ = InfixNonAssociative | InfixLeft | InfixRight deriving (Eq, Show)
 
 data Members λ = AllMembers
                | MemberList [Name λ]
+               deriving (Eq, Show)
 
-newtype Name λ = Name Text
+newtype Name λ = Name Text deriving (Eq, Show)
 
-newtype ModuleName λ = ModuleName (NonEmpty (Name λ))
+newtype ModuleName λ = ModuleName (NonEmpty (Name λ)) deriving (Eq, Show)
 
-data QualifiedName λ = QualifiedName (Maybe (ModuleName λ)) (Name λ)
+data QualifiedName λ = QualifiedName (Maybe (ModuleName λ)) (Name λ) deriving (Eq, Show)
