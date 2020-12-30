@@ -1,13 +1,17 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, OverloadedStrings,
-             StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
+             StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Haskell.AST where
 
+import Control.Monad (forM)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
 import qualified Language.Haskell.Abstract as Abstract
+import qualified Rank2.TH
+import qualified Transformation.Deep.TH
+import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
 
@@ -485,3 +489,11 @@ deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ)) => Ty
 deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ), Data λ) => Data (QualifiedName λ)
 deriving instance (Show (Abstract.ModuleName λ), Show (Abstract.Name λ)) => Show (QualifiedName λ)
 
+$(concat <$>
+  (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
+         Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
+   \derive-> mconcat <$> mapM derive
+             [''Module, ''Export, ''Import, ''ImportItem, ''ImportSpecification,
+              ''Declaration, ''DerivingClause, ''EquationLHS, ''EquationRHS, ''TypeLHS, ''Type, ''Context,
+              ''Expression, ''Value, ''Pattern, ''GuardedExpression, ''Statement,
+              ''FieldBinding, ''FieldDeclaration, ''FieldPattern, ''CaseAlternative, ''Constructor, ''DataConstructor]))

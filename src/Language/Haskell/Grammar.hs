@@ -21,8 +21,10 @@ import Text.Parser.Token (braces, brackets, comma, parens, semi)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Rank2.TH
 
 import qualified Language.Haskell.Abstract as Abstract
+import qualified Language.Haskell.AST as AST (Language)
 
 import Prelude hiding (exponent)
 
@@ -38,7 +40,7 @@ data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
 data HaskellGrammar l f p = HaskellGrammar {
-   haskellModule :: p (Abstract.Module l l f f),
+   haskellModule :: p (f (Abstract.Module l l f f)),
    body :: p ([f (Abstract.Import l l f f)], [f (Abstract.Declaration l l f f)]),
    imports :: p [f (Abstract.Import l l f f)],
    exports :: p [f (Abstract.Export l l f f)],
@@ -87,11 +89,11 @@ data HaskellGrammar l f p = HaskellGrammar {
    rhs :: p (Abstract.EquationRHS l l f f),
    guards :: p (NonEmpty (f (Abstract.Statement l l f f))),
    guard :: p (Abstract.Statement l l f f),
-   expression :: p (Abstract.Expression l l f f),
-   infixExpression :: p (Abstract.Expression l l f f),
-   lExpression :: p (Abstract.Expression l l f f),
-   fExpression :: p (Abstract.Expression l l f f),
-   aExpression :: p (Abstract.Expression l l f f),
+   expression :: p (f (Abstract.Expression l l f f)),
+   infixExpression :: p (f (Abstract.Expression l l f f)),
+   lExpression :: p (f (Abstract.Expression l l f f)),
+   fExpression :: p (f (Abstract.Expression l l f f)),
+   aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
    statement :: p (Abstract.Statement l l f f),
@@ -113,14 +115,18 @@ data HaskellGrammar l f p = HaskellGrammar {
    qualifiedOperator :: p (Abstract.QualifiedName l),
    literal :: p (Abstract.Value l l f f)
 }
-  
+
+grammar2010 :: Grammar (HaskellGrammar AST.Language NodeWrap) Parser Text
+grammar2010 = fixGrammar grammar
    
 grammar :: forall l g. (Abstract.Haskell l, LexicalParsing (Parser g Text))
         => GrammarBuilder (HaskellGrammar l NodeWrap) g Parser Text
 grammar g@HaskellGrammar{..} = HaskellGrammar{
-   haskellModule = uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId <*> optional exports
-                                <|> pure Abstract.anonymousModule)
-                   <* keyword "where" <*> body,
+   haskellModule = wrap (whiteSpace
+                         *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
+                                                               <*> optional exports <* keyword "where"
+                                          <|> pure Abstract.anonymousModule)
+                             <*> body)),
    body = braces ((,) <$> imports <* semi <*> topLevelDeclarations
                   <|> (,[]) <$> imports
                   <|> ([],) <$> topLevelDeclarations),
@@ -131,7 +137,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	{ impdecls }
 -- 	| 	{ topdecls }
 
-   imports = wrap importDeclaration `sepBy` some semi,
+   imports = wrap importDeclaration `startSepEndBy` semi,
    exports = parens (wrap export `sepBy` comma),
    export = Abstract.exportVar <$> qualifiedVariable
             <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
@@ -176,11 +182,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
       <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
-          <*> (keyword "where" *> braces (wrap inClassDeclaration `sepBy` some semi) <|> pure [])
+          <*> (keyword "where" *> braces (wrap inClassDeclaration `startSepEndBy` semi) <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
           <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
-          <*> (keyword "where" *> braces (wrap inInstanceDeclaration `sepBy` some semi) <|> pure [])
+          <*> (keyword "where" *> braces (wrap inInstanceDeclaration `startSepEndBy` semi) <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
       <|> foreignDeclaration
       <|> declaration,
@@ -195,7 +201,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	foreign fdecl
 -- 	| 	decl
 
-   declarations = braces (wrap declaration `sepBy` some semi),
+   declarations = braces (wrap declaration `startSepEndBy` semi),
    declaration = generalDeclaration
                  <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                   <*> wrap rhs <*> whereClauses,
@@ -362,13 +368,13 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    functionLHS = Abstract.prefixLHS <$> wrap (Abstract.variableLHS <$> variable <|> parens functionLHS)
                                     <*> (NonEmpty.fromList <$> some (wrap aPattern))
                  <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern,
-   rhs = Abstract.normalRHS <$ delimiter "=" <*> wrap expression
+   rhs = Abstract.normalRHS <$ delimiter "=" <*> expression
          <|> Abstract.guardedRHS . NonEmpty.fromList
-             <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> wrap expression),
+             <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
    guards = delimiter "|" *> wrap guard `sepByNonEmpty` comma,
-   guard = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> wrap infixExpression
+   guard = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> infixExpression
            <|> Abstract.letStatement <$ keyword "let" <*> declarations
-           <|> Abstract.expressionStatement <$> wrap infixExpression,
+           <|> Abstract.expressionStatement <$> infixExpression,
 
 -- funlhs 	→ 	var apat { apat }
 -- 	| 	pat varop pat
@@ -381,52 +387,53 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	let decls 	    (local declaration)
 -- 	| 	infixexp 	    (boolean guard)
 
-   expression = Abstract.typedExpression <$> wrap infixExpression <* delimiter "::" <*> wrap typeTerm
+   expression = wrap (Abstract.typedExpression <$> infixExpression <* delimiter "::" <*> wrap typeTerm)
                 <|> infixExpression,
-   infixExpression = Abstract.infixExpression <$> wrap lExpression
-                                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                                              <*> wrap infixExpression
-                     <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> wrap infixExpression
+   infixExpression = wrap (Abstract.infixExpression <$> lExpression
+                                                    <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                                                    <*> infixExpression
+                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
                      <|> lExpression,
-   lExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->" <*> wrap expression
-                 <|> Abstract.letExpression <$ keyword "let" <*> declarations <* delimiter "in" <*> wrap expression
-                 <|> Abstract.conditionalExpression <$ keyword "if" <*> wrap expression <* optional semi
-                     <* delimiter "then" <*> wrap expression <* optional semi
-                     <* delimiter "else" <*> wrap expression
-                 <|> Abstract.caseExpression <$ keyword "case" <*> wrap expression <* delimiter "of"
-                     <*> braces (wrap alternative `sepBy1` semi)
-                 <|> Abstract.doExpression <$ keyword "do" <*> braces (wrap statements)
+   lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->"
+                                                 <*> expression
+                       <|> Abstract.letExpression <$ keyword "let" <*> declarations <* delimiter "in" <*> expression
+                       <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
+                                                          <* keyword "then" <*> expression <* optional semi
+                                                          <* keyword "else" <*> expression
+                        <|> Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
+                                                    <*> braces (wrap alternative `sepBy1` semi)
+                        <|> Abstract.doExpression <$ keyword "do" <*> braces (wrap statements))
                  <|> fExpression,
-   fExpression = Abstract.applyExpression <$> wrap fExpression <*> wrap aExpression <|> aExpression,
-   aExpression = Abstract.referenceExpression <$> qualifiedVariable
-                 <|> Abstract.constructorExpression <$> wrap generalConstructor
-                 <|> Abstract.literalExpression <$> wrap literal
-                 <|> parens expression
-                 <|> Abstract.tupleExpression <$> parens ((:|) <$> wrap expression <*> some (comma *> wrap expression))
-                 <|> brackets (Abstract.listExpression <$> (wrap expression `sepBy1` comma)
-                               <|> Abstract.sequenceExpression <$> wrap expression
-                                   <*> optional (comma *> wrap expression)
-                                   <* delimiter ".." <*> optional (wrap expression)
-                               <|> Abstract.listComprehension <$> wrap expression
-                                   <* delimiter "|" <*> wrap statement `sepByNonEmpty` comma)
-                 <|> parens (Abstract.rightSectionExpression <$> wrap infixExpression <*> qualifiedOperator
-                             <|> Abstract.leftSectionExpression <$> qualifiedOperator <*> wrap infixExpression)
-                 <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
-                                                         <$> wrap (Abstract.constructorReference
-                                                                   <$> qualifiedConstructor))
-                                               <*> braces (pure [])
-                 <|> Abstract.recordExpression <$> wrap aExpression <*> braces (wrap fieldBinding `sepBy1` comma),
+   fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
+   aExpression = wrap (Abstract.referenceExpression <$> qualifiedVariable
+                       <|> Abstract.constructorExpression <$> wrap generalConstructor
+                       <|> Abstract.literalExpression <$> wrap literal
+                       <|> Abstract.tupleExpression <$> parens ((:|) <$> expression <*> some (comma *> expression))
+                       <|> brackets (Abstract.listExpression <$> (expression `sepBy1` comma)
+                                     <|> Abstract.sequenceExpression <$> expression
+                                         <*> optional (comma *> expression)
+                                         <* delimiter ".." <*> optional (expression)
+                                     <|> Abstract.listComprehension <$> expression
+                                         <* delimiter "|" <*> wrap statement `sepByNonEmpty` comma)
+                       <|> parens (Abstract.rightSectionExpression <$> infixExpression <*> qualifiedOperator
+                                   <|> Abstract.leftSectionExpression <$> qualifiedOperator <*> infixExpression)
+                       <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
+                                                               <$> wrap (Abstract.constructorReference
+                                                                         <$> qualifiedConstructor))
+                                                     <*> braces (pure [])
+                       <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma))
+                 <|> parens expression,
    alternative = Abstract.caseAlternative <$> wrap pattern
-                 <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> wrap expression
+                 <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList
                                <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "->"
-                                                                                    <*> wrap expression))
+                                                                                    <*> expression))
                  <*> whereClauses,
-   statements = Abstract.guardedExpression <$> many (wrap statement <* some semi) <*> wrap expression <* optional semi,
-   statement = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> wrap expression
+   statements = Abstract.guardedExpression <$> many (wrap statement <* some semi) <*> expression <* optional semi,
+   statement = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
                <|> Abstract.letStatement <$ keyword "let" <*> declarations
-               <|> Abstract.expressionStatement <$> wrap expression,
-   fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> wrap expression,
+               <|> Abstract.expressionStatement <$> expression,
+   fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> expression,
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
 -- 	| 	infixexp
@@ -821,3 +828,12 @@ comment = try (string "{-"
                <> string "-}"
                <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile (/= '\n'))
    where isCommentChar c = c /= '-' && c /= '{'
+
+-- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
+-- @sep@.
+startSepEndBy :: Alternative m => m a -> m sep -> m [a]
+startSepEndBy p sep = (:) <$> p <*> (sep *> startSepEndBy p sep <|> pure [])
+                      <|> sep *> startSepEndBy p sep
+                      <|> pure []
+
+$(Rank2.TH.deriveAll ''HaskellGrammar)
