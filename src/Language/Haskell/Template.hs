@@ -70,13 +70,13 @@ instance PrettyViaTH (Declaration Language Language ((,) x) ((,) x)) where
 instance PrettyViaTH (Expression Language Language ((,) x) ((,) x)) where
    prettyViaTH x = Ppr.ppr (expressionTemplate snd x)
 
-instance PrettyViaTH (ModuleName l) where
+instance PrettyViaTH (ModuleName Language) where
    prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ nameText <$> toList mods)
 
-instance PrettyViaTH (AST.Name l) where
+instance PrettyViaTH (AST.Name Language) where
    prettyViaTH x = Ppr.pprName (nameTemplate x)
 
-instance PrettyViaTH (QualifiedName l) where
+instance PrettyViaTH (QualifiedName Language) where
    prettyViaTH x = Ppr.pprName (qnameTemplate x)
 
 
@@ -265,10 +265,10 @@ nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
    | not (Text.null local), c <- Text.head local, Char.isUpper c || c == ':' = ConE (qnameTemplate name)
    | otherwise = VarE (qnameTemplate name)
 
-nameTemplate :: AST.Name l -> TH.Name
+nameTemplate :: AST.Name Language -> TH.Name
 nameTemplate (Name s) = mkName (unpack s)
 
-qnameTemplate :: AST.QualifiedName l -> TH.Name
+qnameTemplate :: AST.QualifiedName Language -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])

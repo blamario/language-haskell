@@ -1,13 +1,15 @@
-{-# Language OverloadedStrings, TypeFamilies #-}
+{-# Language DeriveDataTypeable, FlexibleContexts, OverloadedStrings,
+             StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 
 module Language.Haskell.AST where
 
 import Data.List.NonEmpty (NonEmpty)
+import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
 import qualified Language.Haskell.Abstract as Abstract
 
-data Language = Language
+data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -175,7 +177,7 @@ instance Abstract.Haskell Language where
    unsafeCall = UnsafeCall
 
 data Module λ l d s =
-   NamedModule (ModuleName λ) (Maybe [s (Abstract.Export l l d d)]) [s (Abstract.Import l l d d)]
+   NamedModule (Abstract.ModuleName λ) (Maybe [s (Abstract.Export l l d d)]) [s (Abstract.Import l l d d)]
                [s (Abstract.Declaration l l d d)]
    | AnonymousModule [s (Abstract.Import l l d d)] [s (Abstract.Declaration l l d d)]
 
@@ -250,7 +252,7 @@ data Pattern λ l d s =
    | IrrefutablePattern (s (Abstract.Pattern l l d d))
    | ListPattern [s (Abstract.Pattern l l d d)]
    | LiteralPattern (s (Abstract.Value l l d d))
-   | RecordPattern (QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
@@ -261,69 +263,225 @@ data Statement λ l d s =
    | LetStatement [s (Abstract.Declaration l l d d)]
 
 data TypeLHS λ l d s =
-   GeneralTypeLHS (QualifiedName λ) (s (Abstract.Type l l d d))
-   | SimpleTypeLHS (Name λ) [Name λ]
+   GeneralTypeLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
 
-data Import λ l d s = Import Bool (ModuleName λ) (Maybe (ModuleName λ))
+data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
 data ImportSpecification λ l d s = ImportSpecification Bool [s (Abstract.ImportItem l l d d)]
 
 data ImportItem λ l (d :: * -> *) (s :: * -> *) =
-   ImportClassOrType (Name λ) (Maybe (Members λ))
-   | ImportVar (Name λ)
-   deriving (Eq, Show)
+   ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
+   | ImportVar (Abstract.Name λ)
 
 data Export λ l (d :: * -> *) (s :: * -> *) =
-   ExportClassOrType (QualifiedName λ) (Maybe (Members λ))
-   | ExportVar (QualifiedName λ)
-   | ReExportModule (ModuleName λ)
+   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (Abstract.Members λ))
+   | ExportVar (Abstract.QualifiedName λ)
+   | ReExportModule (Abstract.ModuleName λ)
 
 data Context λ l d s =
-   SimpleConstraint (QualifiedName λ) (Name λ)
-   | ClassConstraint (QualifiedName λ) (s (Abstract.Type l l d d))
+   SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
+   | ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
    | NoContext
 
 data DataConstructor λ l d s =
-   Constructor (Name λ) [s (Abstract.Type l l d d)]
-   | RecordConstructor (Name λ) [s (Abstract.FieldDeclaration l l d d)]
+   Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
+   | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
 
-data DerivingClause λ l (d :: * -> *) (s :: * -> *) = SimpleDerive (QualifiedName λ)
-                                                      deriving (Eq, Show)
+data DerivingClause λ l (d :: * -> *) (s :: * -> *) = SimpleDerive (Abstract.QualifiedName λ)
 
-data FieldDeclaration λ l d s = ConstructorFields (NonEmpty (Name λ)) (s (Abstract.Type l l d d))
-data FieldBinding λ l d s = FieldBinding (QualifiedName λ) (s (Abstract.Expression l l d d))
-data FieldPattern λ l d s = FieldPattern (QualifiedName λ) (s (Abstract.Pattern l l d d))
+data FieldDeclaration λ l d s = ConstructorFields (NonEmpty (Abstract.Name λ)) (s (Abstract.Type l l d d))
+data FieldBinding λ l d s = FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+data FieldPattern λ l d s = FieldPattern (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
 
 data CaseAlternative λ l d s =
    CaseAlternative (s (Abstract.Pattern l l d d)) (s (Abstract.EquationRHS l l d d)) [s (Abstract.Declaration l l d d)]
 
 data Constructor λ l (d :: * -> *) (s :: * -> *) =
-   ConstructorReference (QualifiedName λ)
+   ConstructorReference (Abstract.QualifiedName λ)
    | EmptyListConstructor
    | TupleConstructor Int
    | UnitConstructor
-   deriving (Eq, Show)
 
 data Value λ l (d :: * -> *) (s :: * -> *) =
    CharLiteral Char
    | FloatingLiteral Rational
    | IntegerLiteral Integer
    | StringLiteral Text
-   deriving (Eq, Show)
+   deriving (Data, Eq, Show)
 
-data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall deriving (Eq, Show)
-data CallSafety λ = SafeCall | UnsafeCall deriving (Eq, Show)
+deriving instance Typeable (Module λ l d s)
+deriving instance (Data (s (Abstract.Declaration l l d d)),
+                   Data (s (Abstract.Export l l d d)), Data (s (Abstract.Import l l d d)),
+                   Data (Abstract.ModuleName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Module λ l d s)
+deriving instance (Show (s (Abstract.Declaration l l d d)),
+                   Show (s (Abstract.Export l l d d)), Show (s (Abstract.Import l l d d)),
+                   Show (Abstract.ModuleName λ)) => Show (Module λ l d s)
 
-data Fixity λ = InfixNonAssociative | InfixLeft | InfixRight deriving (Eq, Show)
+deriving instance Typeable (Declaration λ l d s)
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
+                   Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
+                   Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+                   Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
+                   Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
+                   Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
+                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+                   Show (Abstract.Name λ)) => Show (Declaration λ l d s)
+
+deriving instance Typeable (Expression λ l d s)
+deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
+                   Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
+                   Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
+deriving instance (Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
+                   Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
+                   Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
+                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
+                   Show (Abstract.QualifiedName λ)) => Show (Expression λ l d s)
+
+deriving instance Typeable (Type λ l d s)
+deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
+deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.Name λ)) => Show (Type λ l d s)
+
+deriving instance Typeable (EquationLHS λ l d s)
+deriving instance (Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.Pattern l l d d)), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (EquationLHS λ l d s)
+deriving instance (Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.Pattern l l d d)),
+                   Show (Abstract.Name λ)) => Show (EquationLHS λ l d s)
+
+deriving instance Typeable (EquationRHS λ l d s)
+deriving instance (Data (s (Abstract.GuardedExpression l l d d)), Data (s (Abstract.Expression l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (EquationRHS λ l d s)
+deriving instance (Show (s (Abstract.GuardedExpression l l d d)), Show (s (Abstract.Expression l l d d))) =>
+                  Show (EquationRHS λ l d s)
+
+deriving instance Typeable (GuardedExpression λ l d s)
+deriving instance (Data (s (Abstract.Statement l l d d)), Data (s (Abstract.Expression l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (GuardedExpression λ l d s)
+deriving instance (Show (s (Abstract.Statement l l d d)), Show (s (Abstract.Expression l l d d))) =>
+                  Show (GuardedExpression λ l d s)
+
+deriving instance Typeable (Export λ l d s)
+deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Export λ l d s)
+deriving instance (Show (Abstract.Members λ),
+                   Show (Abstract.ModuleName λ), Show (Abstract.QualifiedName λ)) => Show (Export λ l d s)
+
+deriving instance Typeable (DerivingClause λ l d s)
+deriving instance (Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (DerivingClause λ l d s)
+deriving instance Show (Abstract.QualifiedName λ) => Show (DerivingClause λ l d s)
+
+deriving instance Typeable (Pattern λ l d s)
+deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Value l l d d)),
+                   Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
+deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.FieldPattern l l d d)),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Value l l d d)),
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
+
+deriving instance Typeable (Statement λ l d s)
+deriving instance (Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.Expression l l d d)),
+                   Data (s (Abstract.Pattern l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Statement λ l d s)
+deriving instance (Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.Expression l l d d)),
+                   Show (s (Abstract.Pattern l l d d))) => Show (Statement λ l d s)
+
+deriving instance Typeable (TypeLHS λ l d s)
+deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
+deriving instance (Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
+
+deriving instance Typeable (Import λ l d s)
+deriving instance (Data (s (Abstract.ImportSpecification l l d d)), Data (Abstract.ModuleName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Import λ l d s)
+deriving instance (Show (s (Abstract.ImportSpecification l l d d)), Show (Abstract.ModuleName λ)) =>
+                  Show (Import λ l d s)
+
+deriving instance Typeable (ImportSpecification λ l d s)
+deriving instance (Data (s (Abstract.ImportItem l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (ImportSpecification λ l d s)
+deriving instance (Show (s (Abstract.ImportItem l l d d))) => Show (ImportSpecification λ l d s)
+
+deriving instance Typeable (ImportItem λ l d s)
+deriving instance (Data (Abstract.Members λ), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (ImportItem λ l d s)
+deriving instance (Show (Abstract.Members λ), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
+
+deriving instance Typeable (Context λ l d s)
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Context λ l d s)
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Context λ l d s)
+
+deriving instance Typeable (DataConstructor λ l d s)
+deriving instance (Data (s (Abstract.FieldDeclaration l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (DataConstructor λ l d s)
+deriving instance (Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (DataConstructor λ l d s)
+
+deriving instance Typeable (FieldBinding λ l d s)
+deriving instance (Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldBinding λ l d s)
+deriving instance (Show (s (Abstract.Expression l l d d)), Show (Abstract.QualifiedName λ)) =>
+                  Show (FieldBinding λ l d s)
+
+deriving instance Typeable (FieldDeclaration λ l d s)
+deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldDeclaration λ l d s)
+deriving instance (Show (s (Abstract.Type l l d d)), Show (Abstract.Name λ)) => Show (FieldDeclaration λ l d s)
+
+deriving instance Typeable (FieldPattern λ l d s)
+deriving instance (Data (s (Abstract.Pattern l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldPattern λ l d s)
+deriving instance (Show (s (Abstract.Pattern l l d d)), Show (Abstract.QualifiedName λ)) => Show (FieldPattern λ l d s)
+
+deriving instance Typeable (CaseAlternative λ l d s)
+deriving instance (Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+                   Data (s (Abstract.Declaration l l d d)),
+                   Typeable λ, Typeable l, Typeable d, Typeable s) => Data (CaseAlternative λ l d s)
+deriving instance (Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.EquationRHS l l d d)),
+                   Show (s (Abstract.Declaration l l d d))) => Show (CaseAlternative λ l d s)
+
+deriving instance Data (Abstract.QualifiedName λ) => Typeable (Constructor λ l d s)
+deriving instance (Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Constructor λ l d s)
+deriving instance Show (Abstract.QualifiedName λ) => Show (Constructor λ l d s)
+
+data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall deriving (Data, Eq, Show)
+data CallSafety λ = SafeCall | UnsafeCall deriving (Data, Eq, Show)
+
+data Fixity λ = InfixNonAssociative | InfixLeft | InfixRight deriving (Data, Eq, Show)
 
 data Members λ = AllMembers
                | MemberList [Name λ]
-               deriving (Eq, Show)
+               deriving (Data, Eq, Show)
 
-newtype Name λ = Name Text deriving (Eq, Show)
+newtype Name λ = Name Text deriving (Data, Eq, Show)
 
-newtype ModuleName λ = ModuleName (NonEmpty (Name λ)) deriving (Eq, Show)
+data QualifiedName λ = QualifiedName (Maybe (Abstract.ModuleName λ)) (Abstract.Name λ)
 
-data QualifiedName λ = QualifiedName (Maybe (ModuleName λ)) (Name λ) deriving (Eq, Show)
+newtype ModuleName λ = ModuleName (NonEmpty (Abstract.Name λ))
+deriving instance Data (Abstract.Name λ) => Typeable (ModuleName λ)
+deriving instance (Data (Abstract.Name λ), Data λ) => Data (ModuleName λ)
+deriving instance Show (Abstract.Name λ) => Show (ModuleName λ)
+
+deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ)) => Typeable (QualifiedName λ)
+deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ), Data λ) => Data (QualifiedName λ)
+deriving instance (Show (Abstract.ModuleName λ), Show (Abstract.Name λ)) => Show (QualifiedName λ)
+
