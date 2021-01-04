@@ -8,6 +8,8 @@ import Control.Applicative
 import qualified Control.Monad
 import qualified Data.Char as Char (chr, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit, isSpace,
                                     isSymbol, isUpper, ord)
+import Data.Data (Data)
+import Witherable (filter)
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -29,7 +31,7 @@ import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
 import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..))
 
-import Prelude hiding (exponent)
+import Prelude hiding (exponent, filter)
 
 type Parser = ParserT ((,) [[Lexeme]])
 
@@ -270,11 +272,12 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    declaredConstructor = Abstract.constructor <$> constructor
                                               <*> many (wrap
                                                         $ aType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType)
-                         <|> do left <- wrap infixConstructorArgType
-                                op <- constructorOperator
-                                right <- wrap infixConstructorArgType
-                                pure (Abstract.constructor op [left, right])
-                         <|> Abstract.recordConstructor <$> constructor <*> braces (wrap fieldDeclaration `sepBy` comma),
+                         <|> wrap infixConstructorArgType
+                             <**> (constructorOperator
+                                   <**> (wrap infixConstructorArgType
+                                         <**> (pure $ \right op left-> Abstract.constructor op [left, right])))
+                         <|> Abstract.recordConstructor <$> constructor
+                                                        <*> braces (wrap fieldDeclaration `sepBy` comma),
    infixConstructorArgType = bType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType,
    newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
                     <|> Abstract.recordConstructor <$> constructor
@@ -583,14 +586,11 @@ constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> const
 
 variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
    identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
-variableLexeme = do tok <- satisfyCharInput (liftA2 (||) Char.isLower (== '_')) <> identifierTail
-                    Control.Monad.guard (tok `Set.notMember` reservedWords)
-                    pure tok
+variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varStart <> identifierTail)
+   where varStart c = Char.isLower c ||  c == '_'
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail
-variableSymbolLexeme = do tok <- takeCharsWhile1 Char.isSymbol
-                          Control.Monad.guard (Textual.characterPrefix tok /= Just ':'
-                                               && tok `Set.notMember` reservedOperators)
-                          pure tok
+variableSymbolLexeme = filter validSymbol (takeCharsWhile1 Char.isSymbol)
+   where validSymbol tok = Textual.characterPrefix tok /= Just ':' && tok `Set.notMember` reservedOperators
 constructorSymbolLexeme = string ":" <> takeCharsWhile Char.isSymbol
 identifierTail = takeCharsWhile isNameTailChar
 
@@ -774,9 +774,7 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
    isIdentifierFollowChar = isNameTailChar
-   identifierToken word = lexicalToken (do w <- word
-                                           Control.Monad.guard (w `notElem` reservedWords)
-                                           return w)
+   identifierToken word = lexicalToken (filter (`notElem` reservedWords) word)
    lexicalToken p = snd <$> tmap addOtherToken (match p) <* lexicalWhiteSpace
       where addOtherToken ([], (i, x)) = ([[Token Other $ extract i]], (i, x))
             addOtherToken (t, (i, x)) = (t, (i, x))
