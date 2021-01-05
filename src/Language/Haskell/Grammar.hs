@@ -154,9 +154,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    cname = variable <|> constructor,
 
 -- impdecls 	→ 	impdecl1 ; … ; impdecln 	    (n ≥ 1)
- 
 -- exports 	→ 	( export1 , … , exportn [ , ] ) 	    (n ≥ 0)
- 
 -- export 	→ 	qvar
 -- 	| 	qtycon [(..) | ( cname1 , … , cnamen )] 	    (n ≥ 0)
 -- 	| 	qtycls [(..) | ( qvar1 , … , qvarn )] 	    (n ≥ 0)
@@ -164,10 +162,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 --     
 -- impdecl 	→ 	import [qualified] modid [as modid] [impspec]
 -- 	| 		    (empty declaration)
- 
 -- impspec 	→ 	( import1 , … , importn [ , ] ) 	    (n ≥ 0)
 -- 	| 	hiding ( import1 , … , importn [ , ] ) 	    (n ≥ 0)
- 
 -- import 	→ 	var
 -- 	| 	tycon [ (..) | ( cname1 , … , cnamen )] 	    (n ≥ 0)
 -- 	| 	tycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
@@ -222,19 +218,15 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- decls 	→ 	{ decl1 ; … ; decln } 	    (n ≥ 0)
 -- decl 	→ 	gendecl
 -- 	| 	(funlhs | pat) rhs
- 
 -- cdecls 	→ 	{ cdecl1 ; … ; cdecln } 	    (n ≥ 0)
 -- cdecl 	→ 	gendecl
 -- 	| 	(funlhs | var) rhs
- 
 -- idecls 	→ 	{ idecl1 ; … ; idecln } 	    (n ≥ 0)
 -- idecl 	→ 	(funlhs | var) rhs
 -- 	| 		    (empty)
- 
 -- gendecl 	→ 	vars :: [context =>] type 	    (type signature)
 -- 	| 	fixity [integer] ops 	    (fixity declaration)
 -- 	| 		    (empty declaration)
- 
 -- ops 	→ 	op1 , … , opn 	    (n ≥ 1)
 -- vars 	→ 	var1 , …, varn 	    (n ≥ 1)
 -- fixity 	→ 	infixl | infixr | infix
@@ -250,15 +242,12 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                             <|> Abstract.functionConstructorType <$ parens (delimiter "->"),
    
 -- type 	→ 	btype [-> type] 	    (function type)
- 
 -- btype 	→ 	[btype] atype 	    (type application)
- 
 -- atype 	→ 	gtycon
 -- 	| 	tyvar
 -- 	| 	( type1 , … , typek ) 	    (tuple type, k ≥ 2)
 -- 	| 	[ type ] 	    (list type)
 -- 	| 	( type ) 	    (parenthesized constructor)
- 
 -- gtycon 	→ 	qtycon
 -- 	| 	() 	    (unit type)
 -- 	| 	[] 	    (list constructor)
@@ -325,7 +314,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    
 -- deriving 	→ 	deriving (dclass | (dclass1, … , dclassn)) 	    (n ≥ 0)
 -- dclass 	→ 	qtycls
- 
 -- inst 	→ 	gtycon
 -- 	| 	( gtycon tyvar1 … tyvark ) 	    (k ≥ 0, tyvars distinct)
 -- 	| 	( tyvar1 , … , tyvark ) 	    (k ≥ 2, tyvars distinct)
@@ -358,7 +346,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- impent 	→ 	[string] 	    (see Section 8.5.1)
 -- expent 	→ 	[string] 	    (see Section 8.5.1)
 -- safety 	→ 	unsafe | safe
- 
 -- ftype 	→ 	frtype
 -- 	| 	fatype  →  ftype
 -- frtype 	→ 	fatype
@@ -437,11 +424,9 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
 -- 	| 	infixexp
- 
 -- infixexp 	→ 	lexp qop infixexp 	    (infix operator application)
 -- 	| 	- infixexp 	    (prefix negation)
 -- 	| 	lexp
- 
 -- lexp 	→ 	\ apat1 … apatn -> exp 	    (lambda abstraction, n ≥ 1)
 -- 	| 	let decls in exp 	    (let expression)
 -- 	| 	if exp [;] then exp [;] else exp 	    (conditional)
@@ -449,7 +434,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	do { stmts } 	    (do expression)
 -- 	| 	fexp
 -- fexp 	→ 	[fexp] aexp 	    (function application)
- 
 -- aexp 	→ 	qvar 	    (variable)
 -- 	| 	gcon 	    (general constructor)
 -- 	| 	literal
@@ -462,24 +446,19 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	( qop⟨-⟩ infixexp ) 	    (right section)
 -- 	| 	qcon { fbind1 , … , fbindn } 	    (labeled construction, n ≥ 0)
 -- 	| 	aexp⟨qcon⟩ { fbind1 , … , fbindn } 	    (labeled update, n  ≥  1)
- 
 -- qual 	→ 	pat <- exp 	    (generator)
 -- 	| 	let decls 	    (local declaration)
 -- 	| 	exp 	    (guard)
-
 -- alts 	→ 	alt1 ; … ; altn 	    (n ≥ 1)
 -- alt 	→ 	pat -> exp [where decls]
 -- 	| 	pat gdpat [where decls]
 -- 	| 		    (empty alternative)
- 
 -- gdpat 	→ 	guards -> exp [ gdpat ]
- 
 -- stmts 	→ 	stmt1 … stmtn exp [;] 	    (n ≥ 0)
 -- stmt 	→ 	exp ;
 -- 	| 	pat <- exp ;
 -- 	| 	let decls ;
 -- 	| 	; 	    (empty statement)
- 
 -- fbind 	→ 	qvar = exp
 
    pattern = Abstract.infixPattern <$> wrap lPattern <*> qualifiedConstructorOperator <*> wrap pattern <|> lPattern,
@@ -506,11 +485,9 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
 -- pat 	→ 	lpat qconop pat 	    (infix constructor)
 -- 	| 	lpat
- 
 -- lpat 	→ 	apat
 -- 	| 	- (integer | float) 	    (negative literal)
 -- 	| 	gcon apat1 … apatk 	    (arity gcon  =  k, k ≥ 1)
- 
 -- apat 	→ 	var [ @ apat] 	    (as pattern)
 -- 	| 	gcon 	    (arity gcon  =  0)
 -- 	| 	qcon { fpat1 , … , fpatk } 	    (labeled pattern, k ≥ 0)
@@ -520,9 +497,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	( pat1 , … , patk ) 	    (tuple pattern, k ≥ 2)
 -- 	| 	[ pat1 , … , patk ] 	    (list pattern, k ≥ 1)
 -- 	| 	~ apat 	    (irrefutable pattern)
- 
 -- fpat 	→ 	qvar = pat
-
 -- gcon 	→ 	()
 -- 	| 	[]
 -- 	| 	(,{,})
@@ -633,7 +608,6 @@ reservedOperators = Set.fromList ["..", ":", "::", "=", "\\", "|", "<-", "->", "
 -- 	| 	foreign | if | import | in | infix | infixl
 -- 	| 	infixr | instance | let | module | newtype | of
 -- 	| 	then | type | where | _
- 
 -- varsym 	→ 	( symbol⟨:⟩ {symbol} )⟨reservedop | dashes⟩
 -- consym 	→ 	( : {symbol})⟨reservedop⟩
 -- reservedop 	→ 	.. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
@@ -668,7 +642,6 @@ qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol)
 -- tycon 	→ 	conid 	    (type constructors)
 -- tycls 	→ 	conid 	    (type classes)
 -- modid 	→ 	{conid .} conid 	    (modules)
- 
 -- qvarid 	→ 	[ modid . ] varid
 -- qconid 	→ 	[ modid . ] conid
 -- qtycon 	→ 	[ modid . ] tycon
@@ -694,7 +667,6 @@ exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty)
 -- decimal 	→ 	digit{digit}
 -- octal 	→ 	octit{octit}
 -- hexadecimal 	→ 	hexit{hexit}
- 
 -- integer 	→ 	decimal
 -- 	| 	0o octal | 0O octal
 -- 	| 	0x hexadecimal | 0X hexadecimal
