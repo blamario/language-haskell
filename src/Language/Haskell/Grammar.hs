@@ -169,7 +169,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	tycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
 -- cname 	→ 	var | con
 
-   topLevelDeclarations = wrap topLevelDeclaration `sepBy` semi,
+   topLevelDeclarations = wrap topLevelDeclaration `sepBy` some semi,
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
       <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext)
@@ -178,11 +178,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
       <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
-          <*> (keyword "where" *> braces (wrap inClassDeclaration `startSepEndBy` semi) <|> pure [])
+          <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
           <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
-          <*> (keyword "where" *> braces (wrap inInstanceDeclaration `startSepEndBy` semi) <|> pure [])
+          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
       <|> foreignDeclaration
       <|> declaration,
@@ -197,7 +197,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	foreign fdecl
 -- 	| 	decl
 
-   declarations = braces (wrap declaration `startSepEndBy` semi),
+   declarations = blockOf declaration,
    declaration = generalDeclaration
                  <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                   <*> wrap rhs <*> whereClauses,
@@ -388,7 +388,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression
                         <|> Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
-                                                    <*> braces (wrap alternative `sepBy1` semi)
+                                                    <*> blockOf alternative
                         <|> Abstract.doExpression <$ keyword "do" <*> braces (wrap statements))
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
@@ -801,6 +801,9 @@ comment = try (string "{-"
                <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile (/= '\n'))
    where isCommentChar c = c /= '-' && c /= '{'
 
+blockOf :: TokenParsing (Parser g Text) => Parser g Text a -> Parser g Text [NodeWrap a]
+blockOf p = braces (wrap p `startSepEndBy` semi)
+                                            
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
 startSepEndBy :: Alternative m => m a -> m sep -> m [a]
