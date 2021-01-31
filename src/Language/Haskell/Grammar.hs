@@ -12,6 +12,8 @@ import Data.Data (Data)
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Monoid.Textual as Textual
+import Data.Monoid.Textual (TextualMonoid, toString)
 import Numeric (readOct, readDec, readHex, readFloat)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
@@ -116,11 +118,12 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f)
 }
 
-grammar2010 :: Grammar (HaskellGrammar AST.Language NodeWrap) Parser Text
+grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language NodeWrap) t), Ord t, Show t, TextualMonoid t)
+            => Grammar (HaskellGrammar AST.Language NodeWrap) Parser t
 grammar2010 = fixGrammar grammar
    
-grammar :: forall l g. (Abstract.Haskell l, LexicalParsing (Parser g Text))
-        => GrammarBuilder (HaskellGrammar l NodeWrap) g Parser Text
+grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+        => GrammarBuilder (HaskellGrammar l NodeWrap) g Parser t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
@@ -579,23 +582,27 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
  
 
 constructorIdentifier, constructorSymbol, typeClass, typeConstructor, typeVar, variableIdentifier,
-   variableSymbol :: (Abstract.Haskell l, LexicalParsing (Parser g Text)) => Parser g Text (Abstract.Name l)
-variableIdentifier = token (Abstract.name <$> variableLexeme)
-constructorIdentifier = token (Abstract.name <$> constructorLexeme)
-variableSymbol = token (Abstract.name <$> variableSymbolLexeme)
-constructorSymbol = token (Abstract.name <$> constructorSymbolLexeme)
+   variableSymbol :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                  => Parser g t (Abstract.Name l)
+variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme)
+constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme)
+variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> variableSymbolLexeme)
+constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> constructorSymbolLexeme)
 
-variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme, identifierTail :: Parser g Text Text
+variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
+   identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = do tok <- satisfyCharInput (liftA2 (||) Char.isLower (== '_')) <> identifierTail
                     Control.Monad.guard (tok `Set.notMember` reservedWords)
                     pure tok
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail
 variableSymbolLexeme = do tok <- takeCharsWhile1 Char.isSymbol
-                          Control.Monad.guard (Text.head tok /= ':' && tok `Set.notMember` reservedOperators)
+                          Control.Monad.guard (Textual.characterPrefix tok /= Just ':'
+                                               && tok `Set.notMember` reservedOperators)
                           pure tok
 constructorSymbolLexeme = string ":" <> takeCharsWhile Char.isSymbol
 identifierTail = takeCharsWhile isNameTailChar
 
+reservedWords, reservedOperators :: (Ord t, TextualMonoid t) => Set.Set t
 reservedWords = Set.fromList ["case", "class", "data", "default", "deriving", "do", "else",
                               "foreign", "if", "import", "in", "infix", "infixl",
                               "infixr", "instance", "let", "module", "newtype", "of",
@@ -616,19 +623,22 @@ typeVar = variableIdentifier
 typeConstructor = constructorIdentifier
 typeClass = constructorIdentifier
 
-moduleId :: (Abstract.Haskell l, LexicalParsing (Parser g Text)) => Parser g Text (Abstract.ModuleName l)
+moduleId :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+         => Parser g t (Abstract.ModuleName l)
 moduleId = Abstract.moduleName <$> token moduleLexeme
 
-moduleLexeme :: (Abstract.Haskell l, LexicalParsing (Parser g Text)) => Parser g Text (NonEmpty (Abstract.Name l))
-moduleLexeme = (Abstract.name <$> constructorLexeme) `sepByNonEmpty` string "."
+moduleLexeme :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+             => Parser g t (NonEmpty (Abstract.Name l))
+moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme) `sepByNonEmpty` string "."
 
-qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g Text))
-          => Parser g Text (Abstract.Name l -> Abstract.QualifiedName l)
+qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+          => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
 qualifier = Abstract.qualifiedName <$> optional (Abstract.moduleName <$> moduleLexeme <* string ".")
 
 qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
    qualifiedVariableIdentifier, qualifiedVariableSymbol
-   :: (Abstract.Haskell l, LexicalParsing (Parser g Text)) => Parser g Text (Abstract.QualifiedName l)
+   :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+   => Parser g t (Abstract.QualifiedName l)
 qualifiedVariableIdentifier = token (qualifier <*> variableIdentifier)
 qualifiedConstructorIdentifier = token (qualifier <*> constructorIdentifier)
 qualifiedTypeConstructor = qualifiedConstructorIdentifier
@@ -649,17 +659,17 @@ qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol)
 -- qvarsym 	→ 	[ modid . ] varsym
 -- qconsym 	→ 	[ modid . ] consym
 
-decimal, octal, hexadecimal, exponent :: Parser g Text Text
-integer :: LexicalParsing (Parser g Text) => Parser g Text Integer
-float :: LexicalParsing (Parser g Text) => Parser g Text Rational
+decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
+integer :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
+float :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
 decimal = takeCharsWhile1 Char.isDigit
 octal = takeCharsWhile1 Char.isOctDigit
 hexadecimal = takeCharsWhile1 Char.isHexDigit
 integer = fst . head
-          <$> token (Numeric.readDec . Text.unpack <$> decimal
-                     <|> (string "0o" <|> string "0O") *> (Numeric.readOct . Text.unpack <$> octal)
-                     <|> (string "0x" <|> string "0X") *> (Numeric.readHex . Text.unpack <$> hexadecimal))
-float = fst . head . Numeric.readFloat . Text.unpack
+          <$> token (Numeric.readDec . toString mempty <$> decimal
+                     <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
+                     <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal))
+float = fst . head . Numeric.readFloat . toString mempty
         <$> token (decimal <> string "." <> decimal <> (exponent <> mempty)
                    <|> decimal <> exponent)
 exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal
@@ -674,26 +684,28 @@ exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty)
 -- 	| 	decimal exponent
 -- exponent 	→ 	(e | E) [+ | -] decimal
 
-charLiteral :: LexicalParsing (Parser g Text) => Parser g Text Char
-stringLiteral :: LexicalParsing (Parser g Text) => Parser g Text Text
+charLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
+stringLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
 charLiteral = token (char '\''
                      *> (Text.Parser.Char.satisfy (\c-> c == ' ' || not (Char.isSpace c) && c /= '\'' && c /= '\\')
                          <|> escape)
                      <* char '\'')
-stringLiteral = token (char '"'
+stringLiteral = Text.pack . toString mempty <$>
+                token (char '"'
                        *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
-                                      <|> Text.singleton <$> escape
+                                      <|> Textual.singleton <$> escape
                                       <|> char '\\'
                                           *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
                                           *> pure "")
                            <* char '"')
 
-escape, asciiEscape, charEscape, controlEscape :: LexicalParsing (Parser g Text) => Parser g Text Char
+escape, asciiEscape, charEscape,
+   controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
 escape = string "\\" *> (charEscape <|> asciiEscape
-                         <|> Char.chr . fst . head <$> (Numeric.readDec . Text.unpack <$> decimal
-                                                        <|> string "o" *> (Numeric.readOct . Text.unpack <$> octal)
+                         <|> Char.chr . fst . head <$> (Numeric.readDec . toString mempty <$> decimal
+                                                        <|> string "o" *> (Numeric.readOct . toString mempty <$> octal)
                                                         <|> string "x"
-                                                            *> (Numeric.readHex . Text.unpack <$> hexadecimal)))
+                                                            *> (Numeric.readHex . toString mempty <$> hexadecimal)))
 charEscape = '\a' <$ char 'a'
              <|> '\b' <$ char 'b'
              <|> '\f' <$ char 'f'
@@ -758,7 +770,7 @@ type NodeWrap = (,) (Position, ParsedLexemes, Position)
 newtype ParsedLexemes = Trailing [Lexeme]
                       deriving (Data, Eq, Show, Semigroup, Monoid)
 
-wrap :: Parser g Text a -> Parser g Text (NodeWrap a)
+wrap :: TextualMonoid t => Parser g t a -> Parser g t (NodeWrap a)
 wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (Trailing []) <$>)
    where surround start (lexemes, p) end = ((start, lexemes, end), p)
          store (wss, (Trailing ws', a)) = (mempty, (Trailing $ ws' <> concat wss, a))
@@ -787,21 +799,24 @@ instance LexicalParsing (Parser (HaskellGrammar l f) Text) where
 isNameTailChar :: Char -> Bool
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 
-delimiter :: LexicalParsing (Parser g Text) => Text -> Parser g Text Text
-delimiter s = lexicalToken (string s <* lift ([[Token Delimiter s]], ())) <?> ("delimiter " <> show s)
+delimiter :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
+delimiter s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
+              <?> ("delimiter " <> show s)
 
-whiteSpace :: LexicalParsing (Parser g Text) => Parser g Text ()
+whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars) <?> "whitespace"
-   where spaceChars = (takeCharsWhile1 Char.isSpace >>= \ws-> lift ([[WhiteSpace ws]], ())) <<|> pure ()
+   where spaceChars = (takeCharsWhile1 Char.isSpace
+                       >>= \ws-> lift ([[WhiteSpace $ Text.pack $ toString mempty ws]], ()))
+                      <<|> pure ()
 
-comment :: Parser g Text Text
+comment :: (Show t, TextualMonoid t) => Parser g t t
 comment = try (string "{-"
                <> concatMany (comment <<|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile isCommentChar)
                <> string "-}"
                <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile (/= '\n'))
    where isCommentChar c = c /= '-' && c /= '{'
 
-blockOf :: TokenParsing (Parser g Text) => Parser g Text a -> Parser g Text [NodeWrap a]
+blockOf :: TextualMonoid t => TokenParsing (Parser g t) => Parser g t a -> Parser g t [NodeWrap a]
 blockOf p = braces (wrap p `startSepEndBy` semi)
                                             
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
