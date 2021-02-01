@@ -15,6 +15,7 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2 as Rank2
 
 import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.Monoid.Instances.Positioned (LinePositioned)
 import Data.Text (Text)
 import Text.Grampa (Grammar, ParseResults, parseComplete)
 import qualified Text.Parser.Input.Position as Position
@@ -34,11 +35,11 @@ resolvePosition :: Text -> Grammar.NodeWrap a -> Placed a
 resolvePosition src = \((start, ws, end), a)-> ((Position.offset src start, ws, Position.offset src end), a)
 
 -- | Parse the given text of a single module.
-parseModule :: Text -> ParseResults Text [Placed (Abstract.Module AST.Language AST.Language Placed Placed)]
-parseModule source = resolve source (parseComplete Grammar.grammar2010 source)
+parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (Abstract.Module AST.Language AST.Language Placed Placed)]
+parseModule source = resolve source (parseComplete Grammar.grammar2010 (pure source :: LinePositioned Text))
 
 resolve :: Deep.Functor (Rank2.Map Grammar.NodeWrap Placed) (Abstract.Module l l)
         => Text
-        -> Grammar.HaskellGrammar l Grammar.NodeWrap (Compose (Compose (ParseResults Text) []) ((,) [[Grammar.Lexeme]]))
-        -> ParseResults Text [Placed (Abstract.Module l l Placed Placed)]
+        -> Grammar.HaskellGrammar l Grammar.NodeWrap (Compose (Compose (ParseResults (LinePositioned Text)) []) ((,) [[Grammar.Lexeme]]))
+        -> ParseResults (LinePositioned Text) [Placed (Abstract.Module l l Placed Placed)]
 resolve source results = getCompose (resolvePositions source . snd <$> getCompose (Grammar.haskellModule results))

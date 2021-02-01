@@ -21,6 +21,7 @@ import Data.Functor.Compose (Compose, getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
+import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
@@ -90,15 +91,15 @@ main' Opts{..} = case optsFile
          -> String -> Text -> IO ()
       go production filename contents =
          report contents (getCompose $ resolvePositions contents . snd
-                          <$> getCompose (production $ parseComplete Grammar.grammar2010 contents))
-      report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language
-                 {- Deep.Foldable Reserializer.Serialization (g l l)-}) => Text -> ParseResults Text [a] -> IO ()
+                          <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
+      report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language)
+             => Text -> ParseResults (LinePositioned Text) [a] -> IO ()
       report _ (Right [x]) = case optsOutput
                                   of Plain -> print x
                                      Pretty -> putStrLn (Template.pprint x)
                                      Tree -> putStrLn (reprTreeString x)
       report contents (Right l) = putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
                                   >> report contents (Right [l !! optsIndex])
-      report contents (Left err) = Text.putStrLn (failureDescription contents err 4)
+      report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
 
 type NodeWrap = ((,) Int)

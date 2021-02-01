@@ -14,6 +14,7 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Textual (TextualMonoid, toString)
+import Data.Monoid.Instances.Positioned (LinePositioned, column, extract)
 import Numeric (readOct, readDec, readHex, readFloat)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
@@ -118,11 +119,11 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f)
 }
 
-grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language NodeWrap) t), Ord t, Show t, TextualMonoid t)
+grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language NodeWrap) t), Ord t, Show t, OutlineMonoid t)
             => Grammar (HaskellGrammar AST.Language NodeWrap) Parser t
 grammar2010 = fixGrammar grammar
    
-grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
         => GrammarBuilder (HaskellGrammar l NodeWrap) g Parser t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (whiteSpace
@@ -775,13 +776,13 @@ wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (T
    where surround start (lexemes, p) end = ((start, lexemes, end), p)
          store (wss, (Trailing ws', a)) = (mempty, (Trailing $ ws' <> concat wss, a))
 
-instance TokenParsing (Parser (HaskellGrammar l f) Text) where
+instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
    someSpace = someLexicalSpace
    token = lexicalToken
 
-instance LexicalParsing (Parser (HaskellGrammar l f) Text) where
+instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
    lexicalComment = do c <- comment
-                       lift ([[Comment c]], ())
+                       lift ([[Comment $ extract c]], ())
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
    isIdentifierFollowChar = isNameTailChar
@@ -789,11 +790,11 @@ instance LexicalParsing (Parser (HaskellGrammar l f) Text) where
                                            Control.Monad.guard (w `notElem` reservedWords)
                                            return w)
    lexicalToken p = snd <$> tmap addOtherToken (match p) <* lexicalWhiteSpace
-      where addOtherToken ([], (i, x)) = ([[Token Other i]], (i, x))
+      where addOtherToken ([], (i, x)) = ([[Token Other $ extract i]], (i, x))
             addOtherToken (t, (i, x)) = (t, (i, x))
    keyword s = lexicalToken (string s
                              *> notSatisfyChar isNameTailChar
-                             <* lift ([[Token Keyword s]], ()))
+                             <* lift ([[Token Keyword $ extract s]], ()))
                <?> ("keyword " <> show s)
 
 isNameTailChar :: Char -> Bool
@@ -816,14 +817,30 @@ comment = try (string "{-"
                <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile (/= '\n'))
    where isCommentChar c = c /= '-' && c /= '{'
 
-blockOf :: TextualMonoid t => TokenParsing (Parser g t) => Parser g t a -> Parser g t [NodeWrap a]
-blockOf p = braces (wrap p `startSepEndBy` semi)
-                                            
+blockOf :: OutlineMonoid t => TokenParsing (Parser g t) => Parser g t a -> Parser g t [NodeWrap a]
+blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock)
+   where alignedBlock indent = do
+            item@((_, Trailing lexemes, _), _) <- wrap p
+            let indent' = column (Textual.dropWhile_ True (const True)
+                                  (pure $ foldMap lexemeText lexemes :: LinePositioned Text))
+            (item :) <$> if indent == indent'
+                         then many semi *> alignedBlock indent
+                         else some semi *> (alignedBlock indent <|> pure []) <|> pure []
+
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
 startSepEndBy :: Alternative m => m a -> m sep -> m [a]
 startSepEndBy p sep = (:) <$> p <*> (sep *> startSepEndBy p sep <|> pure [])
                       <|> sep *> startSepEndBy p sep
                       <|> pure []
+
+class TextualMonoid t => OutlineMonoid t where
+   currentColumn :: t -> Int
+
+instance OutlineMonoid (LinePositioned Text) where
+   currentColumn = column
+
+inputColumn :: OutlineMonoid t => Parser g t Int
+inputColumn = currentColumn <$> getInput
 
 $(Rank2.TH.deriveAll ''HaskellGrammar)
