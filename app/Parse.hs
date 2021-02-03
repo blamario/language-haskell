@@ -7,6 +7,7 @@ import Language.Haskell.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.Grammar as Grammar
+import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
 
 import qualified Rank2 as Rank2 (Product(Pair), snd)
@@ -85,17 +86,19 @@ main' Opts{..} = case optsFile
                             ExpressionMode -> go Grammar.expression "<stdin>"
    where
       go :: (Data a, Show a, Template.PrettyViaTH a, a ~ g l l Placed Placed, l ~ Language,
-             Deep.Functor (Rank2.Map Grammar.NodeWrap Placed) (g l l){-,
-             Deep.Foldable Reserializer.Serialization (g l l)-}) =>
+             Deep.Functor (Rank2.Map Grammar.NodeWrap Placed) (g l l),
+             Deep.Foldable Reserializer.Serialization (g l l)) =>
             (forall p. Functor p => Grammar.HaskellGrammar l Grammar.NodeWrap p -> p (Grammar.NodeWrap (g l l Grammar.NodeWrap Grammar.NodeWrap)))
          -> String -> Text -> IO ()
       go production filename contents =
          report contents (getCompose $ resolvePositions contents . snd
                           <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
-      report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language)
+      report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language,
+                 Deep.Foldable Reserializer.Serialization (g l l))
              => Text -> ParseResults (LinePositioned Text) [a] -> IO ()
       report _ (Right [x]) = case optsOutput
-                                  of Plain -> print x
+                                  of Original -> Text.putStr (Reserializer.reserialize x)
+                                     Plain -> print x
                                      Pretty -> putStrLn (Template.pprint x)
                                      Tree -> putStrLn (reprTreeString x)
       report contents (Right l) = putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")

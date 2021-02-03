@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, OverloadedStrings,
+{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
              Rank2Types, RecordWildCards,
              ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
 
@@ -8,7 +8,6 @@ import Control.Applicative
 import qualified Control.Monad
 import qualified Data.Char as Char (chr, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit, isSpace,
                                     isSymbol, isUpper, ord)
-import Data.Data (Data)
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -28,19 +27,11 @@ import qualified Rank2.TH
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
+import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..))
 
 import Prelude hiding (exponent)
 
 type Parser = ParserT ((,) [[Lexeme]])
-
-data Lexeme = WhiteSpace{lexemeText :: Text}
-            | Comment{lexemeText :: Text}
-            | Token{lexemeType :: TokenType,
-                    lexemeText :: Text}
-            deriving (Data, Eq, Show)
-
-data TokenType = Delimiter | Keyword | Operator | Other
-               deriving (Data, Eq, Show)
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -767,9 +758,6 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- gap 	→ 	\ whitechar {whitechar} \
 
 type NodeWrap = (,) (Position, ParsedLexemes, Position)
-
-newtype ParsedLexemes = Trailing [Lexeme]
-                      deriving (Data, Eq, Show, Semigroup, Monoid)
 
 wrap :: TextualMonoid t => Parser g t a -> Parser g t (NodeWrap a)
 wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (Trailing []) <$>)

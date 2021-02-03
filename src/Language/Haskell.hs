@@ -9,7 +9,7 @@ import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.Grammar as Grammar
 import qualified Language.Haskell.Template as Template
 
--- import qualified Language.Oberon.Reserializer as Reserializer
+import qualified Language.Haskell.Reserializer as Reserializer
 
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2 as Rank2
@@ -23,7 +23,7 @@ import qualified Text.Parser.Input.Position as Position
 import Prelude hiding (readFile)
 
 -- | Every node in a parsed and resolved AST is wrapped with this functor
-type Placed = (,) (Int, Grammar.ParsedLexemes, Int)
+type Placed = (,) (Int, Reserializer.ParsedLexemes, Int)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap, q ~ Placed, Deep.Functor (Rank2.Map p q) g)
@@ -40,6 +40,6 @@ parseModule source = resolve source (parseComplete Grammar.grammar2010 (pure sou
 
 resolve :: Deep.Functor (Rank2.Map Grammar.NodeWrap Placed) (Abstract.Module l l)
         => Text
-        -> Grammar.HaskellGrammar l Grammar.NodeWrap (Compose (Compose (ParseResults (LinePositioned Text)) []) ((,) [[Grammar.Lexeme]]))
+        -> Grammar.HaskellGrammar l Grammar.NodeWrap (Compose (Compose (ParseResults (LinePositioned Text)) []) ((,) [[Reserializer.Lexeme]]))
         -> ParseResults (LinePositioned Text) [Placed (Abstract.Module l l Placed Placed)]
 resolve source results = getCompose (resolvePositions source . snd <$> getCompose (Grammar.haskellModule results))
