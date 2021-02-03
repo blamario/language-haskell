@@ -173,7 +173,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	tycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
 -- cname 	→ 	var | con
 
-   topLevelDeclarations = wrap topLevelDeclaration `sepBy` some semi,
+   topLevelDeclarations = wrap topLevelDeclaration `startSepEndBy` some semi,
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
       <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext)
