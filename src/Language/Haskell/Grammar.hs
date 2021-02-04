@@ -808,9 +808,10 @@ comment = try (string "{-"
 blockOf :: OutlineMonoid t => TokenParsing (Parser g t) => Parser g t a -> Parser g t [NodeWrap a]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock)
    where alignedBlock indent = do
-            item@((_, Trailing lexemes, _), _) <- wrap p
-            let indent' = column (Textual.dropWhile_ True (const True)
-                                  (pure $ foldMap lexemeText lexemes :: LinePositioned Text))
+            (input, item) <- match (wrap p)
+            let trailingSpace = Text.takeWhileEnd Char.isSpace (Text.pack $ toString mempty input)
+                indent' = column (Textual.dropWhile_ True (const True)
+                                  (pure trailingSpace :: LinePositioned Text))
             (item :) <$> if indent == indent'
                          then many semi *> alignedBlock indent
                          else some semi *> (alignedBlock indent <|> pure []) <|> pure []
