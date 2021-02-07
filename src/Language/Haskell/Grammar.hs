@@ -478,7 +478,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
               <|> Abstract.literalPattern <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float)
               <|> Abstract.constructorPattern <$> wrap generalConstructor <*> some (wrap aPattern),
    aPattern = Abstract.variablePattern <$> variable
-              <|> Abstract.asPattern <$> variable <*> wrap aPattern
+              <|> Abstract.asPattern <$> variable <* delimiter "@" <*> wrap aPattern
               <|> Abstract.constructorPattern <$> wrap generalConstructor <*> pure []
               <|> Abstract.recordPattern <$> qualifiedConstructor <*> braces (wrap fieldPattern `sepBy` comma)
               <|> Abstract.literalPattern <$> wrap literal
@@ -599,12 +599,12 @@ constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> const
 
 variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
    identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
-variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varStart <> identifierTail)
+variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varStart <> identifierTail) <?> "variable"
    where varStart c = Char.isLower c ||  c == '_'
-constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail
-variableSymbolLexeme = filter validSymbol (takeCharsWhile1 Char.isSymbol)
+constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail <?> "constructor"
+variableSymbolLexeme = filter validSymbol (takeCharsWhile1 isSymbol) <?> "variable symbol"
    where validSymbol tok = Textual.characterPrefix tok /= Just ':' && tok `Set.notMember` reservedOperators
-constructorSymbolLexeme = string ":" <> takeCharsWhile Char.isSymbol
+constructorSymbolLexeme = string ":" <> takeCharsWhile isSymbol
 identifierTail = takeCharsWhile isNameTailChar
 
 reservedWords, reservedOperators :: (Ord t, TextualMonoid t) => Set.Set t
@@ -613,6 +613,9 @@ reservedWords = Set.fromList ["case", "class", "data", "default", "deriving", "d
                               "infixr", "instance", "let", "module", "newtype", "of",
                               "then", "type", "where", "_"]
 reservedOperators = Set.fromList ["..", ":", "::", "=", "\\", "|", "<-", "->", "@", "~", "=>"]
+
+asciiSymbols :: Set.Set Char
+asciiSymbols = Set.fromList "!#$%&⋆+./<=>?@\\^|-~:"
 
 -- varid 	→ 	(small {small | large | digit | ' })⟨reservedid⟩
 -- conid 	→ 	large {small | large | digit | ' }
@@ -667,9 +670,9 @@ qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol)
 decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
 integer :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
 float :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
-decimal = takeCharsWhile1 Char.isDigit
-octal = takeCharsWhile1 Char.isOctDigit
-hexadecimal = takeCharsWhile1 Char.isHexDigit
+decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
+octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
+hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
 integer = fst . head
           <$> token (Numeric.readDec . toString mempty <$> decimal
                      <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
@@ -703,6 +706,7 @@ stringLiteral = Text.pack . toString mempty <$>
                                           *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
                                           *> pure "")
                            <* char '"')
+                <?> "string literal"
 
 escape, asciiEscape, charEscape,
    controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
@@ -799,9 +803,10 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
                              <* lift ([[Token Keyword $ extract s]], ()))
                <?> ("keyword " <> show s)
 
-isLineChar, isNameTailChar :: Char -> Bool
+isLineChar, isNameTailChar, isSymbol :: Char -> Bool
 isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
+isSymbol c = Char.isSymbol c || c `Set.member` asciiSymbols
 
 delimiter :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
 delimiter s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
@@ -817,7 +822,8 @@ comment :: (Show t, TextualMonoid t) => Parser g t t
 comment = try (string "{-"
                <> concatMany (comment <<|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile isCommentChar)
                <> string "-}"
-               <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile isLineChar)
+               <|> (string "--" <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
+          <?> "comment"
    where isCommentChar c = c /= '-' && c /= '{'
 
 blockOf :: (Ord t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
