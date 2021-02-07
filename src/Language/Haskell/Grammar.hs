@@ -91,6 +91,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    expression :: p (f (Abstract.Expression l l f f)),
    infixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression :: p (f (Abstract.Expression l l f f)),
+   dExpression :: p (f (Abstract.Expression l l f f)),
    fExpression :: p (f (Abstract.Expression l l f f)),
    aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
@@ -380,7 +381,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
    expression = wrap (Abstract.typedExpression <$> infixExpression <* delimiter "::" <*> wrap typeTerm)
                 <|> infixExpression,
-   infixExpression = wrap (Abstract.infixExpression <$> lExpression
+   infixExpression = wrap (Abstract.infixExpression <$> dExpression
                                                     <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                                                     <*> infixExpression
                            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
@@ -390,10 +391,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                        <|> Abstract.letExpression <$ keyword "let" <*> declarations <* delimiter "in" <*> expression
                        <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
                                                           <* keyword "then" <*> expression <* optional semi
-                                                          <* keyword "else" <*> expression
-                        <|> Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
+                                                          <* keyword "else" <*> expression)
+                 <|> dExpression,
+   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
                                                     <*> blockOf (wrap alternative)
-                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
+                       <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
    aExpression = wrap (Abstract.referenceExpression <$> qualifiedVariable
