@@ -525,7 +525,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    qualifiedConstructorOperator = qualifiedConstructorSymbol
                                   <|> delimiter "`" *> qualifiedConstructorIdentifier <* delimiter "`",
    operator = variableOperator <|> constructorOperator,
-   qualifiedOperator = qualifiedVariableOperator <|> qualifiedConstructorOperator,
+   qualifiedOperator = qualifiedVariableOperator <|> qualifiedConstructorOperator <?> "qualified operator",
    
 -- var 	→ 	varid | ( varsym ) 	    (variable)
 -- qvar 	→ 	qvarid | ( qvarsym ) 	    (qualified variable)
@@ -612,7 +612,7 @@ reservedWords = Set.fromList ["case", "class", "data", "default", "deriving", "d
                               "foreign", "if", "import", "in", "infix", "infixl",
                               "infixr", "instance", "let", "module", "newtype", "of",
                               "then", "type", "where", "_"]
-reservedOperators = Set.fromList ["..", ":", "::", "=", "\\", "|", "<-", "->", "@", "~", "=>"]
+reservedOperators = Set.fromList ["--", "..", ":", "::", "=", "\\", "|", "<-", "->", "@", "~", "=>"]
 
 asciiSymbols :: Set.Set Char
 asciiSymbols = Set.fromList "!#$%&⋆+./<=>?@\\^|-~:"
@@ -674,11 +674,11 @@ decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
 octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
 hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
 integer = fst . head
-          <$> token (Numeric.readDec . toString mempty <$> decimal
+          <$> token (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy exponent
                      <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
                      <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal))
 float = fst . head . Numeric.readFloat . toString mempty
-        <$> token (decimal <> string "." <> decimal <> (exponent <> mempty)
+        <$> token (decimal <> string "." <> decimal <> (exponent <<|> mempty)
                    <|> decimal <> exponent)
 exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal
 
