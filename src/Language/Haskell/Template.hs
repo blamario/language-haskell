@@ -47,6 +47,7 @@ instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
 instance PrettyViaTH (Import Language Language ((,) x) ((,) x)) where
    prettyViaTH (Import qualified name alias imports) =
       Ppr.text "import" <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
+      <+> prettyViaTH name
       <+> maybe Ppr.empty ((Ppr.text "as" <+>) . prettyViaTH) alias
       <+> maybe Ppr.empty prettyViaTH imports
 
@@ -139,7 +140,7 @@ declarationTemplates get (DataDeclaration context lhs constructors derivings)
    | SimpleTypeLHS con vars <- get lhs =
      [DataD (contextTemplate get $ get context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
             Nothing (dataConstructorTemplate get . get <$> constructors)
-            [DerivClause Nothing $ derived . get <$> derivings]]
+            $ if null derivings then [] else [DerivClause Nothing $ derived . get <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
 declarationTemplates get (DefaultDeclaration types) = error "Template Haskell can't represent a default declaration"
 declarationTemplates get (EquationDeclaration lhs rhs wheres)
@@ -148,9 +149,11 @@ declarationTemplates get (EquationDeclaration lhs rhs wheres)
    | InfixLHS left name right <- get lhs =
      [FunD (nameTemplate name)
            [Clause [patternTemplate get $ get left, patternTemplate get $ get right] body declarations]]
-   | PrefixLHS lhs' pats <- get lhs,
-     [FunD name [Clause args body decs]] <- declarationTemplates get (EquationDeclaration lhs' rhs wheres) =
-     [FunD name [Clause (args ++ (patternTemplate get . get <$> toList pats)) body decs]]
+   | PrefixLHS lhs' pats <- get lhs = case declarationTemplates get (EquationDeclaration lhs' rhs wheres) of
+     [FunD name [Clause args body decs]] ->
+        [FunD name [Clause (args ++ (patternTemplate get . get <$> toList pats)) body decs]]
+     [ValD (VarP name) body decs] ->
+        [FunD name [Clause (patternTemplate get . get <$> toList pats) body decs]]
    where body = rhsTemplate get (get rhs)
          declarations = foldMap (declarationTemplates get . get) wheres
 declarationTemplates get (FixityDeclaration fixity precedence names) =
