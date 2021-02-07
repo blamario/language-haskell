@@ -5,40 +5,44 @@
 module Language.Haskell.Grammar where
 
 import Control.Applicative
+import Control.Monad (void)
 import qualified Control.Monad
 import qualified Data.Char as Char (chr, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit, isSpace,
                                     isSymbol, isUpper, ord)
 import Data.Data (Data)
-import Witherable (filter)
-import Data.Foldable (toList)
+import Data.Either (isLeft, partitionEithers)
+import Data.Foldable (maximumBy, toList)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Ord (comparing)
+import Data.String (fromString)
 import qualified Data.Monoid.Textual as Textual
+import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid, toString)
 import Data.Monoid.Instances.Positioned (LinePositioned, column, extract)
+import qualified Data.Set as Set
+import qualified Data.Text as Text
+import Data.Text (Text)
 import Numeric (readOct, readDec, readHex, readFloat)
+import Witherable (filter, mapMaybe)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (sepBy, sepBy1, sepByNonEmpty, try)
+import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Parser.Token (braces, brackets, comma, parens, semi)
-import qualified Data.Set as Set
-import Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Rank2.TH
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
 import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..))
 
-import Prelude hiding (exponent, filter)
+import Prelude hiding (exponent, filter, null)
 
 type Parser = ParserT ((,) [[Lexeme]])
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
    body :: p ([f (Abstract.Import l l f f)], [f (Abstract.Declaration l l f f)]),
-   imports :: p [f (Abstract.Import l l f f)],
    exports :: p [f (Abstract.Export l l f f)],
    export :: p (Abstract.Export l l f f),
    importDeclaration :: p (Abstract.Import l l f f),
@@ -46,7 +50,6 @@ data HaskellGrammar l f p = HaskellGrammar {
    importItem :: p (Abstract.ImportItem l l f f),
    members :: p (Abstract.Members l),
    cname :: p (Abstract.Name l),
-   topLevelDeclarations :: p [f (Abstract.Declaration l l f f)],
    topLevelDeclaration :: p (Abstract.Declaration l l f f),
    declarations :: p [f (Abstract.Declaration l l f f)],
    declaration :: p (Abstract.Declaration l l f f),
@@ -92,7 +95,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
-   statement :: p (Abstract.Statement l l f f),
+   statement :: p (Either (f (Abstract.Statement l l f f)) (f (Abstract.Expression l l f f))),
    fieldBinding :: p (Abstract.FieldBinding l l f f),
    pattern :: p (Abstract.Pattern l l f f),
    lPattern :: p (Abstract.Pattern l l f f),
@@ -124,9 +127,14 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                                <*> optional exports <* keyword "where"
                                           <|> pure Abstract.anonymousModule)
                              <*> body)),
-   body = braces ((,) <$> imports <* semi <*> topLevelDeclarations
-                  <|> (,[]) <$> imports
-                  <|> ([],) <$> topLevelDeclarations),
+   body = let ordered impdecs
+                 | null rightImports = Just (leftImports, rightDeclarations)
+                 | otherwise = Nothing
+                 where (lefts, rest) = span isLeft impdecs
+                       (leftImports, _) = partitionEithers lefts
+                       (rightImports, rightDeclarations) = partitionEithers rest
+          in mapMaybe ordered (blockOf (Left <$> wrap importDeclaration <|> Right <$> wrap topLevelDeclaration))
+             <?> "imports followed by declarations",
 
 -- module 	→ 	module modid [exports] where body 
 -- 	| 	body
@@ -134,7 +142,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	{ impdecls }
 -- 	| 	{ topdecls }
 
-   imports = wrap importDeclaration `startSepEndBy` semi,
    exports = parens (wrap export `sepBy` comma),
    export = Abstract.exportVar <$> qualifiedVariable
             <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
@@ -166,7 +173,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	tycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
 -- cname 	→ 	var | con
 
-   topLevelDeclarations = wrap topLevelDeclaration `startSepEndBy` some semi,
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
       <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext)
@@ -175,11 +181,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
       <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
-          <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
+          <*> (keyword "where" *> blockOf (wrap inClassDeclaration) <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
           <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
-          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
+          <*> (keyword "where" *> blockOf (wrap inInstanceDeclaration) <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
       <|> foreignDeclaration
       <|> declaration,
@@ -194,7 +200,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	foreign fdecl
 -- 	| 	decl
 
-   declarations = blockOf declaration,
+   declarations = blockOf (wrap declaration),
    declaration = generalDeclaration
                  <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                   <*> wrap rhs <*> whereClauses,
@@ -386,8 +392,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression
                         <|> Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
-                                                    <*> blockOf alternative
-                        <|> Abstract.doExpression <$ keyword "do" <*> braces (wrap statements))
+                                                    <*> blockOf (wrap alternative)
+                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
    aExpression = wrap (Abstract.referenceExpression <$> qualifiedVariable
@@ -397,9 +403,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                        <|> brackets (Abstract.listExpression <$> (expression `sepBy1` comma)
                                      <|> Abstract.sequenceExpression <$> expression
                                          <*> optional (comma *> expression)
-                                         <* delimiter ".." <*> optional (expression)
+                                         <* delimiter ".." <*> optional expression
                                      <|> Abstract.listComprehension <$> expression
-                                         <* delimiter "|" <*> wrap statement `sepByNonEmpty` comma)
+                                         <* delimiter "|"
+                                         <*> (either id (rewrap Abstract.expressionStatement) <$> statement)
+                                             `sepByNonEmpty` comma)
                        <|> parens (Abstract.rightSectionExpression <$> infixExpression <*> qualifiedOperator
                                    <|> Abstract.leftSectionExpression <$> qualifiedOperator <*> infixExpression)
                        <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
@@ -414,10 +422,15 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "->"
                                                                                     <*> expression))
                  <*> whereClauses,
-   statements = Abstract.guardedExpression <$> many (wrap statement <* some semi) <*> expression <* optional semi,
-   statement = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
-               <|> Abstract.letStatement <$ keyword "let" <*> declarations
-               <|> Abstract.expressionStatement <$> expression,
+   statements = braces (Abstract.guardedExpression
+                        <$> many (either id (rewrap Abstract.expressionStatement) <$> statement <* some semi)
+                        <*> expression <* optional semi)
+                <|> (blockOf statement >>= \stats-> if null stats then fail "empty do block"
+                     else Abstract.guardedExpression (either id (rewrap Abstract.expressionStatement) <$> init stats)
+                          <$> either (const $ fail "do block must end with an expression") pure (last stats)),
+   statement = Left <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
+                              <|> Abstract.letStatement <$ keyword "let" <*> declarations)
+               <|> Right <$> expression,
    fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> expression,
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
@@ -764,6 +777,9 @@ wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (T
    where surround start (lexemes, p) end = ((start, lexemes, end), p)
          store (wss, (Trailing ws', a)) = (mempty, (Trailing $ ws' <> concat wss, a))
 
+rewrap :: (NodeWrap a -> b) -> NodeWrap a -> NodeWrap b
+rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
+
 instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
    someSpace = someLexicalSpace
    token = lexicalToken
@@ -783,7 +799,8 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
                              <* lift ([[Token Keyword $ extract s]], ()))
                <?> ("keyword " <> show s)
 
-isNameTailChar :: Char -> Bool
+isLineChar, isNameTailChar :: Char -> Bool
+isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 
 delimiter :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
@@ -800,19 +817,28 @@ comment :: (Show t, TextualMonoid t) => Parser g t t
 comment = try (string "{-"
                <> concatMany (comment <<|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile isCommentChar)
                <> string "-}"
-               <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile (/= '\n'))
+               <|> (string "--" <* notSatisfyChar Char.isSymbol) <> takeCharsWhile isLineChar)
    where isCommentChar c = c /= '-' && c /= '{'
 
-blockOf :: OutlineMonoid t => TokenParsing (Parser g t) => Parser g t a -> Parser g t [NodeWrap a]
-blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock)
-   where alignedBlock indent = do
-            (input, item) <- match (wrap p)
-            let trailingSpace = Text.takeWhileEnd Char.isSpace (Text.pack $ toString mempty input)
-                indent' = column (Textual.dropWhile_ True (const True)
-                                  (pure trailingSpace :: LinePositioned Text))
-            (item :) <$> if indent == indent'
-                         then many semi *> alignedBlock indent
-                         else some semi *> (alignedBlock indent <|> pure []) <|> pure []
+blockOf :: (Ord t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
+blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
+   where alignedBlock cont indent =
+            do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match p)
+               -- don't stop at a higher indent unless there's a terminator
+               void (filter (indent >=) inputColumn) <<|> lookAhead (void semi <|> void (string "}") <|> eof)
+               indent' <- inputColumn
+               let cont' = cont . (item :)
+               if indent == indent'
+                  then many semi *> alignedBlock cont' indent
+                  else some semi *> alignedBlock cont' indent <|> cont' []
+            <|> cont []
+         oneExtendedLine indent input a =
+            if null nextLine then Just a
+            else case compare (currentColumn nextLine) indent
+                 of LT -> Nothing
+                    EQ | Textual.takeWhile_ False Char.isLetter nextLine `Set.notMember` reservedWords -> Nothing
+                    _ -> oneExtendedLine indent nextLine a
+            where nextLine = Textual.dropWhile_ True Char.isSpace (Textual.dropWhile_ True isLineChar input)
 
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
