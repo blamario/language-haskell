@@ -290,7 +290,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                         <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
                                                     <* delimiter "::" <*> wrap typeTerm)),
    fieldDeclaration = Abstract.constructorFields <$> variables <* delimiter "::"
-                      <*> wrap (typeTerm <|> Abstract.strictType <$> wrap aType),
+                      <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
 
 -- simpletype 	→ 	tycon tyvar1 … tyvark 	    (k ≥ 0)
 -- constrs 	→ 	constr1 | … | constrn 	    (n ≥ 1)
