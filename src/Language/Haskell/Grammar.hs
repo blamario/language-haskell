@@ -831,12 +831,13 @@ comment = try (string "{-"
           <?> "comment"
    where isCommentChar c = c /= '-' && c /= '{'
 
-blockOf :: (Ord t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
+blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
 blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
             do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match p)
                -- don't stop at a higher indent unless there's a terminator
-               void (filter (indent >=) inputColumn) <<|> lookAhead (void semi <|> void (string "}") <|> eof)
+               void (filter (indent >=) inputColumn)
+                  <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators)) <|> eof)
                indent' <- inputColumn
                let cont' = cont . (item :)
                if indent == indent'
@@ -850,7 +851,8 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
                     EQ | Textual.takeWhile_ False Char.isLetter nextLine `Set.notMember` reservedWords -> Nothing
                     _ -> oneExtendedLine indent nextLine a
             where nextLine = Textual.dropWhile_ True Char.isSpace (Textual.dropWhile_ True isLineChar input)
-
+         terminators :: [Char]
+         terminators = ";)]}"
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
 startSepEndBy :: Alternative m => m a -> m sep -> m [a]
