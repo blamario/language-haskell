@@ -97,8 +97,8 @@ expressionTemplate get (DoExpression statements) = DoE (guardedTemplate $ get st
             (statementTemplate get . get <$> statements) ++ [NoBindS $ expressionTemplate get $ get result]
 expressionTemplate get (InfixExpression left op right) =
    UInfixE (expressionTemplate get $ get left) (expressionTemplate get $ get op) (expressionTemplate get $ get right)
-expressionTemplate get (LeftSectionExpression op right) =
-   InfixE Nothing (nameReferenceTemplate op) (Just $ expressionTemplate get $ get right)
+expressionTemplate get (LeftSectionExpression left op) =
+   InfixE (Just $ expressionTemplate get $ get left) (nameReferenceTemplate op) Nothing
 expressionTemplate get (LambdaExpression patterns body) =
    LamE (patternTemplate get . get <$> patterns) (expressionTemplate get $ get body)
 expressionTemplate get (LetExpression bindings body) =
@@ -114,8 +114,8 @@ expressionTemplate get (RecordExpression record fields) =
        e -> RecUpdE $ expressionTemplate get e)
    (fieldBindingTemplate get . get <$> fields)
 expressionTemplate get (ReferenceExpression name) = VarE (qnameTemplate name)
-expressionTemplate get (RightSectionExpression left op) =
-   InfixE (Just $ expressionTemplate get $ get left) (nameReferenceTemplate op) Nothing
+expressionTemplate get (RightSectionExpression op right) =
+   InfixE Nothing (nameReferenceTemplate op) (Just $ expressionTemplate get $ get right)
 expressionTemplate get (SequenceExpression start next end) = ArithSeqE $
    case (expressionTemplate get . get <$> next, expressionTemplate get . get <$> end)
    of (Nothing, Nothing) -> FromR s

@@ -82,7 +82,7 @@ class Haskell λ where
    caseExpression :: s (Expression l l d d) -> [s (CaseAlternative l l d d)] -> Expression λ l d s
    doExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    infixExpression :: s (Expression l l d d) -> s (Expression l l d d) -> s (Expression l l d d) -> Expression λ l d s
-   leftSectionExpression :: QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
+   leftSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
    lambdaExpression :: [s (Pattern l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    letExpression :: [s (Declaration l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    listComprehension :: s (Expression l l d d) -> NonEmpty (s (Statement l l d d)) -> Expression λ l d s
@@ -91,7 +91,7 @@ class Haskell λ where
    negate :: Expression λ l d s
    recordExpression :: s (Expression l l d d) -> [s (FieldBinding l l d d)] -> Expression λ l d s
    referenceExpression :: QualifiedName λ -> Expression λ l d d
-   rightSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
+   rightSectionExpression :: QualifiedName λ -> s (Expression l l d d) -> Expression λ l d s
    sequenceExpression :: s (Expression l l d d) -> Maybe (s (Expression l l d d)) -> Maybe (s (Expression l l d d))
                       -> Expression λ l d s
    tupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s

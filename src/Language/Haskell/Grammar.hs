@@ -410,8 +410,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                          <* delimiter "|"
                                          <*> (either id (rewrap Abstract.expressionStatement) <$> statement)
                                              `sepByNonEmpty` comma)
-                       <|> parens (Abstract.rightSectionExpression <$> infixExpression <*> qualifiedOperator
-                                   <|> Abstract.leftSectionExpression <$> qualifiedOperator <*> infixExpression)
+                       <|> parens (Abstract.leftSectionExpression <$> infixExpression <*> qualifiedOperator
+                                   <|> Abstract.rightSectionExpression
+                                          <$> (notFollowedBy (string "-" <* notSatisfyChar isSymbol)
+                                               *> qualifiedOperator)
+                                          <*> infixExpression)
                        <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
                                                                <$> wrap (Abstract.constructorReference
                                                                          <$> qualifiedConstructor))

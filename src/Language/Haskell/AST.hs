@@ -212,7 +212,7 @@ data Expression λ l d s =
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
-   | LeftSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+   | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
    | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
    | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
@@ -221,7 +221,7 @@ data Expression λ l d s =
    | Negate
    | RecordExpression (s (Abstract.Expression l l d d)) [s (Abstract.FieldBinding l l d d)]
    | ReferenceExpression (Abstract.QualifiedName λ)
-   | RightSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
+   | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
