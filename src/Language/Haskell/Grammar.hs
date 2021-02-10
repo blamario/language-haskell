@@ -12,14 +12,16 @@ import qualified Data.Char as Char (chr, isAlphaNum, isDigit, isHexDigit, isLett
 import Data.Data (Data)
 import Data.Either (isLeft, partitionEithers)
 import Data.Foldable (maximumBy, toList)
+import Data.Functor.Compose (getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ord (comparing)
 import Data.String (fromString)
 import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Null (null)
-import Data.Monoid.Textual (TextualMonoid, toString)
+import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
 import Data.Monoid.Instances.Positioned (LinePositioned, column, extract)
+import Data.Semigroup.Cancellative (isPrefixOf)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Text (Text)
@@ -850,9 +852,15 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
                  of LT -> Nothing
                     EQ | Textual.takeWhile_ False Char.isLetter nextLine `Set.notMember` reservedWords -> Nothing
                     _ -> oneExtendedLine indent nextLine a
-            where nextLine = Textual.dropWhile_ True Char.isSpace (Textual.dropWhile_ True isLineChar input)
+            where nextLine = nextLineOf input
+         nextLineOf = dropComments . Textual.dropWhile_ True Char.isSpace . Textual.dropWhile_ True isLineChar
+         dropComments s
+            | "--" `isPrefixOf` s || "{-" `isPrefixOf` s =
+                either (const s) (nextLineOf . snd . snd . head) $ getCompose $ getCompose $ getCompose
+                $ simply parsePrefix comment s
+            | otherwise = s
          terminators :: [Char]
-         terminators = ";)]}"
+         terminators = ",;)]}"
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
 startSepEndBy :: Alternative m => m a -> m sep -> m [a]
