@@ -7,8 +7,8 @@ module Language.Haskell.Grammar where
 import Control.Applicative
 import Control.Monad (void)
 import qualified Control.Monad
-import qualified Data.Char as Char (chr, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit, isSpace,
-                                    isSymbol, isUpper, ord)
+import qualified Data.Char as Char (chr, isAscii, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit,
+                                    isSpace, isSymbol, isUpper, ord)
 import Data.Data (Data)
 import Data.Either (isLeft, partitionEithers)
 import Data.Foldable (maximumBy, toList)
@@ -813,7 +813,7 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
 isLineChar, isNameTailChar, isSymbol :: Char -> Bool
 isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
-isSymbol c = Char.isSymbol c || c `Set.member` asciiSymbols
+isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c
 
 delimiter :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
 delimiter s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
