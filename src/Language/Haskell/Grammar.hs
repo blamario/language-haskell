@@ -648,7 +648,7 @@ moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexem
 
 qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
           => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-qualifier = Abstract.qualifiedName <$> optional (Abstract.moduleName <$> moduleLexeme <* string ".")
+qualifier = Abstract.qualifiedName <$> takeOptional (Abstract.moduleName <$> moduleLexeme <* string ".")
 
 qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
    qualifiedVariableIdentifier, qualifiedVariableSymbol
