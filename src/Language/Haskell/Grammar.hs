@@ -826,12 +826,13 @@ whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars) <?> "whitespa
                       <<|> pure ()
 
 comment :: (Show t, TextualMonoid t) => Parser g t t
-comment = try (string "{-"
-               <> concatMany (comment <<|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile isCommentChar)
-               <> string "-}"
-               <|> (string "--" <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
+comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
           <?> "comment"
    where isCommentChar c = c /= '-' && c /= '{'
+         blockComment =
+            string "{-"
+            <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
+            <> string "-}"
 
 blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
 blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
