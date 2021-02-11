@@ -390,7 +390,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                      <|> lExpression,
    lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->"
                                                  <*> expression
-                       <|> Abstract.letExpression <$ keyword "let" <*> declarations <* delimiter "in" <*> expression
+                       <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
                        <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression)
@@ -840,7 +840,10 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
             do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match p)
                -- don't stop at a higher indent unless there's a terminator
                void (filter (indent >=) inputColumn)
-                  <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators)) <|> eof)
+                  <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
+                                  <|> (string "else" <|> string "in"
+                                       <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
+                                  <|> eof)
                indent' <- inputColumn
                let cont' = cont . (item :)
                if indent == indent'
