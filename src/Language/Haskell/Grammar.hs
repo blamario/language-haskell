@@ -611,7 +611,7 @@ variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varSta
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail <?> "constructor"
 variableSymbolLexeme = filter validSymbol (takeCharsWhile1 isSymbol) <?> "variable symbol"
    where validSymbol tok = Textual.characterPrefix tok /= Just ':' && tok `Set.notMember` reservedOperators
-constructorSymbolLexeme = string ":" <> takeCharsWhile isSymbol
+constructorSymbolLexeme = filter (`Set.notMember` reservedOperators) (string ":" <> takeCharsWhile isSymbol)
 identifierTail = takeCharsWhile isNameTailChar
 
 reservedWords, reservedOperators :: (Ord t, TextualMonoid t) => Set.Set t
