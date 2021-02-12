@@ -820,7 +820,7 @@ delimiter s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ to
               <?> ("delimiter " <> show s)
 
 whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
-whiteSpace = spaceChars *> skipMany (lexicalComment *> spaceChars) <?> "whitespace"
+whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = (takeCharsWhile1 Char.isSpace
                        >>= \ws-> lift ([[WhiteSpace $ Text.pack $ toString mempty ws]], ()))
                       <<|> pure ()
