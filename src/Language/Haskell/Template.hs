@@ -60,7 +60,9 @@ instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) whe
 instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
    prettyViaTH (ImportClassOrType name members) =
       prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
-   prettyViaTH (ImportVar name) = prettyViaTH name
+   prettyViaTH (ImportVar name@(AST.Name local))
+      | not (Text.null local), c <- Text.head local, Char.isLetter c || c == '_' = prettyViaTH name
+      | otherwise = Ppr.parens (prettyViaTH name)
 
 instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> names)
@@ -208,10 +210,10 @@ conventionTemplate AST.StdCall = TH.StdCall
 conventionTemplate convention = error ("Calling Convention " ++ show convention ++ " is not supported by GHC")
 
 dataConstructorTemplate :: (forall a. f a -> a) -> DataConstructor Language Language f f -> Con
+dataConstructorTemplate get (Constructor name@(AST.Name local) [left, right]) | ":" `Text.isPrefixOf` local =
+   InfixC (bangTypeTemplate get $ get left) (nameTemplate name) (bangTypeTemplate get $ get right)
 dataConstructorTemplate get (Constructor name argTypes) =
-   NormalC (nameTemplate name) (bangTypeTemplate . get <$> argTypes)
-   where bangTypeTemplate (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate get $ get t)
-         bangTypeTemplate t = (Bang NoSourceUnpackedness NoSourceStrictness, typeTemplate get t)
+   NormalC (nameTemplate name) (bangTypeTemplate get . get <$> argTypes)
 dataConstructorTemplate get (RecordConstructor name fieldTypes) =
    RecC (nameTemplate name) (concat $ fieldTypeTemplate . get <$> fieldTypes)
    where fieldTypeTemplate (ConstructorFields names t)
@@ -258,6 +260,10 @@ statementTemplate get (BindStatement left right) =
    BindS (patternTemplate get $ get left) (expressionTemplate get $ get right)
 statementTemplate get (ExpressionStatement test) = NoBindS (expressionTemplate get $ get test)
 statementTemplate get (LetStatement declarations) = LetS (foldMap (declarationTemplates get . get) declarations)
+
+bangTypeTemplate :: (forall a. f a -> a) -> AST.Type Language Language f f -> (TH.Bang, TH.Type)
+bangTypeTemplate get (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate get $ get t)
+bangTypeTemplate get t = (Bang NoSourceUnpackedness NoSourceStrictness, typeTemplate get t)
 
 typeTemplate :: (forall a. f a -> a) -> AST.Type Language Language f f -> TH.Type
 typeTemplate get (ConstructorType con) = case (get con) of
