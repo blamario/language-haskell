@@ -648,7 +648,7 @@ moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexem
 
 qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
           => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-qualifier = Abstract.qualifiedName <$> takeOptional (Abstract.moduleName <$> moduleLexeme <* string ".")
+qualifier = Abstract.qualifiedName <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string "."))
 
 qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
    qualifiedVariableIdentifier, qualifiedVariableSymbol
@@ -802,13 +802,16 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
    isIdentifierStartChar = Char.isLetter
    isIdentifierFollowChar = isNameTailChar
    identifierToken word = lexicalToken (filter (`notElem` reservedWords) word)
-   lexicalToken p = snd <$> tmap addOtherToken (match p) <* lexicalWhiteSpace
-      where addOtherToken ([], (i, x)) = ([[Token Other $ extract i]], (i, x))
-            addOtherToken (t, (i, x)) = (t, (i, x))
+   lexicalToken p = storeToken p <* lexicalWhiteSpace
    keyword s = lexicalToken (string s
                              *> notSatisfyChar isNameTailChar
                              <* lift ([[Token Keyword $ extract s]], ()))
                <?> ("keyword " <> show s)
+
+storeToken :: TextualMonoid t => Parser g t a -> Parser g t a
+storeToken p = snd <$> tmap addOtherToken (match p)
+   where addOtherToken ([], (i, x)) = ([[Token Other $ Text.pack $ toString mempty i]], (i, x))
+         addOtherToken (t, (i, x)) = (t, (i, x))
 
 isLineChar, isNameTailChar, isSymbol :: Char -> Bool
 isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
