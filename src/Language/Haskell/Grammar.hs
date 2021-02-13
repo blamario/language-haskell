@@ -684,7 +684,7 @@ decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
 octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
 hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
 integer = fst . head
-          <$> token (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy exponent
+          <$> token (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy (string "." *> decimal <|> exponent)
                      <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
                      <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal))
 float = fst . head . Numeric.readFloat . toString mempty
