@@ -92,7 +92,7 @@ expressionTemplate get (ConstructorExpression con) = case (get con)
    of ConstructorReference name -> ConE (qnameTemplate name)
       EmptyListConstructor -> ListE []
       TupleConstructor n -> TupE (replicate n Nothing)
-      UnitConstructor -> ConE '()
+      UnitConstructor -> TupE []
 expressionTemplate get (CaseExpression scrutinee alternatives) =
    CaseE (expressionTemplate get $ get scrutinee) (caseAlternativeTemplate get . get <$> alternatives)
 expressionTemplate get (DoExpression statements) = DoE (guardedTemplate $ get statements)
