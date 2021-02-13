@@ -341,7 +341,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                  <|> foreignReturnType,
    foreignReturnType = foreignArgType
                        <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
-                                                              <$ delimiter "(" <* delimiter ")"),
+                                                              <$ terminator "(" <* terminator ")"),
    foreignArgType = Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedTypeConstructor)
                     <|> Abstract.typeApplication <$> wrap foreignArgType <*> wrap (Abstract.strictType <$> wrap aType),
 
@@ -395,7 +395,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression)
                  <|> dExpression,
-   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* delimiter "of"
+   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of"
                                                     <*> blockOf (wrap alternative)
                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
@@ -492,13 +492,13 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
               <|> Abstract.wildcardPattern <$ keyword "_"
               <|> parens (pattern
                           <|> Abstract.tuplePattern
-                              <$> ((:|) <$> wrap pattern <*> some (delimiter "," *> wrap pattern)))
+                              <$> ((:|) <$> wrap pattern <*> some (terminator "," *> wrap pattern)))
               <|> Abstract.listPattern <$> brackets (wrap pattern `sepBy` comma)
               <|> Abstract.irrefutablePattern <$ delimiter "~" <*> wrap aPattern,
    fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pattern,
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
-                        <|> Abstract.unitConstructor <$ delimiter "(" <* delimiter ")"
-                        <|> Abstract.emptyListConstructor <$ delimiter "[" <* delimiter "]"
+                        <|> Abstract.unitConstructor <$ terminator "(" <* terminator ")"
+                        <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
                         <|> Abstract.tupleConstructor . length <$> parens (some comma),
 
 -- pat 	→ 	lpat qconop pat 	    (infix constructor)
@@ -525,12 +525,12 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    qualifiedVariable = qualifiedVariableIdentifier <|> parens qualifiedVariableSymbol,
    constructor = constructorIdentifier <|> parens constructorSymbol,
    qualifiedConstructor = qualifiedConstructorIdentifier <|> parens qualifiedConstructorSymbol,
-   variableOperator = variableSymbol <|> delimiter "`" *> variableIdentifier <* delimiter "`",
+   variableOperator = variableSymbol <|> terminator "`" *> variableIdentifier <* terminator "`",
    qualifiedVariableOperator = qualifiedVariableSymbol
-                               <|> delimiter "`" *> qualifiedVariableIdentifier <* delimiter "`",
-   constructorOperator = constructorSymbol <|> delimiter "`" *> constructorIdentifier <* delimiter "`",
+                               <|> terminator "`" *> qualifiedVariableIdentifier <* terminator "`",
+   constructorOperator = constructorSymbol <|> terminator "`" *> constructorIdentifier <* terminator "`",
    qualifiedConstructorOperator = qualifiedConstructorSymbol
-                                  <|> delimiter "`" *> qualifiedConstructorIdentifier <* delimiter "`",
+                                  <|> terminator "`" *> qualifiedConstructorIdentifier <* terminator "`",
    operator = variableOperator <|> constructorOperator,
    qualifiedOperator = qualifiedVariableOperator <|> qualifiedConstructorOperator <?> "qualified operator",
    
@@ -662,7 +662,9 @@ qualifiedConstructorIdentifier = token (qualifier <*> constructorIdentifier)
 qualifiedTypeConstructor = qualifiedConstructorIdentifier
 qualifiedTypeClass = qualifiedConstructorIdentifier
 qualifiedVariableSymbol = token (qualifier <*> variableSymbol)
-qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol)
+qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol
+                                    <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
+                                        <$> string ":" <* notSatisfyChar isSymbol)
 
 -- varid 	     	    (variables)
 -- conid 	     	    (constructors)
@@ -821,9 +823,13 @@ isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c
 
-delimiter :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
-delimiter s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
+delimiter, terminator :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
+delimiter s = lexicalToken (string s
+                            <* notSatisfyChar isSymbol
+                            <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
               <?> ("delimiter " <> show s)
+terminator s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
+               <?> ("terminating delimiter " <> show s)
 
 whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
