@@ -651,7 +651,7 @@ qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, Te
           => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
 qualifier = Abstract.qualifiedName
             <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
-                              <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 Char.isLower))
+                              <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
 
 qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
    qualifiedVariableIdentifier, qualifiedVariableSymbol
@@ -860,13 +860,13 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
             if null nextLine then Just a
             else case compare (currentColumn nextLine) indent
                  of LT -> Nothing
-                    EQ | Textual.takeWhile_ False Char.isLetter nextLine `Set.notMember` reservedWords -> Nothing
+                    EQ | Textual.takeWhile_ False isNameTailChar nextLine `Set.notMember` reservedWords -> Nothing
                     _ -> oneExtendedLine indent nextLine a
             where nextLine = nextLineOf input
          nextLineOf = dropComments . Textual.dropWhile_ True Char.isSpace . Textual.dropWhile_ True isLineChar
          dropComments s
             | "--" `isPrefixOf` s || "{-" `isPrefixOf` s =
-                either (const s) (nextLineOf . snd . snd . head) $ getCompose $ getCompose $ getCompose
+                either (const s) (nextLineOf . fst . snd . head) $ getCompose $ getCompose $ getCompose
                 $ simply parsePrefix comment s
             | otherwise = s
          terminators :: [Char]
