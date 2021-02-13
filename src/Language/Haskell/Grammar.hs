@@ -429,12 +429,10 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "->"
                                                                                     <*> expression))
                  <*> whereClauses,
-   statements = braces (Abstract.guardedExpression
-                        <$> many (either id (rewrap Abstract.expressionStatement) <$> statement <* some semi)
-                        <*> expression <* optional semi)
-                <|> (blockOf statement >>= \stats-> if null stats then fail "empty do block"
-                     else Abstract.guardedExpression (either id (rewrap Abstract.expressionStatement) <$> init stats)
-                          <$> either (const $ fail "do block must end with an expression") pure (last stats)),
+   statements = blockOf statement >>= \stats->
+                   if null stats then fail "empty do block"
+                   else Abstract.guardedExpression (either id (rewrap Abstract.expressionStatement) <$> init stats)
+                        <$> either (const $ fail "do block must end with an expression") pure (last stats),
    statement = Left <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
                               <|> Abstract.letStatement <$ keyword "let" <*> declarations)
                <|> Right <$> expression,
