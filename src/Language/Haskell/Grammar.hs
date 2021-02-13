@@ -644,11 +644,14 @@ moduleId = Abstract.moduleName <$> token moduleLexeme
 
 moduleLexeme :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
              => Parser g t (NonEmpty (Abstract.Name l))
-moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme) `sepByNonEmpty` string "."
+moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme <?> "module name")
+               `sepByNonEmpty` string "."
 
 qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
           => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-qualifier = Abstract.qualifiedName <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string "."))
+qualifier = Abstract.qualifiedName
+            <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
+                              <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 Char.isLower))
 
 qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
    qualifiedVariableIdentifier, qualifiedVariableSymbol
