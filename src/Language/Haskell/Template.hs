@@ -4,6 +4,7 @@ module Language.Haskell.Template where
 
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
+import Data.List (nub)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, unpack)
@@ -87,7 +88,7 @@ expressionTemplate get (ConditionalExpression test true false) =
    CondE (expressionTemplate get $ get test) (expressionTemplate get $ get true) (expressionTemplate get $ get false)
 expressionTemplate get (ConstructorExpression con) = case (get con)
    of ConstructorReference name -> ConE (qnameTemplate name)
-      EmptyListConstructor -> ConE '[]
+      EmptyListConstructor -> ListE []
       TupleConstructor n -> TupE (replicate n Nothing)
       UnitConstructor -> ConE '()
 expressionTemplate get (CaseExpression scrutinee alternatives) =
@@ -183,14 +184,23 @@ declarationTemplates get (NewtypeDeclaration context lhs constructor derivings)
 declarationTemplates get (TypeSynonymDeclaration lhs t)
    | SimpleTypeLHS con vars <- get lhs =
      [TySynD (nameTemplate con) (PlainTV . nameTemplate <$> vars) (typeTemplate get $ get t)]
-declarationTemplates get (TypeSignature names context t)
-   | NoContext <- get context = [SigD (nameTemplate name) (typeTemplate get $ get t) | name <- toList names]
-
+declarationTemplates get (TypeSignature names context t) =
+   [SigD (nameTemplate name) (inContext $ typeTemplate get $ get t) | name <- toList names]
+   where inContext = case get context
+                     of NoContext -> id
+                        ctx -> ForallT (nub $ freeContextVars get ctx <> freeTypeVars get (get t))
+                                       (contextTemplate get ctx)
 contextTemplate :: (forall a. f a -> a) -> Context Language Language f f -> Cxt
 contextTemplate get (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
 contextTemplate get (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate get $ get t)]
 contextTemplate get (Constraints cs) = foldMap (contextTemplate get . get) cs
 contextTemplate get NoContext = []
+
+freeContextVars :: (forall a. f a -> a) -> Context Language Language f f -> [TyVarBndr]
+freeContextVars get (SimpleConstraint cls var) = [PlainTV $ nameTemplate var]
+freeContextVars get (ClassConstraint cls t) = freeTypeVars get (get t)
+freeContextVars get (Constraints cs) = nub (foldMap (freeContextVars get . get) cs)
+freeContextVars get NoContext = []
 
 conventionTemplate :: CallingConvention l -> Callconv
 conventionTemplate AST.CCall = TH.CCall
@@ -262,6 +272,16 @@ typeTemplate get (StrictType t) = typeTemplate get (get t)
 typeTemplate get (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate get . get <$> items)
 typeTemplate get (TypeApplication left right) = AppT (typeTemplate get $ get left) (typeTemplate get $ get right)
 typeTemplate get (TypeVariable name) = VarT (nameTemplate name)
+
+freeTypeVars :: (forall a. f a -> a) -> AST.Type Language Language f f -> [TyVarBndr]
+freeTypeVars get ConstructorType{} = []
+freeTypeVars get FunctionConstructorType = []
+freeTypeVars get (FunctionType from to) = nub (freeTypeVars get (get from) <> freeTypeVars get (get to))
+freeTypeVars get (ListType itemType) = freeTypeVars get (get itemType)
+freeTypeVars get (StrictType t) = freeTypeVars get (get t)
+freeTypeVars get (TupleType items) = nub (foldMap (freeTypeVars get . get) items)
+freeTypeVars get (TypeApplication left right) = nub (freeTypeVars get (get left) <> freeTypeVars get (get right))
+freeTypeVars get (TypeVariable name) = [PlainTV $ nameTemplate name]
 
 nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
