@@ -865,6 +865,7 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
             | otherwise = s
          terminators :: [Char]
          terminators = ",;)]}"
+
 -- | Parses a sequence of zero or more occurrences of @p@, separated and optionally started or ended by one or more of
 -- @sep@.
 startSepEndBy :: Alternative m => m a -> m sep -> m [a]
