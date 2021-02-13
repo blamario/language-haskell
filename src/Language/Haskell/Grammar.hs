@@ -866,7 +866,8 @@ blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pu
             if null nextLine then Just a
             else case compare (currentColumn nextLine) indent
                  of LT -> Nothing
-                    EQ | Textual.takeWhile_ False isNameTailChar nextLine `Set.notMember` reservedWords -> Nothing
+                    EQ | Textual.takeWhile_ False isNameTailChar nextLine `Set.notMember` reservedWords
+                         && all (`notElem` terminators) (Textual.characterPrefix nextLine) -> Nothing
                     _ -> oneExtendedLine indent nextLine a
             where nextLine = nextLineOf input
          nextLineOf = dropComments . Textual.dropWhile_ True Char.isSpace . Textual.dropWhile_ True isLineChar
