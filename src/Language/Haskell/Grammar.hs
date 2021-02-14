@@ -5,12 +5,13 @@
 module Language.Haskell.Grammar where
 
 import Control.Applicative
+import Control.Arrow (first, second)
 import Control.Monad (void)
 import qualified Control.Monad
 import qualified Data.Char as Char (chr, isAscii, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit,
                                     isSpace, isSymbol, isUpper, ord)
 import Data.Data (Data)
-import Data.Either (isLeft, partitionEithers)
+import Data.Either (lefts, isLeft, partitionEithers)
 import Data.Foldable (maximumBy, toList)
 import Data.Functor.Compose (getCompose)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -33,6 +34,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
 import Text.Parser.Token (braces, brackets, comma, parens, semi)
 import qualified Rank2.TH
+import qualified Transformation.Deep as Deep
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
@@ -98,7 +100,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
-   statement :: p (Either (f (Abstract.Statement l l f f)) (f (Abstract.Expression l l f f))),
+   statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
    fieldBinding :: p (Abstract.FieldBinding l l f f),
    pattern :: p (Abstract.Pattern l l f f),
    lPattern :: p (Abstract.Pattern l l f f),
@@ -133,10 +135,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    body = let ordered impdecs
                  | null rightImports = Just (leftImports, rightDeclarations)
                  | otherwise = Nothing
-                 where (lefts, rest) = span isLeft impdecs
-                       (leftImports, _) = partitionEithers lefts
+                 where (prefix, rest) = span isLeft (Deep.eitherFromSum . snd <$> impdecs)
+                       leftImports = lefts prefix
                        (rightImports, rightDeclarations) = partitionEithers rest
-          in mapMaybe ordered (blockOf (Left <$> wrap importDeclaration <|> Right <$> wrap topLevelDeclaration))
+          in mapMaybe ordered (blockOf (Deep.InL <$> wrap importDeclaration
+                                        <|> Deep.InR <$> wrap topLevelDeclaration))
              <?> "imports followed by declarations",
 
 -- module 	→ 	module modid [exports] where body 
@@ -184,11 +187,11 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
       <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
-          <*> (keyword "where" *> blockOf (wrap inClassDeclaration) <|> pure [])
+          <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
           <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
-          <*> (keyword "where" *> blockOf (wrap inInstanceDeclaration) <|> pure [])
+          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
       <|> foreignDeclaration
       <|> declaration,
@@ -203,7 +206,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	foreign fdecl
 -- 	| 	decl
 
-   declarations = blockOf (wrap declaration),
+   declarations = blockOf declaration,
    declaration = generalDeclaration
                  <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                   <*> wrap rhs <*> whereClauses,
@@ -395,8 +398,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression)
                  <|> dExpression,
-   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of"
-                                                    <*> blockOf (wrap alternative)
+   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> blockOf alternative
                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
@@ -410,7 +412,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                          <* delimiter ".." <*> optional expression
                                      <|> Abstract.listComprehension <$> expression
                                          <* delimiter "|"
-                                         <*> (either id (rewrap Abstract.expressionStatement) <$> statement)
+                                         <*> (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum
+                                              <$> statement)
                                              `sepByNonEmpty` comma)
                        <|> parens (Abstract.leftSectionExpression <$> infixExpression <*> qualifiedOperator
                                    <|> Abstract.rightSectionExpression
@@ -431,11 +434,13 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                  <*> whereClauses,
    statements = blockOf statement >>= \stats->
                    if null stats then fail "empty do block"
-                   else Abstract.guardedExpression (either id (rewrap Abstract.expressionStatement) <$> init stats)
-                        <$> either (const $ fail "do block must end with an expression") pure (last stats),
-   statement = Left <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
-                              <|> Abstract.letStatement <$ keyword "let" <*> declarations)
-               <|> Right <$> expression,
+                   else Abstract.guardedExpression
+                           (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . snd <$> init stats)
+                        <$> either (const $ fail "do block must end with an expression") pure
+                                   (Deep.eitherFromSum $ snd $ last stats),
+   statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
+                                  <|> Abstract.letStatement <$ keyword "let" <*> declarations)
+               <|> Deep.InR <$> expression,
    fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> expression,
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
@@ -844,10 +849,11 @@ comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> take
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
-blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t)) => Parser g t a -> Parser g t [a]
-blockOf p = braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
+blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t))
+        => Parser g t (node NodeWrap NodeWrap) -> Parser g t [NodeWrap (node NodeWrap NodeWrap)]
+blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
-            do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match p)
+            do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match $ wrap p)
                -- don't stop at a higher indent unless there's a terminator
                void (filter (indent >=) inputColumn)
                   <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
@@ -892,5 +898,5 @@ instance OutlineMonoid (LinePositioned Text) where
 
 inputColumn :: OutlineMonoid t => Parser g t Int
 inputColumn = currentColumn <$> getInput
-
+                                  
 $(Rank2.TH.deriveAll ''HaskellGrammar)
