@@ -42,7 +42,7 @@ import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(.
 
 import Prelude hiding (exponent, filter, null)
 
-type Parser = ParserT ((,) [[Lexeme]])
+type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -120,12 +120,12 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f)
 }
 
-grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language NodeWrap) t), Ord t, Show t, OutlineMonoid t)
-            => Grammar (HaskellGrammar AST.Language NodeWrap) Parser t
+grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t)
+            => Grammar (HaskellGrammar AST.Language (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
    
 grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-        => GrammarBuilder (HaskellGrammar l NodeWrap) g Parser t
+        => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
@@ -789,14 +789,14 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- cntrl 	→ 	ascLarge | @ | [ | \ | ] | ^ | _
 -- gap 	→ 	\ whitechar {whitechar} \
 
-type NodeWrap = (,) (Position, ParsedLexemes, Position)
+type NodeWrap s = (,) (Position, ParsedLexemes s, Position)
 
-wrap :: TextualMonoid t => Parser g t a -> Parser g t (NodeWrap a)
+wrap :: TextualMonoid t => Parser g t a -> Parser g t (NodeWrap t a)
 wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (Trailing []) <$>)
    where surround start (lexemes, p) end = ((start, lexemes, end), p)
          store (wss, (Trailing ws', a)) = (mempty, (Trailing $ ws' <> concat wss, a))
 
-rewrap :: (NodeWrap a -> b) -> NodeWrap a -> NodeWrap b
+rewrap :: (NodeWrap t a -> b) -> NodeWrap t a -> NodeWrap t b
 rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 
 instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
@@ -805,7 +805,7 @@ instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
 
 instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
    lexicalComment = do c <- comment
-                       lift ([[Comment $ extract c]], ())
+                       lift ([[Comment c]], ())
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
    isIdentifierFollowChar = isNameTailChar
@@ -813,12 +813,12 @@ instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) wher
    lexicalToken p = storeToken p <* lexicalWhiteSpace
    keyword s = lexicalToken (string s
                              *> notSatisfyChar isNameTailChar
-                             <* lift ([[Token Keyword $ extract s]], ()))
+                             <* lift ([[Token Keyword s]], ()))
                <?> ("keyword " <> show s)
 
 storeToken :: TextualMonoid t => Parser g t a -> Parser g t a
 storeToken p = snd <$> tmap addOtherToken (match p)
-   where addOtherToken ([], (i, x)) = ([[Token Other $ Text.pack $ toString mempty i]], (i, x))
+   where addOtherToken ([], (i, x)) = ([[Token Other i]], (i, x))
          addOtherToken (t, (i, x)) = (t, (i, x))
 
 isLineChar, isNameTailChar, isSymbol :: Char -> Bool
@@ -829,15 +829,15 @@ isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymb
 delimiter, terminator :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
 delimiter s = lexicalToken (string s
                             <* notSatisfyChar isSymbol
-                            <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
+                            <* lift ([[Token Delimiter s]], ()))
               <?> ("delimiter " <> show s)
-terminator s = lexicalToken (string s <* lift ([[Token Delimiter $ Text.pack $ toString mempty s]], ()))
+terminator s = lexicalToken (string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
 
 whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = (takeCharsWhile1 Char.isSpace
-                       >>= \ws-> lift ([[WhiteSpace $ Text.pack $ toString mempty ws]], ()))
+                       >>= \ws-> lift ([[WhiteSpace ws]], ()))
                       <<|> pure ()
 
 comment :: (Show t, TextualMonoid t) => Parser g t t
@@ -850,7 +850,7 @@ comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> take
             <> string "-}"
 
 blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t))
-        => Parser g t (node NodeWrap NodeWrap) -> Parser g t [NodeWrap (node NodeWrap NodeWrap)]
+        => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
             do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match $ wrap p)

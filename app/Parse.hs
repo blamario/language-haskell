@@ -85,16 +85,15 @@ main' Opts{..} = case optsFile
                             ModuleMode     -> go Grammar.haskellModule "<stdin>"
                             ExpressionMode -> go Grammar.expression "<stdin>"
    where
-      go :: (Data a, Show a, Template.PrettyViaTH a, a ~ g l l Placed Placed, l ~ Language,
-             Deep.Functor (Rank2.Map Grammar.NodeWrap Placed) (g l l),
-             Deep.Foldable Reserializer.Serialization (g l l)) =>
-            (forall p. Functor p => Grammar.HaskellGrammar l Grammar.NodeWrap p -> p (Grammar.NodeWrap (g l l Grammar.NodeWrap Grammar.NodeWrap)))
+      go :: (Data a, Show a, Template.PrettyViaTH a, a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+             Deep.Functor (Rank2.Map w Placed) (g l l), Deep.Foldable (Reserializer.Serialization Text) (g l l)) =>
+            (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
          -> String -> Text -> IO ()
       go production filename contents =
          report contents (getCompose $ resolvePositions contents . snd
                           <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
       report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language,
-                 Deep.Foldable Reserializer.Serialization (g l l))
+                 Deep.Foldable (Reserializer.Serialization Text) (g l l))
              => Text -> ParseResults (LinePositioned Text) [a] -> IO ()
       report _ (Right [x]) = case optsOutput
                                   of Original -> Text.putStr (Reserializer.reserialize x)
