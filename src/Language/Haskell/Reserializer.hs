@@ -43,15 +43,19 @@ adjustPositions node@((pos, _, _), _) = evalState (Full.traverse PositionAdjustm
 
 -- | Serializes the tree back into the text it was parsed from.
 reserialize :: Deep.Foldable Serialization g => Parsed (g Parsed Parsed) -> Text
-reserialize = finalize . (`runState` (0, [])) . getAp . Full.foldMap Serialization
-   where finalize (s, (_pos, rest)) = s <> foldMap lexemeText rest
+reserialize = foldMap lexemeText . lexemes
+
+-- | Serializes the tree into the lexemes it was parsed from.
+lexemes :: Deep.Foldable Serialization g => Parsed (g Parsed Parsed) -> [Lexeme]
+lexemes = finalize . (`runState` (0, [])) . getAp . Full.foldMap Serialization
+   where finalize (s, (_pos, rest)) = s <> rest
 
 -- | The length of the source code parsed into the argument node
 sourceLength :: (Rank2.Foldable (g (Const (Sum Int))),
                  Deep.Foldable (Transformation.Rank2.Fold Parsed (Sum Int)) g) => Parsed (g Parsed Parsed) -> Int
 sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
                                                                  <> Transformation.Rank2.foldMap nodeLength node)
-   where nodeLength ((_, Trailing lexemes, _), _) = foldMap (Sum . Text.length . lexemeText) lexemes
+   where nodeLength ((_, Trailing ls, _), _) = foldMap (Sum . Text.length . lexemeText) ls
 
 type Parsed = (,) (Int, ParsedLexemes, Int)
 
@@ -62,7 +66,7 @@ data PositionAdjustment = PositionAdjustment
 
 instance Transformation.Transformation Serialization where
     type Domain Serialization = Parsed
-    type Codomain Serialization = Const (Ap (State (Int, [Lexeme])) Text)
+    type Codomain Serialization = Const (Ap (State (Int, [Lexeme])) [Lexeme])
 
 instance Transformation.Transformation PositionAdjustment where
     type Domain PositionAdjustment = Parsed
@@ -70,19 +74,19 @@ instance Transformation.Transformation PositionAdjustment where
 
 instance Serialization `Transformation.At` g Parsed Parsed where
    Serialization $ ((nodePos, Trailing nodeLexemes, _), _) = Const (Ap $ state f)
-      where f :: (Int, [Lexeme]) -> (Text, (Int, [Lexeme]))
-            f (pos, lexemes)
-               | nodePos > pos, l:ls <- lexemes, t <- lexemeText l = first (t <>) (f (pos + Text.length t, ls))
-               | otherwise = (mempty, (pos, nodeLexemes <> lexemes))
+      where f :: (Int, [Lexeme]) -> ([Lexeme], (Int, [Lexeme]))
+            f (pos, parentLexemes)
+               | nodePos > pos, l:ls <- parentLexemes = first (l:) (f (pos + Text.length (lexemeText l), ls))
+               | otherwise = (mempty, (pos, nodeLexemes <> parentLexemes))
 
 instance (Rank2.Foldable (g Parsed), Deep.Foldable Serialization g) => Full.Foldable Serialization g where
    foldMap trans ((nodeStart, Trailing nodeLexemes, _), node) = Ap (state f)
-      where f :: (Int, [Lexeme]) -> (Text, (Int, [Lexeme]))
-            f (pos, lexemes)
-               | nodeStart > pos, l:ls <- lexemes, t <- lexemeText l = first (t <>) (f (pos + Text.length t, ls))
-               | otherwise = let (t, (pos', lexemes')) = runState (getAp $ Deep.foldMap trans node) (pos, nodeLexemes)
-                                 t' = foldMap lexemeText lexemes'
-                             in (t <> t', (pos' + Text.length t', lexemes))
+      where f :: (Int, [Lexeme]) -> ([Lexeme], (Int, [Lexeme]))
+            f (pos, parentLexemes)
+               | nodeStart > pos, l:ls <- parentLexemes = first (l:) (f (pos + Text.length (lexemeText l), ls))
+               | let (ls, (pos', lexemes')) = runState (getAp $ Deep.foldMap trans node) (pos, nodeLexemes) =
+                     (ls <> lexemes',
+                      (pos' + getSum (foldMap (Sum . Text.length . lexemeText) lexemes'), parentLexemes))
 
 instance (Rank2.Foldable (g (Const (Sum Int))),
           Deep.Foldable (Transformation.Rank2.Fold Parsed (Sum Int)) g) =>
