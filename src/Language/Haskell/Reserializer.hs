@@ -4,8 +4,8 @@
 
 -- | This module exports functions for reserializing the parsed tree from the tokens stored with every node.
 
-module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..),
-                                      adjustPositions, reserialize, sourceLength,
+module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..), Wrapped,
+                                      adjustPositions, lexemes, reserialize, sourceLength, mapWrappings,
                                       PositionAdjustment, Serialization) where
 
 import Control.Arrow (first)
@@ -23,7 +23,9 @@ import qualified Transformation.Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 
-type Parsed s = (,) (Int, ParsedLexemes s, Int)
+type Parsed s = Wrapped Int s
+
+type Wrapped pos s = (,) (pos, ParsedLexemes s, pos)
 
 newtype ParsedLexemes s = Trailing [Lexeme s]
                           deriving (Data, Eq, Functor, Show, Semigroup, Monoid)
@@ -65,6 +67,16 @@ sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
 data Serialization s = Serialization
 -- | Transformation type used by 'adjustPositions'
 data PositionAdjustment s = PositionAdjustment
+
+-- | Map the stored positions and lexeme inputs in the entire tree and its wrapping
+mapWrappings :: forall g pos pos' s s'. Deep.Functor (Transformation.Rank2.Map (Wrapped pos s) (Wrapped pos' s')) g
+             => (pos -> pos') -> (s -> s')
+             -> Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
+             -> Wrapped pos' s' (g (Wrapped pos' s') (Wrapped pos' s'))
+mapWrappings f g x = mapWrapping ((mapWrapping Transformation.Rank2.<$>) <$> x)
+   where mapWrapping :: forall a. Wrapped pos s a -> Wrapped pos' s' a
+         mapWrapping ((start, ls, end), a) = ((f start, g <$> ls, f end), a)
+{-# INLINE mapWrappings #-}
 
 instance Transformation.Transformation (Serialization s) where
     type Domain (Serialization s) = Parsed s

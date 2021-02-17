@@ -2,7 +2,7 @@
 
 module Main where
 
-import Language.Haskell (Placed, parseModule, resolvePosition, resolvePositions)
+import Language.Haskell (Placed, parseModule, resolvePositions)
 import Language.Haskell.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST

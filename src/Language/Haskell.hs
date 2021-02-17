@@ -2,7 +2,7 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, resolvePosition, resolvePositions, Placed) where
+module Language.Haskell (parseModule, resolvePositions, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
@@ -28,11 +28,7 @@ type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text), q ~ Placed, Deep.Functor (Rank2.Map p q) g)
                  => Text -> p (g p p) -> q (g q q)
-resolvePositions src t = resolvePosition src ((resolvePosition src Rank2.<$>) <$> t)
-
--- | Replace the stored positions of the given node with offset from the start of the given source text
-resolvePosition :: Text -> Grammar.NodeWrap (LinePositioned Text) a -> Placed a
-resolvePosition src = \((start, ls, end), a)-> ((Position.offset src start, extract <$> ls, Position.offset src end), a)
+resolvePositions src = Reserializer.mapWrappings (Position.offset src) extract
 
 -- | Parse the given text of a single module.
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (Abstract.Module AST.Language AST.Language Placed Placed)]

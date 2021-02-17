@@ -32,17 +32,22 @@ import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
+import Text.Parser.Input.Position (mapOffsets)
 import Text.Parser.Token (braces, brackets, comma, parens, semi)
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
+import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
-import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..))
+import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), Wrapped,
+                                      lexemes, mapWrappings)
 
 import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
+
+type PositionMap t = Transformation.Rank2.Map (Wrapped Position t) (Wrapped Int t)
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -120,11 +125,31 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f)
 }
 
-grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t)
+grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t,
+                Deep.Foldable (Serialization t) (Abstract.CaseAlternative AST.Language AST.Language),
+                Deep.Foldable (Serialization t) (Abstract.Declaration AST.Language AST.Language),
+                Deep.Foldable (Serialization t) (Deep.Sum (Abstract.Import AST.Language AST.Language)
+                                                          (Abstract.Declaration AST.Language AST.Language)),
+                Deep.Foldable (Serialization t) (Deep.Sum (Abstract.Statement AST.Language AST.Language)
+                                                          (Abstract.Expression AST.Language AST.Language)),
+                Deep.Functor (PositionMap t) (Abstract.CaseAlternative AST.Language AST.Language),
+                Deep.Functor (PositionMap t) (Abstract.Declaration AST.Language AST.Language),
+                Deep.Functor (PositionMap t) (Abstract.Expression AST.Language AST.Language),
+                Deep.Functor (PositionMap t) (Abstract.Statement AST.Language AST.Language),
+                Deep.Functor (PositionMap t) (Abstract.Import AST.Language AST.Language))
             => Grammar (HaskellGrammar AST.Language (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
-   
-grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+
+grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                      Deep.Foldable (Serialization t) (Abstract.CaseAlternative l l),
+                      Deep.Foldable (Serialization t) (Abstract.Declaration l l),
+                      Deep.Foldable (Serialization t) (Deep.Sum (Abstract.Import l l) (Abstract.Declaration l l)),
+                      Deep.Foldable (Serialization t) (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l)),
+                      Deep.Functor (PositionMap t) (Abstract.CaseAlternative l l),
+                      Deep.Functor (PositionMap t) (Abstract.Declaration l l),
+                      Deep.Functor (PositionMap t) (Abstract.Expression l l),
+                      Deep.Functor (PositionMap t) (Abstract.Statement l l),
+                      Deep.Functor (PositionMap t) (Abstract.Import l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (whiteSpace
@@ -849,11 +874,14 @@ comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> take
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
-blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t))
+blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
+            Deep.Foldable (Serialization t) node,
+            Deep.Functor (PositionMap t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
-            do item <- mapMaybe (uncurry $ oneExtendedLine indent) (match $ wrap p)
+            do rest <- getInput
+               item <- mapMaybe (oneExtendedLine indent rest) (wrap p)
                -- don't stop at a higher indent unless there's a terminator
                void (filter (indent >=) inputColumn)
                   <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
@@ -866,20 +894,14 @@ blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlo
                   then many semi *> alignedBlock cont' indent
                   else some semi *> alignedBlock cont' indent <|> cont' []
             <|> cont []
-         oneExtendedLine indent input a =
-            if null nextLine then Just a
-            else case compare (currentColumn nextLine) indent
-                 of LT -> Nothing
-                    EQ | Textual.takeWhile_ False isNameTailChar nextLine `Set.notMember` reservedWords
-                         && all (`notElem` terminators) (Textual.characterPrefix nextLine) -> Nothing
-                    _ -> oneExtendedLine indent nextLine a
-            where nextLine = nextLineOf input
-         nextLineOf = dropComments . Textual.dropWhile_ True Char.isSpace . Textual.dropWhile_ True isLineChar
-         dropComments s
-            | "--" `isPrefixOf` s || "{-" `isPrefixOf` s =
-                either (const s) (nextLineOf . fst . snd . head) $ getCompose $ getCompose $ getCompose
-                $ simply parsePrefix comment s
-            | otherwise = s
+         oneExtendedLine indent input node = allIndented (lexemes $ mapOffsets input (flip mapWrappings id) node)
+            where allIndented (WhiteSpace ws : Token Other token : rest)
+                     | Textual.all isLineChar ws = allIndented rest
+                     | currentColumn token < indent = Nothing
+                     | currentColumn token == indent && token `Set.notMember` reservedWords
+                       && all (`notElem` terminators) (characterPrefix token) = Nothing
+                  allIndented (_ : rest) = allIndented rest
+                  allIndented [] = Just node
          terminators :: [Char]
          terminators = ",;)]}"
 
