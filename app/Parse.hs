@@ -28,7 +28,7 @@ import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, ParseResults, parseComplete, failureDescription)
+import Text.Grampa (Ambiguous, Grammar, ParseResults, Position, parseComplete, failureDescription)
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import ReprTree
 import System.FilePath (FilePath, addExtension, combine, takeDirectory)
@@ -86,7 +86,9 @@ main' Opts{..} = case optsFile
                             ExpressionMode -> go Grammar.expression "<stdin>"
    where
       go :: (Data a, Show a, Template.PrettyViaTH a, a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
-             Deep.Functor (Rank2.Map w Placed) (g l l), Deep.Foldable (Reserializer.Serialization Text) (g l l)) =>
+             Deep.Functor (Rank2.Map (Reserializer.Wrapped Position (LinePositioned Text)) Placed) (g l l),
+             Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
+             Deep.Foldable (Reserializer.Serialization Text) (g l l)) =>
             (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
          -> String -> Text -> IO ()
       go production filename contents =

@@ -13,7 +13,8 @@ import qualified Data.Char as Char (chr, isAscii, isAlphaNum, isDigit, isHexDigi
 import Data.Data (Data)
 import Data.Either (lefts, isLeft, partitionEithers)
 import Data.Foldable (maximumBy, toList)
-import Data.Functor.Compose (getCompose)
+import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ord (comparing)
@@ -40,6 +41,7 @@ import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST (Language)
+import qualified Language.Haskell.Disambiguator as Disambiguator
 import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), Wrapped,
                                       lexemes, mapWrappings)
 
@@ -48,6 +50,8 @@ import Prelude hiding (exponent, filter, null)
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
 type PositionMap t = Transformation.Rank2.Map (Wrapped Position t) (Wrapped Int t)
+
+type DisambiguatorTrans t = Disambiguator.T Position t (Transformation.Rank2.Map Ambiguous Identity)
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -135,7 +139,12 @@ grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)
                 Deep.Functor (PositionMap t) (Abstract.Declaration AST.Language AST.Language),
                 Deep.Functor (PositionMap t) (Abstract.Expression AST.Language AST.Language),
                 Deep.Functor (PositionMap t) (Abstract.Statement AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.Import AST.Language AST.Language))
+                Deep.Functor (PositionMap t) (Abstract.Import AST.Language AST.Language),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative AST.Language AST.Language),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration AST.Language AST.Language),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression AST.Language AST.Language),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Import AST.Language AST.Language),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement AST.Language AST.Language))
             => Grammar (HaskellGrammar AST.Language (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
@@ -148,8 +157,13 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (PositionMap t) (Abstract.CaseAlternative l l),
                       Deep.Functor (PositionMap t) (Abstract.Declaration l l),
                       Deep.Functor (PositionMap t) (Abstract.Expression l l),
+                      Deep.Functor (PositionMap t) (Abstract.Import l l),
                       Deep.Functor (PositionMap t) (Abstract.Statement l l),
-                      Deep.Functor (PositionMap t) (Abstract.Import l l))
+                      Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                      Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                      Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                      Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                      Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (whiteSpace
@@ -160,7 +174,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    body = let ordered impdecs
                  | null rightImports = Just (leftImports, rightDeclarations)
                  | otherwise = Nothing
-                 where (prefix, rest) = span isLeft (Deep.eitherFromSum . snd <$> impdecs)
+                 where (prefix, rest) = span isLeft (Deep.eitherFromSum . unwrap <$> impdecs)
                        leftImports = lefts prefix
                        (rightImports, rightDeclarations) = partitionEithers rest
           in mapMaybe ordered (blockOf (Deep.InL <$> wrap importDeclaration
@@ -460,9 +474,10 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    statements = blockOf statement >>= \stats->
                    if null stats then fail "empty do block"
                    else Abstract.guardedExpression
-                           (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . snd <$> init stats)
+                           (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap
+                            <$> init stats)
                         <$> either (const $ fail "do block must end with an expression") pure
-                                   (Deep.eitherFromSum $ snd $ last stats),
+                                   (Deep.eitherFromSum $ unwrap $ last stats),
    statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
                                   <|> Abstract.letStatement <$ keyword "let" <*> declarations)
                <|> Deep.InR <$> expression,
@@ -814,15 +829,19 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- cntrl 	→ 	ascLarge | @ | [ | \ | ] | ^ | _
 -- gap 	→ 	\ whitechar {whitechar} \
 
-type NodeWrap s = (,) (Position, ParsedLexemes s, Position)
+type NodeWrap s = Disambiguator.Wrapped Position s
 
-wrap :: TextualMonoid t => Parser g t a -> Parser g t (NodeWrap t a)
-wrap = (\p-> liftA3 surround getSourcePos p getSourcePos) . tmap store . ((,) (Trailing []) <$>)
-   where surround start (lexemes, p) end = ((start, lexemes, end), p)
-         store (wss, (Trailing ws', a)) = (mempty, (Trailing $ ws' <> concat wss, a))
+wrap :: (Eq t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
+wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
+         . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
+   where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
+         surround start val end = ((start, end), val)
 
 rewrap :: (NodeWrap t a -> b) -> NodeWrap t a -> NodeWrap t b
-rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
+rewrap f node@(Compose ((start, end), _)) = Compose ((start, end), pure $ f node)
+
+unwrap :: NodeWrap t a -> a
+unwrap (Compose (_, Compose (Ambiguous ((_, x) :| _)))) = x
 
 instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
    someSpace = someLexicalSpace
@@ -876,6 +895,7 @@ comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> take
 
 blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
             Deep.Foldable (Serialization t) node,
+            Deep.Functor (DisambiguatorTrans t) node,
             Deep.Functor (PositionMap t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
@@ -894,7 +914,9 @@ blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlo
                   then many semi *> alignedBlock cont' indent
                   else some semi *> alignedBlock cont' indent <|> cont' []
             <|> cont []
-         oneExtendedLine indent input node = allIndented (lexemes $ mapOffsets input (flip mapWrappings id) node)
+         oneExtendedLine indent input node =
+            allIndented (lexemes $ mapOffsets input (flip mapWrappings id)
+                         $ Disambiguator.mapWrappings Disambiguator.headDisambiguator node)
             where allIndented (WhiteSpace ws : Token Other token : rest)
                      | Textual.all isLineChar ws = allIndented rest
                      | currentColumn token < indent = Nothing
