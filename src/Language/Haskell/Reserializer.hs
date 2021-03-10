@@ -16,6 +16,7 @@ import Data.Functor.Const (Const(..))
 import Data.Monoid (Ap(Ap, getAp), Sum(Sum, getSum))
 import Data.Semigroup.Factorial (Factorial)
 import qualified Data.Semigroup.Factorial as Factorial
+import Text.Parser.Input.Position (Position(distance, move))
 
 import qualified Rank2
 import qualified Transformation
@@ -40,33 +41,36 @@ data TokenType = Delimiter | Keyword | Operator | Other
                deriving (Data, Eq, Show)
 
 -- | Re-calculates the position of every node in the parse tree from the tokens stored with it and its children.
-adjustPositions :: (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
-                    Deep.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g,
-                    Deep.Traversable (PositionAdjustment s) g)
-                => Parsed s (g (Parsed s) (Parsed s)) -> Parsed s (g (Parsed s) (Parsed s))
+adjustPositions :: (Factorial s, Position pos, Rank2.Foldable (g (Const (Sum Int))),
+                    Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g,
+                    Deep.Traversable (PositionAdjustment pos s) g)
+                => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
+                -> Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
 adjustPositions node@((pos, _, _), _) = evalState (Full.traverse PositionAdjustment node) 0
 
 -- | Serializes the tree back into the text it was parsed from.
-reserialize :: (Monoid s, Factorial s, Deep.Foldable (Serialization s) g) => Parsed s (g (Parsed s) (Parsed s)) -> s
+reserialize :: (Monoid s, Factorial s, Position pos, Deep.Foldable (Serialization pos s) g)
+            => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> s
 reserialize = foldMap lexemeText . lexemes
 
 -- | Serializes the tree into the lexemes it was parsed from.
-lexemes :: (Factorial s, Deep.Foldable (Serialization s) g) => Parsed s (g (Parsed s) (Parsed s)) -> [Lexeme s]
-lexemes = finalize . (`runState` (0, [])) . getAp . Full.foldMap Serialization
+lexemes :: (Factorial s, Position pos, Deep.Foldable (Serialization pos s) g)
+        => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> [Lexeme s]
+lexemes root@((startPos, _, _), _) = finalize $ (`runState` (startPos, [])) $ getAp $ Full.foldMap Serialization root
    where finalize (s, (_pos, rest)) = s <> rest
 
 -- | The length of the source code parsed into the argument node
-sourceLength :: forall g s. (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
-                        Deep.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g)
-             => Parsed s (g (Parsed s) (Parsed s)) -> Int
+sourceLength :: forall g s pos. (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
+                            Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g)
+             => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> Int
 sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
                                                                  <> Transformation.Rank2.foldMap nodeLength node)
    where nodeLength ((_, Trailing ls, _), _) = foldMap (Sum . Factorial.length . lexemeText) ls
 
 -- | Transformation type used by 'reserialize'
-data Serialization s = Serialization
+data Serialization pos s = Serialization
 -- | Transformation type used by 'adjustPositions'
-data PositionAdjustment s = PositionAdjustment
+data PositionAdjustment pos s = PositionAdjustment
 
 -- | Map the stored positions and lexeme inputs in the entire tree and its wrapping
 mapWrappings :: forall g pos pos' s s'. Deep.Functor (Transformation.Rank2.Map (Wrapped pos s) (Wrapped pos' s')) g
@@ -78,49 +82,52 @@ mapWrappings f g x = mapWrapping ((mapWrapping Transformation.Rank2.<$>) <$> x)
          mapWrapping ((start, ls, end), a) = ((f start, g <$> ls, f end), a)
 {-# INLINE mapWrappings #-}
 
-instance Transformation.Transformation (Serialization s) where
-    type Domain (Serialization s) = Parsed s
-    type Codomain (Serialization s) = Const (Ap (State (Int, [Lexeme s])) [Lexeme s])
+instance Transformation.Transformation (Serialization pos s) where
+    type Domain (Serialization pos s) = Wrapped pos s
+    type Codomain (Serialization pos s) = Const (Ap (State (pos, [Lexeme s])) [Lexeme s])
 
-instance Transformation.Transformation (PositionAdjustment s) where
-    type Domain (PositionAdjustment s) = Parsed s
-    type Codomain (PositionAdjustment s) = Compose (State Int) (Parsed s)
+instance Transformation.Transformation (PositionAdjustment pos s) where
+    type Domain (PositionAdjustment pos s) = Wrapped pos s
+    type Codomain (PositionAdjustment pos s) = Compose (State Int) (Wrapped pos s)
 
-instance forall g s. Factorial s => Serialization s `Transformation.At` g (Parsed s) (Parsed s) where
+instance forall g s pos. (Factorial s, Position pos) =>
+         Serialization pos s `Transformation.At` g (Wrapped pos s) (Wrapped pos s) where
    Serialization $ ((nodePos, Trailing nodeLexemes, _), _) = Const (Ap $ state f)
-      where f :: (Int, [Lexeme s]) -> ([Lexeme s], (Int, [Lexeme s]))
+      where f :: (pos, [Lexeme s]) -> ([Lexeme s], (pos, [Lexeme s]))
             f (pos, parentLexemes)
-               | nodePos > pos, l:ls <- parentLexemes = first (l:) (f (pos + Factorial.length (lexemeText l), ls))
+               | nodePos > pos, l:ls <- parentLexemes = first (l:) (f (move (Factorial.length $ lexemeText l) pos, ls))
                | otherwise = (mempty, (pos, nodeLexemes <> parentLexemes))
 
-instance forall g s. (Factorial s, Rank2.Foldable (g (Parsed s)), Deep.Foldable (Serialization s) g) =>
-         Full.Foldable (Serialization s) g where
+instance forall g s pos. (Factorial s, Position pos,
+                      Rank2.Foldable (g (Wrapped pos s)), Deep.Foldable (Serialization pos s) g) =>
+         Full.Foldable (Serialization pos s) g where
    foldMap trans ((nodeStart, Trailing nodeLexemes, _), node) = Ap (state f)
-      where f :: (Int, [Lexeme s]) -> ([Lexeme s], (Int, [Lexeme s]))
+      where f :: (pos, [Lexeme s]) -> ([Lexeme s], (pos, [Lexeme s]))
             f (pos, parentLexemes)
-               | nodeStart > pos, l:ls <- parentLexemes = first (l:) (f (pos + Factorial.length (lexemeText l), ls))
+               | nodeStart > pos, l:ls <- parentLexemes =
+                    first (l:) (f (move (Factorial.length $ lexemeText l) pos, ls))
                | let (ls, (pos', lexemes')) = runState (getAp $ Deep.foldMap trans node) (pos, nodeLexemes) =
                      (ls <> lexemes',
-                      (pos' + getSum (foldMap (Sum . Factorial.length . lexemeText) lexemes'), parentLexemes))
+                      (move (getSum $ foldMap (Sum . Factorial.length . lexemeText) lexemes') pos', parentLexemes))
 
-instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
-          Deep.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g) =>
-         PositionAdjustment s `Transformation.At` g (Parsed s) (Parsed s) where
+instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
+          Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g) =>
+         PositionAdjustment pos s `Transformation.At` g (Wrapped pos s) (Wrapped pos s) where
    PositionAdjustment $ root@((nodeStart, lexemes, nodeEnd), node) = Compose (state f)
-      where f adjustment = (((nodeStart + adjustment, lexemes, nodeEnd' + adjustment), node),
-                            adjustment + nodeEnd' - nodeEnd)
-               where nodeEnd' = nodeStart + sourceLength root
+      where f adjustment = (((move adjustment nodeStart, lexemes, move adjustment nodeEnd'), node),
+                            adjustment + distance nodeEnd nodeEnd')
+               where nodeEnd' = move (sourceLength root) nodeStart
 
-instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
-          Deep.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g,
-          Deep.Traversable (PositionAdjustment s) g) => Full.Traversable (PositionAdjustment s) g where
+instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
+          Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g,
+          Deep.Traversable (PositionAdjustment pos s) g) => Full.Traversable (PositionAdjustment pos s) g where
    traverse PositionAdjustment root@((nodeStart, lexemes, nodeEnd), node) = state f
-      where f adjustment = (((nodeStart + adjustment, lexemes, nodeEnd' + adjustment),
+      where f adjustment = (((move adjustment nodeStart, lexemes, move adjustment nodeEnd'),
                              evalState (Deep.traverse PositionAdjustment node) adjustment),
-                            adjustment + nodeEnd' - nodeEnd)
-               where nodeEnd' = nodeStart + sourceLength root
+                            adjustment + distance nodeEnd nodeEnd')
+               where nodeEnd' = move (sourceLength root) nodeStart
 
-instance (Rank2.Foldable (g (Parsed s)),
-          Deep.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g) =>
-         Full.Foldable (Transformation.Rank2.Fold (Parsed s) (Sum Int)) g where
+instance (Rank2.Foldable (g (Wrapped pos s)),
+          Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g) =>
+         Full.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g where
    foldMap = Full.foldMapDownDefault

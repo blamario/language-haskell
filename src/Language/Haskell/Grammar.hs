@@ -17,7 +17,7 @@ import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Ord (comparing)
+import Data.Ord (Down, comparing)
 import Data.String (fromString)
 import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Null (null)
@@ -33,7 +33,7 @@ import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
-import Text.Parser.Input.Position (mapOffsets)
+import Text.Parser.Input.Position (Position)
 import Text.Parser.Token (braces, brackets, comma, parens, semi)
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
@@ -49,9 +49,7 @@ import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
-type PositionMap t = Transformation.Rank2.Map (Wrapped Position t) (Wrapped Int t)
-
-type DisambiguatorTrans t = Disambiguator.T Position t (Transformation.Rank2.Map Ambiguous Identity)
+type DisambiguatorTrans t = Disambiguator.T (Down Int) t (Transformation.Rank2.Map Ambiguous Identity)
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -130,16 +128,11 @@ data HaskellGrammar l f p = HaskellGrammar {
 }
 
 grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t,
-                Deep.Foldable (Serialization t) (Abstract.CaseAlternative AST.Language AST.Language),
-                Deep.Foldable (Serialization t) (Abstract.Declaration AST.Language AST.Language),
-                Deep.Foldable (Serialization t) (Abstract.Expression AST.Language AST.Language),
-                Deep.Foldable (Serialization t) (Abstract.Import AST.Language AST.Language),
-                Deep.Foldable (Serialization t) (Abstract.Statement AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.CaseAlternative AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.Declaration AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.Expression AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.Statement AST.Language AST.Language),
-                Deep.Functor (PositionMap t) (Abstract.Import AST.Language AST.Language),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative AST.Language AST.Language),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration AST.Language AST.Language),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression AST.Language AST.Language),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import AST.Language AST.Language),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement AST.Language AST.Language),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative AST.Language AST.Language),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration AST.Language AST.Language),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Expression AST.Language AST.Language),
@@ -149,16 +142,11 @@ grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)
 grammar2010 = fixGrammar grammar
 
 grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                      Deep.Foldable (Serialization t) (Abstract.CaseAlternative l l),
-                      Deep.Foldable (Serialization t) (Abstract.Declaration l l),
-                      Deep.Foldable (Serialization t) (Abstract.Expression l l),
-                      Deep.Foldable (Serialization t) (Abstract.Import l l),
-                      Deep.Foldable (Serialization t) (Abstract.Statement l l),
-                      Deep.Functor (PositionMap t) (Abstract.CaseAlternative l l),
-                      Deep.Functor (PositionMap t) (Abstract.Declaration l l),
-                      Deep.Functor (PositionMap t) (Abstract.Expression l l),
-                      Deep.Functor (PositionMap t) (Abstract.Import l l),
-                      Deep.Functor (PositionMap t) (Abstract.Statement l l),
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
@@ -425,9 +413,15 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
    expression = wrap (Abstract.typedExpression <$> infixExpression <* delimiter "::" <*> wrap typeTerm)
                 <|> infixExpression,
-   infixExpression = wrap (Abstract.infixExpression <$> dExpression
-                                                    <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                                                    <*> infixExpression
+   infixExpression = wrap (Abstract.infixExpression
+                              <$> dExpression
+                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                              <*> infixExpression
+                           <|> -- ambiguous
+                           Abstract.infixExpression
+                              <$> infixExpression
+                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                              <*> dExpression
                            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
                      <|> lExpression,
    lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->"
@@ -829,7 +823,7 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- cntrl 	→ 	ascLarge | @ | [ | \ | ] | ^ | _
 -- gap 	→ 	\ whitechar {whitechar} \
 
-type NodeWrap s = Disambiguator.Wrapped Position s
+type NodeWrap s = Disambiguator.Wrapped (Down Int) s
 
 wrap :: (Eq t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
 wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
@@ -894,9 +888,8 @@ comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> take
             <> string "-}"
 
 blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
-            Deep.Foldable (Serialization t) node,
-            Deep.Functor (DisambiguatorTrans t) node,
-            Deep.Functor (PositionMap t) node)
+            Deep.Foldable (Serialization (Down Int) t) node,
+            Deep.Functor (DisambiguatorTrans t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
@@ -914,16 +907,6 @@ blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlo
                   then many semi *> alignedBlock cont' indent
                   else some semi *> alignedBlock cont' indent <|> cont' []
             <|> cont []
-         oneExtendedLine indent input node =
-            allIndented (lexemes $ mapOffsets input (flip mapWrappings id)
-                         $ Disambiguator.mapWrappings Disambiguator.headDisambiguator node)
-            where allIndented (WhiteSpace ws : Token Other token : rest)
-                     | Textual.all isLineChar ws = allIndented rest
-                     | currentColumn token < indent = Nothing
-                     | currentColumn token == indent && token `Set.notMember` reservedWords
-                       && all (`notElem` terminators) (characterPrefix token) = Nothing
-                  allIndented (_ : rest) = allIndented rest
-                  allIndented [] = Just node
          terminators :: [Char]
          terminators = ",;)]}"
 
@@ -942,5 +925,22 @@ instance OutlineMonoid (LinePositioned Text) where
 
 inputColumn :: OutlineMonoid t => Parser g t Int
 inputColumn = currentColumn <$> getInput
+
+oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
+                    Deep.Foldable (Serialization (Down Int) t) node,
+                    Deep.Functor (DisambiguatorTrans t) node)
+                => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t))
+                -> Maybe (Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)))
+oneExtendedLine indent input node =
+   allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.headDisambiguator node)
+   where allIndented (WhiteSpace ws : Token Other token : rest)
+            | Textual.all isLineChar ws = allIndented rest
+            | currentColumn token < indent = Nothing
+            | currentColumn token == indent && token `Set.notMember` reservedWords
+              && all (`notElem` terminators) (characterPrefix token) = Nothing
+         allIndented (_ : rest) = allIndented rest
+         allIndented [] = Just node
+         terminators :: [Char]
+         terminators = ",;)]}"
                                   
 $(Rank2.TH.deriveAll ''HaskellGrammar)

@@ -16,6 +16,7 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2 as Rank2
 
 import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.Ord (Down)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Text (Text)
 import Text.Grampa (Grammar, ParseResults, parseComplete)
@@ -28,7 +29,7 @@ type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
-                     q ~ Reserializer.Wrapped Position (LinePositioned Text), r ~ Placed,
+                     q ~ Reserializer.Wrapped (Down Int) (LinePositioned Text), r ~ Placed,
                      Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) g,
                      Deep.Functor (Rank2.Map q r) g)
                  => Text -> p (g p p) -> r (g r r)
@@ -39,7 +40,8 @@ resolvePositions src = Reserializer.mapWrappings (offset src) extract
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (Abstract.Module AST.Language AST.Language Placed Placed)]
 parseModule source = resolve source (parseComplete Grammar.grammar2010 (pure source :: LinePositioned Text))
 
-resolve :: (Deep.Functor (Rank2.Map (Reserializer.Wrapped Position (LinePositioned Text)) Placed) (Abstract.Module l l),
+resolve :: (Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed)
+                         (Abstract.Module l l),
             Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (Abstract.Module l l))
         => Text
         -> Grammar.HaskellGrammar l (Grammar.NodeWrap (LinePositioned Text))
