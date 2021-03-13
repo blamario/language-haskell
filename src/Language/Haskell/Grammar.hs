@@ -69,7 +69,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    generalDeclaration :: p (Abstract.Declaration l l f f),
    whereClauses :: p [f (Abstract.Declaration l l f f)],
    variables :: p (NonEmpty (Abstract.Name l)),
-   fixity :: p (Abstract.Fixity l),
+   fixity :: p (Abstract.Associativity l),
    typeTerm :: p (Abstract.Type l l f f),
    bType :: p (Abstract.Type l l f f),
    aType :: p (Abstract.Type l l f f),
@@ -247,9 +247,9 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                      <*> (operator `sepByNonEmpty` comma),
    whereClauses = keyword "where" *> declarations <|> pure [],
    variables = variable `sepByNonEmpty` comma,
-   fixity = Abstract.infixLeft <$ keyword "infixl"
-            <|> Abstract.infixRight <$ keyword "infixr"
-            <|> Abstract.infixNonAssociative <$ keyword "infix",
+   fixity = Abstract.leftAssociative <$ keyword "infixl"
+            <|> Abstract.rightAssociative <$ keyword "infixr"
+            <|> Abstract.nonAssociative <$ keyword "infix",
    
 -- decls 	→ 	{ decl1 ; … ; decln } 	    (n ≥ 0)
 -- decl 	→ 	gendecl

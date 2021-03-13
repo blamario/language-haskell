@@ -161,9 +161,9 @@ declarationTemplates get (EquationDeclaration lhs rhs wheres)
          declarations = foldMap (declarationTemplates get . get) wheres
 declarationTemplates get (FixityDeclaration fixity precedence names) =
    InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) . nameTemplate <$> toList names
-   where fixityTemplate InfixNonAssociative = InfixN
-         fixityTemplate InfixLeft = InfixL
-         fixityTemplate InfixRight = InfixR
+   where fixityTemplate NonAssociative = InfixN
+         fixityTemplate LeftAssociative = InfixL
+         fixityTemplate RightAssociative = InfixR
 declarationTemplates get (ForeignExport convention identification name t) =
    [ForeignD (ExportF (conventionTemplate convention) (foldMap unpack identification) (nameTemplate name)
                       (typeTemplate get $ get t))]

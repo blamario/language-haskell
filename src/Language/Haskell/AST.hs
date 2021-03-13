@@ -46,7 +46,7 @@ instance Abstract.Haskell Language where
 
    type CallingConvention Language = CallingConvention Language
    type CallSafety Language = CallSafety Language
-   type Fixity Language = Fixity Language
+   type Associativity Language = Associativity Language
    type Members Language = Members Language
    type Name Language = Name Language
    type ModuleName Language = ModuleName Language
@@ -167,9 +167,9 @@ instance Abstract.Haskell Language where
    moduleName = ModuleName
    qualifiedName = QualifiedName
 
-   infixNonAssociative = InfixNonAssociative
-   infixLeft = InfixLeft
-   infixRight = InfixRight
+   nonAssociative = NonAssociative
+   leftAssociative = LeftAssociative
+   rightAssociative = RightAssociative
 
    cCall = CCall
    cppCall = CppCall
@@ -192,7 +192,7 @@ data Declaration λ l d s =
    | DefaultDeclaration [s (Abstract.Type l l d d)]
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
                          [s (Abstract.Declaration l l d d)]
-   | FixityDeclaration (Fixity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
+   | FixityDeclaration (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
@@ -470,7 +470,7 @@ deriving instance Show (Abstract.QualifiedName λ) => Show (Constructor λ l d s
 data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall deriving (Data, Eq, Show)
 data CallSafety λ = SafeCall | UnsafeCall deriving (Data, Eq, Show)
 
-data Fixity λ = InfixNonAssociative | InfixLeft | InfixRight deriving (Data, Eq, Show)
+data Associativity λ = NonAssociative | LeftAssociative | RightAssociative deriving (Data, Eq, Show)
 
 data Members λ = AllMembers
                | MemberList [Name λ]

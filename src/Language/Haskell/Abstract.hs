@@ -36,7 +36,7 @@ class Haskell λ where
 
    type CallingConvention λ = x | x -> λ
    type CallSafety λ = x | x -> λ
-   type Fixity λ = x | x -> λ
+   type Associativity λ = x | x -> λ
    type Members λ = x | x -> λ
    type Name λ = x | x -> λ
    type ModuleName λ = x | x -> λ
@@ -65,7 +65,7 @@ class Haskell λ where
    defaultDeclaration :: [s (Type l l d d)] -> Declaration λ l d s
    equationDeclaration :: s (EquationLHS l l d d) -> s (EquationRHS l l d d) -> [s (Declaration l l d d)]
                        -> Declaration λ l d s
-   fixityDeclaration :: Fixity λ -> Maybe Int -> NonEmpty (Name λ) -> Declaration λ l d s
+   fixityDeclaration :: Associativity λ -> Maybe Int -> NonEmpty (Name λ) -> Declaration λ l d s
    foreignExport :: CallingConvention λ -> Maybe Text -> Name λ -> s (Type l l d d) -> Declaration λ l d s
    foreignImport :: CallingConvention λ -> Maybe (CallSafety λ) -> Maybe Text -> Name λ -> s (Type l l d d)
                  -> Declaration λ l d s
@@ -165,7 +165,7 @@ class Haskell λ where
    moduleName :: NonEmpty (Name λ) -> ModuleName λ
    qualifiedName :: Maybe (ModuleName λ) -> Name λ -> QualifiedName λ
 
-   infixNonAssociative, infixLeft, infixRight :: Fixity λ
+   nonAssociative, leftAssociative, rightAssociative :: Associativity λ
 
    cCall, cppCall, dotNetCall, jvmCall, stdCall :: CallingConvention λ
    safeCall, unsafeCall :: CallSafety λ
