@@ -34,7 +34,7 @@ resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
                      Deep.Functor (Rank2.Map q r) g)
                  => Text -> p (g p p) -> r (g r r)
 resolvePositions src = Reserializer.mapWrappings (offset src) extract
-                       . Disambiguator.mapWrappings Disambiguator.headDisambiguator
+                       . Disambiguator.mapWrappings Disambiguator.firstChoice
 
 -- | Parse the given text of a single module.
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (Abstract.Module AST.Language AST.Language Placed Placed)]

@@ -49,7 +49,7 @@ import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
-type DisambiguatorTrans t = Disambiguator.T (Down Int) t (Transformation.Rank2.Map Ambiguous Identity)
+type DisambiguatorTrans t = Disambiguator.Local (Down Int) t (Transformation.Rank2.Map Ambiguous Identity)
 
 data HaskellGrammar l f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -932,7 +932,7 @@ oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                 => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t))
                 -> Maybe (Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)))
 oneExtendedLine indent input node =
-   allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.headDisambiguator node)
+   allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.firstChoice node)
    where allIndented (WhiteSpace ws : Token Other token : rest)
             | Textual.all isLineChar ws = allIndented rest
             | currentColumn token < indent = Nothing
