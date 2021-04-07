@@ -476,7 +476,7 @@ data Members λ = AllMembers
                | MemberList [Name λ]
                deriving (Data, Eq, Show)
 
-newtype Name λ = Name Text deriving (Data, Eq, Show)
+newtype Name λ = Name Text deriving (Data, Eq, Ord, Show)
 
 data QualifiedName λ = QualifiedName (Maybe (Abstract.ModuleName λ)) (Abstract.Name λ)
 
@@ -484,10 +484,14 @@ newtype ModuleName λ = ModuleName (NonEmpty (Abstract.Name λ))
 deriving instance Data (Abstract.Name λ) => Typeable (ModuleName λ)
 deriving instance (Data (Abstract.Name λ), Data λ) => Data (ModuleName λ)
 deriving instance Show (Abstract.Name λ) => Show (ModuleName λ)
+deriving instance Eq (Abstract.Name λ) => Eq (ModuleName λ)
+deriving instance Ord (Abstract.Name λ) => Ord (ModuleName λ)
 
 deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ)) => Typeable (QualifiedName λ)
 deriving instance (Data (Abstract.ModuleName λ), Data (Abstract.Name λ), Data λ) => Data (QualifiedName λ)
 deriving instance (Show (Abstract.ModuleName λ), Show (Abstract.Name λ)) => Show (QualifiedName λ)
+deriving instance (Eq (Abstract.ModuleName λ), Eq (Abstract.Name λ)) => Eq (QualifiedName λ)
+deriving instance (Ord (Abstract.ModuleName λ), Ord (Abstract.Name λ)) => Ord (QualifiedName λ)
 
 $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,

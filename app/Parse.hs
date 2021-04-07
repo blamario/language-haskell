@@ -6,6 +6,7 @@ import Language.Haskell (Placed, parseModule, resolvePositions)
 import Language.Haskell.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar as Grammar
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
@@ -43,11 +44,12 @@ data Output = Original | Plain | Pretty | Tree
             deriving Show
 
 data Opts = Opts
-    { optsMode        :: GrammarMode
-    , optsIndex       :: Int
-    , optsOutput      :: Output
-    , optsInclude     :: Maybe FilePath
-    , optsFile        :: Maybe FilePath
+    { optsMode         :: GrammarMode
+    , optsIndex        :: Int
+    , optsOutput       :: Output
+    , optsWithBindings :: Bool
+    , optsInclude      :: Maybe FilePath
+    , optsFile         :: Maybe FilePath
     } deriving Show
 
 main :: IO ()
@@ -66,6 +68,7 @@ main = execParser opts >>= main'
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
              <|> pure Plain)
+        <*> switch (long "with-bindings" <> help "show inherited and synthesized bindings with every node")
         <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
                                  <> help "Where to look for imports"))
         <*> optional (strArgument
