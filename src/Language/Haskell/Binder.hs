@@ -80,13 +80,13 @@ instance {-# OVERLAPS #-}
                where moduleGlobalScope = Map.unionWith clashingNames (importedScope modImports) (AG.Mono.syn atts)
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
-               --error (show moduleGlobalScope)
                atts{AG.Mono.syn= exportedScope, AG.Mono.inh= moduleGlobalScope}
                where exportedScope, moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
-                     exportedScope = Map.mapKeys baseName (Map.filterWithKey (const . exported) moduleGlobalScope)
+                     exportedScope = Map.singleton qualifiedModuleName $ ModuleBinding
+                                     $ Map.mapKeys baseName (Map.filterWithKey (const . exported) moduleGlobalScope)
                      exported qn@(AST.QualifiedName modName name) =
-                        any (any $ any exportedBy . ($ mempty) . getCompose) exports
+                        maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
                         where exportedBy (AST.ReExportModule modName') = modName == Just modName'
                                                                          || modName == Nothing && modName' == moduleName
                               exportedBy (AST.ExportVar qn') = qn == qn'
@@ -94,7 +94,8 @@ instance {-# OVERLAPS #-}
                               exportedByMember AST.AllMembers = error "What does this refer to !?"
                               exportedByMember (AST.MemberList names) = elem name names
                      moduleGlobalScope = Map.unionWith clashingNames (importedScope modImports) (AG.Mono.syn atts)
-                     baseName (AST.QualifiedName _ name) = AST.QualifiedName Nothing name
+                     qualifiedModuleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
+                     baseName (AST.QualifiedName _ name) = name
             importedScope :: [FromEnvironment l f (AST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = Map.unionsWith clashingImports (Map.mapWithKey importsFrom $ AG.Mono.inh atts)
