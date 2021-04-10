@@ -83,7 +83,7 @@ instance {-# OVERLAPS #-}
                atts{AG.Mono.syn= exportedScope, AG.Mono.inh= moduleGlobalScope}
                where exportedScope, moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
-                     exportedScope = Map.singleton qualifiedModuleName $ ModuleBinding
+                     exportedScope = Map.singleton (qualifiedModuleName moduleName) $ ModuleBinding
                                      $ Map.mapKeys baseName (Map.filterWithKey (const . exported) moduleGlobalScope)
                      exported qn@(AST.QualifiedName modName name) =
                         maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
@@ -94,8 +94,6 @@ instance {-# OVERLAPS #-}
                               exportedByMember AST.AllMembers = error "What does this refer to !?"
                               exportedByMember (AST.MemberList names) = elem name names
                      moduleGlobalScope = Map.unionWith clashingNames (importedScope modImports) (AG.Mono.syn atts)
-                     qualifiedModuleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
-                     baseName (AST.QualifiedName _ name) = name
             importedScope :: [FromEnvironment l f (AST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = Map.unionsWith clashingImports (Map.mapWithKey importsFrom $ AG.Mono.inh atts)
@@ -108,7 +106,6 @@ instance {-# OVERLAPS #-}
                               matchingImport i@(AST.Import _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
-                              preludeName = AST.ModuleName (AST.Name "Prelude" :| [])
                      importsFromModule moduleExports (AST.Import qualified name alias spec)
                         | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                         | otherwise = unqualified (imports spec)
@@ -151,3 +148,51 @@ instance {-# OVERLAPPABLE #-} (Ord (Abstract.ModuleName l), Ord (Abstract.Qualif
                                Foldable f, Functor f, Rank2.Foldable (g (FromEnvironment l f))) =>
          Transformation.At (Binder l f) (g (FromEnvironment l f) (FromEnvironment l f)) where
    ($) = AG.Mono.applyDefaultWithAttributes
+
+qualifiedModuleName :: Abstract.Haskell l => Abstract.ModuleName l -> Abstract.QualifiedName l
+qualifiedModuleName moduleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
+baseName (AST.QualifiedName _ name) = name
+
+preludeName :: Abstract.Haskell l => Abstract.ModuleName l
+preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])
+
+predefinedModuleBindings :: (Abstract.Haskell l, Ord (Abstract.QualifiedName l),
+                             Abstract.QualifiedName l ~ AST.QualifiedName l,
+                             Abstract.Name l ~ AST.Name l,
+                             Abstract.Associativity l ~ AST.Associativity l) => Environment l
+predefinedModuleBindings = Map.fromList [(qualifiedModuleName preludeName,
+                                          ModuleBinding unqualifiedPreludeBindings)]
+
+preludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
+                    Abstract.QualifiedName l ~ AST.QualifiedName l,
+                    Abstract.Associativity l ~ AST.Associativity l) => Environment l
+preludeBindings = Map.mapKeysMonotonic (Abstract.qualifiedName Nothing) unqualifiedPreludeBindings
+
+unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
+                               Abstract.Associativity l ~ AST.Associativity l) => Map (Abstract.Name l) (Binding l)
+unqualifiedPreludeBindings = Map.fromList $
+   [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9),
+    (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9)]
+   ++
+   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 8)
+    | op <- ["^", "^^", "**"]]
+   ++
+   [(Abstract.name op, InfixDeclaration Abstract.leftAssociative 7)
+    | op <- ["*", "/", "`div`", "`mod`", "`rem`", "`quot`"]]
+   ++
+   [(Abstract.name "+", InfixDeclaration Abstract.leftAssociative 6),
+    (Abstract.name "-", InfixDeclaration Abstract.leftAssociative 6)]
+   ++
+   [(Abstract.name ":", InfixDeclaration Abstract.rightAssociative 5),
+    (Abstract.name "++", InfixDeclaration Abstract.rightAssociative 5)]
+   ++
+   [(Abstract.name op, InfixDeclaration Abstract.nonAssociative 4)
+    | op <- ["==", "/=", "<", "<=", ">", ">=", "`elem`", "`notElem`"]]
+   ++
+   [(Abstract.name "&&", InfixDeclaration Abstract.rightAssociative 3),
+    (Abstract.name "||", InfixDeclaration Abstract.rightAssociative 2),
+    (Abstract.name ">>", InfixDeclaration Abstract.leftAssociative 1),
+    (Abstract.name ">>=", InfixDeclaration Abstract.leftAssociative 1)]
+   ++
+   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 0)
+    | op <- ["$", "$!", "`seq`"]]
