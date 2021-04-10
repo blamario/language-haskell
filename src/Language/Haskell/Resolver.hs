@@ -41,9 +41,8 @@ instance {-# overlappable #-} Resolution l pos s
      Compose (Success ((start, ws, end), x))
    Resolution{} $ _ = Compose (Failure $ pure AmbiguousParses)
 
-
 instance {-# overlaps #-} forall l pos s.
-         (Eq s, IsString s,
+         (Eq s, Eq pos, Eq (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)), IsString s,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -80,6 +79,7 @@ instance {-# overlaps #-} forall l pos s.
                   || precedence < precedence'
                   || precedence == precedence' && any (associativity' ==) associativity then result
                else Failure (pure ContradictoryAssociativity)
+             | otherwise = result
           parenthesized (Reserializer.Trailing (paren:_)) = Reserializer.lexemeText paren == "("
       in Compose (Disambiguator.unique id (pure . const AmbiguousExpression) (resolveExpression <$> expressions))
 

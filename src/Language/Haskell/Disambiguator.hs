@@ -102,11 +102,13 @@ firstChoice = Transformation.Rank2.Map (Identity . NonEmpty.head . getAmbiguous)
 -- | Ensures there's exactly one 'Success' in the given 'Wrapped' 'NonEmpty' collection. If there is none, all the
 -- errors are passed to the first argument. If there is more than one, all successes are passed to the second argument
 -- to report as errors.
-unique :: (NonEmpty err -> NonEmpty err) -> ([a] -> NonEmpty err) -> Wrapped pos s (Validation (NonEmpty err) a)
+unique :: (Eq s, Eq a)
+       => (NonEmpty err -> NonEmpty err) -> ([a] -> NonEmpty err) -> Wrapped pos s (Validation (NonEmpty err) a)
        -> Validation (NonEmpty err) (Reserializer.Wrapped pos s a)
 unique _ _ (Compose ((start, end), Compose (Ambiguous (x :| [])))) = first (flip ((,,) start) end) <$> (sequenceA x)
 unique inv amb (Compose ((start, end), Compose (Ambiguous xs))) =
-   case partitionEithers (traverse validationToEither <$> NonEmpty.toList xs)
-   of (_, [(ws, x)]) -> Success ((start, ws, end), x)
-      (errors, []) -> Failure (inv $ sconcat $ NonEmpty.fromList errors)
-      (_, multi) -> Failure (amb $ snd <$> multi)
+   report (partitionEithers $ traverse validationToEither <$> NonEmpty.toList xs)
+   where report (_, [(ws, x)]) = Success ((start, ws, end), x)
+         report (errors, []) = Failure (inv $ sconcat $ NonEmpty.fromList errors)
+         report (errors, x1:x2:xs) | x1 == x2 = report (errors, x2:xs)
+         report (_, multi) = Failure (amb $ snd <$> multi)
