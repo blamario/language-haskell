@@ -3,13 +3,17 @@
 
 module Language.Haskell.Disambiguator where
 
+import Control.Arrow (first)
+import Data.Either (partitionEithers)
+import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
 import Data.Kind (Type)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Semigroup (Semigroup(..), sconcat)
 import Text.Parser.Input.Position (Position)
-import Text.Grampa (Ambiguous, getAmbiguous)
+import Text.Grampa (Ambiguous(Ambiguous, getAmbiguous))
 
 import qualified Rank2
 import Transformation (Transformation)
@@ -95,3 +99,14 @@ traverseWrappings t x = Full.traverse (Effective t) x
 firstChoice :: Transformation.Rank2.Map Ambiguous Identity
 firstChoice = Transformation.Rank2.Map (Identity . NonEmpty.head . getAmbiguous)
 
+-- | Ensures there's exactly one 'Success' in the given 'Wrapped' 'NonEmpty' collection. If there is none, all the
+-- errors are passed to the first argument. If there is more than one, all successes are passed to the second argument
+-- to report as errors.
+unique :: (NonEmpty err -> NonEmpty err) -> ([a] -> NonEmpty err) -> Wrapped pos s (Validation (NonEmpty err) a)
+       -> Validation (NonEmpty err) (Reserializer.Wrapped pos s a)
+unique _ _ (Compose ((start, end), Compose (Ambiguous (x :| [])))) = first (flip ((,,) start) end) <$> (sequenceA x)
+unique inv amb (Compose ((start, end), Compose (Ambiguous xs))) =
+   case partitionEithers (traverse validationToEither <$> NonEmpty.toList xs)
+   of (_, [(ws, x)]) -> Success ((start, ws, end), x)
+      (errors, []) -> Failure (inv $ sconcat $ NonEmpty.fromList errors)
+      (_, multi) -> Failure (amb $ snd <$> multi)
