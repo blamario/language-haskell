@@ -93,7 +93,9 @@ instance {-# OVERLAPS #-}
                               exportedBy (AST.ExportClassOrType parent members) = qn == parent || any exportedByMember members
                               exportedByMember AST.AllMembers = error "What does this refer to !?"
                               exportedByMember (AST.MemberList names) = elem name names
-                     moduleGlobalScope = Map.unionWith clashingNames (importedScope modImports) (AG.Mono.syn atts)
+                     moduleGlobalScope = Map.unionsWith clashingNames [importedScope modImports,
+                                                                       requalifiedWith moduleName (AG.Mono.syn atts),
+                                                                       AG.Mono.syn atts]
             importedScope :: [FromEnvironment l f (AST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = Map.unionsWith clashingImports (Map.mapWithKey importsFrom $ AG.Mono.inh atts)
@@ -127,8 +129,10 @@ instance {-# OVERLAPS #-}
                               nameImport name = mempty
                               getImportName (_, AST.Import _ moduleName _ _) = moduleName
                      getImportName (_, AST.Import _ moduleName _ _) = moduleName
-                     qualifiedWith moduleName = Map.mapKeysMonotonic (AST.QualifiedName $ Just moduleName)
-                     unqualified = Map.mapKeysMonotonic (AST.QualifiedName Nothing)
+            qualifiedWith moduleName = Map.mapKeysMonotonic (AST.QualifiedName $ Just moduleName)
+            requalifiedWith moduleName = Map.mapKeysMonotonic requalify
+               where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name
+            unqualified = Map.mapKeysMonotonic (AST.QualifiedName Nothing)
             clashingImports _ _ = ErroneousBinding "clashing imports"
             clashingNames _ _ = ErroneousBinding "clashing names"
 
