@@ -9,17 +9,18 @@ import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar as Grammar
 import qualified Language.Haskell.Reserializer as Reserializer
+import qualified Language.Haskell.Resolver as Resolver
 import qualified Language.Haskell.Template as Template
 
-import qualified Rank2 as Rank2 (Product(Pair), snd)
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+import qualified Transformation.AG.Monomorphic
 
 import Control.Monad
 import Data.Data (Data)
 import Data.Functor.Identity (Identity(Identity))
-import Data.Functor.Compose (Compose, getCompose)
+import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Maybe (fromMaybe)
@@ -43,11 +44,14 @@ data GrammarMode = ModuleMode | ExpressionMode
 data Output = Original | Plain | Pretty | Tree
             deriving Show
 
+data Stage = Parsed | Bound | Resolved
+    deriving Show
+
 data Opts = Opts
     { optsMode         :: GrammarMode
     , optsIndex        :: Int
     , optsOutput       :: Output
-    , optsWithBindings :: Bool
+    , optsStage        :: Stage
     , optsInclude      :: Maybe FilePath
     , optsFile         :: Maybe FilePath
     } deriving Show
@@ -68,7 +72,10 @@ main = execParser opts >>= main'
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
              <|> pure Plain)
-        <*> switch (long "with-bindings" <> help "show inherited and synthesized bindings with every node")
+        <*> (flag' Parsed (long "parsed" <> help "show raw ambiguous parse tree")
+             <|> flag' Bound (long "bound" <> help "show ambiguous parse tree with identifier bindings")
+             <|> flag' Resolved (long "resolved" <> help "show parse tree with all ambiguities resolved")
+             <|> pure Resolved)
         <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
                                  <> help "Where to look for imports"))
         <*> optional (strArgument
@@ -81,7 +88,8 @@ main = execParser opts >>= main'
 
 main' :: Opts -> IO ()
 main' Opts{..} = case optsFile
-                 of Just file -> (if file == "-" then getContents else readFile file) >>= go Grammar.haskellModule file
+                 of Just file -> (if file == "-" then getContents else readFile file)
+                                 >>= go Grammar.haskellModule file
                     Nothing ->
                         forever $
                         getLine >>=
@@ -89,25 +97,54 @@ main' Opts{..} = case optsFile
                             ModuleMode     -> go Grammar.haskellModule "<stdin>"
                             ExpressionMode -> go Grammar.expression "<stdin>"
    where
-      go :: (Data a, Show a, Template.PrettyViaTH a, a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+      go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+             a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+             e ~ Binder.WithEnvironment Language w,
+             Abstract.QualifiedName l ~ AST.QualifiedName l,
+             Data (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+             Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+             Data (g Language Language e e), Data (g Language Language w w),
+             Show (g Language Language e e), Show (g Language Language w w),
+             Full.Traversable (Binder.Binder Language w) (g Language Language),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
              Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
-             Deep.Foldable (Reserializer.Serialization Int Text) (g l l)) =>
+             Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+             Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l)) =>
             (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
          -> String -> Text -> IO ()
       go production filename contents =
-         report contents (getCompose $ resolvePositions contents . snd
-                          <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
-      report :: (Data a, Show a, Template.PrettyViaTH a, a ~ Placed (g l l Placed Placed), l ~ Language,
-                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l))
-             => Text -> ParseResults (LinePositioned Text) [a] -> IO ()
-      report _ (Right [x]) = case optsOutput
-                                  of Original -> Text.putStr (Reserializer.reserialize x)
-                                     Plain -> print x
-                                     Pretty -> putStrLn (Template.pprint x)
-                                     Tree -> putStrLn (reprTreeString x)
-      report contents (Right l) = putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-                                  >> report contents (Right [l !! optsIndex])
-      report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
+         report contents (snd <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
+      report :: forall g l a e w.
+                (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+                 a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+                 e ~ Binder.WithEnvironment Language w,
+                 Abstract.QualifiedName l ~ AST.QualifiedName l,
+                 Data (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+                 Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+                 Data (g Language Language e e), Data (g Language Language w w),
+                 Show (g Language Language e e), Show (g Language Language w w),
+                 Full.Traversable (Binder.Binder Language w) (g Language Language),
+                 Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
+                 Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g l l),
+                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+                 Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l))
+             => Text -> Compose (ParseResults (LinePositioned Text)) [] (w (g l l w w)) -> IO ()
+      report contents (Compose (Right [parsed])) = case optsOutput of
+         Original -> Text.putStr (Reserializer.reserialize resolved)
+         Plain -> case optsStage of
+            Parsed -> print parsed
+            Bound -> print bound
+            Resolved -> print resolved
+         Pretty -> putStrLn (Template.pprint resolved)
+         Tree -> putStrLn $ case optsStage of
+            Parsed -> reprTreeString parsed
+            Bound -> reprTreeString bound
+            Resolved -> reprTreeString resolved
+         where resolved = resolvePositions contents parsed
+               bound = Binder.withBindings (Binder.predefinedModuleBindings :: Binder.Environment l) parsed
+      report contents (Compose (Right l)) =
+         putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
+         >> report contents (Compose $ Right [l !! optsIndex])
+      report contents (Compose (Left err)) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
 
 type NodeWrap = ((,) Int)
