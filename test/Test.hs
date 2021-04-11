@@ -37,7 +37,7 @@ exampleTree ancestry path =
       isDir <- doesDirectoryExist fullPath
       if isDir
          then (:[]) . testGroup path . concat <$> (listDirectory fullPath >>= mapM (exampleTree fullPath))
-         else return . (:[]) . testCase path . unless (any (`isSuffixOf` path) [".BNF", ".bnf", ".GRM"]) $
+         else return . (:[]) . testCase path $
               do moduleSource <- readFile fullPath
                  (originalModule, prettyModule) <- prettyFile fullPath moduleSource
                  (originalModule', prettyModule') <- prettyFile fullPath originalModule

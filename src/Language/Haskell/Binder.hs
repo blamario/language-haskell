@@ -129,6 +129,7 @@ instance {-# OVERLAPS #-}
                               matchingImport i@(AST.Import _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
+                     importsFrom _ _ = mempty
                      importsFromModule moduleExports (AST.Import qualified name alias spec)
                         | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                         | otherwise = unqualified (imports spec)
