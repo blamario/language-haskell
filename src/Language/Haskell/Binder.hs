@@ -67,12 +67,14 @@ instance {-# OVERLAPS #-}
                                         | name <- toList names])
             export AST.ClassDeclaration{} = AG.Mono.syn atts
             export (AST.EquationDeclaration lhs _ _)
-               | [name] <- foldMap getInfixName (getCompose lhs mempty)
+               | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = MonoidalMap (Map.singleton (Abstract.qualifiedName Nothing name)
                               $ InfixDeclaration False AST.LeftAssociative 9)
             export _ = mempty
-            getInfixName (AST.InfixLHS _ name _) = [name]
-            getInfixName _ = []
+            getOperatorName (AST.InfixLHS _ name _) = [name]
+            getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
+            getOperatorName (AST.VariableLHS name) = [name]
+            getOperatorName _ = []
             bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
             bequeath _ = AG.Mono.inh atts
             synthesis = foldMap export node
