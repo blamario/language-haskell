@@ -54,15 +54,15 @@ instance {-# overlaps #-} forall l pos s.
                             -> Validation (NonEmpty Error) (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
           resolveExpression e@(AST.InfixExpression left op right)
              | (_, AST.ReferenceExpression name) <- op = case Map.lookup name bindings of
-             Just (Binder.InfixDeclaration AST.LeftAssociative precedence) ->
+             Just (Binder.InfixDeclaration _ AST.LeftAssociative precedence) ->
                verifyArg (Just AST.LeftAssociative) precedence left $
                verifyArg Nothing (succ precedence) right $
                pure e
-             Just (Binder.InfixDeclaration AST.RightAssociative precedence) ->
+             Just (Binder.InfixDeclaration _ AST.RightAssociative precedence) ->
                verifyArg (Just AST.RightAssociative) precedence right $
                verifyArg Nothing (succ precedence) left $
                pure e
-             Just (Binder.InfixDeclaration AST.NonAssociative precedence) ->
+             Just (Binder.InfixDeclaration _ AST.NonAssociative precedence) ->
                verifyArg Nothing (succ precedence) left $
                verifyArg Nothing (succ precedence) right $
                pure e
@@ -74,7 +74,7 @@ instance {-# overlaps #-} forall l pos s.
           verifyArg associativity precedence arg result
              | ((_, lexemes, _), AST.InfixExpression _ op' _) <- arg,
                (_, AST.ReferenceExpression name) <- op',
-               Just (Binder.InfixDeclaration associativity' precedence') <- Map.lookup name bindings =
+               Just (Binder.InfixDeclaration _ associativity' precedence') <- Map.lookup name bindings =
                if parenthesized lexemes
                   || precedence < precedence'
                   || precedence == precedence' && any (associativity' ==) associativity then result

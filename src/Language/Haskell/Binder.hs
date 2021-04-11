@@ -31,10 +31,12 @@ type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
 data Binding l = ErroneousBinding String
                | ModuleBinding (MonoidalMap (AST.Name l) (Binding l))
-               | InfixDeclaration (AST.Associativity l) Int
+               | InfixDeclaration Bool (AST.Associativity l) Int
                deriving (Data, Typeable, Eq, Show)
 
 instance Semigroup (Binding l) where
+   a@InfixDeclaration{} <> InfixDeclaration False _ _ = a
+   InfixDeclaration False _ _ <> a@InfixDeclaration{} = a
    a <> b
       | a == b = a
       | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
@@ -53,17 +55,24 @@ instance Transformation (Binder l f) where
    type Codomain (Binder l f) = FromEnvironment l f
 
 instance {-# OVERLAPS #-}
-         (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l,
+         (Abstract.Haskell l, Abstract.EquationLHS l ~ AST.EquationLHS l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
          AG.Mono.Attribution (Binder l f) (Environment l) (AST.Declaration l l) (FromEnvironment l f) f where
    attribution _ node atts = atts{AG.Mono.syn= synthesis, AG.Mono.inh= bequest}
       where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export (AST.FixityDeclaration associativity precedence names) =
                MonoidalMap (Map.fromList [(Abstract.qualifiedName Nothing name,
-                                         InfixDeclaration associativity $ fromMaybe 9 precedence)
+                                         InfixDeclaration True associativity $ fromMaybe 9 precedence)
                                         | name <- toList names])
             export AST.ClassDeclaration{} = AG.Mono.syn atts
+            export (AST.EquationDeclaration lhs _ _)
+               | [name] <- foldMap getInfixName (getCompose lhs mempty)
+               = MonoidalMap (Map.singleton (Abstract.qualifiedName Nothing name)
+                              $ InfixDeclaration False AST.LeftAssociative 9)
             export _ = mempty
+            getInfixName (AST.InfixLHS _ name _) = [name]
+            getInfixName _ = []
             bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
             bequeath _ = AG.Mono.inh atts
             synthesis = foldMap export node
@@ -184,28 +193,28 @@ preludeBindings = MonoidalMap (Map.mapKeysMonotonic (Abstract.qualifiedName Noth
 unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
                                Abstract.Associativity l ~ AST.Associativity l) => Map.Map (Abstract.Name l) (Binding l)
 unqualifiedPreludeBindings = Map.fromList $
-   [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9),
-    (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9)]
+   [(Abstract.name "!!", InfixDeclaration True Abstract.leftAssociative 9),
+    (Abstract.name ".", InfixDeclaration True Abstract.rightAssociative 9)]
    ++
-   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 8)
+   [(Abstract.name op, InfixDeclaration True Abstract.rightAssociative 8)
     | op <- ["^", "^^", "**"]]
    ++
-   [(Abstract.name op, InfixDeclaration Abstract.leftAssociative 7)
+   [(Abstract.name op, InfixDeclaration True Abstract.leftAssociative 7)
     | op <- ["*", "/", "`div`", "`mod`", "`rem`", "`quot`"]]
    ++
-   [(Abstract.name "+", InfixDeclaration Abstract.leftAssociative 6),
-    (Abstract.name "-", InfixDeclaration Abstract.leftAssociative 6)]
+   [(Abstract.name "+", InfixDeclaration True Abstract.leftAssociative 6),
+    (Abstract.name "-", InfixDeclaration True Abstract.leftAssociative 6)]
    ++
-   [(Abstract.name ":", InfixDeclaration Abstract.rightAssociative 5),
-    (Abstract.name "++", InfixDeclaration Abstract.rightAssociative 5)]
+   [(Abstract.name ":", InfixDeclaration True Abstract.rightAssociative 5),
+    (Abstract.name "++", InfixDeclaration True Abstract.rightAssociative 5)]
    ++
-   [(Abstract.name op, InfixDeclaration Abstract.nonAssociative 4)
+   [(Abstract.name op, InfixDeclaration True Abstract.nonAssociative 4)
     | op <- ["==", "/=", "<", "<=", ">", ">=", "`elem`", "`notElem`"]]
    ++
-   [(Abstract.name "&&", InfixDeclaration Abstract.rightAssociative 3),
-    (Abstract.name "||", InfixDeclaration Abstract.rightAssociative 2),
-    (Abstract.name ">>", InfixDeclaration Abstract.leftAssociative 1),
-    (Abstract.name ">>=", InfixDeclaration Abstract.leftAssociative 1)]
+   [(Abstract.name "&&", InfixDeclaration True Abstract.rightAssociative 3),
+    (Abstract.name "||", InfixDeclaration True Abstract.rightAssociative 2),
+    (Abstract.name ">>", InfixDeclaration True Abstract.leftAssociative 1),
+    (Abstract.name ">>=", InfixDeclaration True Abstract.leftAssociative 1)]
    ++
-   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 0)
+   [(Abstract.name op, InfixDeclaration True Abstract.rightAssociative 0)
     | op <- ["$", "$!", "`seq`"]]
