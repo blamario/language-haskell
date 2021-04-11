@@ -101,6 +101,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    guard :: p (Abstract.Statement l l f f),
    expression :: p (f (Abstract.Expression l l f f)),
    infixExpression :: p (f (Abstract.Expression l l f f)),
+   leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression :: p (f (Abstract.Expression l l f f)),
    dExpression :: p (f (Abstract.Expression l l f f)),
    fExpression :: p (f (Abstract.Expression l l f f)),
@@ -413,17 +414,31 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
    expression = wrap (Abstract.typedExpression <$> infixExpression <* delimiter "::" <*> wrap typeTerm)
                 <|> infixExpression,
+   -- infixExpression doesn't allow a conditional, let, or lambda expression on its left side
    infixExpression = wrap (Abstract.infixExpression
                               <$> dExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                               <*> infixExpression
                            <|> -- ambiguous
                            Abstract.infixExpression
-                              <$> infixExpression
+                              <$> leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> dExpression
+                              <*> lExpression
                            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
                      <|> lExpression,
+   -- leftInfixExpression doesn't allow a conditional, let, or lambda expression on either side
+   leftInfixExpression = wrap (Abstract.infixExpression
+                                  <$> dExpression
+                                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                                  <*> leftInfixExpression
+                               <|> -- ambiguous
+                               Abstract.infixExpression
+                                  <$> leftInfixExpression
+                                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                                  <*> dExpression
+                               <|> Abstract.applyExpression
+                                      <$> wrap (Abstract.negate <$ delimiter "-") <*> leftInfixExpression)
+                         <|> dExpression,
    lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->"
                                                  <*> expression
                        <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
