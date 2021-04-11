@@ -6,8 +6,8 @@ module Language.Haskell.Resolver where
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Map.Lazy (Map, traverseWithKey)
 import qualified Data.Map.Lazy as Map
+import Data.Map.Monoidal (MonoidalMap(..))
 import Data.String (IsString)
 import Language.Haskell.TH (appT, conT, varT, newName)
 
@@ -49,7 +49,7 @@ instance {-# overlaps #-} forall l pos s.
           Abstract.Name l ~ AST.Name l) =>
          Resolution l pos s
          `Transformation.At` AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   res $ Compose (AG.Mono.Atts{AG.Mono.inh= bindings}, expressions) =
+   res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
       let resolveExpression :: AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
                             -> Validation (NonEmpty Error) (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
           resolveExpression e@(AST.InfixExpression left op right)
@@ -110,9 +110,9 @@ resolveModules :: forall l pos s. (Abstract.Haskell l,
                               Deep.Traversable (Resolution l pos s) (Abstract.Declaration l l),
                               Full.Traversable (Resolution l pos s) (Abstract.Module l l),
                               Full.Traversable (Resolution l pos s) (Abstract.Declaration l l)) =>
-                  Map (Abstract.ModuleName l) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s) (AST.Module l l (Binder.WithEnvironment l (Disambiguator.Wrapped pos s)) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s))))
-               -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty Error)) (Map (Abstract.ModuleName l) ((Reserializer.Wrapped pos s) (AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))))
-resolveModules modules = traverseWithKey extractErrors resolvedModules
+                  Map.Map (Abstract.ModuleName l) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s) (AST.Module l l (Binder.WithEnvironment l (Disambiguator.Wrapped pos s)) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s))))
+               -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty Error)) (Map.Map (Abstract.ModuleName l) ((Reserializer.Wrapped pos s) (AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))))
+resolveModules modules = Map.traverseWithKey extractErrors resolvedModules
    where resolvedModules = resolveModule <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod

@@ -4,12 +4,12 @@
 module Language.Haskell.Binder where
 
 import Data.Data (Data, Typeable)
-import Data.Foldable (toList)
+import Data.Foldable (fold, toList)
 import Data.Functor.Compose (Compose(..))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
-import Data.Map.Lazy (Map)
+import Data.Map.Monoidal (MonoidalMap(..))
 import qualified Data.Map.Lazy as Map
 
 import qualified Rank2
@@ -23,20 +23,28 @@ import qualified Transformation.Rank2
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 
-type Environment l = Map (AST.QualifiedName l) (Binding l)
+type Environment l = MonoidalMap (AST.QualifiedName l) (Binding l)
 
 type WithEnvironment l = Compose ((,) (AG.Mono.Atts (Environment l)))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
 data Binding l = ErroneousBinding String
-               | ModuleBinding (Map (AST.Name l) (Binding l))
+               | ModuleBinding (MonoidalMap (AST.Name l) (Binding l))
                | InfixDeclaration (AST.Associativity l) Int
-               deriving (Data, Typeable, Show)
+               deriving (Data, Typeable, Eq, Show)
+
+instance Semigroup (Binding l) where
+   a <> b
+      | a == b = a
+      | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
 
 withBindings :: (Full.Traversable (Binder l p) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
              => Environment l -> p (g p p) -> q (g q q)
 withBindings = flip (Full.traverse Binder)
+
+onMap :: (Map.Map j a -> Map.Map k b) -> MonoidalMap j a -> MonoidalMap k b
+onMap f (MonoidalMap x) = MonoidalMap (f x)
 
 data Binder l (f :: Type -> Type) = Binder
 
@@ -51,8 +59,9 @@ instance {-# OVERLAPS #-}
    attribution _ node atts = atts{AG.Mono.syn= synthesis, AG.Mono.inh= bequest}
       where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export (AST.FixityDeclaration associativity precedence names) =
-               Map.fromList [(Abstract.qualifiedName Nothing name,
-                              InfixDeclaration associativity $ fromMaybe 9 precedence) | name <- toList names]
+               MonoidalMap (Map.fromList [(Abstract.qualifiedName Nothing name,
+                                         InfixDeclaration associativity $ fromMaybe 9 precedence)
+                                        | name <- toList names])
             export AST.ClassDeclaration{} = AG.Mono.syn atts
             export _ = mempty
             bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
@@ -76,15 +85,16 @@ instance {-# OVERLAPS #-}
                               -> AG.Mono.Atts (Environment l)
             moduleAttribution (AST.AnonymousModule modImports body) =
                AG.Mono.Atts{AG.Mono.inh= moduleGlobalScope,
-                            AG.Mono.syn= Map.filterWithKey (const . (== mainName)) moduleGlobalScope}
-               where moduleGlobalScope = Map.unionWith clashingNames (importedScope modImports) (AG.Mono.syn atts)
+                            AG.Mono.syn= onMap (Map.filterWithKey (const . (== mainName))) moduleGlobalScope}
+               where moduleGlobalScope = importedScope modImports <> AG.Mono.syn atts
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
                atts{AG.Mono.syn= exportedScope, AG.Mono.inh= moduleGlobalScope}
                where exportedScope, moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
-                     exportedScope = Map.singleton (qualifiedModuleName moduleName) $ ModuleBinding
-                                     $ Map.mapKeys baseName (Map.filterWithKey (const . exported) moduleGlobalScope)
+                     exportedScope = MonoidalMap $ Map.singleton (qualifiedModuleName moduleName) $ ModuleBinding
+                                     $ MonoidalMap $ Map.mapKeys baseName $ Map.filterWithKey (const . exported)
+                                     $ getMonoidalMap moduleGlobalScope
                      exported qn@(AST.QualifiedName modName name) =
                         maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
                         where exportedBy (AST.ReExportModule modName') = modName == Just modName'
@@ -93,13 +103,13 @@ instance {-# OVERLAPS #-}
                               exportedBy (AST.ExportClassOrType parent members) = qn == parent || any exportedByMember members
                               exportedByMember AST.AllMembers = error "What does this refer to !?"
                               exportedByMember (AST.MemberList names) = elem name names
-                     moduleGlobalScope = Map.unionsWith clashingNames [importedScope modImports,
-                                                                       requalifiedWith moduleName (AG.Mono.syn atts),
-                                                                       AG.Mono.syn atts]
+                     moduleGlobalScope = importedScope modImports
+                                         <> requalifiedWith moduleName (AG.Mono.syn atts)
+                                         <> AG.Mono.syn atts
             importedScope :: [FromEnvironment l f (AST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
-            importedScope modImports = Map.unionsWith clashingImports (Map.mapWithKey importsFrom $ AG.Mono.inh atts)
-               where importsFromModule :: Map (AST.Name l) (Binding l)
+            importedScope modImports = fold (Map.mapWithKey importsFrom $ getMonoidalMap $ AG.Mono.inh atts)
+               where importsFromModule :: MonoidalMap (AST.Name l) (Binding l)
                                        -> AST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
                      importsFrom (AST.QualifiedName (Just moduleName) _) (ModuleBinding moduleExports)
                         | null matchingImports && moduleName == preludeName = unqualified moduleExports
@@ -116,7 +126,7 @@ instance {-# OVERLAPS #-}
                               imports Nothing = allImports
                               specImports (AST.ImportSpecification False items) = itemsImports items
                               specImports (AST.ImportSpecification True items) =
-                                 allImports `Map.difference` itemsImports items
+                                 MonoidalMap (getMonoidalMap allImports `Map.difference` getMonoidalMap (itemsImports items))
                               allImports = moduleExports
                               itemsImports = foldMap (foldMap itemImports . ($ mempty) . getCompose)
                               itemImports (AST.ImportClassOrType name members) =
@@ -129,12 +139,11 @@ instance {-# OVERLAPS #-}
                               nameImport name = mempty
                               getImportName (_, AST.Import _ moduleName _ _) = moduleName
                      getImportName (_, AST.Import _ moduleName _ _) = moduleName
-            qualifiedWith moduleName = Map.mapKeysMonotonic (AST.QualifiedName $ Just moduleName)
-            requalifiedWith moduleName = Map.mapKeysMonotonic requalify
+            qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
+            requalifiedWith moduleName = onMap (Map.mapKeysMonotonic requalify)
                where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name
-            unqualified = Map.mapKeysMonotonic (AST.QualifiedName Nothing)
-            clashingImports _ _ = ErroneousBinding "clashing imports"
-            clashingNames _ _ = ErroneousBinding "clashing names"
+            unqualified :: MonoidalMap (AST.Name l) a -> MonoidalMap (AST.QualifiedName l) a
+            unqualified = onMap (Map.mapKeysMonotonic $ AST.QualifiedName Nothing)
 
 instance (Traversable f, Rank2.Traversable (g f), Full.Functor (Binder l f) g,
           Transformation.At (Binder l f) (g (FromEnvironment l f) (FromEnvironment l f)),
@@ -164,16 +173,16 @@ predefinedModuleBindings :: (Abstract.Haskell l, Ord (Abstract.QualifiedName l),
                              Abstract.QualifiedName l ~ AST.QualifiedName l,
                              Abstract.Name l ~ AST.Name l,
                              Abstract.Associativity l ~ AST.Associativity l) => Environment l
-predefinedModuleBindings = Map.fromList [(qualifiedModuleName preludeName,
-                                          ModuleBinding unqualifiedPreludeBindings)]
+predefinedModuleBindings = MonoidalMap (Map.fromList [(qualifiedModuleName preludeName,
+                                                       ModuleBinding $ MonoidalMap unqualifiedPreludeBindings)])
 
 preludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
                     Abstract.QualifiedName l ~ AST.QualifiedName l,
                     Abstract.Associativity l ~ AST.Associativity l) => Environment l
-preludeBindings = Map.mapKeysMonotonic (Abstract.qualifiedName Nothing) unqualifiedPreludeBindings
+preludeBindings = MonoidalMap (Map.mapKeysMonotonic (Abstract.qualifiedName Nothing) unqualifiedPreludeBindings)
 
 unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
-                               Abstract.Associativity l ~ AST.Associativity l) => Map (Abstract.Name l) (Binding l)
+                               Abstract.Associativity l ~ AST.Associativity l) => Map.Map (Abstract.Name l) (Binding l)
 unqualifiedPreludeBindings = Map.fromList $
    [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9),
     (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9)]
