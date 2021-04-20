@@ -17,6 +17,7 @@ import qualified Language.Haskell.Resolver as Resolver
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
+import qualified Transformation.AG.Monomorphic as AG.Mono
 
 import Data.Either.Validation (validationToEither)
 import Data.Functor.Compose (Compose(Compose, getCompose))
@@ -51,7 +52,7 @@ resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
                      q ~ Reserializer.Wrapped (Down Int) (LinePositioned Text), r ~ Placed,
                      Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) g,
                      Deep.Functor (Rank2.Map q r) g,
-                     Full.Traversable (Binder.Binder AST.Language p) g,
+                     Full.Traversable (AG.Mono.Keep (Binder.Binder AST.Language p)) g,
                      Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) g)
                  => Text -> p (g p p) -> r (g r r)
 resolvePositions src = Reserializer.mapWrappings (offset src) extract

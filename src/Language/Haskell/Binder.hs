@@ -41,24 +41,25 @@ instance Semigroup (Binding l) where
       | a == b = a
       | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
 
-withBindings :: (Full.Traversable (Binder l p) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
+withBindings :: (Full.Traversable (AG.Mono.Keep (Binder l p)) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
              => Environment l -> p (g p p) -> q (g q q)
-withBindings = flip (Full.traverse Binder)
+withBindings = flip (Full.traverse (AG.Mono.Keep Binder))
 
 onMap :: (Map.Map j a -> Map.Map k b) -> MonoidalMap j a -> MonoidalMap k b
 onMap f (MonoidalMap x) = MonoidalMap (f x)
 
 data Binder l (f :: Type -> Type) = Binder
 
-instance Transformation (Binder l f) where
-   type Domain (Binder l f) = f
-   type Codomain (Binder l f) = FromEnvironment l f
+instance Transformation (AG.Mono.Keep (Binder l f)) where
+   type Domain (AG.Mono.Keep (Binder l f)) = f
+   type Codomain (AG.Mono.Keep (Binder l f)) = FromEnvironment l f
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
-         AG.Mono.Attribution (Binder l f) (Environment l) (AST.Declaration l l) (FromEnvironment l f) f where
+         AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Declaration l l) (FromEnvironment l f) f
+         where
    attribution _ node atts = atts{AG.Mono.syn= synthesis, AG.Mono.inh= bequest}
       where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export (AST.FixityDeclaration associativity precedence names) =
@@ -90,7 +91,7 @@ instance {-# OVERLAPS #-}
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l, Abstract.ImportItem l l ~ AST.ImportItem l l,
           Abstract.Members l ~ AST.Members l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
-         AG.Mono.Attribution (Binder l f) (Environment l) (AST.Module l l) (FromEnvironment l f) f where
+         AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Module l l) (FromEnvironment l f) f where
    attribution _ node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
                               -> AG.Mono.Atts (Environment l)
@@ -156,23 +157,6 @@ instance {-# OVERLAPS #-}
                where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name
             unqualified :: MonoidalMap (AST.Name l) a -> MonoidalMap (AST.QualifiedName l) a
             unqualified = onMap (Map.mapKeysMonotonic $ AST.QualifiedName Nothing)
-
-instance (Traversable f, Rank2.Traversable (g f), Full.Functor (Binder l f) g,
-          Transformation.At (Binder l f) (g (FromEnvironment l f) (FromEnvironment l f)),
-          Deep.Traversable (AG.Mono.Feeder (Environment l) f) g) =>
-         Full.Traversable (Binder l f) g where
-   traverse = AG.Mono.traverseDefaultWithAttributes
-
-instance (Transformation.At (Binder l f) (g (FromEnvironment l f) (FromEnvironment l f)),
-          Deep.Functor (Binder l f) g, Functor f) =>
-         Full.Functor (Binder l f) g where
-   (<$>) = Full.mapUpDefault
-
-instance {-# OVERLAPPABLE #-} (Ord (Abstract.ModuleName l), Ord (Abstract.QualifiedName l), Ord (Abstract.Name l),
-                               AG.Mono.Attribution (Binder l f) (Environment l) g (FromEnvironment l f) f,
-                               Foldable f, Functor f, Rank2.Foldable (g (FromEnvironment l f))) =>
-         Transformation.At (Binder l f) (g (FromEnvironment l f) (FromEnvironment l f)) where
-   ($) = AG.Mono.applyDefaultWithAttributes
 
 qualifiedModuleName :: Abstract.Haskell l => Abstract.ModuleName l -> Abstract.QualifiedName l
 qualifiedModuleName moduleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
