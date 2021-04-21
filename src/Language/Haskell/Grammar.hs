@@ -674,7 +674,7 @@ reservedWords = Set.fromList ["case", "class", "data", "default", "deriving", "d
 reservedOperators = Set.fromList ["--", "..", ":", "::", "=", "\\", "|", "<-", "->", "@", "~", "=>"]
 
 asciiSymbols :: Set.Set Char
-asciiSymbols = Set.fromList "!#$%&⋆+./<=>?@\\^|-~:"
+asciiSymbols = Set.fromList "!#$%&*+./<=>?@\\^|-~:"
 
 -- varid 	→ 	(small {small | large | digit | ' })⟨reservedid⟩
 -- conid 	→ 	large {small | large | digit | ' }
