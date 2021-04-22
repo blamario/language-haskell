@@ -473,7 +473,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                                          <$> qualifiedConstructor))
                                                      <*> braces (pure [])
                        <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma))
-                 <|> parens expression,
+                 <|> Disambiguator.joinWrapped <$> wrap (parens expression),
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList

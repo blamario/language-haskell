@@ -12,6 +12,7 @@ import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Semigroup (Semigroup(..), sconcat)
+import Data.Semigroup.Factorial (Factorial)
 import Text.Parser.Input.Position (Position)
 import Text.Grampa (Ambiguous(Ambiguous, getAmbiguous))
 
@@ -28,6 +29,16 @@ type Wrapped pos s = Compose ((,) (pos, pos)) (Compose Ambiguous ((,) (Reseriali
 
 data Local pos s t = Local t
 data Effective pos s (m :: Type -> Type) t = Effective t
+
+-- | Join the two wrappings of a double-'Wrapped' value into one.
+joinWrapped :: forall pos s a. (Position pos, Factorial s) => Wrapped pos s (Wrapped pos s a) -> Wrapped pos s a
+joinWrapped (Compose (range@(start, end),
+             Compose (Ambiguous xs))) = Compose (range, Compose $ Ambiguous $ sconcat $ merge <$> xs)
+   where merge :: (Reserializer.ParsedLexemes s, Wrapped pos s a) -> NonEmpty (Reserializer.ParsedLexemes s, a)
+         merge (Reserializer.Trailing lexemes,
+                Compose ((innerStart, innerEnd), Compose (Ambiguous ys))) = mergeInner <$> ys
+            where mergeInner (Reserializer.Trailing innerLexemes, y) =
+                     (Reserializer.Trailing $ Reserializer.mergeLexemes start lexemes innerStart innerLexemes, y)
 
 -- Local instances
 

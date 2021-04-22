@@ -5,7 +5,8 @@
 -- | This module exports functions for reserializing the parsed tree from the tokens stored with every node.
 
 module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..), Wrapped,
-                                      adjustPositions, lexemes, reserialize, sourceLength, mapWrappings,
+                                      adjustPositions, lexemes, reserialize, sourceLength, joinWrapped,
+                                      mergeLexemes, mapWrappings,
                                       PositionAdjustment, Serialization) where
 
 import Control.Arrow (first)
@@ -66,6 +67,18 @@ sourceLength :: forall g s pos. (Factorial s, Rank2.Foldable (g (Const (Sum Int)
 sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
                                                                  <> Transformation.Rank2.foldMap nodeLength node)
    where nodeLength ((_, Trailing ls, _), _) = foldMap (Sum . Factorial.length . lexemeText) ls
+
+-- | Join the two wrappings of a double-'Wrapped' value into one.
+joinWrapped :: (Position pos, Factorial s) => Wrapped pos s (Wrapped pos s a) -> Wrapped pos s a
+joinWrapped ((start, Trailing lexemes, end), ((innerStart, Trailing innerLexemes, innerEnd), x)) =
+   ((start, Trailing $ mergeLexemes start lexemes innerStart innerLexemes, end), x)
+
+-- | Given two lists of lexemes where the first wraps the second and their starting positions, return a single list
+-- | sorted by position.
+mergeLexemes :: (Position pos, Factorial s) => pos -> [Lexeme s] -> pos -> [Lexeme s] -> [Lexeme s]
+mergeLexemes pos1 outer@(lexeme1:rest1) pos2 inner@(lexeme2:rest2)
+   | pos1 < pos2 = lexeme1 : mergeLexemes (move (Factorial.length $ lexemeText lexeme1) pos1) rest1 pos2 inner
+mergeLexemes _ outer _ inner = inner <> outer
 
 -- | Transformation type used by 'reserialize'
 data Serialization pos s = Serialization
