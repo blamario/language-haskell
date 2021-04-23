@@ -8,7 +8,6 @@ import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar as Grammar
-import qualified Language.Haskell.Template as Template
 
 import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer

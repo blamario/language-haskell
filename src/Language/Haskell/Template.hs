@@ -1,4 +1,5 @@
-{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
+{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes,
+             ScopedTypeVariables, TemplateHaskell #-}
 
 module Language.Haskell.Template where
 
@@ -13,6 +14,8 @@ import Text.PrettyPrint (render)
 
 import qualified Transformation
 
+import Language.Haskell (Placed)
+import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.AST
 import Language.Haskell.TH
 
@@ -28,15 +31,21 @@ pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
 class PrettyViaTH a where
    prettyViaTH :: a -> Ppr.Doc
 
+class TemplateWrapper f where
+   extract :: f a -> a
+
+instance TemplateWrapper Placed where
+   extract = snd
+
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
 
-instance PrettyViaTH (Module Language Language ((,) x) ((,) x)) where
+instance PrettyViaTH (Module Language Language Placed Placed) where
    prettyViaTH (AnonymousModule imports declarations) =
       Ppr.vcat ((prettyViaTH <$> imports) ++ (prettyViaTH <$> declarations))
    prettyViaTH (NamedModule name exports imports declarations) =
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
-      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language ((,) x) ((,) x))
+      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language Placed Placed)
       where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH <$> xs))
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
@@ -68,11 +77,11 @@ instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> names)
    prettyViaTH AllMembers = Ppr.text ".."
    
-instance PrettyViaTH (Declaration Language Language ((,) x) ((,) x)) where
-   prettyViaTH x = Ppr.vcat (Ppr.ppr <$> declarationTemplates snd x)
+instance PrettyViaTH (Declaration Language Language Placed Placed) where
+   prettyViaTH x = Ppr.vcat (Ppr.ppr <$> declarationTemplates x)
 
-instance PrettyViaTH (Expression Language Language ((,) x) ((,) x)) where
-   prettyViaTH x = Ppr.ppr (expressionTemplate snd x)
+instance PrettyViaTH (Expression Language Language Placed Placed) where
+   prettyViaTH x = Ppr.ppr (expressionTemplate x)
 
 instance PrettyViaTH (ModuleName Language) where
    prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ nameText <$> toList mods)
@@ -84,210 +93,211 @@ instance PrettyViaTH (QualifiedName Language) where
    prettyViaTH x = Ppr.pprName (qnameTemplate x)
 
 
-expressionTemplate :: (forall a. f a -> a) -> Expression Language Language f f -> Exp
-expressionTemplate get (ApplyExpression f x) = AppE (expressionTemplate get $ get f) (expressionTemplate get $ get x)
-expressionTemplate get (ConditionalExpression test true false) =
-   CondE (expressionTemplate get $ get test) (expressionTemplate get $ get true) (expressionTemplate get $ get false)
-expressionTemplate get (ConstructorExpression con) = case (get con)
+expressionTemplate :: TemplateWrapper f => Expression Language Language f f -> Exp
+expressionTemplate (ApplyExpression f x) = AppE (expressionTemplate $ extract f) (expressionTemplate $ extract x)
+expressionTemplate (ConditionalExpression test true false) =
+   CondE (expressionTemplate $ extract test) (expressionTemplate $ extract true) (expressionTemplate $ extract false)
+expressionTemplate (ConstructorExpression con) = case (extract con)
    of ConstructorReference name -> ConE (qnameTemplate name)
       EmptyListConstructor -> ListE []
       TupleConstructor n -> TupE (replicate n Nothing)
       UnitConstructor -> TupE []
-expressionTemplate get (CaseExpression scrutinee alternatives) =
-   CaseE (expressionTemplate get $ get scrutinee) (caseAlternativeTemplate get . get <$> alternatives)
-expressionTemplate get (DoExpression statements) = DoE (guardedTemplate $ get statements)
+expressionTemplate (CaseExpression scrutinee alternatives) =
+   CaseE (expressionTemplate $ extract scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
+expressionTemplate (DoExpression statements) = DoE (guardedTemplate $ extract statements)
    where guardedTemplate (GuardedExpression statements result) =
-            (statementTemplate get . get <$> statements) ++ [NoBindS $ expressionTemplate get $ get result]
-expressionTemplate get (InfixExpression left op right) =
-   UInfixE (expressionTemplate get $ get left) (expressionTemplate get $ get op) (expressionTemplate get $ get right)
-expressionTemplate get (LeftSectionExpression left op) =
-   InfixE (Just $ expressionTemplate get $ get left) (nameReferenceTemplate op) Nothing
-expressionTemplate get (LambdaExpression patterns body) =
-   LamE (patternTemplate get . get <$> patterns) (expressionTemplate get $ get body)
-expressionTemplate get (LetExpression bindings body) =
-   LetE (foldMap (declarationTemplates get .get) bindings) (expressionTemplate get $ get body)
-expressionTemplate get (ListComprehension element guards) =
-   CompE (statementTemplate get <$> ((get <$> toList guards) ++ [ExpressionStatement element]))
-expressionTemplate get (ListExpression items) = ListE (expressionTemplate get . get <$> items)
-expressionTemplate get (LiteralExpression value) = LitE (literalTemplate $ get value)
-expressionTemplate get Negate = VarE (mkName "-")
-expressionTemplate get (RecordExpression record fields) =
-   (case get record
-    of ConstructorExpression con | ConstructorReference name <- get con -> RecConE (qnameTemplate name)
-       e -> RecUpdE $ expressionTemplate get e)
-   (fieldBindingTemplate get . get <$> fields)
-expressionTemplate get (ReferenceExpression name) = VarE (qnameTemplate name)
-expressionTemplate get (RightSectionExpression op right) =
-   InfixE Nothing (nameReferenceTemplate op) (Just $ expressionTemplate get $ get right)
-expressionTemplate get (SequenceExpression start next end) = ArithSeqE $
-   case (expressionTemplate get . get <$> next, expressionTemplate get . get <$> end)
+            (statementTemplate . extract <$> statements) ++ [NoBindS $ expressionTemplate $ extract result]
+expressionTemplate (InfixExpression left op right) =
+   UInfixE (expressionTemplate $ extract left) (expressionTemplate $ extract op) (expressionTemplate $ extract right)
+expressionTemplate (LeftSectionExpression left op) =
+   InfixE (Just $ expressionTemplate $ extract left) (nameReferenceTemplate op) Nothing
+expressionTemplate (LambdaExpression patterns body) =
+   LamE (patternTemplate . extract <$> patterns) (expressionTemplate $ extract body)
+expressionTemplate (LetExpression bindings body) =
+   LetE (foldMap (declarationTemplates .extract) bindings) (expressionTemplate $ extract body)
+expressionTemplate (ListComprehension element guards) =
+   CompE (statementTemplate <$> ((extract <$> toList guards) ++ [ExpressionStatement element]))
+expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> items)
+expressionTemplate (LiteralExpression value) = LitE (literalTemplate $ extract value)
+expressionTemplate Negate = VarE (mkName "-")
+expressionTemplate (RecordExpression record fields) =
+   (case extract record
+    of ConstructorExpression con | ConstructorReference name <- extract con -> RecConE (qnameTemplate name)
+       e -> RecUpdE $ expressionTemplate e)
+   (fieldBindingTemplate . extract <$> fields)
+expressionTemplate (ReferenceExpression name) = VarE (qnameTemplate name)
+expressionTemplate (RightSectionExpression op right) =
+   InfixE Nothing (nameReferenceTemplate op) (Just $ expressionTemplate $ extract right)
+expressionTemplate (SequenceExpression start next end) = ArithSeqE $
+   case (expressionTemplate . extract <$> next, expressionTemplate . extract <$> end)
    of (Nothing, Nothing) -> FromR s
       (Just n, Nothing) -> FromThenR s n
       (Nothing, Just e) -> FromToR s e
       (Just n, Just e) -> FromThenToR s n e
-   where s = expressionTemplate get $ get start
-expressionTemplate get (TupleExpression items) = TupE (Just . expressionTemplate get . get <$> toList items)
-expressionTemplate get (TypedExpression e signature) =
-   SigE (expressionTemplate get $ get e) (typeTemplate get $ get signature)
+   where s = expressionTemplate $ extract start
+expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
+expressionTemplate (TypedExpression e signature) =
+   SigE (expressionTemplate $ extract e) (typeTemplate $ extract signature)
 
-caseAlternativeTemplate :: (forall a. f a -> a) -> CaseAlternative Language Language f f -> Match
-caseAlternativeTemplate get (CaseAlternative lhs rhs wheres) =
-   Match (patternTemplate get $ get lhs) (rhsTemplate get $ get rhs) (foldMap (declarationTemplates get . get) wheres)
+caseAlternativeTemplate :: TemplateWrapper f => CaseAlternative Language Language f f -> Match
+caseAlternativeTemplate (CaseAlternative lhs rhs wheres) =
+   Match (patternTemplate $ extract lhs) (rhsTemplate $ extract rhs) (foldMap (declarationTemplates . extract) wheres)
 
-declarationTemplates :: (forall a. f a -> a) -> Declaration Language Language f f -> [Dec]
-declarationTemplates get (ClassDeclaration context lhs members)
-   | SimpleTypeLHS con vars <- get lhs =
-     [ClassD (contextTemplate get $ get context) (nameTemplate con) (PlainTV . nameTemplate <$> vars) []
-             (foldMap (declarationTemplates get . get) members)]
-declarationTemplates get (DataDeclaration context lhs constructors derivings)
-   | SimpleTypeLHS con vars <- get lhs =
-     [DataD (contextTemplate get $ get context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
-            Nothing (dataConstructorTemplate get . get <$> constructors)
-            $ if null derivings then [] else [DerivClause Nothing $ derived . get <$> derivings]]
+declarationTemplates :: TemplateWrapper f => Declaration Language Language f f -> [Dec]
+declarationTemplates (ClassDeclaration context lhs members)
+   | SimpleTypeLHS con vars <- extract lhs =
+     [ClassD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars) []
+             (foldMap (declarationTemplates . extract) members)]
+declarationTemplates (DataDeclaration context lhs constructors derivings)
+   | SimpleTypeLHS con vars <- extract lhs =
+     [DataD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
+            Nothing (dataConstructorTemplate . extract <$> constructors)
+            $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
-declarationTemplates get (DefaultDeclaration types) = error "Template Haskell can't represent a default declaration"
-declarationTemplates get (EquationDeclaration lhs rhs wheres)
-   | VariableLHS name <- get lhs = [ValD (VarP $ nameTemplate name) body declarations]
-   | PatternLHS pat <- get lhs = [ValD (patternTemplate get $ get pat) body declarations]
-   | InfixLHS left name right <- get lhs =
+declarationTemplates (DefaultDeclaration types) = error "Template Haskell can't represent a default declaration"
+declarationTemplates (EquationDeclaration lhs rhs wheres)
+   | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) body declarations]
+   | PatternLHS pat <- extract lhs = [ValD (patternTemplate $ extract pat) body declarations]
+   | InfixLHS left name right <- extract lhs =
      [FunD (nameTemplate name)
-           [Clause [patternTemplate get $ get left, patternTemplate get $ get right] body declarations]]
-   | PrefixLHS lhs' pats <- get lhs = case declarationTemplates get (EquationDeclaration lhs' rhs wheres) of
+           [Clause [patternTemplate $ extract left, patternTemplate $ extract right] body declarations]]
+   | PrefixLHS lhs' pats <- extract lhs = case declarationTemplates (EquationDeclaration lhs' rhs wheres) of
      [FunD name [Clause args body decs]] ->
-        [FunD name [Clause (args ++ (patternTemplate get . get <$> toList pats)) body decs]]
+        [FunD name [Clause (args ++ (patternTemplate . extract <$> toList pats)) body decs]]
      [ValD (VarP name) body decs] ->
-        [FunD name [Clause (patternTemplate get . get <$> toList pats) body decs]]
-   where body = rhsTemplate get (get rhs)
-         declarations = foldMap (declarationTemplates get . get) wheres
-declarationTemplates get (FixityDeclaration fixity precedence names) =
+        [FunD name [Clause (patternTemplate . extract <$> toList pats) body decs]]
+   where body = rhsTemplate (extract rhs)
+         declarations = foldMap (declarationTemplates . extract) wheres
+declarationTemplates (FixityDeclaration fixity precedence names) =
    InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) . nameTemplate <$> toList names
    where fixityTemplate NonAssociative = InfixN
          fixityTemplate LeftAssociative = InfixL
          fixityTemplate RightAssociative = InfixR
-declarationTemplates get (ForeignExport convention identification name t) =
+declarationTemplates (ForeignExport convention identification name t) =
    [ForeignD (ExportF (conventionTemplate convention) (foldMap unpack identification) (nameTemplate name)
-                      (typeTemplate get $ get t))]
-declarationTemplates get (ForeignImport convention safety identification name t) =
+                      (typeTemplate $ extract t))]
+declarationTemplates (ForeignImport convention safety identification name t) =
    [ForeignD (ImportF (conventionTemplate convention) (maybe Safe safetyTemplate safety) (foldMap unpack identification)
-                      (nameTemplate name) (typeTemplate get $ get t))]
+                      (nameTemplate name) (typeTemplate $ extract t))]
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
-declarationTemplates get (InstanceDeclaration context lhs wheres)
-   | GeneralTypeLHS name t <- get lhs =
-     [InstanceD Nothing (contextTemplate get $ get context)
-                (AppT (ConT $ qnameTemplate name) $ typeTemplate get $ get t)
-                (foldMap (declarationTemplates get . get) wheres)]
-declarationTemplates get (NewtypeDeclaration context lhs constructor derivings)
-   | SimpleTypeLHS con vars <- get lhs =
-     [NewtypeD (contextTemplate get $ get context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
-               Nothing (dataConstructorTemplate get . get $ constructor)
-               [DerivClause Nothing $ derived . get <$> derivings]]
+declarationTemplates (InstanceDeclaration context lhs wheres)
+   | GeneralTypeLHS name t <- extract lhs =
+     [InstanceD Nothing (contextTemplate $ extract context)
+                (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
+                (foldMap (declarationTemplates . extract) wheres)]
+declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
+   | SimpleTypeLHS con vars <- extract lhs =
+     [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
+               Nothing (dataConstructorTemplate . extract $ constructor)
+               [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
-declarationTemplates get (TypeSynonymDeclaration lhs t)
-   | SimpleTypeLHS con vars <- get lhs =
-     [TySynD (nameTemplate con) (PlainTV . nameTemplate <$> vars) (typeTemplate get $ get t)]
-declarationTemplates get (TypeSignature names context t) =
-   [SigD (nameTemplate name) (inContext $ typeTemplate get $ get t) | name <- toList names]
-   where inContext = case get context
+declarationTemplates (TypeSynonymDeclaration lhs t)
+   | SimpleTypeLHS con vars <- extract lhs =
+     [TySynD (nameTemplate con) (PlainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
+declarationTemplates (TypeSignature names context t) =
+   [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
+   where inContext = case extract context
                      of NoContext -> id
-                        ctx -> ForallT (nub $ freeContextVars get ctx <> freeTypeVars get (get t))
-                                       (contextTemplate get ctx)
-contextTemplate :: (forall a. f a -> a) -> Context Language Language f f -> Cxt
-contextTemplate get (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
-contextTemplate get (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate get $ get t)]
-contextTemplate get (Constraints cs) = foldMap (contextTemplate get . get) cs
-contextTemplate get NoContext = []
+                        ctx -> ForallT (nub $ freeContextVars ctx <> freeTypeVars (extract t))
+                                       (contextTemplate ctx)
 
-freeContextVars :: (forall a. f a -> a) -> Context Language Language f f -> [TyVarBndr]
-freeContextVars get (SimpleConstraint cls var) = [PlainTV $ nameTemplate var]
-freeContextVars get (ClassConstraint cls t) = freeTypeVars get (get t)
-freeContextVars get (Constraints cs) = nub (foldMap (freeContextVars get . get) cs)
-freeContextVars get NoContext = []
+contextTemplate :: TemplateWrapper f => Context Language Language f f -> Cxt
+contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
+contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate $ extract t)]
+contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
+contextTemplate NoContext = []
+
+freeContextVars :: TemplateWrapper f => Context Language Language f f -> [TyVarBndr]
+freeContextVars (SimpleConstraint cls var) = [PlainTV $ nameTemplate var]
+freeContextVars (ClassConstraint cls t) = freeTypeVars (extract t)
+freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
+freeContextVars NoContext = []
 
 conventionTemplate :: CallingConvention l -> Callconv
 conventionTemplate AST.CCall = TH.CCall
 conventionTemplate AST.StdCall = TH.StdCall
 conventionTemplate convention = error ("Calling Convention " ++ show convention ++ " is not supported by GHC")
 
-dataConstructorTemplate :: (forall a. f a -> a) -> DataConstructor Language Language f f -> Con
-dataConstructorTemplate get (Constructor name@(AST.Name local) [left, right]) | ":" `Text.isPrefixOf` local =
-   InfixC (bangTypeTemplate get $ get left) (nameTemplate name) (bangTypeTemplate get $ get right)
-dataConstructorTemplate get (Constructor name argTypes) =
-   NormalC (nameTemplate name) (bangTypeTemplate get . get <$> argTypes)
-dataConstructorTemplate get (RecordConstructor name fieldTypes) =
-   RecC (nameTemplate name) (concat $ fieldTypeTemplate . get <$> fieldTypes)
+dataConstructorTemplate :: TemplateWrapper f => DataConstructor Language Language f f -> Con
+dataConstructorTemplate (Constructor name@(AST.Name local) [left, right]) | ":" `Text.isPrefixOf` local =
+   InfixC (bangTypeTemplate $ extract left) (nameTemplate name) (bangTypeTemplate $ extract right)
+dataConstructorTemplate (Constructor name argTypes) =
+   NormalC (nameTemplate name) (bangTypeTemplate . extract <$> argTypes)
+dataConstructorTemplate (RecordConstructor name fieldTypes) =
+   RecC (nameTemplate name) (concat $ fieldTypeTemplate . extract <$> fieldTypes)
    where fieldTypeTemplate (ConstructorFields names t)
-            | StrictType t' <- get t = varBang SourceStrict t <$> toList names
+            | StrictType t' <- extract t = varBang SourceStrict t <$> toList names
             | otherwise = varBang NoSourceStrictness t <$> toList names
-         varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate get $ get t)
+         varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 
-fieldBindingTemplate :: (forall a. f a -> a) -> FieldBinding Language Language f f -> FieldExp
-fieldBindingTemplate get (FieldBinding name value) = (qnameTemplate name, expressionTemplate get $ get value)
+fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
+fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, expressionTemplate $ extract value)
 
-literalTemplate :: Value Language Language f f -> Lit
+literalTemplate :: TemplateWrapper f => Value Language Language f f -> Lit
 literalTemplate (CharLiteral c) = CharL c
 literalTemplate (FloatingLiteral x) = RationalL x
 literalTemplate (IntegerLiteral n) = IntegerL n
 literalTemplate (StringLiteral s) = StringL (unpack s)
 
-patternTemplate :: (forall a. f a -> a) -> Pattern Language Language f f -> Pat
-patternTemplate get (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate get $ get pat)
-patternTemplate get (ConstructorPattern con args) = case (get con) of
-   ConstructorReference name -> ConP (qnameTemplate name) (patternTemplate get . get <$> args)
-   EmptyListConstructor -> ListP (patternTemplate get . get <$> args)
-   TupleConstructor n -> TupP (patternTemplate get . get <$> toList args)
+patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
+patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)
+patternTemplate (ConstructorPattern con args) = case (extract con) of
+   ConstructorReference name -> ConP (qnameTemplate name) (patternTemplate . extract <$> args)
+   EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
+   TupleConstructor n -> TupP (patternTemplate . extract <$> toList args)
    UnitConstructor -> TupP []
-patternTemplate get (InfixPattern left op right) =
-   InfixP (patternTemplate get $ get left) (qnameTemplate op) (patternTemplate get $ get right)
-patternTemplate get (IrrefutablePattern pat) = TildeP (patternTemplate get $ get pat)
-patternTemplate get (ListPattern items) = ListP (patternTemplate get . get <$> items)
-patternTemplate get (LiteralPattern value) = LitP (literalTemplate $ get value)
-patternTemplate get (RecordPattern constructor fields) =
-   RecP (qnameTemplate constructor) (fieldPatternTemplate . get <$> fields)
-   where fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate get $ get pat)
-patternTemplate get (TuplePattern items) = TupP (patternTemplate get . get <$> toList items)
-patternTemplate get (VariablePattern name) = VarP (nameTemplate name)
-patternTemplate get WildcardPattern = WildP
+patternTemplate (InfixPattern left op right) =
+   InfixP (patternTemplate $ extract left) (qnameTemplate op) (patternTemplate $ extract right)
+patternTemplate (IrrefutablePattern pat) = TildeP (patternTemplate $ extract pat)
+patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> items)
+patternTemplate (LiteralPattern value) = LitP (literalTemplate $ extract value)
+patternTemplate (RecordPattern constructor fields) =
+   RecP (qnameTemplate constructor) (fieldPatternTemplate . extract <$> fields)
+   where fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
+patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
+patternTemplate (VariablePattern name) = VarP (nameTemplate name)
+patternTemplate WildcardPattern = WildP
 
-rhsTemplate :: (forall a. f a -> a) -> EquationRHS Language Language f f -> Body
-rhsTemplate get (GuardedRHS guarded) = GuardedB (guardedTemplate . get <$> toList guarded)
-   where guardedTemplate (GuardedExpression statements result) = (PatG $ statementTemplate get . get <$> statements,
-                                                                  expressionTemplate get $ get result)
-rhsTemplate get (NormalRHS result) = NormalB (expressionTemplate get $ get result)
+rhsTemplate :: TemplateWrapper f => EquationRHS Language Language f f -> Body
+rhsTemplate (GuardedRHS guarded) = GuardedB (guardedTemplate . extract <$> toList guarded)
+   where guardedTemplate (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
+                                                                  expressionTemplate $ extract result)
+rhsTemplate (NormalRHS result) = NormalB (expressionTemplate $ extract result)
 
-statementTemplate :: (forall a. f a -> a) -> Statement Language Language f f -> Stmt
-statementTemplate get (BindStatement left right) =
-   BindS (patternTemplate get $ get left) (expressionTemplate get $ get right)
-statementTemplate get (ExpressionStatement test) = NoBindS (expressionTemplate get $ get test)
-statementTemplate get (LetStatement declarations) = LetS (foldMap (declarationTemplates get . get) declarations)
+statementTemplate :: TemplateWrapper f => Statement Language Language f f -> Stmt
+statementTemplate (BindStatement left right) =
+   BindS (patternTemplate $ extract left) (expressionTemplate $ extract right)
+statementTemplate (ExpressionStatement test) = NoBindS (expressionTemplate $ extract test)
+statementTemplate (LetStatement declarations) = LetS (foldMap (declarationTemplates . extract) declarations)
 
-bangTypeTemplate :: (forall a. f a -> a) -> AST.Type Language Language f f -> (TH.Bang, TH.Type)
-bangTypeTemplate get (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate get $ get t)
-bangTypeTemplate get t = (Bang NoSourceUnpackedness NoSourceStrictness, typeTemplate get t)
+bangTypeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> (TH.Bang, TH.Type)
+bangTypeTemplate (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate $ extract t)
+bangTypeTemplate t = (Bang NoSourceUnpackedness NoSourceStrictness, typeTemplate t)
 
-typeTemplate :: (forall a. f a -> a) -> AST.Type Language Language f f -> TH.Type
-typeTemplate get (ConstructorType con) = case (get con) of
+typeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> TH.Type
+typeTemplate (ConstructorType con) = case (extract con) of
    ConstructorReference name -> ConT (qnameTemplate name)
    EmptyListConstructor -> ListT
    TupleConstructor n -> TupleT n
    UnitConstructor -> TupleT 0
-typeTemplate get FunctionConstructorType = ArrowT
-typeTemplate get (FunctionType from to) = ArrowT `AppT` typeTemplate get (get from) `AppT` typeTemplate get (get to)
-typeTemplate get (ListType itemType) = AppT ListT (typeTemplate get $ get itemType)
-typeTemplate get (StrictType t) = typeTemplate get (get t)
-typeTemplate get (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate get . get <$> items)
-typeTemplate get (TypeApplication left right) = AppT (typeTemplate get $ get left) (typeTemplate get $ get right)
-typeTemplate get (TypeVariable name) = VarT (nameTemplate name)
+typeTemplate FunctionConstructorType = ArrowT
+typeTemplate (FunctionType from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
+typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
+typeTemplate (StrictType t) = typeTemplate (extract t)
+typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
+typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
+typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 
-freeTypeVars :: (forall a. f a -> a) -> AST.Type Language Language f f -> [TyVarBndr]
-freeTypeVars get ConstructorType{} = []
-freeTypeVars get FunctionConstructorType = []
-freeTypeVars get (FunctionType from to) = nub (freeTypeVars get (get from) <> freeTypeVars get (get to))
-freeTypeVars get (ListType itemType) = freeTypeVars get (get itemType)
-freeTypeVars get (StrictType t) = freeTypeVars get (get t)
-freeTypeVars get (TupleType items) = nub (foldMap (freeTypeVars get . get) items)
-freeTypeVars get (TypeApplication left right) = nub (freeTypeVars get (get left) <> freeTypeVars get (get right))
-freeTypeVars get (TypeVariable name) = [PlainTV $ nameTemplate name]
+freeTypeVars :: TemplateWrapper f => AST.Type Language Language f f -> [TyVarBndr]
+freeTypeVars ConstructorType{} = []
+freeTypeVars FunctionConstructorType = []
+freeTypeVars (FunctionType from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
+freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
+freeTypeVars (StrictType t) = freeTypeVars (extract t)
+freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeTypeVars (TypeVariable name) = [PlainTV $ nameTemplate name]
 
 nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
