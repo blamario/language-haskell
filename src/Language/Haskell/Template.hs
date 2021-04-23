@@ -33,9 +33,12 @@ class PrettyViaTH a where
 
 class TemplateWrapper f where
    extract :: f a -> a
+   isParenthesized :: f a -> Bool
 
 instance TemplateWrapper Placed where
    extract = snd
+   isParenthesized ((_, Trailing (lexeme:_), _), _) = "(" `Text.isPrefixOf` lexemeText lexeme
+   isParenthesized _ = False
 
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
@@ -94,27 +97,27 @@ instance PrettyViaTH (QualifiedName Language) where
 
 
 expressionTemplate :: TemplateWrapper f => Expression Language Language f f -> Exp
-expressionTemplate (ApplyExpression f x) = AppE (expressionTemplate $ extract f) (expressionTemplate $ extract x)
+expressionTemplate (ApplyExpression f x) = AppE (wrappedExpressionTemplate f) (wrappedExpressionTemplate x)
 expressionTemplate (ConditionalExpression test true false) =
-   CondE (expressionTemplate $ extract test) (expressionTemplate $ extract true) (expressionTemplate $ extract false)
+   CondE (wrappedExpressionTemplate test) (wrappedExpressionTemplate true) (wrappedExpressionTemplate false)
 expressionTemplate (ConstructorExpression con) = case (extract con)
    of ConstructorReference name -> ConE (qnameTemplate name)
       EmptyListConstructor -> ListE []
       TupleConstructor n -> TupE (replicate n Nothing)
       UnitConstructor -> TupE []
 expressionTemplate (CaseExpression scrutinee alternatives) =
-   CaseE (expressionTemplate $ extract scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
+   CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = DoE (guardedTemplate $ extract statements)
    where guardedTemplate (GuardedExpression statements result) =
-            (statementTemplate . extract <$> statements) ++ [NoBindS $ expressionTemplate $ extract result]
+            (statementTemplate . extract <$> statements) ++ [NoBindS $ wrappedExpressionTemplate result]
 expressionTemplate (InfixExpression left op right) =
-   UInfixE (expressionTemplate $ extract left) (expressionTemplate $ extract op) (expressionTemplate $ extract right)
+   UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
 expressionTemplate (LeftSectionExpression left op) =
-   InfixE (Just $ expressionTemplate $ extract left) (nameReferenceTemplate op) Nothing
+   InfixE (Just $ wrappedExpressionTemplate left) (nameReferenceTemplate op) Nothing
 expressionTemplate (LambdaExpression patterns body) =
-   LamE (patternTemplate . extract <$> patterns) (expressionTemplate $ extract body)
+   LamE (patternTemplate . extract <$> patterns) (wrappedExpressionTemplate body)
 expressionTemplate (LetExpression bindings body) =
-   LetE (foldMap (declarationTemplates .extract) bindings) (expressionTemplate $ extract body)
+   LetE (foldMap (declarationTemplates . extract) bindings) (wrappedExpressionTemplate body)
 expressionTemplate (ListComprehension element guards) =
    CompE (statementTemplate <$> ((extract <$> toList guards) ++ [ExpressionStatement element]))
 expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> items)
@@ -127,17 +130,26 @@ expressionTemplate (RecordExpression record fields) =
    (fieldBindingTemplate . extract <$> fields)
 expressionTemplate (ReferenceExpression name) = VarE (qnameTemplate name)
 expressionTemplate (RightSectionExpression op right) =
-   InfixE Nothing (nameReferenceTemplate op) (Just $ expressionTemplate $ extract right)
+   InfixE Nothing (nameReferenceTemplate op) (Just $ wrappedExpressionTemplate right)
 expressionTemplate (SequenceExpression start next end) = ArithSeqE $
    case (expressionTemplate . extract <$> next, expressionTemplate . extract <$> end)
    of (Nothing, Nothing) -> FromR s
       (Just n, Nothing) -> FromThenR s n
       (Nothing, Just e) -> FromToR s e
       (Just n, Just e) -> FromThenToR s n e
-   where s = expressionTemplate $ extract start
+   where s = wrappedExpressionTemplate start
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
-expressionTemplate (TypedExpression e signature) =
-   SigE (expressionTemplate $ extract e) (typeTemplate $ extract signature)
+expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
+
+wrappedExpressionTemplate :: TemplateWrapper f => f (Expression Language Language f f) -> Exp
+wrappedExpressionTemplate x = if isParenthesized x && not (syntactic e) then ParensE template else template
+   where syntactic LeftSectionExpression{} = True
+         syntactic RightSectionExpression{} = True
+         syntactic ReferenceExpression{} = True
+         syntactic TupleExpression{} = True
+         syntactic _ = False
+         template = expressionTemplate e
+         e = extract x
 
 caseAlternativeTemplate :: TemplateWrapper f => CaseAlternative Language Language f f -> Match
 caseAlternativeTemplate (CaseAlternative lhs rhs wheres) =
@@ -232,7 +244,7 @@ dataConstructorTemplate (RecordConstructor name fieldTypes) =
          varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 
 fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
-fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, expressionTemplate $ extract value)
+fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, wrappedExpressionTemplate value)
 
 literalTemplate :: TemplateWrapper f => Value Language Language f f -> Lit
 literalTemplate (CharLiteral c) = CharL c
@@ -262,13 +274,13 @@ patternTemplate WildcardPattern = WildP
 rhsTemplate :: TemplateWrapper f => EquationRHS Language Language f f -> Body
 rhsTemplate (GuardedRHS guarded) = GuardedB (guardedTemplate . extract <$> toList guarded)
    where guardedTemplate (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
-                                                                  expressionTemplate $ extract result)
-rhsTemplate (NormalRHS result) = NormalB (expressionTemplate $ extract result)
+                                                                  wrappedExpressionTemplate result)
+rhsTemplate (NormalRHS result) = NormalB (wrappedExpressionTemplate result)
 
 statementTemplate :: TemplateWrapper f => Statement Language Language f f -> Stmt
 statementTemplate (BindStatement left right) =
-   BindS (patternTemplate $ extract left) (expressionTemplate $ extract right)
-statementTemplate (ExpressionStatement test) = NoBindS (expressionTemplate $ extract test)
+   BindS (patternTemplate $ extract left) (wrappedExpressionTemplate right)
+statementTemplate (ExpressionStatement test) = NoBindS (wrappedExpressionTemplate test)
 statementTemplate (LetStatement declarations) = LetS (foldMap (declarationTemplates . extract) declarations)
 
 bangTypeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> (TH.Bang, TH.Type)

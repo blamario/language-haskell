@@ -55,15 +55,15 @@ instance {-# overlaps #-} forall l pos s.
              | (_, AST.ReferenceExpression name) <- op = case Map.lookup name bindings of
              Just (Binder.InfixDeclaration _ AST.LeftAssociative precedence) ->
                verifyArg (Just AST.LeftAssociative) precedence left $
-               verifyArg Nothing (succ precedence) right $
+               verifyArg Nothing precedence right $
                pure e
              Just (Binder.InfixDeclaration _ AST.RightAssociative precedence) ->
                verifyArg (Just AST.RightAssociative) precedence right $
-               verifyArg Nothing (succ precedence) left $
+               verifyArg Nothing precedence left $
                pure e
              Just (Binder.InfixDeclaration _ AST.NonAssociative precedence) ->
-               verifyArg Nothing (succ precedence) left $
-               verifyArg Nothing (succ precedence) right $
+               verifyArg Nothing precedence left $
+               verifyArg Nothing precedence right $
                pure e
           resolveExpression e = pure e
           verifyArg :: Maybe (AST.Associativity l) -> Int
