@@ -3,9 +3,9 @@
 module Main where
 
 import Language.Haskell (Placed, parseModule, resolvePositions)
-import Language.Haskell.AST (Language, Module(..), Expression)
+import Language.Haskell.Extensions.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar as Grammar
 import qualified Language.Haskell.Reserializer as Reserializer

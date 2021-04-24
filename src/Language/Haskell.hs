@@ -5,7 +5,7 @@
 module Language.Haskell (parseModule, resolvePositions, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar as Grammar
 

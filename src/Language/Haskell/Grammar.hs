@@ -128,18 +128,19 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f)
 }
 
-grammar2010 :: (LexicalParsing (Parser (HaskellGrammar AST.Language (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t,
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative AST.Language AST.Language),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration AST.Language AST.Language),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression AST.Language AST.Language),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import AST.Language AST.Language),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement AST.Language AST.Language),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative AST.Language AST.Language),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration AST.Language AST.Language),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression AST.Language AST.Language),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Import AST.Language AST.Language),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement AST.Language AST.Language))
-            => Grammar (HaskellGrammar AST.Language (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
+                Ord t, Show t, OutlineMonoid t,
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+            => Grammar (HaskellGrammar l (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
 grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,

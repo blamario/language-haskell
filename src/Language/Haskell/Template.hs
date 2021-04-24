@@ -16,7 +16,7 @@ import qualified Transformation
 
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
-import Language.Haskell.AST
+import Language.Haskell.Extensions.AST
 import Language.Haskell.TH
 
 import qualified Language.Haskell.AST as AST

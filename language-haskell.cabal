@@ -17,7 +17,8 @@ extra-source-files:  CHANGELOG.md
 library
   exposed-modules:     Language.Haskell, Language.Haskell.Abstract, Language.Haskell.AST,
                        Language.Haskell.Binder, Language.Haskell.Disambiguator, Language.Haskell.Reserializer,
-                       Language.Haskell.Grammar, Language.Haskell.Resolver, Language.Haskell.Template
+                       Language.Haskell.Grammar, Language.Haskell.Resolver, Language.Haskell.Template,
+                       Language.Haskell.Extensions.AST
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <5, text < 1.3, containers >= 0.5 && < 1.0,
