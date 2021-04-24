@@ -7,7 +7,7 @@ module Language.Haskell (parseModule, resolvePositions, Placed) where
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
-import qualified Language.Haskell.Grammar as Grammar
+import qualified Language.Haskell.Extensions.Grammar as Grammar
 
 import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer
@@ -34,7 +34,7 @@ type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Parse the given text of a single module.
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
-parseModule source = resolve source (parseComplete Grammar.grammar2010 (pure source :: LinePositioned Text))
+parseModule source = resolve source (parseComplete Grammar.extendedGrammar (pure source :: LinePositioned Text))
 
 resolve :: (l ~ AST.Language,
             Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (AST.Module l l),

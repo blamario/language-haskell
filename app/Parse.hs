@@ -7,7 +7,7 @@ import Language.Haskell.Extensions.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
-import qualified Language.Haskell.Grammar as Grammar
+import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Resolver as Resolver
 import qualified Language.Haskell.Template as Template
@@ -113,7 +113,7 @@ main' Opts{..} = case optsFile
             (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
          -> String -> Text -> IO ()
       go production filename contents =
-         report contents (snd <$> getCompose (production $ parseComplete Grammar.grammar2010 $ pure contents))
+         report contents (snd <$> getCompose (production $ parseComplete Grammar.extendedGrammar $ pure contents))
       report :: forall g l a e w.
                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                  a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
