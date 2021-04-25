@@ -70,9 +70,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    whereClauses :: p [f (Abstract.Declaration l l f f)],
    variables :: p (NonEmpty (Abstract.Name l)),
    fixity :: p (Abstract.Associativity l),
-   typeTerm :: p (Abstract.Type l l f f),
-   bType :: p (Abstract.Type l l f f),
-   aType :: p (Abstract.Type l l f f),
+   typeTerm, bType, aType :: p (Abstract.Type l l f f),
    generalTypeConstructor :: p (Abstract.Type l l f f),
    context :: p (Abstract.Context l l f f),
    classConstraint :: p (Abstract.Context l l f f),
@@ -102,29 +100,21 @@ data HaskellGrammar l f p = HaskellGrammar {
    expression :: p (f (Abstract.Expression l l f f)),
    infixExpression :: p (f (Abstract.Expression l l f f)),
    leftInfixExpression :: p (f (Abstract.Expression l l f f)),
-   lExpression :: p (f (Abstract.Expression l l f f)),
-   dExpression :: p (f (Abstract.Expression l l f f)),
-   fExpression :: p (f (Abstract.Expression l l f f)),
-   aExpression :: p (f (Abstract.Expression l l f f)),
+   lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
    statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
    fieldBinding :: p (Abstract.FieldBinding l l f f),
-   pattern :: p (Abstract.Pattern l l f f),
-   lPattern :: p (Abstract.Pattern l l f f),
-   aPattern :: p (Abstract.Pattern l l f f),
+   pattern, lPattern, aPattern :: p (Abstract.Pattern l l f f),
    fieldPattern :: p (Abstract.FieldPattern l l f f),
    generalConstructor :: p (Abstract.Constructor l l f f),
-   variable :: p (Abstract.Name l),
-   qualifiedVariable :: p (Abstract.QualifiedName l),
-   constructor :: p (Abstract.Name l),
-   qualifiedConstructor :: p (Abstract.QualifiedName l),
-   variableOperator :: p (Abstract.Name l),
-   qualifiedVariableOperator :: p (Abstract.QualifiedName l),
-   constructorOperator :: p (Abstract.Name l),
-   qualifiedConstructorOperator :: p (Abstract.QualifiedName l),
-   operator :: p (Abstract.Name l),
-   qualifiedOperator :: p (Abstract.QualifiedName l),
+   variable, constructor, variableOperator, constructorOperator, operator :: p (Abstract.Name l),
+   qualifiedVariable, qualifiedConstructor :: p (Abstract.QualifiedName l),
+   qualifiedVariableOperator, qualifiedConstructorOperator, qualifiedOperator :: p (Abstract.QualifiedName l),
+   qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
+      qualifiedVariableIdentifier, qualifiedVariableSymbol :: p (Abstract.QualifiedName l),
+   constructorIdentifier, constructorSymbol,
+   typeClass, typeConstructor, typeVar, variableIdentifier, variableSymbol :: p (Abstract.Name l),
    literal :: p (Abstract.Value l l f f),
    doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p ()
 }
@@ -587,7 +577,23 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                   <|> terminator "`" *> qualifiedConstructorIdentifier <* terminator "`",
    operator = variableOperator <|> constructorOperator,
    qualifiedOperator = qualifiedVariableOperator <|> qualifiedConstructorOperator <?> "qualified operator",
-   
+   qualifiedVariableIdentifier = token (qualifier <*> variableIdentifier),
+   qualifiedConstructorIdentifier = token (qualifier <*> constructorIdentifier),
+   qualifiedTypeConstructor = qualifiedConstructorIdentifier,
+   qualifiedTypeClass = qualifiedConstructorIdentifier,
+   qualifiedVariableSymbol = token (qualifier <*> variableSymbol),
+   qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol
+                                       <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
+                                           <$> string ":" <* notSatisfyChar isSymbol),
+
+   typeVar = variableIdentifier,
+   typeConstructor = constructorIdentifier,
+   typeClass = constructorIdentifier,
+   variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
+   constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
+   variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> variableSymbolLexeme),
+   constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> constructorSymbolLexeme),
+
 -- var 	→ 	varid | ( varsym ) 	    (variable)
 -- qvar 	→ 	qvarid | ( qvarsym ) 	    (qualified variable)
 -- con 	→ 	conid | ( consym ) 	    (constructor)
@@ -599,6 +605,18 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- op 	→ 	varop | conop 	    (operator)
 -- qop 	→ 	qvarop | qconop 	    (qualified operator)
 -- gconsym 	→ 	: | qconsym 
+-- varid 	     	    (variables)
+-- conid 	     	    (constructors)
+-- tyvar 	→ 	varid 	    (type variables)
+-- tycon 	→ 	conid 	    (type constructors)
+-- tycls 	→ 	conid 	    (type classes)
+-- modid 	→ 	{conid .} conid 	    (modules)
+-- qvarid 	→ 	[ modid . ] varid
+-- qconid 	→ 	[ modid . ] conid
+-- qtycon 	→ 	[ modid . ] tycon
+-- qtycls 	→ 	[ modid . ] tycls
+-- qvarsym 	→ 	[ modid . ] varsym
+-- qconsym 	→ 	[ modid . ] consym
 
 -- Lexical Syntax
 
@@ -654,15 +672,6 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- octit 	→ 	0 | 1 | … | 7
 -- hexit 	→ 	digit | A | … | F | a | … | f
  
-
-constructorIdentifier, constructorSymbol, typeClass, typeConstructor, typeVar, variableIdentifier,
-   variableSymbol :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                  => Parser g t (Abstract.Name l)
-variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme)
-constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme)
-variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> variableSymbolLexeme)
-constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> constructorSymbolLexeme)
-
 variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
    identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varStart <> identifierTail) <?> "variable"
@@ -693,10 +702,6 @@ asciiSymbols = Set.fromList "!#$%&*+./<=>?@\\^|-~:"
 -- consym 	→ 	( : {symbol})⟨reservedop⟩
 -- reservedop 	→ 	.. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
 
-typeVar = variableIdentifier
-typeConstructor = constructorIdentifier
-typeClass = constructorIdentifier
-
 moduleId :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
          => Parser g t (Abstract.ModuleName l)
 moduleId = Abstract.moduleName <$> token moduleLexeme
@@ -711,32 +716,6 @@ qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, Te
 qualifier = Abstract.qualifiedName
             <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
                               <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
-
-qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
-   qualifiedVariableIdentifier, qualifiedVariableSymbol
-   :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-   => Parser g t (Abstract.QualifiedName l)
-qualifiedVariableIdentifier = token (qualifier <*> variableIdentifier)
-qualifiedConstructorIdentifier = token (qualifier <*> constructorIdentifier)
-qualifiedTypeConstructor = qualifiedConstructorIdentifier
-qualifiedTypeClass = qualifiedConstructorIdentifier
-qualifiedVariableSymbol = token (qualifier <*> variableSymbol)
-qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol
-                                    <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
-                                        <$> string ":" <* notSatisfyChar isSymbol)
-
--- varid 	     	    (variables)
--- conid 	     	    (constructors)
--- tyvar 	→ 	varid 	    (type variables)
--- tycon 	→ 	conid 	    (type constructors)
--- tycls 	→ 	conid 	    (type classes)
--- modid 	→ 	{conid .} conid 	    (modules)
--- qvarid 	→ 	[ modid . ] varid
--- qconid 	→ 	[ modid . ] conid
--- qtycon 	→ 	[ modid . ] tycon
--- qtycls 	→ 	[ modid . ] tycls
--- qvarsym 	→ 	[ modid . ] varsym
--- qconsym 	→ 	[ modid . ] consym
 
 decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
 integer :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
