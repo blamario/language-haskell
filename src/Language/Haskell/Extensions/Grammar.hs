@@ -44,4 +44,11 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar g@HaskellGrammar{..} = Report.grammar g
+grammar g@HaskellGrammar{..} = reportGrammar{
+   -- UnicodeSyntax
+   doubleColon = Report.doubleColon reportGrammar <|> delimiter "∷",
+   rightDoubleArrow = Report.rightDoubleArrow reportGrammar <|> delimiter "⇒",
+   rightArrow = Report.rightArrow reportGrammar <|> delimiter "→",
+   leftArrow = Report.leftArrow reportGrammar <|> delimiter "←"
+}
+   where reportGrammar = Report.grammar g

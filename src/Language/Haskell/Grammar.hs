@@ -125,7 +125,8 @@ data HaskellGrammar l f p = HaskellGrammar {
    qualifiedConstructorOperator :: p (Abstract.QualifiedName l),
    operator :: p (Abstract.Name l),
    qualifiedOperator :: p (Abstract.QualifiedName l),
-   literal :: p (Abstract.Value l l f f)
+   literal :: p (Abstract.Value l l f f),
+   doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p ()
 }
 
 grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
@@ -210,15 +211,15 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
-      <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext)
+      <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap simpleType <*> (delimiter "=" *> declaredConstructors <|> pure []) <*> derivingClause
-      <|> Abstract.newtypeDeclaration <$ keyword "newtype" <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext)
+      <|> Abstract.newtypeDeclaration <$ keyword "newtype" <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
-      <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
+      <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
           <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
-          <*> wrap (simpleContext <* delimiter "=>" <|> pure Abstract.noContext)
+          <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
           <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
@@ -243,8 +244,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    inInstanceDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
                                                         <*> wrap rhs <*> whereClauses,
    generalDeclaration =
-      Abstract.typeSignature <$> variables <* delimiter "::"
-                             <*> wrap (context <* delimiter "=>" <|> pure Abstract.noContext) <*> wrap typeTerm
+      Abstract.typeSignature <$> variables <* doubleColon
+                             <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext) <*> wrap typeTerm
       <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)
                                      <*> (operator `sepByNonEmpty` comma),
    whereClauses = keyword "where" *> declarations <|> pure [],
@@ -269,7 +270,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- vars 	→ 	var1 , …, varn 	    (n ≥ 1)
 -- fixity 	→ 	infixl | infixr | infix
 
-   typeTerm = Abstract.functionType <$> wrap bType <* delimiter "->" <*> wrap typeTerm <|> bType,
+   typeTerm = Abstract.functionType <$> wrap bType <* rightArrow <*> wrap typeTerm <|> bType,
    bType = Abstract.typeApplication <$> wrap bType <*> wrap aType <|> aType,
    aType = generalTypeConstructor
            <|> Abstract.typeVariable <$> typeVar
@@ -277,7 +278,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
            <|> Abstract.listType <$> brackets (wrap typeTerm)
            <|> parens typeTerm,
    generalTypeConstructor = Abstract.constructorType <$> wrap generalConstructor
-                            <|> Abstract.functionConstructorType <$ parens (delimiter "->"),
+                            <|> Abstract.functionConstructorType <$ parens rightArrow,
    
 -- type 	→ 	btype [-> type] 	    (function type)
 -- btype 	→ 	[btype] atype 	    (type application)
@@ -323,8 +324,8 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
                     <|> Abstract.recordConstructor <$> constructor
                         <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
-                                                    <* delimiter "::" <*> wrap typeTerm)),
-   fieldDeclaration = Abstract.constructorFields <$> variables <* delimiter "::"
+                                                    <* doubleColon <*> wrap typeTerm)),
+   fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon
                       <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
 
 -- simpletype 	→ 	tycon tyvar1 … tyvark 	    (k ≥ 0)
@@ -343,7 +344,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    instanceDesignator = generalTypeConstructor
                         <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
                         <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
-                        <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* delimiter "->"
+                        <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
                                                           <*> wrap (Abstract.typeVariable <$> typeVar)),
    typeVarApplications = generalTypeConstructor
                          <|> Abstract.typeApplication <$> wrap typeVarApplications
@@ -360,16 +361,16 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	( tyvar1 -> tyvar2 ) 	    tyvar1 and tyvar2 distinct
 
    foreignDeclaration = Abstract.foreignImport <$ keyword "import" <*> callingConvention <*> optional safety
-                                               <*> optional stringLiteral <*> variable <* delimiter "::"
+                                               <*> optional stringLiteral <*> variable <* doubleColon
                                                <*> wrap foreignType
                         <|> Abstract.foreignExport <$ keyword "export" <*> callingConvention
-                                                   <*> optional stringLiteral <*> variable <* delimiter "::"
+                                                   <*> optional stringLiteral <*> variable <* doubleColon
                                                    <*> wrap foreignType,
    callingConvention = Abstract.cCall <$ keyword "ccall" <|> Abstract.stdCall <$ keyword "stdcall"
                        <|> Abstract.cppCall <$ keyword "cplusplus" <|> Abstract.jvmCall <$ keyword "jvm"
                        <|> Abstract.dotNetCall <$ keyword "dotnet",
    safety = Abstract.safeCall <$ keyword "safe" <|> Abstract.unsafeCall <$ keyword "unsafe",
-   foreignType = Abstract.functionType <$> wrap foreignArgType <* delimiter "->" <*> wrap foreignType
+   foreignType = Abstract.functionType <$> wrap foreignArgType <* rightArrow <*> wrap foreignType
                  <|> foreignReturnType,
    foreignReturnType = foreignArgType
                        <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
@@ -398,7 +399,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
          <|> Abstract.guardedRHS . NonEmpty.fromList
              <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
    guards = delimiter "|" *> wrap guard `sepByNonEmpty` comma,
-   guard = Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> infixExpression
+   guard = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> infixExpression
            <|> Abstract.letStatement <$ keyword "let" <*> declarations
            <|> Abstract.expressionStatement <$> infixExpression,
 
@@ -413,7 +414,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	let decls 	    (local declaration)
 -- 	| 	infixexp 	    (boolean guard)
 
-   expression = wrap (Abstract.typedExpression <$> infixExpression <* delimiter "::" <*> wrap typeTerm)
+   expression = wrap (Abstract.typedExpression <$> infixExpression <* doubleColon <*> wrap typeTerm)
                 <|> infixExpression,
    -- infixExpression doesn't allow a conditional, let, or lambda expression on its left side
    infixExpression = wrap (Abstract.infixExpression
@@ -440,7 +441,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                <|> Abstract.applyExpression
                                       <$> wrap (Abstract.negate <$ delimiter "-") <*> leftInfixExpression)
                          <|> dExpression,
-   lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* delimiter "->"
+   lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
                                                  <*> expression
                        <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
                        <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
@@ -476,9 +477,9 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                        <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma))
                  <|> Disambiguator.joinWrapped <$> wrap (parens expression),
    alternative = Abstract.caseAlternative <$> wrap pattern
-                 <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression
+                 <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList
-                               <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "->"
+                               <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* rightArrow
                                                                                     <*> expression))
                  <*> whereClauses,
    statements = blockOf statement >>= \stats->
@@ -488,7 +489,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                             <$> init stats)
                         <$> either (const $ fail "do block must end with an expression") pure
                                    (Deep.eitherFromSum $ unwrap $ last stats),
-   statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* delimiter "<-" <*> expression
+   statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                                   <|> Abstract.letStatement <$ keyword "let" <*> declarations)
                <|> Deep.InR <$> expression,
    fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> expression,
@@ -602,7 +603,12 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- Lexical Syntax
 
    literal = Abstract.integerLiteral <$> integer <|> Abstract.floatingLiteral <$> float
-             <|> Abstract.charLiteral <$> charLiteral <|> Abstract.stringLiteral <$> stringLiteral
+             <|> Abstract.charLiteral <$> charLiteral <|> Abstract.stringLiteral <$> stringLiteral,
+
+   doubleColon = delimiter "::",
+   rightDoubleArrow = delimiter "=>",
+   rightArrow = delimiter "->",
+   leftArrow = delimiter "<-"
 }
 
 -- literal 	→ 	integer | float | char | string
@@ -880,12 +886,13 @@ isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c
 
-delimiter, terminator :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t t
-delimiter s = lexicalToken (string s
-                            <* notSatisfyChar isSymbol
-                            <* lift ([[Token Delimiter s]], ()))
+delimiter, terminator :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t ()
+delimiter s = void (lexicalToken $
+                    string s
+                    <* notSatisfyChar isSymbol
+                    <* lift ([[Token Delimiter s]], ()))
               <?> ("delimiter " <> show s)
-terminator s = lexicalToken (string s <* lift ([[Token Delimiter s]], ()))
+terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
 
 whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
