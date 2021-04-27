@@ -718,17 +718,19 @@ qualifier = Abstract.qualifiedName
                               <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
 
 decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
-integer :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
-float :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
+integer, integerLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
+float, floatLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
 decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
 octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
 hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
-integer = fst . head
-          <$> token (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy (string "." *> decimal <|> exponent)
+integer = token integerLexeme
+float = token floatLexeme
+integerLexeme = fst . head
+                <$> (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy (string "." *> decimal <|> exponent)
                      <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
                      <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal))
-float = fst . head . Numeric.readFloat . toString mempty
-        <$> token (decimal <> string "." <> decimal <> (exponent <<|> mempty)
+floatLexeme = fst . head . Numeric.readFloat . toString mempty
+              <$> (decimal <> string "." <> decimal <> (exponent <<|> mempty)
                    <|> decimal <> exponent)
 exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal
 
@@ -742,21 +744,22 @@ exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty)
 -- 	| 	decimal exponent
 -- exponent 	→ 	(e | E) [+ | -] decimal
 
-charLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-stringLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
-charLiteral = token (char '\''
-                     *> (Text.Parser.Char.satisfy (\c-> c == ' ' || not (Char.isSpace c) && c /= '\'' && c /= '\\')
-                         <|> escape)
-                     <* char '\'')
-stringLiteral = Text.pack . toString mempty <$>
-                token (char '"'
-                       *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
-                                      <|> Textual.singleton <$> escape
-                                      <|> char '\\'
-                                          *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
-                                          *> pure "")
-                           <* char '"')
-                <?> "string literal"
+charLiteral, charLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
+stringLiteral, stringLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
+charLiteral = token charLexeme
+charLexeme = char '\''
+             *> (Text.Parser.Char.satisfy (\c-> c == ' ' || not (Char.isSpace c) && c /= '\'' && c /= '\\')
+                 <|> escape)
+             <* char '\''
+stringLiteral = token stringLexeme <?> "string literal"
+stringLexeme = Text.pack . toString mempty <$>
+               (char '"'
+                *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
+                               <|> Textual.singleton <$> escape
+                               <|> char '\\'
+                                   *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
+                                   *> pure "")
+                <* char '"')
 
 escape, asciiEscape, charEscape,
    controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char

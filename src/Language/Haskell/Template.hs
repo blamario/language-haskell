@@ -8,7 +8,9 @@ import Data.Foldable (foldl', toList)
 import Data.List (nub)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
+import qualified Data.ByteString as ByteString
 import Data.Text (Text, unpack)
+import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
 import Text.PrettyPrint (render)
 
@@ -251,6 +253,12 @@ literalTemplate (CharLiteral c) = CharL c
 literalTemplate (FloatingLiteral x) = RationalL x
 literalTemplate (IntegerLiteral n) = IntegerL n
 literalTemplate (StringLiteral s) = StringL (unpack s)
+literalTemplate (HashLiteral (CharLiteral c)) = CharPrimL c
+literalTemplate (HashLiteral (FloatingLiteral x)) = FloatPrimL x
+literalTemplate (HashLiteral (HashLiteral (FloatingLiteral x))) = DoublePrimL x
+literalTemplate (HashLiteral (IntegerLiteral n)) = IntPrimL n
+literalTemplate (HashLiteral (HashLiteral (IntegerLiteral n))) = WordPrimL n
+literalTemplate (HashLiteral (StringLiteral s)) = StringPrimL (ByteString.unpack $ encodeUtf8 s)
 
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
 patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)

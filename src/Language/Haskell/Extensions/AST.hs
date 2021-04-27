@@ -1,19 +1,19 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), module Report) where
+module Language.Haskell.Extensions.AST (Language(Language), Value(..), module Report) where
 
 import Control.Monad (forM)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
-import qualified Language.Haskell.Abstract as Abstract
+import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), Declaration(..), Expression(..), Type(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), Pattern(..), Statement(..),
                              TypeLHS(..), Context(..), DataConstructor(..), DerivingClause(..), Constructor(..),
-                             FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..), Value(..),
+                             FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
                              Import(..), ImportSpecification(..), ImportItem(..), Export(..), Members(..))
@@ -22,6 +22,9 @@ import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
+
+instance Abstract.ExtendedHaskell Language where
+   hashLiteral = HashLiteral
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -187,3 +190,17 @@ instance Abstract.Haskell Language where
 
    safeCall = SafeCall
    unsafeCall = UnsafeCall
+
+data Value λ l (d :: * -> *) (s :: * -> *) =
+   CharLiteral Char
+   | FloatingLiteral Rational
+   | IntegerLiteral Integer
+   | StringLiteral Text
+   | HashLiteral (Value λ l d s)
+   deriving (Data, Eq, Show)
+
+$(concat <$>
+  (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
+         Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
+   \derive-> mconcat <$> mapM derive
+             [''Value]))
