@@ -147,7 +147,7 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
-   haskellModule = wrap (whiteSpace
+   haskellModule = wrap (optional (char '\xfeff') *> whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
                                                                <*> optional exports <* keyword "where"
                                           <|> pure Abstract.anonymousModule)
