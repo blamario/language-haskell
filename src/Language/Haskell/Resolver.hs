@@ -49,27 +49,19 @@ instance {-# overlaps #-} forall l pos s.
          Resolution l pos s
          `Transformation.At` AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
-      let resolveExpression :: AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
-                            -> Validation (NonEmpty Error) (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
+      let resolveExpression :: f ~ Reserializer.Wrapped pos s
+                            => AST.Expression l l f f
+                            -> Validation (NonEmpty Error) (AST.Expression l l f f)
           resolveExpression e@(AST.InfixExpression left op right)
-             | (_, AST.ReferenceExpression name) <- op = case Map.lookup name bindings of
-             Just (Binder.InfixDeclaration _ AST.LeftAssociative precedence) ->
-               verifyArg (Just AST.LeftAssociative) precedence left $
-               verifyArg Nothing precedence right $
-               pure e
-             Just (Binder.InfixDeclaration _ AST.RightAssociative precedence) ->
-               verifyArg (Just AST.RightAssociative) precedence right $
-               verifyArg Nothing precedence left $
-               pure e
-             Just (Binder.InfixDeclaration _ AST.NonAssociative precedence) ->
-               verifyArg Nothing precedence left $
-               verifyArg Nothing precedence right $
-               pure e
+             | (_, AST.ReferenceExpression name) <- op =
+                maybe (const $ Failure $ pure UnknownOperator)
+                      (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
           resolveExpression e = pure e
-          verifyArg :: Maybe (AST.Associativity l) -> Int
-                    -> Reserializer.Wrapped pos s (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
-                    -> Validation (NonEmpty Error) (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
-                    -> Validation (NonEmpty Error) (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))
+          verifyArg :: f ~ Reserializer.Wrapped pos s
+                    => Maybe (AST.Associativity l) -> Int
+                    -> f (AST.Expression l l f f)
+                    -> Validation (NonEmpty Error) (AST.Expression l l f f)
+                    -> Validation (NonEmpty Error) (AST.Expression l l f f)
           verifyArg associativity precedence arg result
              | ((_, lexemes, _), AST.InfixExpression _ op' _) <- arg,
                (_, AST.ReferenceExpression name) <- op',
@@ -79,15 +71,26 @@ instance {-# overlaps #-} forall l pos s.
                   || precedence == precedence' && any (associativity' ==) associativity then result
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
-          parenthesized (Reserializer.Trailing (paren:_)) = Reserializer.lexemeText paren == "("
-          parenthesized (Reserializer.Trailing []) = False
       in Compose (Disambiguator.unique id (pure . const AmbiguousExpression) (resolveExpression <$> expressions))
+
+verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a) -> e -> e -> Binder.Binding l -> a -> a
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.LeftAssociative precedence) =
+   verifyArg (Just AST.LeftAssociative) precedence left . verifyArg Nothing precedence right
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.RightAssociative precedence) =
+   verifyArg (Just AST.RightAssociative) precedence right . verifyArg Nothing precedence left
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.NonAssociative precedence) =
+   verifyArg Nothing precedence left . verifyArg Nothing precedence right
+
+parenthesized :: (Eq s, IsString s) => Reserializer.ParsedLexemes s -> Bool
+parenthesized (Reserializer.Trailing (paren:_)) = Reserializer.lexemeText paren == "("
+parenthesized (Reserializer.Trailing []) = False
 
 data Error = AmbiguousParses
            | AmbiguousExpression
            | ContradictoryAssociativity
            | ClashingImports
            | ClashingNames
+           | UnknownOperator
            deriving Show
 
 instance Monad (Validation (NonEmpty Error)) where
