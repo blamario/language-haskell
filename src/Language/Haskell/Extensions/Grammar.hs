@@ -21,7 +21,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST (Language, Value(..))
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
-                                 delimiter, wrap)
+                                 blockOf, delimiter, rewrap, wrap, unwrap)
 import Language.Haskell.Reserializer (Lexeme, Serialization)
 
 import Prelude hiding (exponent, filter, null)
@@ -85,7 +85,16 @@ grammar g@HaskellGrammar{..} = reportGrammar{
                  <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
                       <|> Abstract.charLiteral <$> charHashLiteral <|> Abstract.stringLiteral <$> stringHashLiteral)
              <|> Abstract.hashLiteral . Abstract.hashLiteral
-                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)
+                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2),
+   -- RecursiveDo
+   dExpression = Report.dExpression reportGrammar
+                 <|> wrap (Abstract.mdoExpression <$ keyword "mdo" <*> wrap statements),
+   statement = Report.statement reportGrammar
+               <|> Deep.InL
+                   <$> wrap (Abstract.recursiveStatement
+                             . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
+                             <$ keyword "rec"
+                             <*> blockOf statement)
 }
    where reportGrammar = Report.grammar g
 

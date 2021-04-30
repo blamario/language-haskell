@@ -22,6 +22,7 @@ import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer
@@ -65,6 +66,40 @@ instance {-# overlaps #-} forall l pos s.
           verifyArg associativity precedence arg result
              | ((_, lexemes, _), AST.InfixExpression _ op' _) <- arg,
                (_, AST.ReferenceExpression name) <- op',
+               Just (Binder.InfixDeclaration _ associativity' precedence') <- Map.lookup name bindings =
+               if parenthesized lexemes
+                  || precedence < precedence'
+                  || precedence == precedence' && any (associativity' ==) associativity then result
+               else Failure (pure ContradictoryAssociativity)
+             | otherwise = result
+      in Compose (Disambiguator.unique id (pure . const AmbiguousExpression) (resolveExpression <$> expressions))
+
+instance {-# overlaps #-} forall l pos s.
+         (Eq s, IsString s, Eq pos,
+          Eq (ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)),
+          Abstract.Expression l ~ ExtAST.Expression l,
+          Abstract.ModuleName l ~ ExtAST.ModuleName l,
+          Abstract.QualifiedName l ~ ExtAST.QualifiedName l,
+          Abstract.Name l ~ ExtAST.Name l) =>
+         Resolution l pos s
+         `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
+      let resolveExpression :: f ~ Reserializer.Wrapped pos s
+                            => ExtAST.Expression l l f f
+                            -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
+          resolveExpression e@(ExtAST.InfixExpression left op right)
+             | (_, ExtAST.ReferenceExpression name) <- op =
+                maybe (const $ Failure $ pure UnknownOperator)
+                      (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
+          resolveExpression e = pure e
+          verifyArg :: f ~ Reserializer.Wrapped pos s
+                    => Maybe (ExtAST.Associativity l) -> Int
+                    -> f (ExtAST.Expression l l f f)
+                    -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
+                    -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
+          verifyArg associativity precedence arg result
+             | ((_, lexemes, _), ExtAST.InfixExpression _ op' _) <- arg,
+               (_, ExtAST.ReferenceExpression name) <- op',
                Just (Binder.InfixDeclaration _ associativity' precedence') <- Map.lookup name bindings =
                if parenthesized lexemes
                   || precedence < precedence'

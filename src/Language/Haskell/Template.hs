@@ -110,8 +110,7 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
 expressionTemplate (CaseExpression scrutinee alternatives) =
    CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = DoE (guardedTemplate $ extract statements)
-   where guardedTemplate (GuardedExpression statements result) =
-            (statementTemplate . extract <$> statements) ++ [NoBindS $ wrappedExpressionTemplate result]
+expressionTemplate (MDoExpression statements) = MDoE (guardedTemplate $ extract statements)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
 expressionTemplate (LeftSectionExpression left op) =
@@ -142,6 +141,10 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
    where s = wrappedExpressionTemplate start
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
+
+guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
+guardedTemplate (GuardedExpression statements result) =
+   (statementTemplate . extract <$> statements) ++ [NoBindS $ wrappedExpressionTemplate result]
 
 wrappedExpressionTemplate :: TemplateWrapper f => f (Expression Language Language f f) -> Exp
 wrappedExpressionTemplate x = if isParenthesized x && not (syntactic e) then ParensE template else template
@@ -290,6 +293,7 @@ statementTemplate (BindStatement left right) =
    BindS (patternTemplate $ extract left) (wrappedExpressionTemplate right)
 statementTemplate (ExpressionStatement test) = NoBindS (wrappedExpressionTemplate test)
 statementTemplate (LetStatement declarations) = LetS (foldMap (declarationTemplates . extract) declarations)
+statementTemplate (RecursiveStatement statements) = RecS (statementTemplate . extract <$> statements)
 
 bangTypeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> (TH.Bang, TH.Type)
 bangTypeTemplate (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate $ extract t)

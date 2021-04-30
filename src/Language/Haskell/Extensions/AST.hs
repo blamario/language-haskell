@@ -1,7 +1,8 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Value(..), module Report) where
+module Language.Haskell.Extensions.AST (Language(Language), Expression(..), Statement(..), Value(..),
+                                        module Report) where
 
 import Control.Monad (forM)
 import Data.List.NonEmpty (NonEmpty)
@@ -10,8 +11,8 @@ import Data.Text (Text)
 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
-import Language.Haskell.AST (Module(..), Declaration(..), Expression(..), Type(..), EquationLHS(..), EquationRHS(..),
-                             GuardedExpression(..), Pattern(..), Statement(..),
+import Language.Haskell.AST (Module(..), Declaration(..), Type(..), EquationLHS(..), EquationRHS(..),
+                             GuardedExpression(..), Pattern(..),
                              TypeLHS(..), Context(..), DataConstructor(..), DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
@@ -25,6 +26,8 @@ data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.ExtendedHaskell Language where
    hashLiteral = HashLiteral
+   mdoExpression = MDoExpression
+   recursiveStatement = RecursiveStatement
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -191,6 +194,37 @@ instance Abstract.Haskell Language where
    safeCall = SafeCall
    unsafeCall = UnsafeCall
 
+data Expression λ l d s =
+   ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+   | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+                           (s (Abstract.Expression l l d d))
+   | ConstructorExpression (s (Abstract.Constructor l l d d))
+   | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
+   | DoExpression (s (Abstract.GuardedExpression l l d d))
+   | MDoExpression (s (Abstract.GuardedExpression l l d d))
+   | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+                     (s (Abstract.Expression l l d d))
+   | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
+   | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
+   | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
+   | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+   | ListExpression [s (Abstract.Expression l l d d)]
+   | LiteralExpression (s (Abstract.Value l l d d))
+   | Negate
+   | RecordExpression (s (Abstract.Expression l l d d)) [s (Abstract.FieldBinding l l d d)]
+   | ReferenceExpression (Abstract.QualifiedName λ)
+   | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+   | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
+                        (Maybe (s (Abstract.Expression l l d d)))
+   | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
+   | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+
+data Statement λ l d s =
+   BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
+   | ExpressionStatement (s (Abstract.Expression l l d d))
+   | LetStatement [s (Abstract.Declaration l l d d)]
+   | RecursiveStatement [s (Abstract.Statement l l d d)]
+
 data Value λ l (d :: * -> *) (s :: * -> *) =
    CharLiteral Char
    | FloatingLiteral Rational
@@ -199,8 +233,38 @@ data Value λ l (d :: * -> *) (s :: * -> *) =
    | HashLiteral (Value λ l d s)
    deriving (Data, Eq, Show)
 
+deriving instance Typeable (Expression λ l d s)
+deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
+                   Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
+                   Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
+deriving instance (Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
+                   Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
+                   Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
+                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
+                   Show (Abstract.QualifiedName λ)) => Show (Expression λ l d s)
+deriving instance (Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
+                   Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
+                   Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
+                   Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
+                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
+                   Eq (Abstract.QualifiedName λ)) => Eq (Expression λ l d s)
+
+deriving instance Typeable (Statement λ l d s)
+deriving instance (Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.Expression l l d d)),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Statement λ l d s)
+deriving instance (Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.Expression l l d d)),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)))
+                   => Show (Statement λ l d s)
+deriving instance (Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.Expression l l d d)),
+                   Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d))) => Eq (Statement λ l d s)
+
 $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Value]))
+             [''Expression, ''Statement, ''Value]))
