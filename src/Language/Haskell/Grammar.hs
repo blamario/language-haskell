@@ -537,7 +537,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
               <|> parens (pattern
                           <|> Abstract.tuplePattern
                               <$> ((:|) <$> wrap pattern <*> some (terminator "," *> wrap pattern)))
-              <|> Abstract.listPattern <$> brackets (wrap pattern `sepBy` comma)
+              <|> Abstract.listPattern <$> brackets (wrap pattern `sepBy1` comma)
               <|> Abstract.irrefutablePattern <$ delimiter "~" <*> wrap aPattern,
    fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pattern,
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
