@@ -899,7 +899,7 @@ blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
             do rest <- getInput
-               item <- mapMaybe (oneExtendedLine indent rest) (wrap p)
+               item <- filter (oneExtendedLine indent rest) (wrap p)
                -- don't stop at a higher indent unless there's a terminator
                void (filter (indent >=) inputColumn)
                   <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
@@ -934,17 +934,16 @@ inputColumn = currentColumn <$> getInput
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                     Deep.Foldable (Serialization (Down Int) t) node,
                     Deep.Functor (DisambiguatorTrans t) node)
-                => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t))
-                -> Maybe (Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)))
+                => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)) -> Bool
 oneExtendedLine indent input node =
    allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.firstChoice node)
    where allIndented (WhiteSpace ws : Token Other token : rest)
             | Textual.all isLineChar ws = allIndented rest
-            | currentColumn token < indent = Nothing
+            | currentColumn token < indent = False
             | currentColumn token == indent && token `Set.notMember` reservedWords
-              && all (`notElem` terminators) (characterPrefix token) = Nothing
+              && all (`notElem` terminators) (characterPrefix token) = False
          allIndented (_ : rest) = allIndented rest
-         allIndented [] = Just node
+         allIndented [] = True
          terminators :: [Char]
          terminators = ",;)]}"
                                   
