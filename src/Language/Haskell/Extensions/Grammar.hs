@@ -53,19 +53,28 @@ grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar g@HaskellGrammar{..} = reportGrammar{
-   -- identifiers
+grammar = unicodeSyntaxMixin . magicHashMixin . recursiveDoMixin . identifierSyntaxMixin . Report.grammar
+
+identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+identifierSyntaxMixin baseGrammar = baseGrammar{
    variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
    constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
    variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
-   constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme),
-   -- UnicodeSyntax
-   doubleColon = Report.doubleColon reportGrammar <|> delimiter "∷",
-   rightDoubleArrow = Report.rightDoubleArrow reportGrammar <|> delimiter "⇒",
-   rightArrow = Report.rightArrow reportGrammar <|> delimiter "→",
-   leftArrow = Report.leftArrow reportGrammar <|> delimiter "←",
-   -- MagicHash
-   lPattern = aPattern
+   constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}
+
+unicodeSyntaxMixin :: forall l g t. (LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+                   => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+unicodeSyntaxMixin baseGrammar = baseGrammar{
+   doubleColon = doubleColon baseGrammar <|> delimiter "∷",
+   rightDoubleArrow = rightDoubleArrow baseGrammar <|> delimiter "⇒",
+   rightArrow = rightArrow baseGrammar <|> delimiter "→",
+   leftArrow = leftArrow baseGrammar <|> delimiter "←"}
+
+magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+               => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+magicHashMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+  lPattern = aPattern
               <|> Abstract.literalPattern
                   <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer
                             <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
@@ -85,18 +94,23 @@ grammar g@HaskellGrammar{..} = reportGrammar{
                  <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
                       <|> Abstract.charLiteral <$> charHashLiteral <|> Abstract.stringLiteral <$> stringHashLiteral)
              <|> Abstract.hashLiteral . Abstract.hashLiteral
-                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2),
-   -- RecursiveDo
-   dExpression = Report.dExpression reportGrammar
-                 <|> wrap (Abstract.mdoExpression <$ keyword "mdo" <*> wrap statements),
-   statement = Report.statement reportGrammar
+                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}
+
+recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                               Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+recursiveDoMixin baseGrammar = baseGrammar{
+   dExpression = dExpression baseGrammar
+                 <|> wrap (Abstract.mdoExpression <$ keyword "mdo" <*> wrap (statements baseGrammar)),
+   statement = statement baseGrammar
                <|> Deep.InL
                    <$> wrap (Abstract.recursiveStatement
                              . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
                              <$ keyword "rec"
-                             <*> blockOf statement)
-}
-   where reportGrammar = Report.grammar g
+                             <*> blockOf (statement baseGrammar))}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
