@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module Language.Haskell.Resolver where
 
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty(..), toList)
 import qualified Data.Map.Lazy as Map
 import Data.Map.Monoidal (MonoidalMap(..))
 import Data.String (IsString)
@@ -29,11 +29,11 @@ import qualified Language.Haskell.Reserializer as Reserializer
 
 data Resolution l pos s = Resolution
 
-type Resolved = Validation (NonEmpty Error)
+type Resolved l f = Validation (NonEmpty (Error l f))
 
 instance Transformation.Transformation (Resolution l pos s) where
     type Domain (Resolution l pos s) = Binder.WithEnvironment l (Disambiguator.Wrapped pos s)
-    type Codomain (Resolution l pos s) = Compose Resolved (Reserializer.Wrapped pos s)
+    type Codomain (Resolution l pos s) = Compose (Resolved l (Reserializer.Wrapped pos s)) (Reserializer.Wrapped pos s)
 
 instance {-# overlappable #-} Resolution l pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
@@ -52,7 +52,7 @@ instance {-# overlaps #-} forall l pos s.
    res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
       let resolveExpression :: f ~ Reserializer.Wrapped pos s
                             => AST.Expression l l f f
-                            -> Validation (NonEmpty Error) (AST.Expression l l f f)
+                            -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
           resolveExpression e@(AST.InfixExpression left op right)
              | (_, AST.ReferenceExpression name) <- op =
                 maybe (const $ Failure $ pure UnknownOperator)
@@ -61,8 +61,8 @@ instance {-# overlaps #-} forall l pos s.
           verifyArg :: f ~ Reserializer.Wrapped pos s
                     => Maybe (AST.Associativity l) -> Int
                     -> f (AST.Expression l l f f)
-                    -> Validation (NonEmpty Error) (AST.Expression l l f f)
-                    -> Validation (NonEmpty Error) (AST.Expression l l f f)
+                    -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
+                    -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
           verifyArg associativity precedence arg result
              | ((_, lexemes, _), AST.InfixExpression _ op' _) <- arg,
                (_, AST.ReferenceExpression name) <- op',
@@ -72,10 +72,11 @@ instance {-# overlaps #-} forall l pos s.
                   || precedence == precedence' && any (associativity' ==) associativity then result
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
-      in Compose (Disambiguator.unique id (pure . const AmbiguousExpression) (resolveExpression <$> expressions))
+      in Compose (Disambiguator.unique id (pure . AmbiguousExpression) (resolveExpression <$> expressions))
 
 instance {-# overlaps #-} forall l pos s.
          (Eq s, IsString s, Eq pos,
+          Show pos, Show s, Show (ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)),
           Eq (ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)),
           Abstract.Expression l ~ ExtAST.Expression l,
           Abstract.ModuleName l ~ ExtAST.ModuleName l,
@@ -86,7 +87,7 @@ instance {-# overlaps #-} forall l pos s.
    res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
       let resolveExpression :: f ~ Reserializer.Wrapped pos s
                             => ExtAST.Expression l l f f
-                            -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
+                            -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
              | (_, ExtAST.ReferenceExpression name) <- op =
                 maybe (const $ Failure $ pure UnknownOperator)
@@ -95,8 +96,8 @@ instance {-# overlaps #-} forall l pos s.
           verifyArg :: f ~ Reserializer.Wrapped pos s
                     => Maybe (ExtAST.Associativity l) -> Int
                     -> f (ExtAST.Expression l l f f)
-                    -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
-                    -> Validation (NonEmpty Error) (ExtAST.Expression l l f f)
+                    -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
+                    -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           verifyArg associativity precedence arg result
              | ((_, lexemes, _), ExtAST.InfixExpression _ op' _) <- arg,
                (_, ExtAST.ReferenceExpression name) <- op',
@@ -106,7 +107,7 @@ instance {-# overlaps #-} forall l pos s.
                   || precedence == precedence' && any (associativity' ==) associativity then result
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
-      in Compose (Disambiguator.unique id (pure . const AmbiguousExpression) (resolveExpression <$> expressions))
+      in Compose (Disambiguator.unique id (pure . AmbiguousExtExpression) (resolveExpression <$> expressions))
 
 verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a) -> e -> e -> Binder.Binding l -> a -> a
 verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.LeftAssociative precedence) =
@@ -120,36 +121,44 @@ parenthesized :: (Eq s, IsString s) => Reserializer.ParsedLexemes s -> Bool
 parenthesized (Reserializer.Trailing (paren:_)) = Reserializer.lexemeText paren == "("
 parenthesized (Reserializer.Trailing []) = False
 
-data Error = AmbiguousParses
-           | AmbiguousExpression
-           | ContradictoryAssociativity
-           | ClashingImports
-           | ClashingNames
-           | UnknownOperator
-           deriving Show
+data Error l f = AmbiguousParses
+               | AmbiguousExpression [AST.Expression l l f f]
+               | AmbiguousExtExpression [ExtAST.Expression l l f f]
+               | ContradictoryAssociativity
+               | ClashingImports
+               | ClashingNames
+               | UnknownOperator
 
-instance Monad (Validation (NonEmpty Error)) where
+deriving instance (Show (AST.Expression l l f f), Show (ExtAST.Expression l l f f)) => Show (Error l f)
+
+instance Monad (Validation (NonEmpty (Error l f))) where
    Success s >>= f = f s
    Failure errors >>= _ = Failure errors
 
 -- | Resolve ambiguities in the given collection of modules, a 'Map' keyed by module name. Note that all class
 -- constraints in the function's type signature are satisfied by the Haskell 'AST.Language'.
-resolveModules :: forall l pos s. (Abstract.Haskell l,
-                              Abstract.Module l l ~ AST.Module l l,
-                              Abstract.ModuleName l ~ AST.ModuleName l,
-                              Abstract.Export l l ~ AST.Export l l,
-                              Abstract.Import l l ~ AST.Import l l,
-                              Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
-                              Abstract.ImportItem l l ~ AST.ImportItem l l,
-                              Abstract.Members l ~ AST.Members l,
-                              Abstract.Declaration l ~ AST.Declaration l,
-                              Abstract.QualifiedName l ~ AST.QualifiedName l,
-                              Abstract.Name l ~ AST.Name l,
-                              Deep.Traversable (Resolution l pos s) (Abstract.Declaration l l),
-                              Full.Traversable (Resolution l pos s) (Abstract.Module l l),
-                              Full.Traversable (Resolution l pos s) (Abstract.Declaration l l)) =>
-                  Map.Map (Abstract.ModuleName l) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s) (AST.Module l l (Binder.WithEnvironment l (Disambiguator.Wrapped pos s)) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s))))
-               -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty Error)) (Map.Map (Abstract.ModuleName l) ((Reserializer.Wrapped pos s) (AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))))
+resolveModules :: forall l pos s f. (f ~ Reserializer.Wrapped pos s,
+                                Abstract.Haskell l,
+                                Abstract.Module l l ~ AST.Module l l,
+                                Abstract.ModuleName l ~ AST.ModuleName l,
+                                Abstract.Export l l ~ AST.Export l l,
+                                Abstract.Import l l ~ AST.Import l l,
+                                Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
+                                Abstract.ImportItem l l ~ AST.ImportItem l l,
+                                Abstract.Members l ~ AST.Members l,
+                                Abstract.Declaration l ~ AST.Declaration l,
+                                Abstract.QualifiedName l ~ AST.QualifiedName l,
+                                Abstract.Name l ~ AST.Name l,
+                                Deep.Traversable (Resolution l pos s) (Abstract.Declaration l l),
+                                Full.Traversable (Resolution l pos s) (Abstract.Module l l),
+                                Full.Traversable (Resolution l pos s) (Abstract.Declaration l l)) =>
+                  Map.Map (Abstract.ModuleName l)
+                          (Binder.WithEnvironment l (Disambiguator.Wrapped pos s)
+                                                  (AST.Module l l
+                                                              (Binder.WithEnvironment l (Disambiguator.Wrapped pos s))
+                                                              (Binder.WithEnvironment l (Disambiguator.Wrapped pos s))))
+               -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty (Error l f)))
+                             (Map.Map (Abstract.ModuleName l) (f (AST.Module l l f f)))
 resolveModules modules = Map.traverseWithKey extractErrors resolvedModules
    where resolvedModules = Full.traverse Resolution <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
