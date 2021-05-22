@@ -99,6 +99,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    guard, qualifier :: p (Abstract.Statement l l f f),
    expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
+   bareExpression :: p (Abstract.Expression l l f f),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
    statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
@@ -440,30 +441,29 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
-   aExpression = wrap (Abstract.referenceExpression <$> qualifiedVariable
-                       <|> Abstract.constructorExpression <$> wrap generalConstructor
-                       <|> Abstract.literalExpression <$> wrap literal
-                       <|> Abstract.tupleExpression <$> parens ((:|) <$> expression <*> some (comma *> expression))
-                       <|> brackets (Abstract.listExpression <$> (expression `sepBy1` comma)
-                                     <|> Abstract.sequenceExpression <$> expression
-                                         <*> optional (comma *> expression)
-                                         <* delimiter ".." <*> optional expression
-                                     <|> Abstract.listComprehension <$> expression <*> qualifiers)
-                       <|> parens (Abstract.leftSectionExpression <$> infixExpression <*> qualifiedOperator
-                                   <|> Abstract.rightSectionExpression
-                                          <$> (notFollowedBy (string "-" <* notSatisfyChar isSymbol)
-                                               *> qualifiedOperator)
-                                          <*> infixExpression)
-                       <|> Abstract.recordExpression <$> wrap (Abstract.constructorExpression
-                                                               <$> wrap (Abstract.constructorReference
-                                                                         <$> qualifiedConstructor))
-                                                     <*> braces (pure [])
-                       <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma))
-                 <|> Disambiguator.joinWrapped <$> wrap (parens expression),
+   aExpression = wrap bareExpression <|> Disambiguator.joinWrapped <$> wrap (parens expression),
+   bareExpression = Abstract.referenceExpression <$> qualifiedVariable
+                    <|> Abstract.constructorExpression <$> wrap generalConstructor
+                    <|> Abstract.literalExpression <$> wrap literal
+                    <|> Abstract.tupleExpression <$> parens ((:|) <$> expression <*> some (comma *> expression))
+                    <|> brackets (Abstract.listExpression <$> (expression `sepBy1` comma)
+                                  <|> Abstract.sequenceExpression <$> expression
+                                      <*> optional (comma *> expression)
+                                      <* delimiter ".." <*> optional expression
+                                  <|> Abstract.listComprehension <$> expression <*> qualifiers)
+                    <|> parens (Abstract.leftSectionExpression <$> infixExpression <*> qualifiedOperator
+                                <|> Abstract.rightSectionExpression
+                                       <$> (notFollowedBy (string "-" <* notSatisfyChar isSymbol) *> qualifiedOperator)
+                                       <*> infixExpression)
+                    <|> Abstract.recordExpression
+                           <$> wrap (Abstract.constructorExpression
+                                        <$> wrap (Abstract.constructorReference <$> qualifiedConstructor))
+                           <*> braces (pure [])
+                    <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma),
    qualifiers = delimiter "|" *> wrap qualifier `sepByNonEmpty` comma,
    qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
-           <|> Abstract.letStatement <$ keyword "let" <*> declarations
-           <|> Abstract.expressionStatement <$> expression,
+               <|> Abstract.letStatement <$ keyword "let" <*> declarations
+               <|> Abstract.expressionStatement <$> expression,
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList

@@ -4,18 +4,26 @@
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
+-- * @TransformListComp@ is not supported by TemplateHaskell
+-- * @MonadComprehensions@ implies @TransformListComp@ and is not syntactic by itself
+-- * @MonadFailDesugaring@ is not syntactic
+-- * @OverloadedLists@ is not syntactic
+-- * @NoImplicitPrelude@ is not syntactic
+-- * @RebindableSyntax@ is not syntactic
+-- * @PostfixOperators@ is not syntactic
 
 module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, module Report) where
 
 import Control.Applicative
+import qualified Data.Char as Char
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
-import qualified Data.Char as Char
 import qualified Data.Monoid.Textual as Textual
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Text.Parser.Token (brackets)
+import Text.Parser.Token (brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT)
 import qualified Transformation.Deep as Deep
@@ -58,7 +66,7 @@ grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar = unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin . parallelListComprehensionsMixin
-          . recursiveDoMixin . Report.grammar
+          . recursiveDoMixin . tupleSectionsMixin . Report.grammar
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -121,10 +129,17 @@ parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, Le
                                               Ord t, Show t, OutlineMonoid t)
                                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 parallelListComprehensionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   aExpression = Report.aExpression baseGrammar
-                 <|> brackets (wrap $
-                               Abstract.parallelListComprehension
-                               <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}
+   bareExpression = Report.bareExpression baseGrammar
+                    <|> brackets (Abstract.parallelListComprehension
+                                  <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}
+
+tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                 Ord t, Show t, OutlineMonoid t)
+                   => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   bareExpression = Report.bareExpression baseGrammar
+                    <|> Abstract.tupleSectionExpression
+                           <$> parens ((:|) <$> optional expression <*> some (comma *> optional expression))}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

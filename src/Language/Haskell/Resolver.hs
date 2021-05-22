@@ -74,10 +74,10 @@ instance {-# overlaps #-} forall l pos s.
              | otherwise = result
       in Compose (Disambiguator.unique id (pure . AmbiguousExpression) (resolveExpression <$> expressions))
 
-instance {-# overlaps #-} forall l pos s.
-         (Eq s, IsString s, Eq pos,
-          Show pos, Show s, Show (ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)),
-          Eq (ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)),
+instance {-# overlaps #-} forall l pos s f.
+         (Eq s, IsString s, Eq pos, f ~ Reserializer.Wrapped pos s,
+          Show pos, Show s, Show (ExtAST.Expression l l f f),
+          Eq (ExtAST.Expression l l f f),
           Abstract.Expression l ~ ExtAST.Expression l,
           Abstract.ModuleName l ~ ExtAST.ModuleName l,
           Abstract.QualifiedName l ~ ExtAST.QualifiedName l,
@@ -85,13 +85,14 @@ instance {-# overlaps #-} forall l pos s.
          Resolution l pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
-      let resolveExpression :: f ~ Reserializer.Wrapped pos s
-                            => ExtAST.Expression l l f f
+      let resolveExpression :: ExtAST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
              | (_, ExtAST.ReferenceExpression name) <- op =
                 maybe (const $ Failure $ pure UnknownOperator)
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
+          resolveExpression e@(ExtAST.TupleSectionExpression items)
+             | Just items' <- sequence items = Failure (TupleSectionWithNoOmission items' :| [])
           resolveExpression e = pure e
           verifyArg :: f ~ Reserializer.Wrapped pos s
                     => Maybe (ExtAST.Associativity l) -> Int
@@ -127,9 +128,11 @@ data Error l f = AmbiguousParses
                | ContradictoryAssociativity
                | ClashingImports
                | ClashingNames
+               | TupleSectionWithNoOmission (NonEmpty (f (ExtAST.Expression l l f f)))
                | UnknownOperator
 
-deriving instance (Show (AST.Expression l l f f), Show (ExtAST.Expression l l f f)) => Show (Error l f)
+deriving instance (Show (AST.Expression l l f f), Show (ExtAST.Expression l l f f),
+                   Show (f (ExtAST.Expression l l f f))) => Show (Error l f)
 
 instance Monad (Validation (NonEmpty (Error l f))) where
    Success s >>= f = f s

@@ -28,6 +28,7 @@ instance Abstract.ExtendedHaskell Language where
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
    parallelListComprehension = ParallelListComprehension
+   tupleSectionExpression = TupleSectionExpression
    recursiveStatement = RecursiveStatement
 
 instance Abstract.Haskell Language where
@@ -220,6 +221,7 @@ data Expression λ l d s =
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
+   | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
 
 data Statement λ l d s =

@@ -144,6 +144,7 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
       (Just n, Just e) -> FromThenToR s n e
    where s = wrappedExpressionTemplate start
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
+expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
