@@ -27,6 +27,7 @@ data Language = Language deriving (Data, Eq, Show)
 instance Abstract.ExtendedHaskell Language where
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
+   parallelListComprehension = ParallelListComprehension
    recursiveStatement = RecursiveStatement
 
 instance Abstract.Haskell Language where
@@ -208,6 +209,8 @@ data Expression λ l d s =
    | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
    | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+   | ParallelListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+                               (NonEmpty (s (Abstract.Statement l l d d))) [NonEmpty (s (Abstract.Statement l l d d))]
    | ListExpression [s (Abstract.Expression l l d d)]
    | LiteralExpression (s (Abstract.Value l l d d))
    | Negate

@@ -95,11 +95,9 @@ data HaskellGrammar l f p = HaskellGrammar {
    foreignArgType :: p (Abstract.Type l l f f),
    functionLHS :: p (Abstract.EquationLHS l l f f),
    rhs :: p (Abstract.EquationRHS l l f f),
-   guards :: p (NonEmpty (f (Abstract.Statement l l f f))),
-   guard :: p (Abstract.Statement l l f f),
-   expression :: p (f (Abstract.Expression l l f f)),
-   infixExpression :: p (f (Abstract.Expression l l f f)),
-   leftInfixExpression :: p (f (Abstract.Expression l l f f)),
+   guards, qualifiers :: p (NonEmpty (f (Abstract.Statement l l f f))),
+   guard, qualifier :: p (Abstract.Statement l l f f),
+   expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
@@ -450,11 +448,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                      <|> Abstract.sequenceExpression <$> expression
                                          <*> optional (comma *> expression)
                                          <* delimiter ".." <*> optional expression
-                                     <|> Abstract.listComprehension <$> expression
-                                         <* delimiter "|"
-                                         <*> (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum
-                                              <$> statement)
-                                             `sepByNonEmpty` comma)
+                                     <|> Abstract.listComprehension <$> expression <*> qualifiers)
                        <|> parens (Abstract.leftSectionExpression <$> infixExpression <*> qualifiedOperator
                                    <|> Abstract.rightSectionExpression
                                           <$> (notFollowedBy (string "-" <* notSatisfyChar isSymbol)
@@ -466,6 +460,10 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                      <*> braces (pure [])
                        <|> Abstract.recordExpression <$> aExpression <*> braces (wrap fieldBinding `sepBy1` comma))
                  <|> Disambiguator.joinWrapped <$> wrap (parens expression),
+   qualifiers = delimiter "|" *> wrap qualifier `sepByNonEmpty` comma,
+   qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
+           <|> Abstract.letStatement <$ keyword "let" <*> declarations
+           <|> Abstract.expressionStatement <$> expression,
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList
@@ -577,12 +575,12 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                   <|> terminator "`" *> qualifiedConstructorIdentifier <* terminator "`",
    operator = variableOperator <|> constructorOperator,
    qualifiedOperator = qualifiedVariableOperator <|> qualifiedConstructorOperator <?> "qualified operator",
-   qualifiedVariableIdentifier = token (qualifier <*> variableIdentifier),
-   qualifiedConstructorIdentifier = token (qualifier <*> constructorIdentifier),
+   qualifiedVariableIdentifier = token (nameQualifier <*> variableIdentifier),
+   qualifiedConstructorIdentifier = token (nameQualifier <*> constructorIdentifier),
    qualifiedTypeConstructor = qualifiedConstructorIdentifier,
    qualifiedTypeClass = qualifiedConstructorIdentifier,
-   qualifiedVariableSymbol = token (qualifier <*> variableSymbol),
-   qualifiedConstructorSymbol = token (qualifier <*> constructorSymbol
+   qualifiedVariableSymbol = token (nameQualifier <*> variableSymbol),
+   qualifiedConstructorSymbol = token (nameQualifier <*> constructorSymbol
                                        <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
                                            <$> string ":" <* notSatisfyChar isSymbol),
 
@@ -711,11 +709,11 @@ moduleLexeme :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t,
 moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme <?> "module name")
                `sepByNonEmpty` string "."
 
-qualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-          => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-qualifier = Abstract.qualifiedName
-            <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
-                              <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
+nameQualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+              => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
+nameQualifier = Abstract.qualifiedName
+                <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
+                                  <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
 
 decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
 integer, integerLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer

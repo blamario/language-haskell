@@ -2,6 +2,9 @@
              Rank2Types, RecordWildCards,
              ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
 
+-- | Missing syntax extensions:
+-- * @QualifiedDo@ requires TemplateHaskell 2.17
+
 module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, module Report) where
 
 import Control.Applicative
@@ -12,6 +15,7 @@ import qualified Data.Monoid.Textual as Textual
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Text.Parser.Token (brackets)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT)
 import qualified Transformation.Deep as Deep
@@ -53,7 +57,8 @@ grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar = unicodeSyntaxMixin . magicHashMixin . recursiveDoMixin . identifierSyntaxMixin . Report.grammar
+grammar = unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin . parallelListComprehensionsMixin
+          . recursiveDoMixin . Report.grammar
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -111,6 +116,15 @@ recursiveDoMixin baseGrammar = baseGrammar{
                              . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
                              <$ keyword "rec"
                              <*> blockOf (statement baseGrammar))}
+
+parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                              Ord t, Show t, OutlineMonoid t)
+                                => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+parallelListComprehensionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   aExpression = Report.aExpression baseGrammar
+                 <|> brackets (wrap $
+                               Abstract.parallelListComprehension
+                               <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

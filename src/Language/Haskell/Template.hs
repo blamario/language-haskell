@@ -121,6 +121,10 @@ expressionTemplate (LetExpression bindings body) =
    LetE (foldMap (declarationTemplates . extract) bindings) (wrappedExpressionTemplate body)
 expressionTemplate (ListComprehension element guards) =
    CompE (statementTemplate <$> ((extract <$> toList guards) ++ [ExpressionStatement element]))
+expressionTemplate (ParallelListComprehension element guards1 guards2 guardses) =
+   CompE [ParS (branch guards1 : branch guards2 : map branch guardses),
+          statementTemplate (ExpressionStatement element)]
+   where branch statements = statementTemplate <$> (extract <$> toList statements)
 expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> items)
 expressionTemplate (LiteralExpression value) = LitE (literalTemplate $ extract value)
 expressionTemplate Negate = VarE (mkName "-")
