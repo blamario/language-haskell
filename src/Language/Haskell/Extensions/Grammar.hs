@@ -66,7 +66,7 @@ grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar = unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin . parallelListComprehensionsMixin
-          . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . Report.grammar
+          . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin . Report.grammar
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -141,14 +141,19 @@ tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                     <|> Abstract.tupleSectionExpression
                            <$> parens ((:|) <$> optional expression <*> some (comma *> optional expression))}
 
-lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                               Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                               Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l))
-                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 lambdaCaseMixin baseGrammar = baseGrammar{
    dExpression = dExpression baseGrammar
                  <|> wrap (Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
-                              <*> blockOf (alternative baseGrammar))}
+                              <*> alternatives baseGrammar)}
+
+emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                             Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                             Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l))
+                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+emptyCaseMixin baseGrammar = baseGrammar{
+   alternatives = blockOf (alternative baseGrammar)}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

@@ -100,6 +100,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
    bareExpression :: p (Abstract.Expression l l f f),
+   alternatives :: p [f (Abstract.CaseAlternative l l f f)],
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
    statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
@@ -437,7 +438,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                                           <* keyword "then" <*> expression <* optional semi
                                                           <* keyword "else" <*> expression)
                  <|> dExpression,
-   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> blockOf alternative
+   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> alternatives
                        <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
                  <|> fExpression,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
@@ -464,6 +465,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                <|> Abstract.letStatement <$ keyword "let" <*> declarations
                <|> Abstract.expressionStatement <$> expression,
+   alternatives = filter (not . null) (blockOf alternative) <?> "non-empty case alternatives",
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList
