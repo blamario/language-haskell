@@ -12,4 +12,5 @@ class Haskell λ => ExtendedHaskell λ where
                              -> [NonEmpty (s (Statement l l d d))]
                              -> Expression λ l d s
    tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s
+   lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s

@@ -109,6 +109,8 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
       UnitConstructor -> TupE []
 expressionTemplate (CaseExpression scrutinee alternatives) =
    CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
+expressionTemplate (LambdaCaseExpression alternatives) =
+   LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = DoE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = MDoE (guardedTemplate $ extract statements)
 expressionTemplate (InfixExpression left op right) =
