@@ -214,7 +214,7 @@ declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
    | SimpleTypeLHS con vars <- extract lhs =
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
                Nothing (dataConstructorTemplate . extract $ constructor)
-               [DerivClause Nothing $ derived . extract <$> derivings]]
+               $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | SimpleTypeLHS con vars <- extract lhs =
