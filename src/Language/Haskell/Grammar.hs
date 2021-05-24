@@ -408,26 +408,16 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                 <|> infixExpression,
    -- infixExpression doesn't allow a conditional, let, or lambda expression on its left side
    infixExpression = wrap (Abstract.infixExpression
-                              <$> dExpression
-                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> infixExpression
-                           <|> -- ambiguous
-                           Abstract.infixExpression
                               <$> leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> lExpression
+                              <*> infixExpression
                            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
                      <|> lExpression,
    -- leftInfixExpression doesn't allow a conditional, let, or lambda expression on either side
    leftInfixExpression = wrap (Abstract.infixExpression
-                                  <$> dExpression
-                                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                                  <*> leftInfixExpression
-                               <|> -- ambiguous
-                               Abstract.infixExpression
                                   <$> leftInfixExpression
                                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                                  <*> dExpression
+                                  <*> leftInfixExpression
                                <|> Abstract.applyExpression
                                       <$> wrap (Abstract.negate <$ delimiter "-") <*> leftInfixExpression)
                          <|> dExpression,
