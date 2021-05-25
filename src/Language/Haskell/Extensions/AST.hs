@@ -30,6 +30,7 @@ instance Abstract.ExtendedHaskell Language where
    parallelListComprehension = ParallelListComprehension
    tupleSectionExpression = TupleSectionExpression
    lambdaCaseExpression = LambdaCaseExpression
+   multiWayIfExpression = MultiWayIfExpression
    recursiveStatement = RecursiveStatement
 
 instance Abstract.Haskell Language where
@@ -204,6 +205,7 @@ data Expression λ l d s =
    | ConstructorExpression (s (Abstract.Constructor l l d d))
    | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
    | LambdaCaseExpression [s (Abstract.CaseAlternative l l d d)]
+   | MultiWayIfExpression [s (Abstract.GuardedExpression l l d d)]
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | MDoExpression (s (Abstract.GuardedExpression l l d d))
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
