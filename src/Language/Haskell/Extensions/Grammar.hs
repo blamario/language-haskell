@@ -124,8 +124,8 @@ recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (P
                                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
                  => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 recursiveDoMixin baseGrammar = baseGrammar{
-   dExpression = dExpression baseGrammar
-                 <|> wrap (Abstract.mdoExpression <$ keyword "mdo" <*> wrap (statements baseGrammar)),
+   closedBlockExpresion = closedBlockExpresion baseGrammar
+                          <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap (statements baseGrammar),
    statement = statement baseGrammar
                <|> Deep.InL
                    <$> wrap (Abstract.recursiveStatement
@@ -152,9 +152,9 @@ tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
 lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 lambdaCaseMixin baseGrammar = baseGrammar{
-   dExpression = dExpression baseGrammar
-                 <|> wrap (Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
-                              <*> alternatives baseGrammar)}
+   closedBlockExpresion = closedBlockExpresion baseGrammar
+                          <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
+                                                            <*> alternatives baseGrammar}
 
 emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
@@ -168,12 +168,12 @@ multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                              Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 multiWayIfMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   dExpression = dExpression
-                 <|> wrap (Abstract.multiWayIfExpression <$ keyword "if"
-                              <*> blockOf'
-                                     (Abstract.guardedExpression . toList
-                                         <$> guards <* rightArrow
-                                         <*> expression))}
+   closedBlockExpresion = Report.closedBlockExpresion baseGrammar
+                          <|> Abstract.multiWayIfExpression <$ keyword "if"
+                                  <*> blockOf'
+                                         (Abstract.guardedExpression . toList
+                                             <$> guards <* rightArrow
+                                             <*> expression)}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

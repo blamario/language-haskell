@@ -99,7 +99,7 @@ data HaskellGrammar l f p = HaskellGrammar {
    guard, qualifier :: p (Abstract.Statement l l f f),
    expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
-   bareExpression :: p (Abstract.Expression l l f f),
+   bareExpression, openBlockExpression, closedBlockExpresion :: p (Abstract.Expression l l f f),
    alternatives :: p [f (Abstract.CaseAlternative l l f f)],
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
@@ -421,16 +421,16 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                                <|> Abstract.applyExpression
                                       <$> wrap (Abstract.negate <$ delimiter "-") <*> leftInfixExpression)
                          <|> dExpression,
-   lExpression = wrap (Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
-                                                 <*> expression
-                       <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
-                       <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
-                                                          <* keyword "then" <*> expression <* optional semi
-                                                          <* keyword "else" <*> expression)
-                 <|> dExpression,
-   dExpression = wrap (Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> alternatives
-                       <|> Abstract.doExpression <$ keyword "do" <*> wrap statements)
-                 <|> fExpression,
+   lExpression = wrap openBlockExpression <|> dExpression,
+   openBlockExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
+                                                   <*> expression
+                         <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
+                         <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi
+                                                            <* keyword "then" <*> expression <* optional semi
+                                                            <* keyword "else" <*> expression,
+   dExpression = wrap closedBlockExpresion <|> fExpression,
+   closedBlockExpresion = Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> alternatives
+                          <|> Abstract.doExpression <$ keyword "do" <*> wrap statements,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
    aExpression = wrap bareExpression <|> Disambiguator.joinWrapped <$> wrap (parens expression),
    bareExpression = Abstract.referenceExpression <$> qualifiedVariable
