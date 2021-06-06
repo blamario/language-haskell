@@ -45,6 +45,7 @@ import qualified Language.Haskell.Disambiguator as Disambiguator
 import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), Wrapped,
                                       lexemes, mapWrappings)
 
+import Debug.Trace
 import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
@@ -886,22 +887,24 @@ blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
             Deep.Foldable (Serialization (Down Int) t) node,
             Deep.Functor (DisambiguatorTrans t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock pure)
-   where alignedBlock cont indent =
+blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
+   where alignedBlock opt cont indent =
             do rest <- getInput
-               item <- filter (oneExtendedLine indent rest) (wrap p)
-               -- don't stop at a higher indent unless there's a terminator
-               void (filter (indent >=) inputColumn)
-                  <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
-                                  <|> (string "else" <|> string "in"
-                                       <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
-                                  <|> eof)
-               indent' <- inputColumn
-               let cont' = cont . (item :)
-               if indent == indent'
-                  then many semi *> alignedBlock cont' indent
-                  else some semi *> alignedBlock cont' indent <|> cont' []
-            <|> cont []
+               maybeItem <- opt (filter (oneExtendedLine indent rest) $ wrap p)
+               case maybeItem of
+                  Nothing -> cont []
+                  Just item -> do
+                     -- don't stop at a higher indent unless there's a terminator
+                     void (filter (indent >=) inputColumn)
+                        <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
+                                        <|> (string "else" <|> string "in"
+                                        <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
+                                        <|> eof)
+                     indent' <- inputColumn
+                     let cont' = cont . (item :)
+                     if indent == indent'
+                        then many semi *> alignedBlock takeOptional cont' indent
+                        else some semi *> alignedBlock takeOptional cont' indent <|> cont' []
          terminators :: [Char]
          terminators = ",;)]}"
 
