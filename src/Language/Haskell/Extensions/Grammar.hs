@@ -38,6 +38,7 @@ import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
+import qualified Language.Haskell.Disambiguator as Disambiguator
 import Language.Haskell.Reserializer (Lexeme, Serialization)
 
 import Prelude hiding (exponent, filter, null)
@@ -73,8 +74,9 @@ grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar = unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin . parallelListComprehensionsMixin
-          . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin . multiWayIfMixin . Report.grammar
+grammar = blockArgumentsMixin . unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin
+          . parallelListComprehensionsMixin . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin
+          . multiWayIfMixin . Report.grammar
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -174,6 +176,17 @@ multiWayIfMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                                          (Abstract.guardedExpression . toList
                                              <$> guards <* rightArrow
                                              <*> expression)}
+
+blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                  Ord t, Show t, OutlineMonoid t,
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
+                                  Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
+                    => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   lExpression = Report.lExpression baseGrammar
+                 <|> wrap (Abstract.applyExpression <$> fExpression <*> wrap openBlockExpression),
+   dExpression = fExpression,
+   bareExpression = Report.bareExpression baseGrammar <|> closedBlockExpresion}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

@@ -19,6 +19,7 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ord (Down, comparing)
 import Data.String (fromString)
+import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
@@ -898,7 +899,7 @@ blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlo
                      void (filter (indent >=) inputColumn)
                         <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
                                         <|> (string "else" <|> string "in"
-                                        <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
+                                             <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
                                         <|> eof)
                      indent' <- inputColumn
                      let cont' = cont . (item :)
@@ -930,11 +931,13 @@ oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                 => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)) -> Bool
 oneExtendedLine indent input node =
    allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.firstChoice node)
-   where allIndented (WhiteSpace ws : Token Other token : rest)
+   where allIndented (WhiteSpace ws : Token Delimiter token : rest) = allIndented rest
+         allIndented (WhiteSpace ws : Token _ token : rest)
             | Textual.all isLineChar ws = allIndented rest
-            | currentColumn token < indent = False
-            | currentColumn token == indent && token `Set.notMember` reservedWords
+            | tokenIndent < indent = False
+            | tokenIndent == indent && token `Set.notMember` reservedWords
               && all (`notElem` terminators) (characterPrefix token) = False
+            where tokenIndent = currentColumn (Factorial.dropWhile (const True) ws)
          allIndented (_ : rest) = allIndented rest
          allIndented [] = True
          terminators :: [Char]
