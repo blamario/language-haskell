@@ -113,7 +113,8 @@ main' Opts{..} = case optsFile
             (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
          -> String -> Text -> IO ()
       go production filename contents =
-         report contents (snd <$> getCompose (production $ parseComplete Grammar.extendedGrammar $ pure contents))
+         report contents (snd <$> getCompose (production $ parseComplete (Grammar.extendedGrammar Grammar.allExtensions)
+                                              $ pure contents))
       report :: forall g l a e w.
                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                  a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),

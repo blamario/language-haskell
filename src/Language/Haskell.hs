@@ -34,17 +34,8 @@ type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Parse the given text of a single module.
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
-parseModule source = resolve source (parseComplete Grammar.extendedGrammar (pure source :: LinePositioned Text))
-
-resolve :: (l ~ AST.Language,
-            Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (AST.Module l l),
-            Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (Abstract.Module l l))
-        => Text
-        -> Grammar.HaskellGrammar l (Grammar.NodeWrap (LinePositioned Text))
-                                    (Compose (Compose (ParseResults (LinePositioned Text)) [])
-                                             ((,) [[Reserializer.Lexeme (LinePositioned Text)]]))
-        -> ParseResults (LinePositioned Text) [Placed (Abstract.Module l l Placed Placed)]
-resolve source results = getCompose (resolvePositions source . snd <$> getCompose (Grammar.haskellModule results))
+parseModule source = (resolvePositions source <$>)
+                     <$> (Grammar.parseModule Grammar.allExtensions (pure source :: LinePositioned Text))
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),

@@ -11,24 +11,33 @@
 -- * @NoImplicitPrelude@ is not syntactic
 -- * @RebindableSyntax@ is not syntactic
 -- * @PostfixOperators@ is not syntactic
+-- * @PostfixOperators@ is not syntactic
+-- * @Arrows@ is not supported by TemplateHaskell
+-- * @LexicalNegation@ awaits
 
-module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, module Report) where
+module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, allExtensions, parseModule, module Report) where
 
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
+import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Ord (Down)
+import Data.Monoid (Dual(..), Endo(..))
+import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
 import qualified Data.Monoid.Textual as Textual
+import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
+import Data.Map (Map)
+import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT)
+import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
 
@@ -39,9 +48,86 @@ import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, Disa
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
 import qualified Language.Haskell.Disambiguator as Disambiguator
-import Language.Haskell.Reserializer (Lexeme, Serialization)
+import Language.Haskell.Reserializer (Lexeme(..), Serialization)
 
 import Prelude hiding (exponent, filter, null)
+
+data Extension = IdentifierSyntax | UnicodeSyntax | MagicHash
+               | ParallelListComprehensions | RecursiveDo | TupleSections
+               | EmptyCase | LambdaCase | MultiWayIf
+               | BlockArguments
+               deriving (Enum, Eq, Ord, Read, Show)
+
+allExtensions :: Set Extension
+allExtensions = Set.fromList [IdentifierSyntax ..]
+
+extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                => Map Extension (GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
+extensionMixins = Map.fromList [
+                     (BlockArguments, blockArgumentsMixin),
+                     (EmptyCase, emptyCaseMixin),
+                     (IdentifierSyntax, identifierSyntaxMixin),
+                     (LambdaCase, lambdaCaseMixin),
+                     (MagicHash, magicHashMixin),
+                     (MultiWayIf, multiWayIfMixin),
+                     (ParallelListComprehensions, parallelListComprehensionsMixin),
+                     (RecursiveDo, recursiveDoMixin),
+                     (TupleSections, tupleSectionsMixin),
+                     (UnicodeSyntax, unicodeSyntaxMixin)]
+
+pragma :: (Show t, TextualMonoid t) => Parser g t t
+pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
+            content <- concatMany ((notFollowedBy (string "#-}") *> anyToken) <> takeCharsWhile (/= '#'))
+            close <- string "#-}"
+            lift ([[Comment $ open <> content <> close]], content)
+
+languagePragma :: (Show t, TextualMonoid t) => Parser g t [t]
+languagePragma = mapMaybe languageExtensions pragma
+   where languageExtensions pragmaContent
+            | Text.toUpper (Textual.toText mempty firstWord) == "LANGUAGE" =
+              Just (map trim $ Textual.split (== ',') rest)
+            | otherwise = Nothing
+            where (firstWord, rest) = Textual.span_ False Char.isLetter pragmaContent
+                  trim = Textual.takeWhile_ True (not . Char.isSpace) . Textual.dropWhile_ True Char.isSpace
+
+moduleLanguageExtensions :: (Show t, TextualMonoid t) => Parser g t [t]
+moduleLanguageExtensions = spaceChars *> (languagePragma
+                                          <<|> Report.comment *> moduleLanguageExtensions
+                                          <<|> pure [])
+   where spaceChars = (takeCharsWhile1 Char.isSpace
+                       >>= \ws-> lift ([[WhiteSpace ws]], ()))
+                      <<|> pure ()
+
+parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
+                Ord t, Show t, OutlineMonoid t,
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+            => Set Extension -> t
+            -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
+parseModule extensions source = getCompose $ fmap snd $ getCompose $ Report.haskellModule
+                                $ parseComplete (extendedGrammar extensions) source
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
@@ -57,8 +143,9 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellG
                     Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                 => Grammar (HaskellGrammar l (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-extendedGrammar = fixGrammar grammar
+                 => Set Extension -> Grammar (HaskellGrammar l (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+extendedGrammar extensions = fixGrammar (extended . Report.grammar)
+   where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ Map.elems $ Map.restrictKeys extensionMixins extensions
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
