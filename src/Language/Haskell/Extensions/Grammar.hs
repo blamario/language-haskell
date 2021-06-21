@@ -23,6 +23,7 @@ import qualified Data.Char as Char
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Ord (Down)
+import Data.String (IsString)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
@@ -33,10 +34,12 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Rank2
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof)
+import Text.Parser.Combinators (eof, sepBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
+import qualified Text.Grampa.ContextFree.SortedMemoizing as P (Parser)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
@@ -54,8 +57,8 @@ import Prelude hiding (exponent, filter, null)
 
 data Extension = IdentifierSyntax | UnicodeSyntax | MagicHash
                | ParallelListComprehensions | RecursiveDo | TupleSections
-               | EmptyCase | LambdaCase | MultiWayIf
-               | BlockArguments
+               | EmptyCase | EmptyDataDeclarations | LambdaCase | MultiWayIf
+               | BlockArguments | AlternativeLayoutRule
                deriving (Enum, Eq, Ord, Read, Show)
 
 allExtensions :: Set Extension
@@ -76,8 +79,10 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
                 => Map Extension (GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
 extensionMixins = Map.fromList [
+                     (AlternativeLayoutRule, id),
                      (BlockArguments, blockArgumentsMixin),
                      (EmptyCase, emptyCaseMixin),
+                     (EmptyDataDeclarations, id),
                      (IdentifierSyntax, identifierSyntaxMixin),
                      (LambdaCase, lambdaCaseMixin),
                      (MagicHash, magicHashMixin),
@@ -87,28 +92,44 @@ extensionMixins = Map.fromList [
                      (TupleSections, tupleSectionsMixin),
                      (UnicodeSyntax, unicodeSyntaxMixin)]
 
+extensionsByName :: (IsString t, Ord t) => Map t Extension
+extensionsByName = Map.fromList [
+                      ("AlternativeLayoutRule", AlternativeLayoutRule),
+                      ("BlockArguments", BlockArguments),
+                      ("EmptyCase", EmptyCase),
+                      ("EmptyDataDecls", EmptyDataDeclarations),
+                      ("IdentifierSyntax", IdentifierSyntax),
+                      ("LambdaCase", LambdaCase),
+                      ("MagicHash", MagicHash),
+                      ("MultiWayIf", MultiWayIf),
+                      ("ParallelListComp", ParallelListComprehensions),
+                      ("RecursiveDo", RecursiveDo),
+                      ("TupleSections", TupleSections),
+                      ("UnicodeSyntax", UnicodeSyntax)]
+
 pragma :: (Show t, TextualMonoid t) => Parser g t t
 pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
             content <- concatMany ((notFollowedBy (string "#-}") *> anyToken) <> takeCharsWhile (/= '#'))
             close <- string "#-}"
             lift ([[Comment $ open <> content <> close]], content)
 
-languagePragma :: (Show t, TextualMonoid t) => Parser g t [t]
-languagePragma = mapMaybe languageExtensions pragma
-   where languageExtensions pragmaContent
-            | Text.toUpper (Textual.toText mempty firstWord) == "LANGUAGE" =
-              Just (map trim $ Textual.split (== ',') rest)
-            | otherwise = Nothing
-            where (firstWord, rest) = Textual.span_ False Char.isLetter pragmaContent
-                  trim = Textual.takeWhile_ True (not . Char.isSpace) . Textual.dropWhile_ True Char.isSpace
-
-moduleLanguageExtensions :: (Show t, TextualMonoid t) => Parser g t [t]
-moduleLanguageExtensions = spaceChars *> (languagePragma
-                                          <<|> Report.comment *> moduleLanguageExtensions
-                                          <<|> pure [])
-   where spaceChars = (takeCharsWhile1 Char.isSpace
-                       >>= \ws-> lift ([[WhiteSpace ws]], ()))
-                      <<|> pure ()
+languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t (Set Extension)
+languagePragma
+   | otherwise = do spaceChars
+                    lang <- isLanguagePragma
+                            <$> takeOptional (string "{-#" *> spaceChars *> takeCharsWhile Char.isLetter <* spaceChars)
+                    if lang
+                       then Set.fromList <$> extension `sepBy` (string "," *> spaceChars) <* string "#-}" <* spaceChars
+                       else comment *> languagePragma <<|> pure Set.empty
+   where spaceChars = takeCharsWhile Char.isSpace
+         isLanguagePragma (Just pragmaName) = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
+         isLanguagePragma Nothing = False
+         extension = do extensionName <- takeCharsWhile Char.isLetter
+                        spaceChars
+                        case Map.lookup extensionName extensionsByName of
+                           Just ext -> pure ext
+                           Nothing -> fail ("Invalid extension " <> toString mempty extensionName)
+         comment = string "--" <* takeCharsWhile Report.isLineChar
 
 parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
@@ -126,8 +147,13 @@ parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
             => Set Extension -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
-parseModule extensions source = getCompose $ fmap snd $ getCompose $ Report.haskellModule
-                                $ parseComplete (extendedGrammar extensions) source
+parseModule extensions source = case moduleExtensions of
+               Left err -> Left err
+               Right [extensions'] -> parseResults $ Report.haskellModule
+                                      $ parseComplete (extendedGrammar $ extensions <> extensions') source
+               Right extensionses -> error (show extensionses)
+   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragma source
+         parseResults = getCompose . fmap snd . getCompose
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
