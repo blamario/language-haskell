@@ -89,14 +89,17 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} = case optsFile
                  of Just file -> (if file == "-" then getContents else readFile file)
-                                 >>= go Grammar.haskellModule file
+                                 >>= go (Grammar.parseModule mempty) file
                     Nothing ->
                         forever $
                         getLine >>=
                         case optsMode of
-                            ModuleMode     -> go Grammar.haskellModule "<stdin>"
-                            ExpressionMode -> go Grammar.expression "<stdin>"
+                            ModuleMode     -> go (Grammar.parseModule mempty) "<stdin>"
+                            ExpressionMode -> go parseExpression "<stdin>"
    where
+      parseExpression t = getCompose
+                          $ snd <$> getCompose (Grammar.expression
+                                                $ parseComplete (Grammar.extendedGrammar Grammar.allExtensions) t)
       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
              e ~ Binder.WithEnvironment Language w,
@@ -110,11 +113,9 @@ main' Opts{..} = case optsFile
              Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
              Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
              Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l)) =>
-            (forall p. Functor p => Grammar.HaskellGrammar l w p -> p (w (g l l w w)))
+            (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
          -> String -> Text -> IO ()
-      go production filename contents =
-         report contents (snd <$> getCompose (production $ parseComplete (Grammar.extendedGrammar Grammar.allExtensions)
-                                              $ pure contents))
+      go parser filename contents = report contents (parser $ pure contents)
       report :: forall g l a e w.
                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                  a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
@@ -129,8 +130,8 @@ main' Opts{..} = case optsFile
                  Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g l l),
                  Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
                  Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l))
-             => Text -> Compose (ParseResults (LinePositioned Text)) [] (w (g l l w w)) -> IO ()
-      report contents (Compose (Right [parsed])) = case optsOutput of
+             => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
+      report contents (Right [parsed]) = case optsOutput of
          Original -> Text.putStr (Reserializer.reserialize resolved)
          Plain -> case optsStage of
             Parsed -> print parsed
@@ -143,9 +144,9 @@ main' Opts{..} = case optsFile
             Resolved -> reprTreeString resolved
          where resolved = resolvePositions contents parsed
                bound = Binder.withBindings (Binder.predefinedModuleBindings :: Binder.Environment l) parsed
-      report contents (Compose (Right l)) =
+      report contents (Right l) =
          putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-         >> report contents (Compose $ Right [l !! optsIndex])
-      report contents (Compose (Left err)) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
+         >> report contents (Right [l !! optsIndex])
+      report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
 
 type NodeWrap = ((,) Int)
