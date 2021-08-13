@@ -114,21 +114,20 @@ pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
             lift ([[Comment $ open <> content <> close]], content)
 
 languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t (Set Extension)
-languagePragma
-   | otherwise = do spaceChars
-                    lang <- isLanguagePragma
-                            <$> takeOptional (string "{-#" *> spaceChars *> takeCharsWhile Char.isLetter <* spaceChars)
-                    if lang
-                       then Set.fromList <$> extension `sepBy` (string "," *> spaceChars) <* string "#-}" <* spaceChars
-                       else comment *> languagePragma <<|> pure Set.empty
+languagePragma = spaceChars
+                 *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isLetter)
+                           *> commit (spaceChars
+                                      *> (Set.fromList <$> extension `sepBy` (string "," *> spaceChars) <* string "#-}")
+                                      <* spaceChars)
+                           <<|> comment *> commit languagePragma
+                           <<|> commit (pure mempty))
    where spaceChars = takeCharsWhile Char.isSpace
-         isLanguagePragma (Just pragmaName) = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
-         isLanguagePragma Nothing = False
+         isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
          extension = do extensionName <- takeCharsWhile Char.isLetter
                         spaceChars
                         case Map.lookup extensionName extensionsByName of
                            Just ext -> pure ext
-                           Nothing -> fail ("Invalid extension " <> toString mempty extensionName)
+                           Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
          comment = string "--" <* takeCharsWhile Report.isLineChar
 
 parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
