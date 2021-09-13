@@ -6,7 +6,7 @@ import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import qualified Data.Map.Lazy as Map
-import Data.Map.Monoidal (MonoidalMap(..))
+import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
 import Language.Haskell.TH (appT, conT, varT, newName)
 
@@ -49,7 +49,7 @@ instance {-# overlaps #-} forall l pos s.
           Abstract.Name l ~ AST.Name l) =>
          Resolution l pos s
          `Transformation.At` AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
+   res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
       let resolveExpression :: f ~ Reserializer.Wrapped pos s
                             => AST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
@@ -84,7 +84,7 @@ instance {-# overlaps #-} forall l pos s f.
           Abstract.Name l ~ ExtAST.Name l) =>
          Resolution l pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   res $ Compose (AG.Mono.Atts{AG.Mono.inh= MonoidalMap bindings}, expressions) =
+   res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
       let resolveExpression :: ExtAST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
