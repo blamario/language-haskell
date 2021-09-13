@@ -128,7 +128,11 @@ languagePragma = spaceChars
                         case Map.lookup extensionName extensionsByName of
                            Just ext -> pure ext
                            Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
-         comment = string "--" <* takeCharsWhile Report.isLineChar
+         comment = string "--" <* takeCharsWhile Report.isLineChar <|> blockComment
+         blockComment = string "{-"
+                        *> skipMany (blockComment
+                                     <|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile  (/= '-'))
+                        *> string "-}"
 
 parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
