@@ -176,7 +176,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    exports = parens (wrap export `sepBy` comma),
    export = Abstract.exportVar <$> qualifiedVariable
             <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
-            <|> Abstract.reExportModule <$> moduleId,
+            <|> Abstract.reExportModule <$ keyword "module" <*> moduleId,
    importDeclaration = Abstract.importDeclaration <$ keyword "import"
                        <*> (True <$ keyword "qualified" <|> pure False) <*> moduleId
                        <*> optional (keyword "as" *> moduleId) <*> optional (wrap importSpecification),
