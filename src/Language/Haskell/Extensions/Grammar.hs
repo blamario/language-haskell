@@ -5,13 +5,6 @@
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
 -- * @TransformListComp@ is not supported by TemplateHaskell
--- * @MonadComprehensions@ implies @TransformListComp@ and is not syntactic by itself
--- * @MonadFailDesugaring@ is not syntactic
--- * @OverloadedLists@ is not syntactic
--- * @NoImplicitPrelude@ is not syntactic
--- * @RebindableSyntax@ is not syntactic
--- * @PostfixOperators@ is not syntactic
--- * @PostfixOperators@ is not syntactic
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ awaits
 
@@ -57,11 +50,14 @@ import Prelude hiding (exponent, filter, null)
 
 data Extension = IdentifierSyntax
                | UnicodeSyntax
+               | Haskell2010
                | MagicHash
                | MonadComprehensions
                | MonadFailDesugaring
+               | NoImplicitPrelude
                | OverloadedLists
                | ParallelListComprehensions
+               | RebindableSyntax
                | RecursiveDo
                | TupleSections
                | EmptyCase
@@ -94,14 +90,17 @@ extensionMixins = Map.fromList [
                      (BlockArguments, blockArgumentsMixin),
                      (EmptyCase, emptyCaseMixin),
                      (EmptyDataDeclarations, id),
+                     (Haskell2010, id),
                      (IdentifierSyntax, identifierSyntaxMixin),
                      (LambdaCase, lambdaCaseMixin),
                      (MagicHash, magicHashMixin),
                      (MonadComprehensions, id),
                      (MonadFailDesugaring, id),
                      (MultiWayIf, multiWayIfMixin),
+                     (NoImplicitPrelude, id),
                      (OverloadedLists, id),
                      (ParallelListComprehensions, parallelListComprehensionsMixin),
+                     (RebindableSyntax, id),
                      (RecursiveDo, recursiveDoMixin),
                      (TupleSections, tupleSectionsMixin),
                      (UnicodeSyntax, unicodeSyntaxMixin)]
@@ -114,12 +113,15 @@ extensionsByName = Map.fromList [
                       ("EmptyDataDecls", EmptyDataDeclarations),
                       ("IdentifierSyntax", IdentifierSyntax),
                       ("LambdaCase", LambdaCase),
+                      ("Haskell2010", Haskell2010),
                       ("MagicHash", MagicHash),
                       ("MonadComprehensions", MonadComprehensions),
                       ("MonadFailDesugaring", MonadFailDesugaring),
+                      ("NoImplicitPrelude", NoImplicitPrelude),
                       ("OverloadedLists", OverloadedLists),
                       ("MultiWayIf", MultiWayIf),
                       ("ParallelListComp", ParallelListComprehensions),
+                      ("RebindableSyntax", RebindableSyntax),
                       ("RecursiveDo", RecursiveDo),
                       ("TupleSections", TupleSections),
                       ("UnicodeSyntax", UnicodeSyntax)]
@@ -132,7 +134,7 @@ pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
 
 languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t (Set Extension)
 languagePragma = spaceChars
-                 *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isLetter)
+                 *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (spaceChars
                                       *> (Set.fromList <$> extension `sepBy` (string "," *> spaceChars) <* string "#-}")
                                       <* spaceChars)
@@ -140,7 +142,7 @@ languagePragma = spaceChars
                            <<|> commit (pure mempty))
    where spaceChars = takeCharsWhile Char.isSpace
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
-         extension = do extensionName <- takeCharsWhile Char.isLetter
+         extension = do extensionName <- takeCharsWhile Char.isAlphaNum
                         spaceChars
                         case Map.lookup extensionName extensionsByName of
                            Just ext -> pure ext
