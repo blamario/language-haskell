@@ -55,10 +55,21 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization)
 
 import Prelude hiding (exponent, filter, null)
 
-data Extension = IdentifierSyntax | UnicodeSyntax | MagicHash
-               | ParallelListComprehensions | RecursiveDo | TupleSections
-               | EmptyCase | EmptyDataDeclarations | LambdaCase | MultiWayIf
-               | BlockArguments | AlternativeLayoutRule
+data Extension = IdentifierSyntax
+               | UnicodeSyntax
+               | MagicHash
+               | MonadComprehensions
+               | MonadFailDesugaring
+               | OverloadedLists
+               | ParallelListComprehensions
+               | RecursiveDo
+               | TupleSections
+               | EmptyCase
+               | EmptyDataDeclarations
+               | LambdaCase
+               | MultiWayIf
+               | BlockArguments
+               | AlternativeLayoutRule
                deriving (Enum, Eq, Ord, Read, Show)
 
 allExtensions :: Set Extension
@@ -86,7 +97,10 @@ extensionMixins = Map.fromList [
                      (IdentifierSyntax, identifierSyntaxMixin),
                      (LambdaCase, lambdaCaseMixin),
                      (MagicHash, magicHashMixin),
+                     (MonadComprehensions, id),
+                     (MonadFailDesugaring, id),
                      (MultiWayIf, multiWayIfMixin),
+                     (OverloadedLists, id),
                      (ParallelListComprehensions, parallelListComprehensionsMixin),
                      (RecursiveDo, recursiveDoMixin),
                      (TupleSections, tupleSectionsMixin),
@@ -101,6 +115,9 @@ extensionsByName = Map.fromList [
                       ("IdentifierSyntax", IdentifierSyntax),
                       ("LambdaCase", LambdaCase),
                       ("MagicHash", MagicHash),
+                      ("MonadComprehensions", MonadComprehensions),
+                      ("MonadFailDesugaring", MonadFailDesugaring),
+                      ("OverloadedLists", OverloadedLists),
                       ("MultiWayIf", MultiWayIf),
                       ("ParallelListComp", ParallelListComprehensions),
                       ("RecursiveDo", RecursiveDo),
