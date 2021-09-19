@@ -1,6 +1,7 @@
 {-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
              Rank2Types, RecordWildCards,
              ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
+{-# OPTIONS_GHC -ddump-splices -ddump-to-file #-}
 
 module Language.Haskell.Grammar where
 
@@ -120,6 +121,8 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f),
    doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p ()
 }
+                                  
+$(Rank2.TH.deriveAll ''HaskellGrammar)
 
 grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
@@ -942,5 +945,3 @@ oneExtendedLine indent input node =
          allIndented [] = True
          terminators :: [Char]
          terminators = ",;)]}"
-                                  
-$(Rank2.TH.deriveAll ''HaskellGrammar)

@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes,
+{-# Language CPP, FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes,
              ScopedTypeVariables, TemplateHaskell #-}
 
 module Language.Haskell.Template where
@@ -19,7 +19,8 @@ import qualified Transformation
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions.AST
-import Language.Haskell.TH
+import Language.Haskell.TH hiding (doE, mdoE)
+import Language.Haskell.TH.Datatype.TyVarBndr
 
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
@@ -29,6 +30,15 @@ import Language.Haskell.TH.Ppr as Ppr (ppr)
 
 pprint :: PrettyViaTH a => a -> String
 pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
+
+doE, mdoE :: [Stmt] -> Exp
+#if MIN_VERSION_template_haskell(2,17,0)
+doE = DoE Nothing
+mdoE = MDoE Nothing
+#else
+doE = DoE
+mdoE = MDoE
+#endif
 
 class PrettyViaTH a where
    prettyViaTH :: a -> Ppr.Doc
@@ -114,8 +124,8 @@ expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTempla
                                                                   wrappedExpressionTemplate result)
 expressionTemplate (LambdaCaseExpression alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
-expressionTemplate (DoExpression statements) = DoE (guardedTemplate $ extract statements)
-expressionTemplate (MDoExpression statements) = MDoE (guardedTemplate $ extract statements)
+expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
+expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
 expressionTemplate (LeftSectionExpression left op) =
@@ -173,11 +183,11 @@ caseAlternativeTemplate (CaseAlternative lhs rhs wheres) =
 declarationTemplates :: TemplateWrapper f => Declaration Language Language f f -> [Dec]
 declarationTemplates (ClassDeclaration context lhs members)
    | SimpleTypeLHS con vars <- extract lhs =
-     [ClassD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars) []
+     [ClassD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars) []
              (foldMap (declarationTemplates . extract) members)]
 declarationTemplates (DataDeclaration context lhs constructors derivings)
    | SimpleTypeLHS con vars <- extract lhs =
-     [DataD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
+     [DataD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
             Nothing (dataConstructorTemplate . extract <$> constructors)
             $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
@@ -215,18 +225,18 @@ declarationTemplates (InstanceDeclaration context lhs wheres)
                 (foldMap (declarationTemplates . extract) wheres)]
 declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
    | SimpleTypeLHS con vars <- extract lhs =
-     [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (PlainTV . nameTemplate <$> vars)
+     [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
                Nothing (dataConstructorTemplate . extract $ constructor)
                $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | SimpleTypeLHS con vars <- extract lhs =
-     [TySynD (nameTemplate con) (PlainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
+     [TySynD (nameTemplate con) (plainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
    where inContext = case extract context
                      of NoContext -> id
-                        ctx -> ForallT (nub $ freeContextVars ctx <> freeTypeVars (extract t))
+                        ctx -> ForallT (nub $ changeTVFlags InferredSpec $ freeContextVars ctx <> freeTypeVars (extract t))
                                        (contextTemplate ctx)
 
 contextTemplate :: TemplateWrapper f => Context Language Language f f -> Cxt
@@ -235,8 +245,8 @@ contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (type
 contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
 contextTemplate NoContext = []
 
-freeContextVars :: TemplateWrapper f => Context Language Language f f -> [TyVarBndr]
-freeContextVars (SimpleConstraint cls var) = [PlainTV $ nameTemplate var]
+freeContextVars :: TemplateWrapper f => Context Language Language f f -> [TyVarBndrUnit]
+freeContextVars (SimpleConstraint cls var) = [plainTV $ nameTemplate var]
 freeContextVars (ClassConstraint cls t) = freeTypeVars (extract t)
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
 freeContextVars NoContext = []
@@ -323,7 +333,7 @@ typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTempl
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 
-freeTypeVars :: TemplateWrapper f => AST.Type Language Language f f -> [TyVarBndr]
+freeTypeVars :: TemplateWrapper f => AST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
 freeTypeVars FunctionConstructorType = []
 freeTypeVars (FunctionType from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
@@ -331,7 +341,7 @@ freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
-freeTypeVars (TypeVariable name) = [PlainTV $ nameTemplate name]
+freeTypeVars (TypeVariable name) = [plainTV $ nameTemplate name]
 
 nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
@@ -347,5 +357,3 @@ qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text
                                                                    $ nameText <$> toList m ++ [name])
 
 nameText (Name s) = s
-
-
