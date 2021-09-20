@@ -8,7 +8,7 @@
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ awaits
 
-module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, allExtensions, parseModule, module Report) where
+module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModule, module Report) where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -37,6 +37,7 @@ import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
 
+import Language.Haskell.Extensions (Extension(..), allExtensions, extensionsByName) 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST (Language, Value(..))
 import qualified Language.Haskell.Grammar as Report
@@ -47,29 +48,6 @@ import qualified Language.Haskell.Disambiguator as Disambiguator
 import Language.Haskell.Reserializer (Lexeme(..), Serialization)
 
 import Prelude hiding (exponent, filter, null)
-
-data Extension = IdentifierSyntax
-               | UnicodeSyntax
-               | Haskell2010
-               | MagicHash
-               | MonadComprehensions
-               | MonadFailDesugaring
-               | NoImplicitPrelude
-               | OverloadedLists
-               | ParallelListComprehensions
-               | RebindableSyntax
-               | RecursiveDo
-               | TupleSections
-               | EmptyCase
-               | EmptyDataDeclarations
-               | LambdaCase
-               | MultiWayIf
-               | BlockArguments
-               | AlternativeLayoutRule
-               deriving (Enum, Eq, Ord, Read, Show)
-
-allExtensions :: Set Extension
-allExtensions = Set.fromList [IdentifierSyntax ..]
 
 extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
@@ -85,46 +63,18 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
                 => Map Extension (GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
-extensionMixins = Map.fromList [
-                     (AlternativeLayoutRule, id),
-                     (BlockArguments, blockArgumentsMixin),
-                     (EmptyCase, emptyCaseMixin),
-                     (EmptyDataDeclarations, id),
-                     (Haskell2010, id),
-                     (IdentifierSyntax, identifierSyntaxMixin),
-                     (LambdaCase, lambdaCaseMixin),
-                     (MagicHash, magicHashMixin),
-                     (MonadComprehensions, id),
-                     (MonadFailDesugaring, id),
-                     (MultiWayIf, multiWayIfMixin),
-                     (NoImplicitPrelude, id),
-                     (OverloadedLists, id),
-                     (ParallelListComprehensions, parallelListComprehensionsMixin),
-                     (RebindableSyntax, id),
-                     (RecursiveDo, recursiveDoMixin),
-                     (TupleSections, tupleSectionsMixin),
-                     (UnicodeSyntax, unicodeSyntaxMixin)]
-
-extensionsByName :: (IsString t, Ord t) => Map t Extension
-extensionsByName = Map.fromList [
-                      ("AlternativeLayoutRule", AlternativeLayoutRule),
-                      ("BlockArguments", BlockArguments),
-                      ("EmptyCase", EmptyCase),
-                      ("EmptyDataDecls", EmptyDataDeclarations),
-                      ("IdentifierSyntax", IdentifierSyntax),
-                      ("LambdaCase", LambdaCase),
-                      ("Haskell2010", Haskell2010),
-                      ("MagicHash", MagicHash),
-                      ("MonadComprehensions", MonadComprehensions),
-                      ("MonadFailDesugaring", MonadFailDesugaring),
-                      ("NoImplicitPrelude", NoImplicitPrelude),
-                      ("OverloadedLists", OverloadedLists),
-                      ("MultiWayIf", MultiWayIf),
-                      ("ParallelListComp", ParallelListComprehensions),
-                      ("RebindableSyntax", RebindableSyntax),
-                      ("RecursiveDo", RecursiveDo),
-                      ("TupleSections", TupleSections),
-                      ("UnicodeSyntax", UnicodeSyntax)]
+extensionMixins =
+  Map.fromList [
+     (BlockArguments, blockArgumentsMixin),
+     (EmptyCase, emptyCaseMixin),
+     (IdentifierSyntax, identifierSyntaxMixin),
+     (LambdaCase, lambdaCaseMixin),
+     (MagicHash, magicHashMixin),
+     (MultiWayIf, multiWayIfMixin),
+     (ParallelListComprehensions, parallelListComprehensionsMixin),
+     (RecursiveDo, recursiveDoMixin),
+     (TupleSections, tupleSectionsMixin),
+     (UnicodeSyntax, unicodeSyntaxMixin)]
 
 pragma :: (Show t, TextualMonoid t) => Parser g t t
 pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace

@@ -18,6 +18,7 @@ library
   exposed-modules:     Language.Haskell, Language.Haskell.Abstract, Language.Haskell.AST,
                        Language.Haskell.Binder, Language.Haskell.Disambiguator, Language.Haskell.Reserializer,
                        Language.Haskell.Grammar, Language.Haskell.Resolver, Language.Haskell.Template,
+                       Language.Haskell.Extensions,
                        Language.Haskell.Extensions.Abstract, Language.Haskell.Extensions.AST,
                        Language.Haskell.Extensions.Grammar
   -- other-modules:

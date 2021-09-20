@@ -5,8 +5,9 @@
 module Language.Haskell (parseModule, resolvePositions, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
+import Language.Haskell.Extensions (allExtensions)
+import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 
 import qualified Language.Haskell.Disambiguator as Disambiguator
@@ -35,7 +36,7 @@ type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 -- | Parse the given text of a single module.
 parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
 parseModule source = (resolvePositions source <$>)
-                     <$> (Grammar.parseModule Grammar.allExtensions (pure source :: LinePositioned Text))
+                     <$> (Grammar.parseModule allExtensions (pure source :: LinePositioned Text))
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
