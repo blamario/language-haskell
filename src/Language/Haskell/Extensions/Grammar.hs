@@ -13,6 +13,7 @@ module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModul
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
+import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Ord (Down)
@@ -62,19 +63,19 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                => Map Extension (GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
+                => Map Extension (Int, GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
 extensionMixins =
   Map.fromList [
-     (BlockArguments, blockArgumentsMixin),
-     (EmptyCase, emptyCaseMixin),
-     (IdentifierSyntax, identifierSyntaxMixin),
-     (LambdaCase, lambdaCaseMixin),
-     (MagicHash, magicHashMixin),
-     (MultiWayIf, multiWayIfMixin),
-     (ParallelListComprehensions, parallelListComprehensionsMixin),
-     (RecursiveDo, recursiveDoMixin),
-     (TupleSections, tupleSectionsMixin),
-     (UnicodeSyntax, unicodeSyntaxMixin)]
+     (IdentifierSyntax,           (0, identifierSyntaxMixin)),
+     (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
+     (MagicHash,                  (2, magicHashMixin)),
+     (ParallelListComprehensions, (3, parallelListComprehensionsMixin)),
+     (RecursiveDo,                (4, recursiveDoMixin)),
+     (TupleSections,              (5, tupleSectionsMixin)),
+     (EmptyCase,                  (6, emptyCaseMixin)),
+     (LambdaCase,                 (7, lambdaCaseMixin)),
+     (MultiWayIf,                 (8, multiWayIfMixin)),
+     (BlockArguments,             (9, blockArgumentsMixin))]
 
 pragma :: (Show t, TextualMonoid t) => Parser g t t
 pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
@@ -143,7 +144,8 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellG
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
                  => Set Extension -> Grammar (HaskellGrammar l (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . Report.grammar)
-   where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ Map.elems $ Map.restrictKeys extensionMixins extensions
+   where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
+                    $ Map.elems $ Map.restrictKeys extensionMixins extensions
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
