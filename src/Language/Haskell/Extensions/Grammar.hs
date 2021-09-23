@@ -38,7 +38,7 @@ import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
 
-import Language.Haskell.Extensions (Extension(..), allExtensions, extensionsByName) 
+import Language.Haskell.Extensions (Extension(..), allExtensions, byName, implications) 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST (Language, Value(..))
 import qualified Language.Haskell.Grammar as Report
@@ -95,7 +95,7 @@ languagePragma = spaceChars
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
          extension = do extensionName <- takeCharsWhile Char.isAlphaNum
                         spaceChars
-                        case Map.lookup extensionName extensionsByName of
+                        case Map.lookup extensionName byName of
                            Just ext -> pure ext
                            Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
          comment = string "--" <* takeCharsWhile Report.isLineChar <|> blockComment
@@ -121,12 +121,14 @@ parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser
             => Set Extension -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
-               Left err -> Left err
-               Right [extensions'] -> parseResults $ Report.haskellModule
-                                      $ parseComplete (extendedGrammar $ extensions <> extensions') source
-               Right extensionses -> error (show extensionses)
-   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragma source
-         parseResults = getCompose . fmap snd . getCompose
+  Left err -> Left err
+  Right [extensions'] ->
+    parseResults $ Report.haskellModule
+    $ parseComplete (extendedGrammar $ extensions <> foldMap withImplied extensions') source
+  Right extensionses -> error (show extensionses)
+  where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragma source
+        parseResults = getCompose . fmap snd . getCompose
+        withImplied extension = Set.insert extension (Map.findWithDefault mempty extension implications)
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
