@@ -119,7 +119,9 @@ data HaskellGrammar l f p = HaskellGrammar {
    constructorIdentifier, constructorSymbol,
    typeClass, typeConstructor, typeVar, variableIdentifier, variableSymbol :: p (Abstract.Name l),
    literal :: p (Abstract.Value l l f f),
-   doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p ()
+   doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p (),
+   integer, integerLexeme :: p Integer,
+   float, floatLexeme :: p Rational
 }
                                   
 $(Rank2.TH.deriveAll ''HaskellGrammar)
@@ -621,7 +623,17 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    doubleColon = delimiter "::",
    rightDoubleArrow = delimiter "=>",
    rightArrow = delimiter "->",
-   leftArrow = delimiter "<-"
+   leftArrow = delimiter "<-",
+   integer = token integerLexeme,
+   float = token floatLexeme,
+   integerLexeme = fst . head
+                   <$> (Numeric.readDec . toString mempty <$> decimal
+                           <* notFollowedBy (string "." *> decimal <|> exponent)
+                        <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
+                        <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal)),
+   floatLexeme = fst . head . Numeric.readFloat . toString mempty
+                 <$> (decimal <> string "." <> decimal <> (exponent <<|> mempty)
+                      <|> decimal <> exponent)
 }
 
 -- literal 	→ 	integer | float | char | string
@@ -713,20 +725,9 @@ nameQualifier = Abstract.qualifiedName
                                   <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
 
 decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
-integer, integerLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
-float, floatLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
 decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
 octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
 hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
-integer = token integerLexeme
-float = token floatLexeme
-integerLexeme = fst . head
-                <$> (Numeric.readDec . toString mempty <$> decimal <* notFollowedBy (string "." *> decimal <|> exponent)
-                     <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
-                     <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal))
-floatLexeme = fst . head . Numeric.readFloat . toString mempty
-              <$> (decimal <> string "." <> decimal <> (exponent <<|> mempty)
-                   <|> decimal <> exponent)
 exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal
 
 -- decimal 	→ 	digit{digit}

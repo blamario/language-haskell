@@ -46,7 +46,7 @@ import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, Disa
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
 import qualified Language.Haskell.Disambiguator as Disambiguator
-import Language.Haskell.Reserializer (Lexeme(..), Serialization)
+import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
 
@@ -69,6 +69,8 @@ extensionMixins =
      (IdentifierSyntax,           (0, identifierSyntaxMixin)),
      (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
      (MagicHash,                  (2, magicHashMixin)),
+     (NegativeLiterals,           (2, negativeLiteralsMixin)),
+     (LexicalNegation,            (2, lexicalNegationMixin)),
      (ParallelListComprehensions, (3, parallelListComprehensionsMixin)),
      (RecursiveDo,                (4, recursiveDoMixin)),
      (TupleSections,              (5, tupleSectionsMixin)),
@@ -185,7 +187,24 @@ unicodeSyntaxMixin baseGrammar = baseGrammar{
 
 magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-magicHashMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+magicHashMixin baseGrammar@HaskellGrammar{..} =
+  let integer, integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
+      float, floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
+      charLiteral, charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
+      stringLiteral, stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
+
+      integer = token (integerLexeme <* notFollowedBy (string "#"))
+      float = token (floatLexeme <* notFollowedBy (string "#"))
+      charLiteral = token (Report.charLexeme <* notFollowedBy (string "#"))
+      stringLiteral = token (Report.stringLexeme <* notFollowedBy (string "#")) <?> "string literal"
+
+      integerHash = token (integerLexeme <* string "#" <* notFollowedBy (string "#"))
+      floatHash = token (floatLexeme <* string "#" <* notFollowedBy (string "#"))
+      integerHash2 = token (integerLexeme <* string "##")
+      floatHash2 = token (floatLexeme <* string "##")
+      charHashLiteral = token (Report.charLexeme <* string "#")
+      stringHashLiteral = token (Report.stringLexeme <* string "#")
+  in baseGrammar{
   lPattern = aPattern
               <|> Abstract.literalPattern
                   <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer
@@ -277,6 +296,35 @@ blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    dExpression = fExpression,
    bareExpression = Report.bareExpression baseGrammar <|> closedBlockExpresion}
 
+lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                     => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   qualifiedVariableSymbol = notFollowedBy prefixMinus
+                             *> Report.qualifiedVariableSymbol baseGrammar,
+   infixExpression = wrap (Abstract.infixExpression
+                              <$> leftInfixExpression
+                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                              <*> infixExpression
+                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
+                     <|> lExpression,
+   leftInfixExpression =
+      wrap (Abstract.infixExpression
+               <$> leftInfixExpression
+               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+               <*> leftInfixExpression
+            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
+      <|> dExpression}
+   where prefixMinus = void (string "-"
+                             <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
+                             <* lift ([[Token Delimiter "-"]], ()))
+                       <?> "prefix -"
+
+negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+negativeLiteralsMixin baseGrammar = baseGrammar{
+   integerLexeme = (negate <$ string "-" <|> pure id) <*> Report.integerLexeme baseGrammar,
+   floatLexeme = (negate <$ string "-" <|> pure id) <*> Report.floatLexeme baseGrammar}
+
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"
@@ -286,23 +334,6 @@ identifierTail = takeCharsWhile isNameTailChar <> concatAll (string "#") -- Magi
 
 isNameTailChar :: Char -> Bool
 isNameTailChar c = Report.isNameTailChar c || Char.isMark c
-
-integer, integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
-float, floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
-charLiteral, charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-stringLiteral, stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
-
-integer = token (Report.integerLexeme <* notFollowedBy (string "#"))
-float = token (Report.floatLexeme <* notFollowedBy (string "#"))
-charLiteral = token (Report.charLexeme <* notFollowedBy (string "#"))
-stringLiteral = token (Report.stringLexeme <* notFollowedBy (string "#")) <?> "string literal"
-
-integerHash = token (Report.integerLexeme <* string "#" <* notFollowedBy (string "#"))
-floatHash = token (Report.floatLexeme <* string "#" <* notFollowedBy (string "#"))
-integerHash2 = token (Report.integerLexeme <* string "##")
-floatHash2 = token (Report.floatLexeme <* string "##")
-charHashLiteral = token (Report.charLexeme <* string "#")
-stringHashLiteral = token (Report.stringLexeme <* string "#")
 
 blockOf' :: (Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node, Deep.Functor (DisambiguatorTrans t) node)

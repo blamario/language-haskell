@@ -159,6 +159,7 @@ implications = Set.fromList <$> Map.fromList [
   (Haskell98, [NPlusKPatterns]),
   (ImpredicativeTypes, [ExplicitForAll, RankNTypes]),
   (IncoherentInstances, [OverlappingInstances]),
+  (LexicalNegation, [NegativeLiterals]),
   (LiberalTypeSynonyms, [ExplicitForAll]),
   (PolyKinds, [KindSignatures]),
   (RankNTypes, [ExplicitForAll]),
