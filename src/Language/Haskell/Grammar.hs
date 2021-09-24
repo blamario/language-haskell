@@ -411,7 +411,7 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	let decls 	    (local declaration)
 -- 	| 	infixexp 	    (boolean guard)
 
-   expression = wrap (Abstract.typedExpression <$> infixExpression <* doubleColon <*> wrap typeTerm)
+   expression = wrap (Abstract.typedExpression <$> leftInfixExpression <* doubleColon <*> wrap typeTerm)
                 <|> infixExpression,
    -- infixExpression doesn't allow a conditional, let, or lambda expression on its left side
    infixExpression = wrap (Abstract.infixExpression
