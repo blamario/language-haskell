@@ -85,13 +85,14 @@ pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
             close <- string "#-}"
             lift ([[Comment $ open <> content <> close]], content)
 
-languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [Extension]
-languagePragma = spaceChars
+languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [Extension]
+languagePragmas = spaceChars
                  *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (spaceChars
-                                      *> (extension `sepBy` (string "," *> spaceChars) <* string "#-}")
-                                      <* spaceChars)
-                           <<|> comment *> commit languagePragma
+                                      *> liftA2 (<>)
+                                            (extension `sepBy` (string "," *> spaceChars) <* string "#-}")
+                                            languagePragmas)
+                           <<|> comment *> commit languagePragmas
                            <<|> commit (pure mempty))
    where spaceChars = takeCharsWhile Char.isSpace
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
@@ -130,7 +131,7 @@ parseModule extensions source = case moduleExtensions of
     $ parseResults $ Report.haskellModule
     $ parseComplete (extendedGrammar $ extensions <> foldMap withImplied extensions') source
   Right extensionses -> error (show extensionses)
-  where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragma source
+  where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
         parseResults = getCompose . fmap snd . getCompose
         withImplied extension = Set.insert extension (Map.findWithDefault mempty extension implications)
 
@@ -301,7 +302,8 @@ blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
 lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   qualifiedVariableSymbol = notFollowedBy prefixMinus
+   qualifiedVariableSymbol = notFollowedBy (string "-"
+                                            *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
                              *> Report.qualifiedVariableSymbol baseGrammar,
    infixExpression = wrap (Abstract.infixExpression
                               <$> leftInfixExpression
@@ -317,15 +319,29 @@ lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
             <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
       <|> dExpression}
    where prefixMinus = void (string "-"
-                             <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
+                             <* lookAhead (satisfyCharInput $ \c-> Char.isLetter c || c == '(' || c == '[')
                              <* lift ([[Token Delimiter "-"]], ()))
                        <?> "prefix -"
 
 negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-negativeLiteralsMixin baseGrammar = baseGrammar{
+negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   infixExpression = wrap (Abstract.infixExpression
+                              <$> leftInfixExpression
+                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                              <*> infixExpression
+                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
+                     <|> lExpression,
+   leftInfixExpression =
+      wrap (Abstract.infixExpression
+               <$> leftInfixExpression
+               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+               <*> leftInfixExpression
+               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
+      <|> dExpression,
    integerLexeme = (negate <$ string "-" <|> pure id) <*> Report.integerLexeme baseGrammar,
    floatLexeme = (negate <$ string "-" <|> pure id) <*> Report.floatLexeme baseGrammar}
+   where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

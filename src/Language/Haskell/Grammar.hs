@@ -627,10 +627,10 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
    integer = token integerLexeme,
    float = token floatLexeme,
    integerLexeme = fst . head
-                   <$> (Numeric.readDec . toString mempty <$> decimal
-                           <* notFollowedBy (string "." *> decimal <|> exponent)
-                        <|> (string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
-                        <|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal)),
+                   <$> ((string "0o" <|> string "0O") *> (Numeric.readOct . toString mempty <$> octal)
+                        <<|> (string "0x" <|> string "0X") *> (Numeric.readHex . toString mempty <$> hexadecimal)
+                        <<|> Numeric.readDec . toString mempty <$> decimal
+                             <* notFollowedBy (string "." *> decimal <|> exponent)),
    floatLexeme = fst . head . Numeric.readFloat . toString mempty
                  <$> (decimal <> string "." <> decimal <> (exponent <<|> mempty)
                       <|> decimal <> exponent)
