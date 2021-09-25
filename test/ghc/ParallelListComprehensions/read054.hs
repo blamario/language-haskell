@@ -1,5 +1,5 @@
 
-{-# OPTIONS_GHC -XParallelListComp #-}
+{-# LANGUAGE ParallelListComprehensions #-}
 
 module Foo where
 
