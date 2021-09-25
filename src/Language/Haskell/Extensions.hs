@@ -117,6 +117,7 @@ data Extension = AllowAmbiguousTypes
                | RelaxedLayout
                | RelaxedPolyRec
                | RoleAnnotations
+               | Safe
                | ScopedTypeVariables
                | StandaloneDeriving
                | StandaloneKindSignatures
@@ -143,10 +144,10 @@ data Extension = AllowAmbiguousTypes
                | UnliftedFFITypes
                | UnliftedNewtypes
                | ViewPatterns
-               deriving (Data, Enum, Eq, Ord, Read, Show)
+               deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
 allExtensions :: Set Extension
-allExtensions = Set.fromList [AllowAmbiguousTypes ..]
+allExtensions = Set.fromList [minBound..maxBound]
 
 implications :: Map Extension (Set Extension)
 implications = Set.fromList <$> Map.fromList [
@@ -190,6 +191,7 @@ byName = Map.fromList [
   ("ParallelListComp", ParallelListComprehensions),
   ("RebindableSyntax", RebindableSyntax),
   ("RecursiveDo", RecursiveDo),
+  ("Safe", Safe),
   ("TupleSections", TupleSections),
   ("UnicodeSyntax", UnicodeSyntax),
   ("Cpp", Cpp),
