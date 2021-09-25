@@ -1,4 +1,4 @@
-{-# Language OverloadedStrings #-}
+{-# Language DeriveDataTypeable, OverloadedStrings #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
@@ -8,6 +8,7 @@
 
 module Language.Haskell.Extensions (Extension(..), allExtensions, byName, implications) where
 
+import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
@@ -142,7 +143,7 @@ data Extension = AllowAmbiguousTypes
                | UnliftedFFITypes
                | UnliftedNewtypes
                | ViewPatterns
-               deriving (Enum, Eq, Ord, Read, Show)
+               deriving (Data, Enum, Eq, Ord, Read, Show)
 
 allExtensions :: Set Extension
 allExtensions = Set.fromList [AllowAmbiguousTypes ..]

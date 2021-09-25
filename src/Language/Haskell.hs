@@ -21,8 +21,7 @@ import qualified Transformation.AG.Monomorphic as AG.Mono
 
 import Data.Either.Validation (validationToEither)
 import Data.Functor.Compose (Compose(Compose, getCompose))
-import qualified Data.Set as Set
-import qualified Data.Map.Lazy as Map
+import Data.Set (Set)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
 import Data.Text (Text)
@@ -35,11 +34,10 @@ import Prelude hiding (readFile)
 type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Parse the given text of a single module.
-parseModule :: Text -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
-parseModule source = (resolvePositions source <$>)
-                     <$> (Grammar.parseModule
-                            (allExtensions Set.\\ Set.singleton LexicalNegation)
-                            (pure source :: LinePositioned Text))
+parseModule :: Set Extension -> Text
+            -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
+parseModule extensions source =
+  (resolvePositions source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),

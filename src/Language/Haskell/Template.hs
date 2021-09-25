@@ -9,6 +9,7 @@ import Data.List (nub)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
+import Data.String (fromString)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
@@ -18,8 +19,9 @@ import qualified Transformation
 
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
+import Language.Haskell.Extensions (Extension)
 import Language.Haskell.Extensions.AST
-import Language.Haskell.TH hiding (doE, mdoE)
+import Language.Haskell.TH hiding (Extension, doE, mdoE)
 import Language.Haskell.TH.Datatype.TyVarBndr
 
 import qualified Language.Haskell.AST as AST
@@ -62,6 +64,13 @@ instance PrettyViaTH (Module Language Language Placed Placed) where
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
       $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language Placed Placed)
       where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH <$> xs))
+   prettyViaTH (ExtendedModule extensions body) =
+      Ppr.vcat [Ppr.text "{-# LANGUAGE" <+> Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> extensions)
+                <+> Ppr.text "#-}",
+                prettyViaTH body]
+
+instance PrettyViaTH Extension where
+   prettyViaTH = Ppr.text . show
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
    prettyViaTH (ExportClassOrType name members) =

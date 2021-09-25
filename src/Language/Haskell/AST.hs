@@ -13,6 +13,8 @@ import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
+import Language.Haskell.Extensions (Extension)
+
 data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.Haskell Language where
@@ -54,6 +56,7 @@ instance Abstract.Haskell Language where
 
    anonymousModule = AnonymousModule
    namedModule = NamedModule
+   withLanguagePragma = ExtendedModule
 
    exportClassOrType = ExportClassOrType
    exportVar = ExportVar
@@ -184,6 +187,7 @@ data Module λ l d s =
    NamedModule (Abstract.ModuleName λ) (Maybe [s (Abstract.Export l l d d)]) [s (Abstract.Import l l d d)]
                [s (Abstract.Declaration l l d d)]
    | AnonymousModule [s (Abstract.Import l l d d)] [s (Abstract.Declaration l l d d)]
+   | ExtendedModule [Extension] (s (Abstract.Module l l d d))
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
@@ -317,14 +321,14 @@ data Value λ l (d :: * -> *) (s :: * -> *) =
    deriving (Data, Eq, Show)
 
 deriving instance Typeable (Module λ l d s)
-deriving instance (Data (s (Abstract.Declaration l l d d)),
+deriving instance (Data (s (Abstract.Module l l d d)), Data (s (Abstract.Declaration l l d d)),
                    Data (s (Abstract.Export l l d d)), Data (s (Abstract.Import l l d d)),
                    Data (Abstract.ModuleName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Module λ l d s)
-deriving instance (Show (s (Abstract.Declaration l l d d)),
+deriving instance (Show (s (Abstract.Module l l d d)), Show (s (Abstract.Declaration l l d d)),
                    Show (s (Abstract.Export l l d d)), Show (s (Abstract.Import l l d d)),
                    Show (Abstract.ModuleName λ)) => Show (Module λ l d s)
-deriving instance (Eq (s (Abstract.Declaration l l d d)),
+deriving instance (Eq (s (Abstract.Module l l d d)), Eq (s (Abstract.Declaration l l d d)),
                    Eq (s (Abstract.Export l l d d)), Eq (s (Abstract.Import l l d d)),
                    Eq (Abstract.ModuleName λ)) => Eq (Module λ l d s)
 

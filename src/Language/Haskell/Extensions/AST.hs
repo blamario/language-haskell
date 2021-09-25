@@ -72,6 +72,7 @@ instance Abstract.Haskell Language where
 
    anonymousModule = AnonymousModule
    namedModule = NamedModule
+   withLanguagePragma = ExtendedModule
 
    exportClassOrType = ExportClassOrType
    exportVar = ExportVar

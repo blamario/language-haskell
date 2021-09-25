@@ -103,6 +103,7 @@ instance {-# OVERLAPS #-}
    attribution _ node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
                               -> AG.Mono.Atts (Environment l)
+            moduleAttribution (AST.ExtendedModule extensions body) = atts
             moduleAttribution (AST.AnonymousModule modImports body) =
                AG.Mono.Atts{AG.Mono.inh= moduleGlobalScope,
                             AG.Mono.syn= onMap (Map.filterWithKey (const . (== mainName))) moduleGlobalScope}

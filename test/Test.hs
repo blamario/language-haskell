@@ -7,6 +7,7 @@ import Data.Functor.Identity (Identity(Identity))
 import Data.List (isSuffixOf)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Monoid.Instances.Positioned (extract)
+import qualified Data.Set as Set
 import Data.Text (Text, pack, unpack)
 import Data.Text.IO (readFile)
 import GHC.Stack (HasCallStack)
@@ -22,6 +23,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 
 import Language.Haskell (parseModule, Placed)
 import Language.Haskell.AST (Language, Module)
+import Language.Haskell.Extensions (Extension(..))
 import qualified Language.Haskell.Template as Template
 
 import Prelude hiding (readFile)
@@ -48,7 +50,7 @@ exampleTree ancestry path =
                  assertEqual "original=pretty" originalModule'' prettyModule''
 
 prettyFile :: HasCallStack => FilePath -> Text -> IO (Text, Text)
-prettyFile path src = case parseModule src of
+prettyFile path src = case parseModule (Set.fromList [IdentifierSyntax]) src of
    Right [tree] -> return (Reserializer.reserialize tree, pack $ Template.pprint tree)
    Right trees -> error (show (length trees) ++ " ambiguous parses.")
    Left err -> error (unpack $ failureDescription src (extract <$> err) 4)

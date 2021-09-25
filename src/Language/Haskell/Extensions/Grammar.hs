@@ -13,7 +13,7 @@ module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModul
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
-import Data.List (sortOn)
+import Data.List (null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Ord (Down)
@@ -85,11 +85,11 @@ pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
             close <- string "#-}"
             lift ([[Comment $ open <> content <> close]], content)
 
-languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t (Set Extension)
+languagePragma :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [Extension]
 languagePragma = spaceChars
                  *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (spaceChars
-                                      *> (Set.fromList <$> extension `sepBy` (string "," *> spaceChars) <* string "#-}")
+                                      *> (extension `sepBy` (string "," *> spaceChars) <* string "#-}")
                                       <* spaceChars)
                            <<|> comment *> commit languagePragma
                            <<|> commit (pure mempty))
@@ -125,7 +125,9 @@ parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser
 parseModule extensions source = case moduleExtensions of
   Left err -> Left err
   Right [extensions'] ->
-    parseResults $ Report.haskellModule
+     (if null extensions' then id
+      else fmap $ fmap (rewrap $ Abstract.withLanguagePragma extensions'))
+    $ parseResults $ Report.haskellModule
     $ parseComplete (extendedGrammar $ extensions <> foldMap withImplied extensions') source
   Right extensionses -> error (show extensionses)
   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragma source
