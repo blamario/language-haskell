@@ -1,4 +1,4 @@
-{-# OPTIONS -XRecursiveDo #-}
+{-# LANGUAGE RecursiveDo #-}
 
 -- This test, from Iavor Diatchki, made GHC 6.2 loop (testLoop)
 -- or panic (testPanic); there was a Lint error.

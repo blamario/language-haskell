@@ -1,5 +1,5 @@
 
-{-# OPTIONS_GHC -XRecursiveDo #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Foo where
 

@@ -1,4 +1,4 @@
-{-# OPTIONS -XRecursiveDo #-}
+{-# LANGUAGE RecursiveDo #-}
 
 -- test scoping
 
