@@ -250,7 +250,7 @@ parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, Le
                                               Ord t, Show t, OutlineMonoid t)
                                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 parallelListComprehensionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   bareExpression = Report.bareExpression baseGrammar
+   bareExpression = bareExpression
                     <|> brackets (Abstract.parallelListComprehension
                                   <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}
 
@@ -258,7 +258,7 @@ tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing 
                                  Ord t, Show t, OutlineMonoid t)
                    => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   bareExpression = Report.bareExpression baseGrammar
+   bareExpression = bareExpression
                     <|> Abstract.tupleSectionExpression
                            <$> parens ((:|) <$> optional expression <*> some (comma *> optional expression))}
 
@@ -281,7 +281,7 @@ multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                              Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
                 => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 multiWayIfMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   closedBlockExpresion = Report.closedBlockExpresion baseGrammar
+   closedBlockExpresion = closedBlockExpresion
                           <|> Abstract.multiWayIfExpression <$ keyword "if"
                                   <*> blockOf'
                                          (Abstract.guardedExpression . toList
@@ -294,17 +294,16 @@ blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
                     => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   lExpression = Report.lExpression baseGrammar
-                 <|> wrap (Abstract.applyExpression <$> fExpression <*> wrap openBlockExpression),
+   lExpression = lExpression <|> wrap (Abstract.applyExpression <$> fExpression <*> wrap openBlockExpression),
    dExpression = fExpression,
-   bareExpression = Report.bareExpression baseGrammar <|> closedBlockExpresion}
+   bareExpression = bareExpression <|> closedBlockExpresion}
 
 lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    qualifiedVariableSymbol = notFollowedBy (string "-"
                                             *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                             *> Report.qualifiedVariableSymbol baseGrammar,
+                             *> qualifiedVariableSymbol,
    infixExpression = wrap (Abstract.infixExpression
                               <$> leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
@@ -339,8 +338,8 @@ negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                <*> leftInfixExpression
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
       <|> dExpression,
-   integerLexeme = (negate <$ string "-" <|> pure id) <*> Report.integerLexeme baseGrammar,
-   floatLexeme = (negate <$ string "-" <|> pure id) <*> Report.floatLexeme baseGrammar}
+   integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
+   floatLexeme = (negate <$ string "-" <|> pure id) <*> floatLexeme}
    where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
