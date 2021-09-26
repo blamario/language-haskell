@@ -70,9 +70,9 @@ extensionMixins =
      (IdentifierSyntax,           (0, identifierSyntaxMixin)),
      (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
      (BinaryLiterals,             (1, binaryLiteralsMixin)),
-     (MagicHash,                  (2, magicHashMixin)),
      (NegativeLiterals,           (2, negativeLiteralsMixin)),
-     (LexicalNegation,            (2, lexicalNegationMixin)),
+     (LexicalNegation,            (3, lexicalNegationMixin)),
+     (MagicHash,                  (3, magicHashMixin)),
      (ParallelListComprehensions, (3, parallelListComprehensionsMixin)),
      (RecursiveDo,                (4, recursiveDoMixin)),
      (TupleSections,              (5, tupleSectionsMixin)),
@@ -327,6 +327,7 @@ lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
 negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                       => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
    infixExpression = wrap (Abstract.infixExpression
                               <$> leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
