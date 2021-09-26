@@ -13,7 +13,7 @@ module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModul
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
-import Data.List (null, sortOn)
+import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Ord (Down)
@@ -28,6 +28,7 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Numeric (readInt)
 import qualified Rank2
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy)
@@ -68,6 +69,7 @@ extensionMixins =
   Map.fromList [
      (IdentifierSyntax,           (0, identifierSyntaxMixin)),
      (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
+     (BinaryLiterals,             (1, binaryLiteralsMixin)),
      (MagicHash,                  (2, magicHashMixin)),
      (NegativeLiterals,           (2, negativeLiteralsMixin)),
      (LexicalNegation,            (2, lexicalNegationMixin)),
@@ -341,6 +343,16 @@ negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
    floatLexeme = (negate <$ string "-" <|> pure id) <*> floatLexeme}
    where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
+
+binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+binaryLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   integerLexeme =
+      (string "0b" <|> string "0B")
+      *> (foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
+      <<|> integerLexeme}
+   where binary n '0' = 2*n
+         binary n '1' = 2*n + 1
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
