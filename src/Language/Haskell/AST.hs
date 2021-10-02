@@ -13,7 +13,7 @@ import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
-import Language.Haskell.Extensions (Extension)
+import Language.Haskell.Extensions (ExtensionSwitch)
 
 data Language = Language deriving (Data, Eq, Show)
 
@@ -187,7 +187,7 @@ data Module λ l d s =
    NamedModule (Abstract.ModuleName λ) (Maybe [s (Abstract.Export l l d d)]) [s (Abstract.Import l l d d)]
                [s (Abstract.Declaration l l d d)]
    | AnonymousModule [s (Abstract.Import l l d d)] [s (Abstract.Declaration l l d d)]
-   | ExtendedModule [Extension] (s (Abstract.Module l l d d))
+   | ExtendedModule [ExtensionSwitch] (s (Abstract.Module l l d d))
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]

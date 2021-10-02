@@ -3,7 +3,7 @@
 module Main where
 
 import Language.Haskell (Placed, parseModule, resolvePositions)
-import Language.Haskell.Extensions (allExtensions)
+import Language.Haskell.Extensions (ExtensionSwitch(Yes), allExtensions)
 import Language.Haskell.Extensions.AST (Language, Module(..), Expression)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
@@ -23,10 +23,11 @@ import Data.Data (Data)
 import Data.Functor.Identity (Identity(Identity))
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Ord (Down)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
+import Data.Ord (Down)
+import qualified Data.Set as Set
 import Data.Text (Text, unpack)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
@@ -100,7 +101,7 @@ main' Opts{..} = case optsFile
    where
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression
-                                                $ parseComplete (Grammar.extendedGrammar allExtensions) t)
+                                                $ parseComplete (Grammar.extendedGrammar $ Set.map Yes allExtensions) t)
       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
              e ~ Binder.WithEnvironment Language w,

@@ -6,7 +6,7 @@ module Language.Haskell (parseModule, resolvePositions, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
-import Language.Haskell.Extensions (allExtensions, Extension(LexicalNegation))
+import Language.Haskell.Extensions (ExtensionSwitch)
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 
@@ -34,7 +34,7 @@ import Prelude hiding (readFile)
 type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Parse the given text of a single module.
-parseModule :: Set Extension -> Text
+parseModule :: Set ExtensionSwitch -> Text
             -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
 parseModule extensions source =
   (resolvePositions source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text)

@@ -6,7 +6,8 @@
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ awaits
 
-module Language.Haskell.Extensions (Extension(..), allExtensions, byName, implications) where
+module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
+                                    allExtensions, byName, switchesByName, implications) where
 
 import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
@@ -146,31 +147,42 @@ data Extension = AllowAmbiguousTypes
                | ViewPatterns
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
-allExtensions :: Set Extension
-allExtensions = Set.fromList [minBound..maxBound]
+data ExtensionSwitch = Yes Extension
+                     | No Extension
+                     deriving (Data, Eq, Ord)
 
-implications :: Map Extension (Set Extension)
+instance Show ExtensionSwitch where
+  show (Yes ext) = show ext
+  show (No ext) = "No" <> show ext
+
+allExtensions :: Set Extension
+allExtensions = Set.fromList [minBound .. ViewPatterns]
+
+implications :: Map Extension (Set ExtensionSwitch)
 implications = Set.fromList <$> Map.fromList [
-  (AutoDeriveTypeable, [DeriveDataTypeable]),
-  (DeriveTraversable, [DeriveFoldable, DeriveFunctor]),
-  (DerivingVia, [DerivingStrategies]),
-  (ExistentialQuantification, [ExplicitForAll]),
-  (FlexibleInstances, [TypeSynonymInstances]),
-  (FunctionalDependencies, [MultiParamTypeClasses]),
-  (GADTs, [GADTSyntax, MonoLocalBinds]),
-  (Haskell98, [NPlusKPatterns]),
-  (ImpredicativeTypes, [ExplicitForAll, RankNTypes]),
-  (IncoherentInstances, [OverlappingInstances]),
-  (LiberalTypeSynonyms, [ExplicitForAll]),
-  (ParallelListComp, [ParallelListComprehensions]),
-  (PolyKinds, [KindSignatures]),
-  (RankNTypes, [ExplicitForAll]),
-  (RebindableSyntax, [NoImplicitPrelude]),
-  (RecordWildCards, [DisambiguateRecordFields]),
-  (ScopedTypeVariables, [ExplicitForAll]),
-  (TypeFamilies, [ExplicitNamespaces, KindSignatures, MonoLocalBinds]),
-  (TypeFamilyDependencies, [ExplicitNamespaces, KindSignatures, MonoLocalBinds, TypeFamilies]),
-  (TypeOperators, [ExplicitNamespaces])]
+  (AutoDeriveTypeable, [Yes DeriveDataTypeable]),
+  (DeriveTraversable, [Yes DeriveFoldable, Yes DeriveFunctor]),
+  (DerivingVia, [Yes DerivingStrategies]),
+  (ExistentialQuantification, [Yes ExplicitForAll]),
+  (FlexibleInstances, [Yes TypeSynonymInstances]),
+  (FunctionalDependencies, [Yes MultiParamTypeClasses]),
+  (GADTs, [Yes GADTSyntax, Yes MonoLocalBinds]),
+  (Haskell98, [Yes NPlusKPatterns, No PatternSynonyms]),
+  (ImpredicativeTypes, [Yes ExplicitForAll, Yes RankNTypes]),
+  (IncoherentInstances, [Yes OverlappingInstances]),
+  (LiberalTypeSynonyms, [Yes ExplicitForAll]),
+  (ParallelListComp, [Yes ParallelListComprehensions]),
+  (PolyKinds, [Yes KindSignatures]),
+  (RankNTypes, [Yes ExplicitForAll]),
+  (RebindableSyntax, [Yes NoImplicitPrelude]),
+  (RecordWildCards, [Yes DisambiguateRecordFields]),
+  (ScopedTypeVariables, [Yes ExplicitForAll]),
+  (TypeFamilies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds]),
+  (TypeFamilyDependencies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds, Yes TypeFamilies]),
+  (TypeOperators, [Yes ExplicitNamespaces])]
+
+switchesByName :: (IsString t, Ord t, Semigroup t) => Map t ExtensionSwitch
+switchesByName = (Yes <$> byName) <> (No <$> Map.mapKeysMonotonic ("No" <>) byName)
 
 byName :: (IsString t, Ord t) => Map t Extension
 byName = Map.fromList [

@@ -19,7 +19,7 @@ import qualified Transformation
 
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
-import Language.Haskell.Extensions (Extension)
+import Language.Haskell.Extensions (ExtensionSwitch)
 import Language.Haskell.Extensions.AST
 import Language.Haskell.TH hiding (Extension, doE, mdoE)
 import Language.Haskell.TH.Datatype.TyVarBndr
@@ -69,7 +69,7 @@ instance PrettyViaTH (Module Language Language Placed Placed) where
                 <+> Ppr.text "#-}",
                 prettyViaTH body]
 
-instance PrettyViaTH Extension where
+instance PrettyViaTH ExtensionSwitch where
    prettyViaTH = Ppr.text . show
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where

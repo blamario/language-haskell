@@ -4,7 +4,7 @@ module Language.Haskell.Abstract where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
-import Language.Haskell.Extensions (Extension)
+import Language.Haskell.Extensions (ExtensionSwitch)
 
 class Haskell λ where
    type Module λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
@@ -46,7 +46,7 @@ class Haskell λ where
    anonymousModule :: [s (Import l l d d)] -> [s (Declaration l l d d)] -> Module λ l d s
    namedModule :: ModuleName λ -> Maybe [s (Export l l d d)] -> [s (Import l l d d)] -> [s (Declaration l l d d)]
                -> Module λ l d s
-   withLanguagePragma :: [Extension] -> s (Module l l d d) -> Module λ l d s
+   withLanguagePragma :: [ExtensionSwitch] -> s (Module l l d d) -> Module λ l d s
 
    exportClassOrType :: QualifiedName λ -> Maybe (Members λ) -> Export λ l d s
    exportVar :: QualifiedName λ -> Export λ l d s

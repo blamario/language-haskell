@@ -39,7 +39,8 @@ import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
 
-import Language.Haskell.Extensions (Extension(..), allExtensions, byName, implications) 
+import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
+                                    allExtensions, switchesByName, implications) 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST (Language, Value(..))
 import qualified Language.Haskell.Grammar as Report
@@ -65,27 +66,30 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                => Map Extension (Int,
-                                  GrammarBuilder (HaskellGrammar l t (NodeWrap t))
-                                                 (HaskellGrammar l t (NodeWrap t))
-                                                 (ParserT ((,) [[Lexeme t]]))
-                                                 t)
+                => Map (Set ExtensionSwitch)
+                       (Int,
+                        GrammarBuilder (HaskellGrammar l t (NodeWrap t))
+                                       (HaskellGrammar l t (NodeWrap t))
+                                       (ParserT ((,) [[Lexeme t]]))
+                                       t)
 extensionMixins =
   Map.fromList [
-     (IdentifierSyntax,           (0, identifierSyntaxMixin)),
-     (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
-     (BinaryLiterals,             (1, binaryLiteralsMixin)),
-     (NumericUnderscores,         (1, numericUnderscoresMixin)),
-     (NegativeLiterals,           (2, negativeLiteralsMixin)),
-     (LexicalNegation,            (3, lexicalNegationMixin)),
-     (MagicHash,                  (3, magicHashMixin)),
-     (ParallelListComprehensions, (3, parallelListComprehensionsMixin)),
-     (RecursiveDo,                (4, recursiveDoMixin)),
-     (TupleSections,              (5, tupleSectionsMixin)),
-     (EmptyCase,                  (6, emptyCaseMixin)),
-     (LambdaCase,                 (7, lambdaCaseMixin)),
-     (MultiWayIf,                 (8, multiWayIfMixin)),
-     (BlockArguments,             (9, blockArgumentsMixin))]
+     (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
+     (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
+     (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
+     (Set.fromList [Yes NumericUnderscores],         (1, numericUnderscoresMixin)),
+     (Set.fromList [Yes NegativeLiterals],           (2, negativeLiteralsMixin)),
+     (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
+     (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
+     (Set.fromList [Yes ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
+     (Set.fromList [Yes RecursiveDo],                (4, recursiveDoMixin)),
+     (Set.fromList [Yes TupleSections],              (5, tupleSectionsMixin)),
+     (Set.fromList [Yes EmptyCase],                  (6, emptyCaseMixin)),
+     (Set.fromList [Yes LambdaCase],                 (7, lambdaCaseMixin)),
+     (Set.fromList [Yes MultiWayIf],                 (8, multiWayIfMixin)),
+     (Set.fromList [Yes BlockArguments],             (9, blockArgumentsMixin)),
+     (Set.fromList [Yes BinaryLiterals,
+                    Yes NumericUnderscores],         (9, binaryUnderscoresMixin))]
 
 pragma :: (Show t, TextualMonoid t) => Parser g t t
 pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
@@ -93,7 +97,7 @@ pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
             close <- string "#-}"
             lift ([[Comment $ open <> content <> close]], content)
 
-languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [Extension]
+languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
                  *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (spaceChars
@@ -106,7 +110,7 @@ languagePragmas = spaceChars
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
          extension = do extensionName <- takeCharsWhile Char.isAlphaNum
                         spaceChars
-                        case Map.lookup extensionName byName of
+                        case Map.lookup extensionName switchesByName of
                            Just ext -> pure ext
                            Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
          comment = string "--" <* takeCharsWhile Report.isLineChar <|> blockComment
@@ -129,7 +133,7 @@ parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser
                 Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-            => Set Extension -> t
+            => Set ExtensionSwitch -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
   Left err -> Left err
@@ -137,11 +141,10 @@ parseModule extensions source = case moduleExtensions of
      (if null extensions' then id
       else fmap $ fmap (rewrap $ Abstract.withLanguagePragma extensions'))
     $ parseResults $ Report.haskellModule
-    $ parseComplete (extendedGrammar $ extensions <> foldMap withImplied extensions') source
+    $ parseComplete (extendedGrammar $ extensions <> Set.fromList extensions') source
   Right extensionses -> error (show extensionses)
   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
         parseResults = getCompose . fmap snd . getCompose
-        withImplied extension = Set.insert extension (Map.findWithDefault mempty extension implications)
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
@@ -157,10 +160,15 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellG
                     Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                 => Set Extension -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+                 => Set ExtensionSwitch -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . Report.grammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
-                    $ Map.elems $ Map.restrictKeys extensionMixins extensions
+                    $ Map.elems $ Map.restrictKeys extensionMixins
+                    $ Set.powerSet $ foldMap withImplications extensions
+         withImplications :: ExtensionSwitch -> Set ExtensionSwitch
+         withImplications switch@(Yes extension) = Set.insert switch (Map.findWithDefault mempty extension implications)
+         withImplications switch = Set.singleton switch
+         
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
@@ -380,6 +388,18 @@ numericUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
            <?> "octal number",
    hexadecimal = takeCharsWhile1 Char.isHexDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isHexDigit)
                  <?> "hexadecimal number"}
+
+binaryUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+binaryUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   integerLexeme =
+      (string "0b" <|> string "0B")
+      *> (foldl' binary 0 . toString mempty
+          <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
+      <<|> integerLexeme}
+   where binary n '0' = 2*n
+         binary n '1' = 2*n + 1
+         binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
