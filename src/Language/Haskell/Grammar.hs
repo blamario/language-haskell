@@ -909,7 +909,7 @@ blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlo
                      let cont' = cont . (item :)
                      if indent == indent'
                         then many semi *> alignedBlock takeOptional cont' indent
-                        else some semi *> alignedBlock takeOptional cont' indent <|> cont' []
+                        else some semi *> alignedBlock takeOptional cont' indent <<|> cont' []
          terminators :: [Char]
          terminators = ",;)]}"
 
