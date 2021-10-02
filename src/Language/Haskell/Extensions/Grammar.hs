@@ -75,6 +75,7 @@ extensionMixins =
      (IdentifierSyntax,           (0, identifierSyntaxMixin)),
      (UnicodeSyntax,              (1, unicodeSyntaxMixin)),
      (BinaryLiterals,             (1, binaryLiteralsMixin)),
+     (NumericUnderscores,         (1, numericUnderscoresMixin)),
      (NegativeLiterals,           (2, negativeLiteralsMixin)),
      (LexicalNegation,            (3, lexicalNegationMixin)),
      (MagicHash,                  (3, magicHashMixin)),
@@ -371,6 +372,14 @@ binaryLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <<|> integerLexeme}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
+numericUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+numericUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit) <?> "decimal number",
+   octal = takeCharsWhile1 Char.isOctDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isOctDigit)
+           <?> "octal number",
+   hexadecimal = takeCharsWhile1 Char.isHexDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isHexDigit)
+                 <?> "hexadecimal number"}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
