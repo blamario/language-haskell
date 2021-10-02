@@ -51,7 +51,8 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
 
-extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+extensionMixins :: forall l g t. ( Abstract.ExtendedHaskell l,
+                              LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t), Ord t, Show t, OutlineMonoid t,
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
@@ -64,7 +65,11 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                => Map Extension (Int, GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t)
+                => Map Extension (Int,
+                                  GrammarBuilder (HaskellGrammar l (NodeWrap t))
+                                                 (HaskellGrammar l (NodeWrap t))
+                                                 (ParserT ((,) [[Lexeme t]]))
+                                                 t)
 extensionMixins =
   Map.fromList [
      (IdentifierSyntax,           (0, identifierSyntaxMixin)),
@@ -300,45 +305,57 @@ blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    dExpression = fExpression,
    bareExpression = bareExpression <|> closedBlockExpresion}
 
-lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                     => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+lexicalNegationMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
+                                 Ord t, Show t, TextualMonoid t)
+                     => GrammarBuilder (HaskellGrammar l (NodeWrap t))
+                                       (HaskellGrammar l (NodeWrap t))
+                                       (ParserT ((,) [[Lexeme t]]))
+                                       t
 lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    qualifiedVariableSymbol = notFollowedBy (string "-"
                                             *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                             *> qualifiedVariableSymbol,
+                             *> token (Report.nameQualifier <*> variableSymbol),
    infixExpression = wrap (Abstract.infixExpression
-                              <$> leftInfixExpression
+                              <$> nonTerminal Report.leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> infixExpression
-                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
+                              <*> nonTerminal Report.infixExpression)
                      <|> lExpression,
    leftInfixExpression =
       wrap (Abstract.infixExpression
-               <$> leftInfixExpression
+               <$> nonTerminal Report.leftInfixExpression
                <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-               <*> leftInfixExpression
-            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
-      <|> dExpression}
+               <*> nonTerminal Report.leftInfixExpression)
+      <|> dExpression,
+   bareExpression =
+      Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> aExpression
+      <|> parens (Abstract.rightSectionExpression
+                  <$> (notFollowedBy prefixMinus *> qualifiedOperator)
+                  <*> infixExpression)
+      <|> bareExpression}
    where prefixMinus = void (string "-"
-                             <* lookAhead (satisfyCharInput $ \c-> Char.isLetter c || c == '(' || c == '[')
+                             <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
                              <* lift ([[Token Delimiter "-"]], ()))
                        <?> "prefix -"
 
-negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                      => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+negativeLiteralsMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
+                                  Ord t, Show t, TextualMonoid t)
+                      => GrammarBuilder (HaskellGrammar l (NodeWrap t))
+                                        (HaskellGrammar l (NodeWrap t))
+                                        (ParserT ((,) [[Lexeme t]]))
+                                        t
 negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
    infixExpression = wrap (Abstract.infixExpression
-                              <$> leftInfixExpression
+                              <$> nonTerminal Report.leftInfixExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> infixExpression
+                              <*> nonTerminal Report.infixExpression
                            <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
                      <|> lExpression,
    leftInfixExpression =
       wrap (Abstract.infixExpression
-               <$> leftInfixExpression
+               <$> nonTerminal Report.leftInfixExpression
                <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-               <*> leftInfixExpression
+               <*> nonTerminal Report.leftInfixExpression
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
       <|> dExpression,
    integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
