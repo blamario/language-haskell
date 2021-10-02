@@ -54,7 +54,7 @@ type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
 type DisambiguatorTrans t = Disambiguator.Local (Down Int) t (Transformation.Rank2.Map Ambiguous Identity)
 
-data HaskellGrammar l f p = HaskellGrammar {
+data HaskellGrammar l t f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
    body :: p ([f (Abstract.Import l l f f)], [f (Abstract.Declaration l l f f)]),
    exports :: p [f (Abstract.Export l l f f)],
@@ -121,12 +121,15 @@ data HaskellGrammar l f p = HaskellGrammar {
    literal :: p (Abstract.Value l l f f),
    doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p (),
    integer, integerLexeme :: p Integer,
-   float, floatLexeme :: p Rational
+   float, floatLexeme :: p Rational,
+   decimal, octal, hexadecimal, exponent :: p t,
+   charLiteral, charLexeme, escape :: p Char,
+   stringLiteral, stringLexeme :: p Text
 }
                                   
 $(Rank2.TH.deriveAll ''HaskellGrammar)
 
-grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (NodeWrap t)) t),
+grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -138,7 +141,7 @@ grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l (No
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-            => Grammar (HaskellGrammar l (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+            => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
 grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -152,7 +155,7 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-        => GrammarBuilder (HaskellGrammar l (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar g@HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (optional (char '\xfeff') *> whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
@@ -633,7 +636,32 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
                              <* notFollowedBy (string "." *> decimal <|> exponent)),
    floatLexeme = fst . head . Numeric.readFloat . toString mempty
                  <$> (decimal <> string "." <> decimal <> (exponent <<|> mempty)
-                      <|> decimal <> exponent)
+                      <|> decimal <> exponent),
+
+   decimal = takeCharsWhile1 Char.isDigit <?> "decimal number",
+   octal = takeCharsWhile1 Char.isOctDigit <?> "octal number",
+   hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number",
+   exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal,
+
+   charLiteral = token charLexeme,
+   charLexeme = char '\''
+                *> (Text.Parser.Char.satisfy (\c-> c == ' ' || not (Char.isSpace c) && c /= '\'' && c /= '\\')
+                    <|> escape)
+                <* char '\'',
+   stringLiteral = token stringLexeme <?> "string literal",
+   stringLexeme = Text.pack . toString mempty <$>
+                  (char '"'
+                   *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
+                                  <|> Textual.singleton <$> escape
+                                  <|> char '\\'
+                                      *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
+                                      *> pure "")
+                   <* char '"'),
+   escape = string "\\" *> (charEscape <|> asciiEscape
+                            <|> Char.chr . fst . head <$> (Numeric.readDec . toString mempty <$> decimal
+                                                           <|> string "o" *> (Numeric.readOct . toString mempty <$> octal)
+                                                           <|> string "x"
+                                                            *> (Numeric.readHex . toString mempty <$> hexadecimal)))
 }
 
 -- literal 	→ 	integer | float | char | string
@@ -678,6 +706,16 @@ grammar g@HaskellGrammar{..} = HaskellGrammar{
 -- uniDigit 	→ 	any Unicode decimal digit
 -- octit 	→ 	0 | 1 | … | 7
 -- hexit 	→ 	digit | A | … | F | a | … | f
+
+-- decimal 	→ 	digit{digit}
+-- octal 	→ 	octit{octit}
+-- hexadecimal 	→ 	hexit{hexit}
+-- integer 	→ 	decimal
+-- 	| 	0o octal | 0O octal
+-- 	| 	0x hexadecimal | 0X hexadecimal
+-- float 	→ 	decimal . decimal [exponent]
+-- 	| 	decimal exponent
+-- exponent 	→ 	(e | E) [+ | -] decimal
  
 variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
    identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
@@ -724,46 +762,7 @@ nameQualifier = Abstract.qualifiedName
                 <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
                                   <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
 
-decimal, octal, hexadecimal, exponent :: (Show t, TextualMonoid t) => Parser g t t
-decimal = takeCharsWhile1 Char.isDigit <?> "decimal number"
-octal = takeCharsWhile1 Char.isOctDigit <?> "octal number"
-hexadecimal = takeCharsWhile1 Char.isHexDigit <?> "hexadecimal number"
-exponent = (string "e" <|> string "E") <> (string "+" <|> string "-" <|> mempty) <> decimal
-
--- decimal 	→ 	digit{digit}
--- octal 	→ 	octit{octit}
--- hexadecimal 	→ 	hexit{hexit}
--- integer 	→ 	decimal
--- 	| 	0o octal | 0O octal
--- 	| 	0x hexadecimal | 0X hexadecimal
--- float 	→ 	decimal . decimal [exponent]
--- 	| 	decimal exponent
--- exponent 	→ 	(e | E) [+ | -] decimal
-
-charLiteral, charLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-stringLiteral, stringLexeme :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
-charLiteral = token charLexeme
-charLexeme = char '\''
-             *> (Text.Parser.Char.satisfy (\c-> c == ' ' || not (Char.isSpace c) && c /= '\'' && c /= '\\')
-                 <|> escape)
-             <* char '\''
-stringLiteral = token stringLexeme <?> "string literal"
-stringLexeme = Text.pack . toString mempty <$>
-               (char '"'
-                *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
-                               <|> Textual.singleton <$> escape
-                               <|> char '\\'
-                                   *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
-                                   *> pure "")
-                <* char '"')
-
-escape, asciiEscape, charEscape,
-   controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-escape = string "\\" *> (charEscape <|> asciiEscape
-                         <|> Char.chr . fst . head <$> (Numeric.readDec . toString mempty <$> decimal
-                                                        <|> string "o" *> (Numeric.readOct . toString mempty <$> octal)
-                                                        <|> string "x"
-                                                            *> (Numeric.readHex . toString mempty <$> hexadecimal)))
+asciiEscape, charEscape, controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'
              <|> '\b' <$ char 'b'
              <|> '\f' <$ char 'f'
@@ -837,11 +836,11 @@ rewrap f node@(Compose ((start, end), _)) = Compose ((start, end), pure $ f node
 unwrap :: NodeWrap t a -> a
 unwrap (Compose (_, Compose (Ambiguous ((_, x) :| _)))) = x
 
-instance TokenParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
+instance TokenParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
    someSpace = someLexicalSpace
    token = lexicalToken
 
-instance LexicalParsing (Parser (HaskellGrammar l f) (LinePositioned Text)) where
+instance LexicalParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
    lexicalComment = do c <- comment
                        lift ([[Comment c]], ())
    lexicalWhiteSpace = whiteSpace
