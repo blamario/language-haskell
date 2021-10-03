@@ -86,6 +86,7 @@ extensionMixins =
      (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
      (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
      (Set.fromList [Yes ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
+     (Set.fromList [Yes OverloadedLabels],           (4, overloadedLabelsMixin)),
      (Set.fromList [Yes RecursiveDo],                (4, recursiveDoMixin)),
      (Set.fromList [Yes TupleSections],              (5, tupleSectionsMixin)),
      (Set.fromList [Yes EmptyCase],                  (6, emptyCaseMixin)),
@@ -197,6 +198,12 @@ identifierSyntaxMixin baseGrammar = baseGrammar{
    constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
    variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
    constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}
+
+overloadedLabelsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+overloadedLabelsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme))
+                        <|> variableIdentifier}
 
 unicodeSyntaxMixin :: forall l g t. (LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                    => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
