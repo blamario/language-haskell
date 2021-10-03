@@ -21,6 +21,7 @@ import Data.String (IsString)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
+import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
@@ -28,7 +29,7 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Numeric (readInt)
+import qualified Numeric
 import qualified Rank2
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy)
@@ -77,7 +78,10 @@ extensionMixins =
      (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
      (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
      (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
+     (Set.fromList [Yes HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
      (Set.fromList [Yes NumericUnderscores],         (1, numericUnderscoresMixin)),
+     (Set.fromList [Yes BinaryLiterals,
+                    Yes NumericUnderscores],         (9, binaryUnderscoresMixin)),
      (Set.fromList [Yes NegativeLiterals],           (2, negativeLiteralsMixin)),
      (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
      (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
@@ -87,9 +91,7 @@ extensionMixins =
      (Set.fromList [Yes EmptyCase],                  (6, emptyCaseMixin)),
      (Set.fromList [Yes LambdaCase],                 (7, lambdaCaseMixin)),
      (Set.fromList [Yes MultiWayIf],                 (8, multiWayIfMixin)),
-     (Set.fromList [Yes BlockArguments],             (9, blockArgumentsMixin)),
-     (Set.fromList [Yes BinaryLiterals,
-                    Yes NumericUnderscores],         (9, binaryUnderscoresMixin))]
+     (Set.fromList [Yes BlockArguments],             (9, blockArgumentsMixin))]
 
 pragma :: (Show t, TextualMonoid t) => Parser g t t
 pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
@@ -380,6 +382,25 @@ binaryLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <<|> integerLexeme}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
+
+hexFloatLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+hexFloatLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
+                                 *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
+                   *> integerLexeme,
+   floatLexeme = (string "0x" <|> string "0X")
+                 *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (exponent <<|> pure 0)
+                    <|> readHexFloat <$> hexadecimal <*> pure mempty <*> exponent)
+                 <|> floatLexeme}
+   where exponent =
+           (string "p" <|> string "P")
+           *> (id <$ string "+" <|> negate <$ string "-" <|> pure id)
+           <*> (fst . head . Numeric.readDec . toString mempty <$> decimal)
+         readHexFloat whole fraction exponent =
+           fst (head $ Numeric.readHex $ toString mempty $ whole <> fraction)
+           * 2 ^^ (exponent - Factorial.length fraction)
+
 numericUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 numericUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
