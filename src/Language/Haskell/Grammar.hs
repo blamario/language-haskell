@@ -879,7 +879,8 @@ whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespac
                       <<|> pure ()
 
 comment :: (Show t, TextualMonoid t) => Parser g t t
-comment = try (blockComment <|> (string "--" <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
+comment = try (blockComment
+               <|> (string "--" <> takeCharsWhile (== '-') <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
           <?> "comment"
    where isCommentChar c = c /= '-' && c /= '{'
          blockComment =
