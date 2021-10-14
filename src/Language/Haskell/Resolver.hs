@@ -2,10 +2,12 @@
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module Language.Haskell.Resolver where
 
+import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty(..), toList)
+import Data.List.NonEmpty (NonEmpty(..), fromList, toList, nonEmpty)
 import qualified Data.Map.Lazy as Map
+import Data.Semigroup (sconcat)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
 import Language.Haskell.TH (appT, conT, varT, newName)
@@ -31,15 +33,17 @@ data Resolution l pos s = Resolution
 
 type Resolved l f = Validation (NonEmpty (Error l f))
 
+prefixMinusPrecedence :: Int
+prefixMinusPrecedence = 6
+
 instance Transformation.Transformation (Resolution l pos s) where
     type Domain (Resolution l pos s) = Binder.WithEnvironment l (Disambiguator.Wrapped pos s)
     type Codomain (Resolution l pos s) = Compose (Resolved l (Reserializer.Wrapped pos s)) (Reserializer.Wrapped pos s)
 
 instance {-# overlappable #-} Resolution l pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Resolution $ Compose (_, (Compose ((start, end), Compose (Ambiguous ((ws, x) :| []))))) =
-     Compose (Success ((start, ws, end), x))
-   Resolution{} $ _ = Compose (Failure $ pure AmbiguousParses)
+  Resolution $ Compose (_, Compose ((start, end), Compose (Ambiguous ((ws, x) :| [])))) =
+    Compose (Success ((start, ws, end), x))
 
 instance {-# overlaps #-} forall l pos s.
          (Eq s, Eq pos, Eq (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)), IsString s,
@@ -57,6 +61,8 @@ instance {-# overlaps #-} forall l pos s.
              | (_, AST.ReferenceExpression name) <- op =
                 maybe (const $ Failure $ pure UnknownOperator)
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
+          resolveExpression e@(AST.ApplyExpression left right)
+             | (_, AST.Negate{}) <- left = verifyArg (Just AST.LeftAssociative) prefixMinusPrecedence right (pure e)
           resolveExpression e = pure e
           verifyArg :: f ~ Reserializer.Wrapped pos s
                     => Maybe (AST.Associativity l) -> Int
@@ -69,7 +75,12 @@ instance {-# overlaps #-} forall l pos s.
                Just (Binder.InfixDeclaration _ associativity' precedence') <- Map.lookup name bindings =
                if parenthesized lexemes
                   || precedence < precedence'
-                  || precedence == precedence' && any (associativity' ==) associativity then result
+                  || precedence == precedence' && elem associativity' associativity then result
+               else Failure (pure ContradictoryAssociativity)
+             | ((_, lexemes, _), AST.ApplyExpression (_, AST.Negate{}) _) <- arg =
+               if parenthesized lexemes
+                  || precedence < prefixMinusPrecedence
+                  || precedence == prefixMinusPrecedence && elem AST.LeftAssociative associativity then result
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
       in Compose (Disambiguator.unique id (pure . AmbiguousExpression) (resolveExpression <$> expressions))
@@ -93,6 +104,8 @@ instance {-# overlaps #-} forall l pos s f.
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
           resolveExpression e@(ExtAST.TupleSectionExpression items)
              | Just items' <- sequence items = Failure (TupleSectionWithNoOmission items' :| [])
+          resolveExpression e@(ExtAST.ApplyExpression left right)
+             | (_, ExtAST.Negate{}) <- left = verifyArg (Just AST.LeftAssociative) prefixMinusPrecedence right (pure e)
           resolveExpression e = pure e
           verifyArg :: f ~ Reserializer.Wrapped pos s
                     => Maybe (ExtAST.Associativity l) -> Int
@@ -105,7 +118,12 @@ instance {-# overlaps #-} forall l pos s f.
                Just (Binder.InfixDeclaration _ associativity' precedence') <- Map.lookup name bindings =
                if parenthesized lexemes
                   || precedence < precedence'
-                  || precedence == precedence' && any (associativity' ==) associativity then result
+                  || precedence == precedence' && elem associativity' associativity then result
+               else Failure (pure ContradictoryAssociativity)
+             | ((_, lexemes, _), ExtAST.ApplyExpression (_, ExtAST.Negate{}) _) <- arg =
+               if parenthesized lexemes
+                  || precedence < prefixMinusPrecedence
+                  || precedence == prefixMinusPrecedence && elem AST.LeftAssociative associativity then result
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
       in Compose (Disambiguator.unique id (pure . AmbiguousExtExpression) (resolveExpression <$> expressions))
@@ -170,4 +188,13 @@ resolveModules modules = Map.traverseWithKey extractErrors resolvedModules
 instance (Deep.Traversable (Resolution l pos s) g,
           Transformation.At (Resolution l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
          Full.Traversable (Resolution l pos s) g where
-   traverse = Full.traverseUpDefault
+   traverse t x = sequenceValidations (Deep.traverse t <$> x) >>= getCompose . (t Transformation.$)
+
+sequenceValidations :: Binder.WithEnvironment l (Disambiguator.Wrapped pos s) (Validation (NonEmpty e) x)
+                    -> Validation (NonEmpty e) (Binder.WithEnvironment l (Disambiguator.Wrapped pos s) x)
+sequenceValidations (Compose (env, Compose (span, Compose (Ambiguous xs)))) =
+   case nonEmpty <$> partitionEithers (traverse validationToEither <$> toList xs)
+   of (errors, Nothing) -> Failure (sconcat $ fromList errors)
+      (_, Just successes) -> Success (Compose (env, Compose (span, Compose $ Ambiguous successes)))
+
+
