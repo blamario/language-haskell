@@ -120,8 +120,8 @@ instance {-# overlaps #-} forall l pos s f.
                   || precedence < precedence'
                   || precedence == precedence' && elem associativity' associativity then result
                else Failure (pure ContradictoryAssociativity)
-             | ((_, lexemes, _), ExtAST.ApplyExpression (_, ExtAST.Negate{}) _) <- arg =
-               if parenthesized lexemes
+             | (_, ExtAST.ApplyExpression ((_, lexemes, _), ExtAST.Negate{}) _) <- arg =
+               if modifying lexemes
                   || precedence < prefixMinusPrecedence
                   || precedence == prefixMinusPrecedence && elem AST.LeftAssociative associativity then result
                else Failure (pure ContradictoryAssociativity)
@@ -136,7 +136,9 @@ verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.Right
 verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.NonAssociative precedence) =
    verifyArg Nothing precedence left . verifyArg Nothing precedence right
 
-parenthesized :: (Eq s, IsString s) => Reserializer.ParsedLexemes s -> Bool
+modifying, parenthesized :: (Eq s, IsString s) => Reserializer.ParsedLexemes s -> Bool
+modifying (Reserializer.Trailing [Reserializer.Token{Reserializer.lexemeType= Reserializer.Modifier}]) = True
+modifying _ = False
 parenthesized (Reserializer.Trailing (paren:_)) = Reserializer.lexemeText paren == "("
 parenthesized (Reserializer.Trailing []) = False
 

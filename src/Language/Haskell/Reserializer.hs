@@ -38,7 +38,7 @@ data Lexeme s = WhiteSpace{lexemeText :: s}
                       lexemeText :: s}
                 deriving (Data, Eq, Functor, Show)
 
-data TokenType = Delimiter | Keyword | Operator | Other
+data TokenType = Delimiter | Keyword | Operator | Modifier | Other
                deriving (Data, Eq, Show)
 
 -- | Re-calculates the position of every node in the parse tree from the tokens stored with it and its children.

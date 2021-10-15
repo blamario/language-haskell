@@ -352,7 +352,7 @@ lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <|> bareExpression}
    where prefixMinus = void (string "-"
                              <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
-                             <* lift ([[Token Delimiter "-"]], ()))
+                             <* lift ([[Token Modifier "-"]], ()))
                        <?> "prefix -"
 
 negativeLiteralsMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
