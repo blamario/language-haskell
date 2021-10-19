@@ -6,7 +6,7 @@
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
 -- * @TransformListComp@ is not supported by TemplateHaskell
 -- * @Arrows@ is not supported by TemplateHaskell
--- * @LexicalNegation@ awaits
+-- * @LexicalNegation@ ignores the presence or absence of whitespace preceding the minus
 
 module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModule, module Report) where
 
@@ -76,6 +76,7 @@ extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
 extensionMixins =
   Map.fromList [
      (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
+     (Set.fromList [Yes PackageImports],             (0, packageImportsMixin)),
      (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
      (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
      (Set.fromList [Yes HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
@@ -312,6 +313,17 @@ multiWayIfMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                                          (Abstract.guardedExpression . toList
                                              <$> guards <* rightArrow
                                              <*> expression)}
+
+packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
+                                  OutlineMonoid t)
+                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+packageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                           <*> (True <$ keyword "qualified" <|> pure False)
+                           <*> stringLiteral
+                           <*> Report.moduleId
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,

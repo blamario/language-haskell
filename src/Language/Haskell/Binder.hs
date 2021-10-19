@@ -23,6 +23,7 @@ import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Extensions.AST as ExtAST
 
 type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
 
@@ -95,7 +96,7 @@ instance {-# OVERLAPS #-}
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Abstract.Module l l ~ AST.Module l l, Abstract.ModuleName l ~ AST.ModuleName l,
-          Abstract.Export l l ~ AST.Export l l, Abstract.Import l l ~ AST.Import l l,
+          Abstract.Export l l ~ AST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l, Abstract.ImportItem l l ~ AST.ImportItem l l,
           Abstract.Members l ~ AST.Members l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
@@ -127,20 +128,20 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope = importedScope modImports
                                          <> requalifiedWith moduleName (AG.Mono.syn atts)
                                          <> AG.Mono.syn atts
-            importedScope :: [FromEnvironment l f (AST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
+            importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith $ AG.Mono.inh atts)
                where importsFromModule :: UnionWith (Map (AST.Name l)) (Binding l)
-                                       -> AST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
+                                       -> ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
                      importsFrom (AST.QualifiedName (Just moduleName) _) (ModuleBinding moduleExports)
                         | null matchingImports && moduleName == preludeName = unqualified moduleExports
                         | otherwise = foldMap (importsFromModule moduleExports) matchingImports
                         where matchingImports = foldMap (foldMap matchingImport . ($ mempty) . getCompose) modImports
-                              matchingImport i@(AST.Import _ name _ _)
+                              matchingImport i@(ExtAST.Import _ _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
                      importsFrom _ _ = mempty
-                     importsFromModule moduleExports (AST.Import qualified name alias spec)
+                     importsFromModule moduleExports (ExtAST.Import qualified _ name alias spec)
                         | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                         | otherwise = unqualified (imports spec)
                                       <> maybe mempty (`qualifiedWith` imports spec) alias
@@ -159,8 +160,8 @@ instance {-# OVERLAPS #-}
                               allMemberImports name = mempty
                               memberImport name member = mempty
                               nameImport name = mempty
-                              getImportName (_, AST.Import _ moduleName _ _) = moduleName
-                     getImportName (_, AST.Import _ moduleName _ _) = moduleName
+                              getImportName (_, ExtAST.Import _ _ moduleName _ _) = moduleName
+                     getImportName (_, ExtAST.Import _ _ moduleName _ _) = moduleName
             qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
             requalifiedWith moduleName = onMap (Map.mapKeysMonotonic requalify)
                where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name

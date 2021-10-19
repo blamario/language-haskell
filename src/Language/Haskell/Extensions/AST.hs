@@ -1,7 +1,7 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Expression(..), Statement(..), Value(..),
+module Language.Haskell.Extensions.AST (Language(Language), Import(..), Expression(..), Statement(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -17,7 +17,7 @@ import Language.Haskell.AST (Module(..), Declaration(..), Type(..), EquationLHS(
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
-                             Import(..), ImportSpecification(..), ImportItem(..), Export(..), Members(..))
+                             ImportSpecification(..), ImportItem(..), Export(..), Members(..))
 import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
@@ -32,6 +32,7 @@ instance Abstract.ExtendedHaskell Language where
    lambdaCaseExpression = LambdaCaseExpression
    multiWayIfExpression = MultiWayIfExpression
    recursiveStatement = RecursiveStatement
+   packageQualifiedImportDeclaration q p = Import q (Just p)
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -78,7 +79,7 @@ instance Abstract.Haskell Language where
    exportVar = ExportVar
    reExportModule = ReExportModule
 
-   importDeclaration = Import
+   importDeclaration q = Import q Nothing
    excludedImports = ImportSpecification False
    includedImports = ImportSpecification True
    importClassOrType = ImportClassOrType
@@ -199,6 +200,10 @@ instance Abstract.Haskell Language where
    safeCall = SafeCall
    unsafeCall = UnsafeCall
 
+data Import λ l d s = Import Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
+                             (Maybe (s (Abstract.ImportSpecification l l d d)))
+
+
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -243,6 +248,14 @@ data Value λ l (d :: * -> *) (s :: * -> *) =
    | HashLiteral (Value λ l d s)
    deriving (Data, Eq, Show)
 
+deriving instance Typeable (Import λ l d s)
+deriving instance (Data (s (Abstract.ImportSpecification l l d d)), Data (Abstract.ModuleName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Import λ l d s)
+deriving instance (Show (s (Abstract.ImportSpecification l l d d)), Show (Abstract.ModuleName λ)) =>
+                  Show (Import λ l d s)
+deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.ModuleName λ)) =>
+                  Eq (Import λ l d s)
+
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
@@ -277,4 +290,4 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Expression, ''Statement, ''Value]))
+             [''Import, ''Expression, ''Statement, ''Value]))
