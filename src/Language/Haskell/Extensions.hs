@@ -130,6 +130,7 @@ data Extension = AllowAmbiguousTypes
                | TemplateHaskellQuotes
                | TraditionalRecordSyntax
                | TransformListComp
+               | Trustworthy
                | TupleSections
                | TypeApplications
                | TypeFamilies
@@ -144,6 +145,7 @@ data Extension = AllowAmbiguousTypes
                | UnicodeSyntax
                | UnliftedFFITypes
                | UnliftedNewtypes
+               | Unsafe
                | ViewPatterns
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
@@ -301,6 +303,7 @@ byName = Map.fromList [
   ("TemplateHaskellQuotes", TemplateHaskellQuotes),
   ("TraditionalRecordSyntax", TraditionalRecordSyntax),
   ("TransformListComp", TransformListComp),
+  ("Trustworthy", Trustworthy),
   ("TupleSections", TupleSections),
   ("TypeApplications", TypeApplications),
   ("TypeFamilies", TypeFamilies),
@@ -315,4 +318,5 @@ byName = Map.fromList [
   ("UnicodeSyntax", UnicodeSyntax),
   ("UnliftedFFITypes", UnliftedFFITypes),
   ("UnliftedNewtypes", UnliftedNewtypes),
+  ("Unsafe", Unsafe),
   ("ViewPatterns", ViewPatterns)]

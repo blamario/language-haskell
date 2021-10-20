@@ -32,7 +32,9 @@ instance Abstract.ExtendedHaskell Language where
    lambdaCaseExpression = LambdaCaseExpression
    multiWayIfExpression = MultiWayIfExpression
    recursiveStatement = RecursiveStatement
-   packageQualifiedImportDeclaration q p = Import q (Just p)
+   safeImportDeclaration q = Import True q Nothing 
+   packageQualifiedImportDeclaration q p = Import False q (Just p)
+   safePackageQualifiedImportDeclaration q p = Import True q (Just p)
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -79,7 +81,7 @@ instance Abstract.Haskell Language where
    exportVar = ExportVar
    reExportModule = ReExportModule
 
-   importDeclaration q = Import q Nothing
+   importDeclaration q = Import False q Nothing
    excludedImports = ImportSpecification False
    includedImports = ImportSpecification True
    importClassOrType = ImportClassOrType
@@ -200,7 +202,7 @@ instance Abstract.Haskell Language where
    safeCall = SafeCall
    unsafeCall = UnsafeCall
 
-data Import λ l d s = Import Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
+data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
 

@@ -16,6 +16,12 @@ class Haskell λ => ExtendedHaskell λ where
    lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s
    multiWayIfExpression :: [s (GuardedExpression l l d d)] -> Expression λ l d s
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s
+   safeImportDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ)
+                         -> Maybe (s (ImportSpecification l l d d))
+                         -> Import λ l d s
    packageQualifiedImportDeclaration :: Bool -> Text -> ModuleName λ -> Maybe (ModuleName λ)
                                      -> Maybe (s (ImportSpecification l l d d))
                                      -> Import λ l d s
+   safePackageQualifiedImportDeclaration :: Bool -> Text -> ModuleName λ -> Maybe (ModuleName λ)
+                                         -> Maybe (s (ImportSpecification l l d d))
+                                         -> Import λ l d s

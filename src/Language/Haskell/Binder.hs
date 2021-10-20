@@ -137,11 +137,11 @@ instance {-# OVERLAPS #-}
                         | null matchingImports && moduleName == preludeName = unqualified moduleExports
                         | otherwise = foldMap (importsFromModule moduleExports) matchingImports
                         where matchingImports = foldMap (foldMap matchingImport . ($ mempty) . getCompose) modImports
-                              matchingImport i@(ExtAST.Import _ _ name _ _)
+                              matchingImport i@(ExtAST.Import _ _ _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
                      importsFrom _ _ = mempty
-                     importsFromModule moduleExports (ExtAST.Import qualified _ name alias spec)
+                     importsFromModule moduleExports (ExtAST.Import _ qualified _ name alias spec)
                         | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                         | otherwise = unqualified (imports spec)
                                       <> maybe mempty (`qualifiedWith` imports spec) alias
@@ -160,8 +160,8 @@ instance {-# OVERLAPS #-}
                               allMemberImports name = mempty
                               memberImport name member = mempty
                               nameImport name = mempty
-                              getImportName (_, ExtAST.Import _ _ moduleName _ _) = moduleName
-                     getImportName (_, ExtAST.Import _ _ moduleName _ _) = moduleName
+                              getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
+                     getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
             qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
             requalifiedWith moduleName = onMap (Map.mapKeysMonotonic requalify)
                where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name

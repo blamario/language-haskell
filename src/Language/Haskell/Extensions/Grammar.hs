@@ -77,12 +77,21 @@ extensionMixins =
   Map.fromList [
      (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
      (Set.fromList [Yes PackageImports],             (0, packageImportsMixin)),
+     (Set.fromList [Yes Safe],                       (0, safeImportsMixin)),
+     (Set.fromList [Yes Trustworthy],                (0, safeImportsMixin)),
+     (Set.fromList [Yes Unsafe],                     (0, safeImportsMixin)),
      (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
      (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
      (Set.fromList [Yes HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
      (Set.fromList [Yes NumericUnderscores],         (1, numericUnderscoresMixin)),
      (Set.fromList [Yes BinaryLiterals,
                     Yes NumericUnderscores],         (9, binaryUnderscoresMixin)),
+     (Set.fromList [Yes PackageImports,
+                    Yes Safe],                       (9, safePackageImportsMixin)),
+     (Set.fromList [Yes PackageImports,
+                    Yes Trustworthy],                (9, safePackageImportsMixin)),
+     (Set.fromList [Yes PackageImports,
+                    Yes Unsafe],                     (9, safePackageImportsMixin)),
      (Set.fromList [Yes NegativeLiterals],           (2, negativeLiteralsMixin)),
      (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
      (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
@@ -320,6 +329,26 @@ packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
 packageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    importDeclaration = importDeclaration
                        <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                           <*> (True <$ keyword "qualified" <|> pure False)
+                           <*> stringLiteral
+                           <*> Report.moduleId
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
+                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safeImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                           <*> (True <$ keyword "qualified" <|> pure False)
+                           <*> Report.moduleId
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
+                                      OutlineMonoid t)
+                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safePackageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                            <*> (True <$ keyword "qualified" <|> pure False)
                            <*> stringLiteral
                            <*> Report.moduleId

@@ -79,8 +79,9 @@ instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
 instance PrettyViaTH (Import Language Language ((,) x) ((,) x)) where
-   prettyViaTH (Import qualified package name alias imports) =
-      Ppr.text "import" <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
+   prettyViaTH (Import safe qualified package name alias imports) =
+      Ppr.text "import" <+> (if safe then Ppr.text "safe" else Ppr.empty)
+      <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
       <+> maybe Ppr.empty (Ppr.doubleQuotes . Ppr.text . unpack) package
       <+> prettyViaTH name
       <+> maybe Ppr.empty ((Ppr.text "as" <+>) . prettyViaTH) alias
