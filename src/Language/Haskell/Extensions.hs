@@ -119,6 +119,7 @@ data Extension = AllowAmbiguousTypes
                | RelaxedPolyRec
                | RoleAnnotations
                | Safe
+               | SafeImports
                | ScopedTypeVariables
                | StandaloneDeriving
                | StandaloneKindSignatures
@@ -158,7 +159,7 @@ instance Show ExtensionSwitch where
   show (No ext) = "No" <> show ext
 
 allExtensions :: Set Extension
-allExtensions = Set.fromList [minBound .. ViewPatterns]
+allExtensions = Set.fromList [minBound .. maxBound]
 
 implications :: Map Extension (Set ExtensionSwitch)
 implications = Set.fromList <$> Map.fromList [
@@ -179,9 +180,12 @@ implications = Set.fromList <$> Map.fromList [
   (RebindableSyntax, [Yes NoImplicitPrelude]),
   (RecordWildCards, [Yes DisambiguateRecordFields]),
   (ScopedTypeVariables, [Yes ExplicitForAll]),
+  (Safe, [Yes SafeImports]),
+  (Trustworthy, [Yes SafeImports]),
   (TypeFamilies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds]),
   (TypeFamilyDependencies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds, Yes TypeFamilies]),
-  (TypeOperators, [Yes ExplicitNamespaces])]
+  (TypeOperators, [Yes ExplicitNamespaces]),
+  (Unsafe, [Yes SafeImports])]
 
 switchesByName :: (IsString t, Ord t, Semigroup t) => Map t ExtensionSwitch
 switchesByName = (Yes <$> byName) <> (No <$> Map.mapKeysMonotonic ("No" <>) byName)
