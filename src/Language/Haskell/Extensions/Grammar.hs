@@ -78,6 +78,7 @@ extensionMixins =
      (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
      (Set.fromList [Yes PackageImports],             (0, packageImportsMixin)),
      (Set.fromList [Yes SafeImports],                (0, safeImportsMixin)),
+     (Set.fromList [Yes ExplicitNamespaces],         (0, explicitNamespacesMixin)),
      (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
      (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
      (Set.fromList [Yes HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
@@ -347,6 +348,13 @@ safePackageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                            <*> stringLiteral
                            <*> Report.moduleId
                            <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+explicitNamespacesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
+                                      OutlineMonoid t)
+                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+explicitNamespacesMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importItem = importItem
+                <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
