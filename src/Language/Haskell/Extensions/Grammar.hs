@@ -88,6 +88,13 @@ extensionMixins =
                     Yes NumericUnderscores],         (9, binaryUnderscoresMixin)),
      (Set.fromList [Yes PackageImports,
                     Yes SafeImports],                (9, safePackageImportsMixin)),
+     (Set.fromList [Yes PackageImports,
+                    Yes ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
+     (Set.fromList [Yes SafeImports,
+                    Yes ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
+     (Set.fromList [Yes PackageImports,
+                    Yes SafeImports,
+                    Yes ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
      (Set.fromList [Yes NegativeLiterals],           (2, negativeLiteralsMixin)),
      (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
      (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
@@ -349,7 +356,7 @@ importQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                            <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
 
 safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
-                                      OutlineMonoid t)
+                                          OutlineMonoid t)
                         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 safePackageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    importDeclaration = importDeclaration
@@ -357,6 +364,42 @@ safePackageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                            <*> (True <$ keyword "qualified" <|> pure False)
                            <*> stringLiteral
                            <*> Report.moduleId
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                   Ord t, Show t, OutlineMonoid t)
+                                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+packageImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                           <**> pure flip
+                           <*> stringLiteral
+                           <**> pure flip
+                           <*> Report.moduleId
+                           <*> (True <$ keyword "qualified" <|> pure False)
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                Ord t, Show t, OutlineMonoid t)
+                              => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safeImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                           <*> Report.moduleId
+                           <*> (True <$ keyword "qualified" <|> pure False)
+                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+
+safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                       Ord t, Show t, OutlineMonoid t)
+                                     => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safePackageImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   importDeclaration = importDeclaration
+                       <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
+                           <**> pure flip
+                           <*> stringLiteral
+                           <**> pure flip
+                           <*> Report.moduleId
+                           <*> (True <$ keyword "qualified" <|> pure False)
                            <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
 
 explicitNamespacesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
