@@ -47,7 +47,6 @@ data Extension = AllowAmbiguousTypes
                | DuplicateRecordFields
                | EmptyCase
                | EmptyDataDeclarations
-               | EmptyDataDecls
                | EmptyDataDeriving
                | ExistentialQuantification
                | ExplicitForAll
@@ -89,7 +88,6 @@ data Extension = AllowAmbiguousTypes
                | NPlusKPatterns
                | NamedWildCards
                | NegativeLiterals
-               | NoImplicitPrelude
                | NondecreasingIndentation
                | NullaryTypeClasses
                | NumDecimals
@@ -152,11 +150,7 @@ data Extension = AllowAmbiguousTypes
 
 data ExtensionSwitch = Yes Extension
                      | No Extension
-                     deriving (Data, Eq, Ord)
-
-instance Show ExtensionSwitch where
-  show (Yes ext) = show ext
-  show (No ext) = "No" <> show ext
+                     deriving (Data, Eq, Ord, Show)
 
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
@@ -170,14 +164,16 @@ implications = Set.fromList <$> Map.fromList [
   (FlexibleInstances, [Yes TypeSynonymInstances]),
   (FunctionalDependencies, [Yes MultiParamTypeClasses]),
   (GADTs, [Yes GADTSyntax, Yes MonoLocalBinds]),
-  (Haskell98, [Yes NPlusKPatterns, No PatternSynonyms]),
+  (Haskell98, [Yes NPlusKPatterns, Yes NondecreasingIndentation,
+               No DoAndIfThenElse, No EmptyDataDeclarations,
+               No ForeignFunctionInterface, No PatternGuards, No RelaxedPolyRec]),
   (ImpredicativeTypes, [Yes ExplicitForAll, Yes RankNTypes]),
   (IncoherentInstances, [Yes OverlappingInstances]),
   (LiberalTypeSynonyms, [Yes ExplicitForAll]),
   (ParallelListComp, [Yes ParallelListComprehensions]),
   (PolyKinds, [Yes KindSignatures]),
   (RankNTypes, [Yes ExplicitForAll]),
-  (RebindableSyntax, [Yes NoImplicitPrelude]),
+  (RebindableSyntax, [No ImplicitPrelude]),
   (RecordWildCards, [Yes DisambiguateRecordFields]),
   (ScopedTypeVariables, [Yes ExplicitForAll]),
   (Safe, [Yes SafeImports]),
@@ -223,8 +219,8 @@ byName = Map.fromList [
   ("DuplicateRecordFields", DuplicateRecordFields),
   ("EmptyCase", EmptyCase),
   ("EmptyCase", EmptyCase),
+  ("EmptyDataDeclarations", EmptyDataDeclarations),
   ("EmptyDataDecls", EmptyDataDeclarations),
-  ("EmptyDataDecls", EmptyDataDecls),
   ("EmptyDataDeriving", EmptyDataDeriving),
   ("ExistentialQuantification", ExistentialQuantification),
   ("ExplicitForAll", ExplicitForAll),
@@ -265,7 +261,6 @@ byName = Map.fromList [
   ("NPlusKPatterns", NPlusKPatterns),
   ("NamedWildCards", NamedWildCards),
   ("NegativeLiterals", NegativeLiterals),
-  ("NoImplicitPrelude", NoImplicitPrelude),
   ("NondecreasingIndentation", NondecreasingIndentation),
   ("NullaryTypeClasses", NullaryTypeClasses),
   ("NumDecimals", NumDecimals),

@@ -19,7 +19,8 @@ import qualified Transformation
 
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
-import Language.Haskell.Extensions (ExtensionSwitch)
+import Language.Haskell.Extensions (ExtensionSwitch(..))
+import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST
 import Language.Haskell.TH hiding (Extension, doE, mdoE)
 import Language.Haskell.TH.Datatype.TyVarBndr
@@ -70,7 +71,9 @@ instance PrettyViaTH (Module Language Language Placed Placed) where
                 prettyViaTH body]
 
 instance PrettyViaTH ExtensionSwitch where
-   prettyViaTH = Ppr.text . show
+   prettyViaTH (Yes Extensions.EmptyDataDeclarations) = Ppr.text "EmptyDataDecls"
+   prettyViaTH (Yes x) = Ppr.text (show x)
+   prettyViaTH (No x) = Ppr.text "No" Ppr.<> prettyViaTH (Yes x)
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
    prettyViaTH (ExportClassOrType name members) =
