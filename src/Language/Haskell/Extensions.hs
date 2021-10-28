@@ -235,6 +235,7 @@ byName = Map.fromList [
   ("GHCForeignImportPrim", GHCForeignImportPrim),
   ("GeneralizedNewtypeDeriving", GeneralizedNewtypeDeriving),
   ("Haskell2010", Haskell2010),
+  ("Haskell98", Haskell98),
   ("HexFloatLiterals", HexFloatLiterals),
   ("IdentifierSyntax", IdentifierSyntax),
   ("ImplicitParams", ImplicitParams),
