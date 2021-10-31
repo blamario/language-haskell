@@ -874,8 +874,8 @@ terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ())
 
 whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
-   where spaceChars = (takeCharsWhile1 Char.isSpace
-                       >>= \ws-> lift ([[WhiteSpace ws]], ()))
+   where spaceChars = ((takeCharsWhile1 Char.isSpace
+                       >>= \ws-> lift ([[WhiteSpace ws]], ())) <?> "whitespace")
                       <<|> pure ()
 
 comment :: (Show t, TextualMonoid t) => Parser g t t
