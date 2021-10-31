@@ -155,7 +155,7 @@ parseModule extensions source = case moduleExtensions of
   Left err -> Left err
   Right [extensions'] ->
      (if null extensions' then id
-      else fmap $ fmap (rewrap $ Abstract.withLanguagePragma extensions'))
+      else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
     $ parseResults $ Report.haskellModule
     $ parseComplete (extendedGrammar $ extensions <> Set.fromList extensions') source
   Right extensionses -> error (show extensionses)
