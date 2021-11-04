@@ -2,9 +2,9 @@
 
 module Main where
 
-import Language.Haskell (Placed, parseModule, resolvePositions)
+import Language.Haskell (Placed, resolvePositions)
 import Language.Haskell.Extensions (ExtensionSwitch(Yes), allExtensions)
-import Language.Haskell.Extensions.AST (Language, Module(..), Expression)
+import Language.Haskell.Extensions.AST (Language)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
@@ -20,23 +20,17 @@ import qualified Transformation.AG.Monomorphic
 
 import Control.Monad
 import Data.Data (Data)
-import Data.Functor.Identity (Identity(Identity))
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
 import qualified Data.Set as Set
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
 import Data.Typeable (Typeable)
 import Options.Applicative
-import Text.Grampa (Ambiguous, Grammar, ParseResults, Position, parseComplete, failureDescription)
-import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
+import Text.Grampa (ParseResults, parseComplete, failureDescription)
 import ReprTree
-import System.FilePath (FilePath, addExtension, combine, takeDirectory)
 
 import Prelude hiding (getLine, getContents, readFile)
 
@@ -117,7 +111,7 @@ main' Opts{..} = case optsFile
              Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l)) =>
             (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
          -> String -> Text -> IO ()
-      go parser filename contents = report contents (parser $ pure contents)
+      go parser _filename contents = report contents (parser $ pure contents)
       report :: forall g l a e w.
                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                  a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),

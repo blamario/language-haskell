@@ -16,7 +16,6 @@ import Data.Semigroup.Factorial (Factorial)
 import Text.Parser.Input.Position (Position)
 import Text.Grampa (Ambiguous(Ambiguous, getAmbiguous))
 
-import qualified Rank2
 import Transformation (Transformation)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
@@ -32,11 +31,11 @@ data Effective pos s (m :: Type -> Type) t = Effective t
 
 -- | Join the two wrappings of a double-'Wrapped' value into one.
 joinWrapped :: forall pos s a. (Position pos, Factorial s) => Wrapped pos s (Wrapped pos s a) -> Wrapped pos s a
-joinWrapped (Compose (range@(start, end),
+joinWrapped (Compose (range@(start, _end),
              Compose (Ambiguous xs))) = Compose (range, Compose $ Ambiguous $ sconcat $ merge <$> xs)
    where merge :: (Reserializer.ParsedLexemes s, Wrapped pos s a) -> NonEmpty (Reserializer.ParsedLexemes s, a)
          merge (Reserializer.Trailing lexemes,
-                Compose ((innerStart, innerEnd), Compose (Ambiguous ys))) = mergeInner <$> ys
+                Compose ((innerStart, _innerEnd), Compose (Ambiguous ys))) = mergeInner <$> ys
             where mergeInner (Reserializer.Trailing innerLexemes, y) =
                      (Reserializer.Trailing $ Reserializer.mergeLexemes start lexemes innerStart innerLexemes, y)
 
@@ -121,5 +120,5 @@ unique inv amb (Compose ((start, end), Compose (Ambiguous xs))) =
    report (partitionEithers $ traverse validationToEither <$> NonEmpty.toList xs)
    where report (_, [(ws, x)]) = Success ((start, ws, end), x)
          report (errors, []) = Failure (inv $ sconcat $ NonEmpty.fromList errors)
-         report (errors, x1:x2:xs) | x1 == x2 = report (errors, x2:xs)
+         report (errors, x1:x2:xs') | x1 == x2 = report (errors, x2:xs')
          report (_, multi) = Failure (amb $ snd <$> multi)

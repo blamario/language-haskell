@@ -10,15 +10,10 @@ import qualified Data.Map.Lazy as Map
 import Data.Semigroup (sconcat)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
-import Language.Haskell.TH (appT, conT, varT, newName)
 
-import qualified Rank2.TH
 import qualified Transformation
 import qualified Transformation.Deep as Deep
-import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
-import qualified Transformation.Full.TH
-import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG.Monomorphic as AG.Mono
 import Text.Grampa (Ambiguous(..))
 
@@ -28,6 +23,8 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer
+
+import Prelude hiding (mod, span)
 
 data Resolution l pos s = Resolution
 
@@ -53,7 +50,7 @@ instance {-# overlaps #-} forall l pos s.
           Abstract.Name l ~ AST.Name l) =>
          Resolution l pos s
          `Transformation.At` AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
+   _res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
       let resolveExpression :: f ~ Reserializer.Wrapped pos s
                             => AST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
@@ -95,14 +92,14 @@ instance {-# overlaps #-} forall l pos s f.
           Abstract.Name l ~ ExtAST.Name l) =>
          Resolution l pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
+  _res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expressions) =
       let resolveExpression :: ExtAST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
              | (_, ExtAST.ReferenceExpression name) <- op =
                 maybe (const $ Failure $ pure UnknownOperator)
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
-          resolveExpression e@(ExtAST.TupleSectionExpression items)
+          resolveExpression (ExtAST.TupleSectionExpression items)
              | Just items' <- sequence items = Failure (TupleSectionWithNoOmission items' :| [])
           resolveExpression e@(ExtAST.ApplyExpression left right)
              | (_, ExtAST.Negate{}) <- left = verifyArg (Just AST.LeftAssociative) prefixMinusPrecedence right (pure e)

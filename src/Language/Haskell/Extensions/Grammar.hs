@@ -15,12 +15,10 @@ import Control.Monad (void)
 import qualified Data.Char as Char
 import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)), toList)
-import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.Functor.Compose (Compose(getCompose))
 import Data.Ord (Down)
-import Data.String (IsString)
 import Data.Monoid (Dual(..), Endo(..))
-import Data.Monoid.Instances.Positioned (LinePositioned, extract)
-import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
+import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import qualified Data.Map.Lazy as Map
@@ -30,7 +28,6 @@ import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Numeric
-import qualified Rank2
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
@@ -38,35 +35,33 @@ import Text.Grampa
 import qualified Text.Grampa.ContextFree.SortedMemoizing as P (Parser)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
-import Witherable (filter, mapMaybe)
+import Witherable (filter)
 
 import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    allExtensions, switchesByName, implications) 
+                                    switchesByName, implications) 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
-import qualified Language.Haskell.Extensions.AST as AST (Language, Value(..))
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
-import qualified Language.Haskell.Disambiguator as Disambiguator
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
 
-extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
-                              Ord t, Show t, OutlineMonoid t,
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+                            Ord t, Show t, OutlineMonoid t,
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
                 => Map (Set ExtensionSwitch)
                        (Int,
                         GrammarBuilder (HaskellGrammar l t (NodeWrap t))
@@ -107,12 +102,6 @@ extensionMixins =
      (Set.fromList [Yes MultiWayIf],                 (8, multiWayIfMixin)),
      (Set.fromList [Yes BlockArguments],             (9, blockArgumentsMixin))]
 
-pragma :: (Show t, TextualMonoid t) => Parser g t t
-pragma = do open <- string "{-#" <> takeCharsWhile Char.isSpace
-            content <- concatMany ((notFollowedBy (string "#-}") *> anyToken) <> takeCharsWhile (/= '#'))
-            close <- string "#-}"
-            lift ([[Comment $ open <> content <> close]], content)
-
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
                  *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
@@ -125,7 +114,7 @@ languagePragmas = spaceChars
    where spaceChars = takeCharsWhile Char.isSpace
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
          extension = do extensionName <- takeCharsWhile Char.isAlphaNum
-                        spaceChars
+                        void spaceChars
                         case Map.lookup extensionName switchesByName of
                            Just ext -> pure ext
                            Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
@@ -135,7 +124,7 @@ languagePragmas = spaceChars
                                      <|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile  (/= '-'))
                         *> string "-}"
 
-parseModule :: forall l t p. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -229,15 +218,15 @@ unicodeSyntaxMixin baseGrammar = baseGrammar{
 magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 magicHashMixin baseGrammar@HaskellGrammar{..} =
-  let integer, integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
-      float, floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
-      charLiteral, charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-      stringLiteral, stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
+  let integer', integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
+      float', floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
+      charLiteral', charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
+      stringLiteral', stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
 
-      integer = token (integerLexeme <* notFollowedBy (string "#"))
-      float = token (floatLexeme <* notFollowedBy (string "#"))
-      charLiteral = token (charLexeme <* notFollowedBy (string "#"))
-      stringLiteral = token (stringLexeme <* notFollowedBy (string "#")) <?> "string literal"
+      integer' = token (integerLexeme <* notFollowedBy (string "#"))
+      float' = token (floatLexeme <* notFollowedBy (string "#"))
+      charLiteral' = token (charLexeme <* notFollowedBy (string "#"))
+      stringLiteral' = token (stringLexeme <* notFollowedBy (string "#")) <?> "string literal"
 
       integerHash = token (integerLexeme <* string "#" <* notFollowedBy (string "#"))
       floatHash = token (floatLexeme <* string "#" <* notFollowedBy (string "#"))
@@ -248,20 +237,20 @@ magicHashMixin baseGrammar@HaskellGrammar{..} =
   in baseGrammar{
   lPattern = aPattern
               <|> Abstract.literalPattern
-                  <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer
+                  <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
                             <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
                                 <$ delimiter "-" <*> integerHash
                             <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.integerLiteral . negate)
                                 <$ delimiter "-" <*> integerHash2)
               <|> Abstract.literalPattern
-                  <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float
+                  <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float'
                             <|> (Abstract.hashLiteral . Abstract.floatingLiteral . negate)
                                 <$ delimiter "-" <*> floatHash
                             <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.floatingLiteral . negate)
                                 <$ delimiter "-" <*> floatHash2)
               <|> Abstract.constructorPattern <$> wrap generalConstructor <*> some (wrap aPattern),
-   literal = Abstract.integerLiteral <$> integer <|> Abstract.floatingLiteral <$> float
-             <|> Abstract.charLiteral <$> charLiteral <|> Abstract.stringLiteral <$> stringLiteral
+   literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
+             <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
              <|> Abstract.hashLiteral
                  <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
                       <|> Abstract.charLiteral <$> charHashLiteral <|> Abstract.stringLiteral <$> stringHashLiteral)
@@ -485,6 +474,7 @@ binaryLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <<|> integerLexeme}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
+         binary _ _ = error "non-binary"
 
 hexFloatLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                       => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -493,20 +483,20 @@ hexFloatLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                                  *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
                    *> integerLexeme,
    floatLexeme = (string "0x" <|> string "0X")
-                 *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (exponent <<|> pure 0)
-                    <|> readHexFloat <$> hexadecimal <*> pure mempty <*> exponent)
+                 *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (hexExponent <<|> pure 0)
+                    <|> readHexFloat <$> hexadecimal <*> pure mempty <*> hexExponent)
                  <|> floatLexeme}
-   where exponent =
+   where hexExponent =
            (string "p" <|> string "P")
            *> (id <$ string "+" <|> negate <$ string "-" <|> pure id)
            <*> (fst . head . Numeric.readDec . toString mempty <$> decimal)
-         readHexFloat whole fraction exponent =
+         readHexFloat whole fraction magnitude =
            fst (head $ Numeric.readHex $ toString mempty $ whole <> fraction)
-           * 2 ^^ (exponent - Factorial.length fraction)
+           * 2 ^^ (magnitude - Factorial.length fraction)
 
 numericUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-numericUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+numericUnderscoresMixin baseGrammar@HaskellGrammar{} = baseGrammar{
    decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit) <?> "decimal number",
    octal = takeCharsWhile1 Char.isOctDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isOctDigit)
            <?> "octal number",
@@ -523,6 +513,7 @@ binaryUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <<|> integerLexeme}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
+         binary _ _ = error "non-binary"
          binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t

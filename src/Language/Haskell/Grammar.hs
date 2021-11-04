@@ -6,26 +6,21 @@
 module Language.Haskell.Grammar where
 
 import Control.Applicative
-import Control.Arrow (first, second)
 import Control.Monad (void)
-import qualified Control.Monad
 import qualified Data.Char as Char (chr, isAscii, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit,
                                     isSpace, isSymbol, isUpper, ord)
-import Data.Data (Data)
 import Data.Either (lefts, isLeft, partitionEithers)
-import Data.Foldable (maximumBy, toList)
-import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.Foldable (toList)
+import Data.Functor.Compose (Compose(Compose))
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Ord (Down, comparing)
-import Data.String (fromString)
+import Data.Ord (Down)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
-import Data.Monoid.Instances.Positioned (LinePositioned, column, extract)
-import Data.Semigroup.Cancellative (isPrefixOf)
+import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Text (Text)
@@ -35,19 +30,15 @@ import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
-import Text.Parser.Input.Position (Position)
-import Text.Parser.Token (braces, brackets, comma, parens, semi)
+import Text.Parser.Token (braces, brackets, comma, parens)
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.AST as AST (Language)
 import qualified Language.Haskell.Disambiguator as Disambiguator
-import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), Wrapped,
-                                      lexemes, mapWrappings)
+import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), lexemes)
 
-import Debug.Trace
 import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
@@ -156,7 +147,7 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar g@HaskellGrammar{..} = HaskellGrammar{
+grammar HaskellGrammar{..} = HaskellGrammar{
    haskellModule = wrap (optional (char '\xfeff') *> whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
                                                                <*> optional exports <* keyword "where"
@@ -933,14 +924,14 @@ oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                     Deep.Foldable (Serialization (Down Int) t) node,
                     Deep.Functor (DisambiguatorTrans t) node)
                 => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)) -> Bool
-oneExtendedLine indent input node =
+oneExtendedLine indent _input node =
    allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.firstChoice node)
-   where allIndented (WhiteSpace ws : Token Delimiter token : rest) = allIndented rest
-         allIndented (WhiteSpace ws : Token _ token : rest)
+   where allIndented (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented rest
+         allIndented (WhiteSpace ws : Token _ tok : rest)
             | Textual.all isLineChar ws = allIndented rest
             | tokenIndent < indent = False
-            | tokenIndent == indent && token `Set.notMember` reservedWords
-              && all (`notElem` terminators) (characterPrefix token) = False
+            | tokenIndent == indent && tok `Set.notMember` reservedWords
+              && all (`notElem` terminators) (characterPrefix tok) = False
             where tokenIndent = currentColumn (Factorial.dropWhile (const True) ws)
          allIndented (_ : rest) = allIndented rest
          allIndented [] = True

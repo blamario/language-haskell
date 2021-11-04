@@ -6,23 +6,19 @@ module Language.Haskell.Template where
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
 import Data.List (nub)
-import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
-import Data.String (fromString)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
 import Text.PrettyPrint (render)
-
-import qualified Transformation
 
 import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST
-import Language.Haskell.TH hiding (Extension, doE, mdoE)
+import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr
 
 import qualified Language.Haskell.AST as AST
@@ -133,9 +129,7 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
       UnitConstructor -> TupE []
 expressionTemplate (CaseExpression scrutinee alternatives) =
    CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
-expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTemplate . extract <$> alternatives)
-   where guardedTemplate (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
-                                                                  wrappedExpressionTemplate result)
+expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTemplatePair . extract <$> alternatives)
 expressionTemplate (LambdaCaseExpression alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
@@ -180,6 +174,10 @@ guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f 
 guardedTemplate (GuardedExpression statements result) =
    (statementTemplate . extract <$> statements) ++ [NoBindS $ wrappedExpressionTemplate result]
 
+guardedTemplatePair :: TemplateWrapper f => GuardedExpression λ Language f f -> (Guard, Exp)
+guardedTemplatePair (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
+                                                             wrappedExpressionTemplate result)
+
 wrappedExpressionTemplate :: TemplateWrapper f => f (Expression Language Language f f) -> Exp
 wrappedExpressionTemplate x = if isParenthesized x && not (syntactic e) then ParensE template else template
    where syntactic LeftSectionExpression{} = True
@@ -205,19 +203,19 @@ declarationTemplates (DataDeclaration context lhs constructors derivings)
             Nothing (dataConstructorTemplate . extract <$> constructors)
             $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
-declarationTemplates (DefaultDeclaration types) = error "Template Haskell can't represent a default declaration"
+declarationTemplates DefaultDeclaration{} = error "Template Haskell can't represent a default declaration"
 declarationTemplates (EquationDeclaration lhs rhs wheres)
-   | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) body declarations]
-   | PatternLHS pat <- extract lhs = [ValD (patternTemplate $ extract pat) body declarations]
+   | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) rhs' declarations]
+   | PatternLHS pat <- extract lhs = [ValD (patternTemplate $ extract pat) rhs' declarations]
    | InfixLHS left name right <- extract lhs =
      [FunD (nameTemplate name)
-           [Clause [patternTemplate $ extract left, patternTemplate $ extract right] body declarations]]
+           [Clause [patternTemplate $ extract left, patternTemplate $ extract right] rhs' declarations]]
    | PrefixLHS lhs' pats <- extract lhs = case declarationTemplates (EquationDeclaration lhs' rhs wheres) of
      [FunD name [Clause args body decs]] ->
         [FunD name [Clause (args ++ (patternTemplate . extract <$> toList pats)) body decs]]
      [ValD (VarP name) body decs] ->
         [FunD name [Clause (patternTemplate . extract <$> toList pats) body decs]]
-   where body = rhsTemplate (extract rhs)
+   where rhs' = rhsTemplate (extract rhs)
          declarations = foldMap (declarationTemplates . extract) wheres
 declarationTemplates (FixityDeclaration fixity precedence names) =
    InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) . nameTemplate <$> toList names
@@ -260,8 +258,8 @@ contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
 contextTemplate NoContext = []
 
 freeContextVars :: TemplateWrapper f => Context Language Language f f -> [TyVarBndrUnit]
-freeContextVars (SimpleConstraint cls var) = [plainTV $ nameTemplate var]
-freeContextVars (ClassConstraint cls t) = freeTypeVars (extract t)
+freeContextVars (SimpleConstraint _cls var) = [plainTV $ nameTemplate var]
+freeContextVars (ClassConstraint _cls t) = freeTypeVars (extract t)
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
 freeContextVars NoContext = []
 
@@ -275,10 +273,10 @@ dataConstructorTemplate (Constructor name@(AST.Name local) [left, right]) | ":" 
    InfixC (bangTypeTemplate $ extract left) (nameTemplate name) (bangTypeTemplate $ extract right)
 dataConstructorTemplate (Constructor name argTypes) =
    NormalC (nameTemplate name) (bangTypeTemplate . extract <$> argTypes)
-dataConstructorTemplate (RecordConstructor name fieldTypes) =
-   RecC (nameTemplate name) (concat $ fieldTypeTemplate . extract <$> fieldTypes)
+dataConstructorTemplate (RecordConstructor recName fieldTypes) =
+   RecC (nameTemplate recName) (concat $ fieldTypeTemplate . extract <$> fieldTypes)
    where fieldTypeTemplate (ConstructorFields names t)
-            | StrictType t' <- extract t = varBang SourceStrict t <$> toList names
+            | StrictType{} <- extract t = varBang SourceStrict t <$> toList names
             | otherwise = varBang NoSourceStrictness t <$> toList names
          varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 
@@ -296,13 +294,14 @@ literalTemplate (HashLiteral (HashLiteral (FloatingLiteral x))) = DoublePrimL x
 literalTemplate (HashLiteral (IntegerLiteral n)) = IntPrimL n
 literalTemplate (HashLiteral (HashLiteral (IntegerLiteral n))) = WordPrimL n
 literalTemplate (HashLiteral (StringLiteral s)) = StringPrimL (ByteString.unpack $ encodeUtf8 s)
+literalTemplate (HashLiteral _) = error "Unexpected HashLiteral"
 
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
 patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)
 patternTemplate (ConstructorPattern con args) = case (extract con) of
    ConstructorReference name -> ConP (qnameTemplate name) (patternTemplate . extract <$> args)
    EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
-   TupleConstructor n -> TupP (patternTemplate . extract <$> toList args)
+   TupleConstructor{} -> TupP (patternTemplate . extract <$> toList args)
    UnitConstructor -> TupP []
 patternTemplate (InfixPattern left op right) =
    InfixP (patternTemplate $ extract left) (qnameTemplate op) (patternTemplate $ extract right)
@@ -317,9 +316,7 @@ patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate WildcardPattern = WildP
 
 rhsTemplate :: TemplateWrapper f => EquationRHS Language Language f f -> Body
-rhsTemplate (GuardedRHS guarded) = GuardedB (guardedTemplate . extract <$> toList guarded)
-   where guardedTemplate (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
-                                                                  wrappedExpressionTemplate result)
+rhsTemplate (GuardedRHS guarded) = GuardedB (guardedTemplatePair . extract <$> toList guarded)
 rhsTemplate (NormalRHS result) = NormalB (wrappedExpressionTemplate result)
 
 statementTemplate :: TemplateWrapper f => Statement Language Language f f -> Stmt
@@ -370,4 +367,5 @@ qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])
 
+nameText :: AST.Name λ -> Text
 nameText (Name s) = s

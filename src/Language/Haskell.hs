@@ -4,13 +4,11 @@
 
 module Language.Haskell (parseModule, resolvePositions, Placed) where
 
-import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
 import Language.Haskell.Extensions (ExtensionSwitch)
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 
-import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Resolver as Resolver
 
@@ -20,13 +18,12 @@ import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG.Monomorphic as AG.Mono
 
 import Data.Either.Validation (validationToEither)
-import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Set (Set)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
 import Data.Text (Text)
-import Text.Grampa (Grammar, ParseResults, parseComplete)
-import Text.Parser.Input.Position (Position, offset)
+import Text.Grampa (ParseResults)
+import Text.Parser.Input.Position (offset)
 
 import Prelude hiding (readFile)
 
