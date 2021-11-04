@@ -815,7 +815,7 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 
 type NodeWrap s = Disambiguator.Wrapped (Down Int) s
 
-wrap :: (Eq t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
+wrap :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
 wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
          . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
    where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
@@ -844,7 +844,7 @@ instance LexicalParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) wh
                              <* lift ([[Token Keyword s]], ()))
                <?> ("keyword " <> show s)
 
-storeToken :: TextualMonoid t => Parser g t a -> Parser g t a
+storeToken :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t a
 storeToken p = snd <$> tmap addOtherToken (match p)
    where addOtherToken ([], (i, x)) = ([[Token Other i]], (i, x))
          addOtherToken (t, (i, x)) = (t, (i, x))
@@ -854,7 +854,7 @@ isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c
 
-delimiter, terminator :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t ()
+delimiter, terminator :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t ()
 delimiter s = void (lexicalToken $
                     string s
                     <* notSatisfyChar isSymbol
@@ -863,13 +863,13 @@ delimiter s = void (lexicalToken $
 terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
 
-whiteSpace :: (Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
+whiteSpace :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = ((takeCharsWhile1 Char.isSpace
                        >>= \ws-> lift ([[WhiteSpace ws]], ())) <?> "whitespace")
                       <<|> pure ()
 
-comment :: (Show t, TextualMonoid t) => Parser g t t
+comment :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 comment = try (blockComment
                <|> (string "--" <> takeCharsWhile (== '-') <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
           <?> "comment"
@@ -917,7 +917,7 @@ class TextualMonoid t => OutlineMonoid t where
 instance OutlineMonoid (LinePositioned Text) where
    currentColumn = column
 
-inputColumn :: OutlineMonoid t => Parser g t Int
+inputColumn :: (Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
 
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
