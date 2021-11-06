@@ -7,7 +7,8 @@
 -- * @LexicalNegation@ awaits
 
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    allExtensions, byName, switchesByName, implications) where
+                                    allExtensions, byName, implications,
+                                    modifiedWith, switchesByName, withImplications) where
 
 import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
@@ -182,6 +183,20 @@ implications = Set.fromList <$> Map.fromList [
   (TypeFamilyDependencies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds, Yes TypeFamilies]),
   (TypeOperators, [Yes ExplicitNamespaces]),
   (Unsafe, [Yes SafeImports])]
+
+-- | Adds the implied extensions to the given set of extension switches
+withImplications :: Set ExtensionSwitch -> Set ExtensionSwitch
+withImplications extensions = foldMap implied extensions `modifiedWith` extensions
+   where implied switch@(Yes extension) = Map.findWithDefault mempty extension implications
+         implied _ = mempty
+
+-- | Combines two sets of extension switches so that the latter overrides the former
+modifiedWith :: Set ExtensionSwitch -> Set ExtensionSwitch -> Set ExtensionSwitch
+modifiedWith outer inner = (outer Set.\\ Set.map inverse inner) <> inner
+
+inverse :: ExtensionSwitch -> ExtensionSwitch
+inverse (Yes ext) = No ext
+inverse (No ext) = Yes ext
 
 switchesByName :: (IsString t, Ord t, Semigroup t) => Map t ExtensionSwitch
 switchesByName = (Yes <$> byName) <> (No <$> Map.mapKeysMonotonic ("No" <>) byName)

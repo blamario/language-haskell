@@ -38,7 +38,7 @@ import qualified Transformation.Deep as Deep
 import Witherable (filter)
 
 import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    switchesByName, implications) 
+                                    modifiedWith, switchesByName, withImplications)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
@@ -146,7 +146,9 @@ parseModule extensions source = case moduleExtensions of
      (if null extensions' then id
       else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
     $ parseResults $ Report.haskellModule
-    $ parseComplete (extendedGrammar $ extensions <> Set.fromList extensions') source
+    $ parseComplete (extendedGrammar $ withImplications extensions
+                                       `modifiedWith` withImplications (Set.fromList extensions'))
+                    source
   Right extensionses -> error (show extensionses)
   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
         parseResults = getCompose . fmap snd . getCompose
@@ -169,11 +171,7 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellG
 extendedGrammar extensions = fixGrammar (extended . Report.grammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
                     $ Map.elems $ Map.restrictKeys extensionMixins
-                    $ Set.powerSet $ foldMap withImplications extensions
-         withImplications :: ExtensionSwitch -> Set ExtensionSwitch
-         withImplications switch@(Yes extension) = Set.insert switch (Map.findWithDefault mempty extension implications)
-         withImplications switch = Set.singleton switch
-         
+                    $ Set.powerSet extensions
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
