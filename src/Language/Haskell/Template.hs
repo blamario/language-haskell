@@ -67,9 +67,9 @@ instance PrettyViaTH (Module Language Language Placed Placed) where
                 prettyViaTH body]
 
 instance PrettyViaTH ExtensionSwitch where
-   prettyViaTH (Yes Extensions.EmptyDataDeclarations) = Ppr.text "EmptyDataDecls"
-   prettyViaTH (Yes x) = Ppr.text (show x)
-   prettyViaTH (No x) = Ppr.text "No" Ppr.<> prettyViaTH (Yes x)
+   prettyViaTH (ExtensionSwitch (Extensions.EmptyDataDeclarations, True)) = Ppr.text "EmptyDataDecls"
+   prettyViaTH (ExtensionSwitch (x, True)) = Ppr.text (show x)
+   prettyViaTH (ExtensionSwitch (x, False)) = Ppr.text "No" Ppr.<> prettyViaTH (ExtensionSwitch (x, True))
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
    prettyViaTH (ExportClassOrType name members) =

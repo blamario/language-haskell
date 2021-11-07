@@ -7,6 +7,7 @@
 -- * @LexicalNegation@ awaits
 
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
+                                    on, off,
                                     allExtensions, byName, implications,
                                     modifiedWith, switchesByName, withImplications) where
 
@@ -149,45 +150,50 @@ data Extension = AllowAmbiguousTypes
                | ViewPatterns
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
-data ExtensionSwitch = Yes Extension
-                     | No Extension
-                     deriving (Data, Eq, Ord, Show)
+newtype ExtensionSwitch = ExtensionSwitch (Extension, Bool)
+                          deriving (Data, Eq, Ord, Show)
+
+off, on :: Extension -> ExtensionSwitch
+-- | The off-switch for an extension
+off x = ExtensionSwitch (x, False)
+-- | The on-switch for an extension
+on x = ExtensionSwitch (x, True)
 
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
 
 implications :: Map Extension (Set ExtensionSwitch)
 implications = Set.fromList <$> Map.fromList [
-  (AutoDeriveTypeable, [Yes DeriveDataTypeable]),
-  (DeriveTraversable, [Yes DeriveFoldable, Yes DeriveFunctor]),
-  (DerivingVia, [Yes DerivingStrategies]),
-  (ExistentialQuantification, [Yes ExplicitForAll]),
-  (FlexibleInstances, [Yes TypeSynonymInstances]),
-  (FunctionalDependencies, [Yes MultiParamTypeClasses]),
-  (GADTs, [Yes GADTSyntax, Yes MonoLocalBinds]),
-  (Haskell98, [Yes NPlusKPatterns, Yes NondecreasingIndentation,
-               No DoAndIfThenElse, No EmptyDataDeclarations,
-               No ForeignFunctionInterface, No PatternGuards, No RelaxedPolyRec]),
-  (ImpredicativeTypes, [Yes ExplicitForAll, Yes RankNTypes]),
-  (IncoherentInstances, [Yes OverlappingInstances]),
-  (LiberalTypeSynonyms, [Yes ExplicitForAll]),
-  (ParallelListComp, [Yes ParallelListComprehensions]),
-  (PolyKinds, [Yes KindSignatures]),
-  (RankNTypes, [Yes ExplicitForAll]),
-  (RebindableSyntax, [No ImplicitPrelude]),
-  (RecordWildCards, [Yes DisambiguateRecordFields]),
-  (ScopedTypeVariables, [Yes ExplicitForAll]),
-  (Safe, [Yes SafeImports]),
-  (Trustworthy, [Yes SafeImports]),
-  (TypeFamilies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds]),
-  (TypeFamilyDependencies, [Yes ExplicitNamespaces, Yes KindSignatures, Yes MonoLocalBinds, Yes TypeFamilies]),
-  (TypeOperators, [Yes ExplicitNamespaces]),
-  (Unsafe, [Yes SafeImports])]
+  (AutoDeriveTypeable, [on DeriveDataTypeable]),
+  (DeriveTraversable, [on DeriveFoldable, on DeriveFunctor]),
+  (DerivingVia, [on DerivingStrategies]),
+  (ExistentialQuantification, [on ExplicitForAll]),
+  (FlexibleInstances, [on TypeSynonymInstances]),
+  (FunctionalDependencies, [on MultiParamTypeClasses]),
+  (GADTs, [on GADTSyntax, on MonoLocalBinds]),
+  (Haskell98, [on NPlusKPatterns, on NondecreasingIndentation,
+               off DoAndIfThenElse, off EmptyDataDeclarations,
+               off ForeignFunctionInterface, off PatternGuards, off RelaxedPolyRec]),
+  (ImpredicativeTypes, [on ExplicitForAll, on RankNTypes]),
+  (IncoherentInstances, [on OverlappingInstances]),
+  (LiberalTypeSynonyms, [on ExplicitForAll]),
+  (ParallelListComp, [on ParallelListComprehensions]),
+  (PolyKinds, [on KindSignatures]),
+  (RankNTypes, [on ExplicitForAll]),
+  (RebindableSyntax, [off ImplicitPrelude]),
+  (RecordWildCards, [on DisambiguateRecordFields]),
+  (ScopedTypeVariables, [on ExplicitForAll]),
+  (Safe, [on SafeImports]),
+  (Trustworthy, [on SafeImports]),
+  (TypeFamilies, [on ExplicitNamespaces, on KindSignatures, on MonoLocalBinds]),
+  (TypeFamilyDependencies, [on ExplicitNamespaces, on KindSignatures, on MonoLocalBinds, on TypeFamilies]),
+  (TypeOperators, [on ExplicitNamespaces]),
+  (Unsafe, [on SafeImports])]
 
 -- | Adds the implied extensions to the given set of extension switches
 withImplications :: Set ExtensionSwitch -> Set ExtensionSwitch
 withImplications extensions = foldMap implied extensions `modifiedWith` extensions
-   where implied switch@(Yes extension) = Map.findWithDefault mempty extension implications
+   where implied switch@(ExtensionSwitch (extension, True)) = Map.findWithDefault mempty extension implications
          implied _ = mempty
 
 -- | Combines two sets of extension switches so that the latter overrides the former
@@ -195,11 +201,11 @@ modifiedWith :: Set ExtensionSwitch -> Set ExtensionSwitch -> Set ExtensionSwitc
 modifiedWith outer inner = (outer Set.\\ Set.map inverse inner) <> inner
 
 inverse :: ExtensionSwitch -> ExtensionSwitch
-inverse (Yes ext) = No ext
-inverse (No ext) = Yes ext
+inverse (ExtensionSwitch (ext, s)) = ExtensionSwitch (ext, not s)
 
 switchesByName :: (IsString t, Ord t, Semigroup t) => Map t ExtensionSwitch
-switchesByName = (Yes <$> byName) <> (No <$> Map.mapKeysMonotonic ("No" <>) byName)
+switchesByName = ExtensionSwitch <$> ((flip (,) True <$> byName)
+                                      <> (flip (,) False <$> Map.mapKeysMonotonic ("No" <>) byName))
 
 byName :: (IsString t, Ord t) => Map t Extension
 byName = Map.fromList [

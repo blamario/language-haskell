@@ -38,7 +38,7 @@ import qualified Transformation.Deep as Deep
 import Witherable (filter)
 
 import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    modifiedWith, switchesByName, withImplications)
+                                    on, modifiedWith, switchesByName, withImplications)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
@@ -70,37 +70,37 @@ extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Pars
                                        t)
 extensionMixins =
   Map.fromList [
-     (Set.fromList [Yes IdentifierSyntax],           (0, identifierSyntaxMixin)),
-     (Set.fromList [Yes PackageImports],             (0, packageImportsMixin)),
-     (Set.fromList [Yes SafeImports],                (0, safeImportsMixin)),
-     (Set.fromList [Yes ImportQualifiedPost],        (0, importQualifiedPostMixin)),
-     (Set.fromList [Yes ExplicitNamespaces],         (0, explicitNamespacesMixin)),
-     (Set.fromList [Yes UnicodeSyntax],              (1, unicodeSyntaxMixin)),
-     (Set.fromList [Yes BinaryLiterals],             (1, binaryLiteralsMixin)),
-     (Set.fromList [Yes HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
-     (Set.fromList [Yes NumericUnderscores],         (1, numericUnderscoresMixin)),
-     (Set.fromList [Yes BinaryLiterals,
-                    Yes NumericUnderscores],         (9, binaryUnderscoresMixin)),
-     (Set.fromList [Yes PackageImports,
-                    Yes SafeImports],                (9, safePackageImportsMixin)),
-     (Set.fromList [Yes PackageImports,
-                    Yes ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
-     (Set.fromList [Yes SafeImports,
-                    Yes ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
-     (Set.fromList [Yes PackageImports,
-                    Yes SafeImports,
-                    Yes ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
-     (Set.fromList [Yes NegativeLiterals],           (2, negativeLiteralsMixin)),
-     (Set.fromList [Yes LexicalNegation],            (3, lexicalNegationMixin)),
-     (Set.fromList [Yes MagicHash],                  (3, magicHashMixin)),
-     (Set.fromList [Yes ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
-     (Set.fromList [Yes OverloadedLabels],           (4, overloadedLabelsMixin)),
-     (Set.fromList [Yes RecursiveDo],                (4, recursiveDoMixin)),
-     (Set.fromList [Yes TupleSections],              (5, tupleSectionsMixin)),
-     (Set.fromList [Yes EmptyCase],                  (6, emptyCaseMixin)),
-     (Set.fromList [Yes LambdaCase],                 (7, lambdaCaseMixin)),
-     (Set.fromList [Yes MultiWayIf],                 (8, multiWayIfMixin)),
-     (Set.fromList [Yes BlockArguments],             (9, blockArgumentsMixin))]
+     (Set.fromList [on IdentifierSyntax],           (0, identifierSyntaxMixin)),
+     (Set.fromList [on PackageImports],             (0, packageImportsMixin)),
+     (Set.fromList [on SafeImports],                (0, safeImportsMixin)),
+     (Set.fromList [on ImportQualifiedPost],        (0, importQualifiedPostMixin)),
+     (Set.fromList [on ExplicitNamespaces],         (0, explicitNamespacesMixin)),
+     (Set.fromList [on UnicodeSyntax],              (1, unicodeSyntaxMixin)),
+     (Set.fromList [on BinaryLiterals],             (1, binaryLiteralsMixin)),
+     (Set.fromList [on HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
+     (Set.fromList [on NumericUnderscores],         (1, numericUnderscoresMixin)),
+     (Set.fromList [on BinaryLiterals,
+                    on NumericUnderscores],         (9, binaryUnderscoresMixin)),
+     (Set.fromList [on PackageImports,
+                    on SafeImports],                (9, safePackageImportsMixin)),
+     (Set.fromList [on PackageImports,
+                    on ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
+     (Set.fromList [on SafeImports,
+                    on ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
+     (Set.fromList [on PackageImports,
+                    on SafeImports,
+                    on ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
+     (Set.fromList [on NegativeLiterals],           (2, negativeLiteralsMixin)),
+     (Set.fromList [on LexicalNegation],            (3, lexicalNegationMixin)),
+     (Set.fromList [on MagicHash],                  (3, magicHashMixin)),
+     (Set.fromList [on ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
+     (Set.fromList [on OverloadedLabels],           (4, overloadedLabelsMixin)),
+     (Set.fromList [on RecursiveDo],                (4, recursiveDoMixin)),
+     (Set.fromList [on TupleSections],              (5, tupleSectionsMixin)),
+     (Set.fromList [on EmptyCase],                  (6, emptyCaseMixin)),
+     (Set.fromList [on LambdaCase],                 (7, lambdaCaseMixin)),
+     (Set.fromList [on MultiWayIf],                 (8, multiWayIfMixin)),
+     (Set.fromList [on BlockArguments],             (9, blockArgumentsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
