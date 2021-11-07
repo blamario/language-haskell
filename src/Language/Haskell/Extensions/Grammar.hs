@@ -146,8 +146,7 @@ parseModule extensions source = case moduleExtensions of
      (if null extensions' then id
       else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
     $ parseResults $ Report.haskellModule
-    $ parseComplete (extendedGrammar $ withImplications extensions
-                                       `modifiedWith` withImplications (Set.fromList extensions'))
+    $ parseComplete (extendedGrammar $ withImplications $ extensions `modifiedWith` Set.fromList extensions')
                     source
   Right extensionses -> error (show extensionses)
   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
