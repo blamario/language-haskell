@@ -9,7 +9,7 @@
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     on, off,
                                     allExtensions, byName, implications,
-                                    modifiedWith, switchesByName, withImplications) where
+                                    partitionContradictory, switchesByName, withImplications) where
 
 import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
@@ -162,43 +162,51 @@ on x = ExtensionSwitch (x, True)
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
 
-implications :: Map Extension (Set ExtensionSwitch)
-implications = Set.fromList <$> Map.fromList [
-  (AutoDeriveTypeable, [on DeriveDataTypeable]),
-  (DeriveTraversable, [on DeriveFoldable, on DeriveFunctor]),
-  (DerivingVia, [on DerivingStrategies]),
-  (ExistentialQuantification, [on ExplicitForAll]),
-  (FlexibleInstances, [on TypeSynonymInstances]),
-  (FunctionalDependencies, [on MultiParamTypeClasses]),
-  (GADTs, [on GADTSyntax, on MonoLocalBinds]),
-  (Haskell98, [on NPlusKPatterns, on NondecreasingIndentation,
-               off DoAndIfThenElse, off EmptyDataDeclarations,
-               off ForeignFunctionInterface, off PatternGuards, off RelaxedPolyRec]),
-  (ImpredicativeTypes, [on ExplicitForAll, on RankNTypes]),
-  (IncoherentInstances, [on OverlappingInstances]),
-  (LiberalTypeSynonyms, [on ExplicitForAll]),
-  (ParallelListComp, [on ParallelListComprehensions]),
-  (PolyKinds, [on KindSignatures]),
-  (RankNTypes, [on ExplicitForAll]),
-  (RebindableSyntax, [off ImplicitPrelude]),
-  (RecordWildCards, [on DisambiguateRecordFields]),
-  (ScopedTypeVariables, [on ExplicitForAll]),
-  (Safe, [on SafeImports]),
-  (Trustworthy, [on SafeImports]),
-  (TypeFamilies, [on ExplicitNamespaces, on KindSignatures, on MonoLocalBinds]),
-  (TypeFamilyDependencies, [on ExplicitNamespaces, on KindSignatures, on MonoLocalBinds, on TypeFamilies]),
-  (TypeOperators, [on ExplicitNamespaces]),
-  (Unsafe, [on SafeImports])]
+implications :: Map Extension (Map Extension Bool)
+implications = Map.fromList <$> Map.fromList [
+  (AutoDeriveTypeable, [(DeriveDataTypeable, True)]),
+  (DeriveTraversable, [(DeriveFoldable, True), (DeriveFunctor, True)]),
+  (DerivingVia, [(DerivingStrategies, True)]),
+  (ExistentialQuantification, [(ExplicitForAll, True)]),
+  (FlexibleInstances, [(TypeSynonymInstances, True)]),
+  (FunctionalDependencies, [(MultiParamTypeClasses, True)]),
+  (GADTs, [(GADTSyntax, True), (MonoLocalBinds, True)]),
+  (Haskell98, [(NPlusKPatterns, True), (NondecreasingIndentation, True),
+               (DoAndIfThenElse, False), (EmptyDataDeclarations, False),
+               (ForeignFunctionInterface, False), (PatternGuards, False), (RelaxedPolyRec, False)]),
+  (ImpredicativeTypes, [(ExplicitForAll, True), (RankNTypes, True)]),
+  (IncoherentInstances, [(OverlappingInstances, True)]),
+  (LiberalTypeSynonyms, [(ExplicitForAll, True)]),
+  (ParallelListComp, [(ParallelListComprehensions, True)]),
+  (PolyKinds, [(KindSignatures, True)]),
+  (RankNTypes, [(ExplicitForAll, True)]),
+  (RebindableSyntax, [(ImplicitPrelude, False)]),
+  (RecordWildCards, [(DisambiguateRecordFields, True)]),
+  (ScopedTypeVariables, [(ExplicitForAll, True)]),
+  (Safe, [(SafeImports, True)]),
+  (Trustworthy, [(SafeImports, True)]),
+  (TypeFamilies, [(ExplicitNamespaces, True), (KindSignatures, True), (MonoLocalBinds, True)]),
+  (TypeFamilyDependencies, [(ExplicitNamespaces, True), (KindSignatures, True),
+                            (MonoLocalBinds, True), (TypeFamilies, True)]),
+  (TypeOperators, [(ExplicitNamespaces, True)]),
+  (Unsafe, [(SafeImports, True)])]
+
+-- | Given a set of extension switches, provides a 'Map' of extensions to their 'on'/'off' state an a 'Set' of
+-- contradictory extensions.
+partitionContradictory :: Set ExtensionSwitch -> (Set ExtensionSwitch, Map Extension Bool)
+partitionContradictory switches = (Map.keysSet contradictions, Map.mapKeys getExtension consistents)
+   where (contradictions, consistents) = Map.partitionWithKey isContradicted extensionMap
+         extensionMap :: Map ExtensionSwitch Bool
+         extensionMap = Map.fromSet getSwitch switches
+         isContradicted (ExtensionSwitch (x, s)) _ = ExtensionSwitch (x, not s) `Set.member` switches
+         getExtension (ExtensionSwitch (x, _)) = x
+         getSwitch (ExtensionSwitch (_, s)) = s
 
 -- | Adds the implied extensions to the given set of extension switches
-withImplications :: Set ExtensionSwitch -> Set ExtensionSwitch
-withImplications extensions = foldMap implied extensions `modifiedWith` extensions
-   where implied switch@(ExtensionSwitch (extension, True)) = Map.findWithDefault mempty extension implications
-         implied _ = mempty
-
--- | Combines two sets of extension switches so that the latter overrides the former
-modifiedWith :: Set ExtensionSwitch -> Set ExtensionSwitch -> Set ExtensionSwitch
-modifiedWith outer inner = (outer Set.\\ Set.map inverse inner) <> inner
+withImplications :: Map Extension Bool -> Map Extension Bool
+withImplications extensions = extensions `Map.union` Map.foldMapWithKey implied extensions
+   where implied extension True = Map.findWithDefault mempty extension implications
+         implied _ False = mempty
 
 inverse :: ExtensionSwitch -> ExtensionSwitch
 inverse (ExtensionSwitch (ext, s)) = ExtensionSwitch (ext, not s)

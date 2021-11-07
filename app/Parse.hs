@@ -23,7 +23,7 @@ import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
-import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Text (Text)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
@@ -95,7 +95,9 @@ main' Opts{..} = case optsFile
    where
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression
-                                                $ parseComplete (Grammar.extendedGrammar $ Set.map on allExtensions) t)
+                                                $ parseComplete (Grammar.extendedGrammar
+                                                                 $ Map.fromSet (const True) allExtensions)
+                                                  t)
       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
              e ~ Binder.WithEnvironment Language w,

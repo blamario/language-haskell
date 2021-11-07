@@ -13,9 +13,10 @@ module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModul
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
-import Data.List (foldl', null, sortOn)
-import Data.List.NonEmpty (NonEmpty((:|)), toList)
+import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(getCompose))
+import Data.List (foldl', null, sortOn)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Textual (TextualMonoid, toString)
@@ -38,7 +39,7 @@ import qualified Transformation.Deep as Deep
 import Witherable (filter)
 
 import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    on, modifiedWith, switchesByName, withImplications)
+                                    on, partitionContradictory, switchesByName, withImplications)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
@@ -62,7 +63,7 @@ extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Pars
                             Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                             Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                             Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                => Map (Set ExtensionSwitch)
+                => Map (Set Extension)
                        (Int,
                         GrammarBuilder (HaskellGrammar l t (NodeWrap t))
                                        (HaskellGrammar l t (NodeWrap t))
@@ -70,37 +71,37 @@ extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Pars
                                        t)
 extensionMixins =
   Map.fromList [
-     (Set.fromList [on IdentifierSyntax],           (0, identifierSyntaxMixin)),
-     (Set.fromList [on PackageImports],             (0, packageImportsMixin)),
-     (Set.fromList [on SafeImports],                (0, safeImportsMixin)),
-     (Set.fromList [on ImportQualifiedPost],        (0, importQualifiedPostMixin)),
-     (Set.fromList [on ExplicitNamespaces],         (0, explicitNamespacesMixin)),
-     (Set.fromList [on UnicodeSyntax],              (1, unicodeSyntaxMixin)),
-     (Set.fromList [on BinaryLiterals],             (1, binaryLiteralsMixin)),
-     (Set.fromList [on HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
-     (Set.fromList [on NumericUnderscores],         (1, numericUnderscoresMixin)),
-     (Set.fromList [on BinaryLiterals,
-                    on NumericUnderscores],         (9, binaryUnderscoresMixin)),
-     (Set.fromList [on PackageImports,
-                    on SafeImports],                (9, safePackageImportsMixin)),
-     (Set.fromList [on PackageImports,
-                    on ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
-     (Set.fromList [on SafeImports,
-                    on ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
-     (Set.fromList [on PackageImports,
-                    on SafeImports,
-                    on ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
-     (Set.fromList [on NegativeLiterals],           (2, negativeLiteralsMixin)),
-     (Set.fromList [on LexicalNegation],            (3, lexicalNegationMixin)),
-     (Set.fromList [on MagicHash],                  (3, magicHashMixin)),
-     (Set.fromList [on ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
-     (Set.fromList [on OverloadedLabels],           (4, overloadedLabelsMixin)),
-     (Set.fromList [on RecursiveDo],                (4, recursiveDoMixin)),
-     (Set.fromList [on TupleSections],              (5, tupleSectionsMixin)),
-     (Set.fromList [on EmptyCase],                  (6, emptyCaseMixin)),
-     (Set.fromList [on LambdaCase],                 (7, lambdaCaseMixin)),
-     (Set.fromList [on MultiWayIf],                 (8, multiWayIfMixin)),
-     (Set.fromList [on BlockArguments],             (9, blockArgumentsMixin))]
+     (Set.fromList [IdentifierSyntax],           (0, identifierSyntaxMixin)),
+     (Set.fromList [PackageImports],             (0, packageImportsMixin)),
+     (Set.fromList [SafeImports],                (0, safeImportsMixin)),
+     (Set.fromList [ImportQualifiedPost],        (0, importQualifiedPostMixin)),
+     (Set.fromList [ExplicitNamespaces],         (0, explicitNamespacesMixin)),
+     (Set.fromList [UnicodeSyntax],              (1, unicodeSyntaxMixin)),
+     (Set.fromList [BinaryLiterals],             (1, binaryLiteralsMixin)),
+     (Set.fromList [HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
+     (Set.fromList [NumericUnderscores],         (1, numericUnderscoresMixin)),
+     (Set.fromList [BinaryLiterals,
+                    NumericUnderscores],         (9, binaryUnderscoresMixin)),
+     (Set.fromList [PackageImports,
+                    SafeImports],                (9, safePackageImportsMixin)),
+     (Set.fromList [PackageImports,
+                    ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
+     (Set.fromList [SafeImports,
+                    ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
+     (Set.fromList [PackageImports,
+                    SafeImports,
+                    ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
+     (Set.fromList [NegativeLiterals],           (2, negativeLiteralsMixin)),
+     (Set.fromList [LexicalNegation],            (3, lexicalNegationMixin)),
+     (Set.fromList [MagicHash],                  (3, magicHashMixin)),
+     (Set.fromList [ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
+     (Set.fromList [OverloadedLabels],           (4, overloadedLabelsMixin)),
+     (Set.fromList [RecursiveDo],                (4, recursiveDoMixin)),
+     (Set.fromList [TupleSections],              (5, tupleSectionsMixin)),
+     (Set.fromList [EmptyCase],                  (6, emptyCaseMixin)),
+     (Set.fromList [LambdaCase],                 (7, lambdaCaseMixin)),
+     (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
+     (Set.fromList [BlockArguments],             (9, blockArgumentsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -138,19 +139,21 @@ parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (
                 Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                 Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-            => Set ExtensionSwitch -> t
+            => Map Extension Bool -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
-  Left err -> Left err
-  Right [extensions'] ->
-     (if null extensions' then id
-      else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
-    $ parseResults $ Report.haskellModule
-    $ parseComplete (extendedGrammar $ withImplications $ extensions `modifiedWith` Set.fromList extensions')
-                    source
-  Right extensionses -> error (show extensionses)
-  where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
-        parseResults = getCompose . fmap snd . getCompose
+   Left err -> Left err
+   Right [extensions']
+      | let (contradictions, extensionMap) = partitionContradictory (Set.fromList extensions') ->
+        if Set.null contradictions then
+           (if null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
+           $ parseResults $ Report.haskellModule
+           $ parseComplete (extendedGrammar $ withImplications $ extensionMap <> extensions) source
+        else Left mempty{errorAlternatives= [StaticDescription
+                                             $ "Contradictory extension switches " <> show (toList contradictions)]}
+   Right extensionses -> error (show extensionses)
+   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
+         parseResults = getCompose . fmap snd . getCompose
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
@@ -166,11 +169,11 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellG
                     Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                     Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
-                 => Set ExtensionSwitch -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+                 => Map Extension Bool -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . Report.grammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
                     $ Map.elems $ Map.restrictKeys extensionMixins
-                    $ Set.powerSet extensions
+                    $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),

@@ -5,7 +5,7 @@
 module Language.Haskell (parseModule, resolvePositions, Placed) where
 
 import qualified Language.Haskell.Binder as Binder
-import Language.Haskell.Extensions (ExtensionSwitch)
+import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 
@@ -18,7 +18,7 @@ import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG.Monomorphic as AG.Mono
 
 import Data.Either.Validation (validationToEither)
-import Data.Set (Set)
+import Data.Map (Map)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
 import Data.Text (Text)
@@ -31,7 +31,7 @@ import Prelude hiding (readFile)
 type Placed = (,) (Int, Reserializer.ParsedLexemes Text, Int)
 
 -- | Parse the given text of a single module.
-parseModule :: Set ExtensionSwitch -> Text
+parseModule :: Map Extension Bool -> Text
             -> ParseResults (LinePositioned Text) [Placed (AST.Module AST.Language AST.Language Placed Placed)]
 parseModule extensions source =
   (resolvePositions source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text)
