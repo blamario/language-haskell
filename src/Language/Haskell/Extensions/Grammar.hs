@@ -51,18 +51,8 @@ import Prelude hiding (exponent, filter, null)
 
 extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                             Ord t, Show t, OutlineMonoid t,
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                            Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                            Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
                 => Map (Set Extension)
                        (Int,
                         GrammarBuilder (HaskellGrammar l t (NodeWrap t))
@@ -126,19 +116,9 @@ languagePragmas = spaceChars
                         *> string "-}"
 
 parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
-                Ord t, Show t, OutlineMonoid t,
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                        Ord t, Show t, OutlineMonoid t,
+                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                        Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
             => Map Extension Bool -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
@@ -157,18 +137,8 @@ parseModule extensions source = case moduleExtensions of
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                    Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                    Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
                  => Map Extension Bool -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . Report.grammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
@@ -176,18 +146,8 @@ extendedGrammar extensions = fixGrammar (extended . Report.grammar)
                     $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                     Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar = blockArgumentsMixin . unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin
           . parallelListComprehensionsMixin . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin
@@ -258,10 +218,8 @@ magicHashMixin baseGrammar@HaskellGrammar{..} =
                  <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}
 
 recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                               Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                               Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                               Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                               Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
                  => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 recursiveDoMixin baseGrammar = baseGrammar{
    closedBlockExpresion = closedBlockExpresion baseGrammar

@@ -1,9 +1,11 @@
-{-# Language KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
+{-# Language ConstraintKinds, FlexibleContexts, KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
 
 module Language.Haskell.Abstract where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
+import qualified Transformation.Deep as Deep
+
 import Language.Haskell.Extensions (ExtensionSwitch)
 
 class Haskell λ where
@@ -171,3 +173,75 @@ class Haskell λ where
 
    cCall, cppCall, dotNetCall, jvmCall, stdCall :: CallingConvention λ
    safeCall, unsafeCall :: CallSafety λ
+
+type DeeplyFunctor t l = (Deep.Functor t (Module l l),
+                          Deep.Functor t (Declaration l l),
+                          Deep.Functor t (Expression l l),
+                          Deep.Functor t (Type l l),
+                          Deep.Functor t (EquationLHS l l),
+                          Deep.Functor t (EquationRHS l l),
+                          Deep.Functor t (GuardedExpression l l),
+                          Deep.Functor t (Pattern l l),
+                          Deep.Functor t (Statement l l),
+                          Deep.Functor t (TypeLHS l l),
+                          Deep.Functor t (Import l l),
+                          Deep.Functor t (ImportSpecification l l),
+                          Deep.Functor t (ImportItem l l),
+                          Deep.Functor t (Export l l),
+                          Deep.Functor t (Context l l),
+                          Deep.Functor t (DataConstructor l l),
+                          Deep.Functor t (DerivingClause l l),
+                          Deep.Functor t (FieldDeclaration l l),
+                          Deep.Functor t (FieldBinding l l),
+                          Deep.Functor t (FieldPattern l l),
+                          Deep.Functor t (CaseAlternative l l),
+                          Deep.Functor t (Constructor l l),
+                          Deep.Functor t (Value l l))
+
+type DeeplyFoldable t l = (Deep.Foldable t (Module l l),
+                           Deep.Foldable t (Declaration l l),
+                           Deep.Foldable t (Expression l l),
+                           Deep.Foldable t (Type l l),
+                           Deep.Foldable t (EquationLHS l l),
+                           Deep.Foldable t (EquationRHS l l),
+                           Deep.Foldable t (GuardedExpression l l),
+                           Deep.Foldable t (Pattern l l),
+                           Deep.Foldable t (Statement l l),
+                           Deep.Foldable t (TypeLHS l l),
+                           Deep.Foldable t (Import l l),
+                           Deep.Foldable t (ImportSpecification l l),
+                           Deep.Foldable t (ImportItem l l),
+                           Deep.Foldable t (Export l l),
+                           Deep.Foldable t (Context l l),
+                           Deep.Foldable t (DataConstructor l l),
+                           Deep.Foldable t (DerivingClause l l),
+                           Deep.Foldable t (FieldDeclaration l l),
+                           Deep.Foldable t (FieldBinding l l),
+                           Deep.Foldable t (FieldPattern l l),
+                           Deep.Foldable t (CaseAlternative l l),
+                           Deep.Foldable t (Constructor l l),
+                           Deep.Foldable t (Value l l))
+
+type DeeplyTraversable t l = (Deep.Traversable t (Module l l),
+                              Deep.Traversable t (Declaration l l),
+                              Deep.Traversable t (Expression l l),
+                              Deep.Traversable t (Type l l),
+                              Deep.Traversable t (EquationLHS l l),
+                              Deep.Traversable t (EquationRHS l l),
+                              Deep.Traversable t (GuardedExpression l l),
+                              Deep.Traversable t (Pattern l l),
+                              Deep.Traversable t (Statement l l),
+                              Deep.Traversable t (TypeLHS l l),
+                              Deep.Traversable t (Import l l),
+                              Deep.Traversable t (ImportSpecification l l),
+                              Deep.Traversable t (ImportItem l l),
+                              Deep.Traversable t (Export l l),
+                              Deep.Traversable t (Context l l),
+                              Deep.Traversable t (DataConstructor l l),
+                              Deep.Traversable t (DerivingClause l l),
+                              Deep.Traversable t (FieldDeclaration l l),
+                              Deep.Traversable t (FieldBinding l l),
+                              Deep.Traversable t (FieldPattern l l),
+                              Deep.Traversable t (CaseAlternative l l),
+                              Deep.Traversable t (Constructor l l),
+                              Deep.Traversable t (Value l l))
