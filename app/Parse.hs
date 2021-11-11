@@ -9,10 +9,12 @@ import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions.Grammar as Grammar
+import qualified Language.Haskell.Extensions.Verifier as Verifier
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Resolver as Resolver
 import qualified Language.Haskell.Template as Template
 
+import qualified Transformation
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -40,7 +42,7 @@ data GrammarMode = ModuleMode | ExpressionMode
 data Output = Original | Plain | Pretty | Tree
             deriving Show
 
-data Stage = Parsed | Bound | Resolved
+data Stage = Parsed | Bound | Resolved | Verified
     deriving Show
 
 data Opts = Opts
@@ -71,7 +73,8 @@ main = execParser opts >>= main'
         <*> (flag' Parsed (long "parsed" <> help "show raw ambiguous parse tree")
              <|> flag' Bound (long "bound" <> help "show ambiguous parse tree with identifier bindings")
              <|> flag' Resolved (long "resolved" <> help "show parse tree with all ambiguities resolved")
-             <|> pure Resolved)
+             <|> flag' Verified (long "verified" <> help "show resolved parse tree with all extensions verified")
+             <|> pure Verified)
         <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
                                  <> help "Where to look for imports"))
         <*> optional (strArgument
@@ -106,6 +109,7 @@ main' Opts{..} = case optsFile
              Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
              Data (g Language Language e e), Data (g Language Language w w),
              Show (g Language Language e e), Show (g Language Language w w),
+             Transformation.At (Verifier.Verification l Int Text) (g l l Placed Placed),
              Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
              Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
@@ -123,6 +127,7 @@ main' Opts{..} = case optsFile
                  Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
                  Data (g Language Language e e), Data (g Language Language w w),
                  Show (g Language Language e e), Show (g Language Language w w),
+                 Transformation.At (Verifier.Verification l Int Text) (g l l Placed Placed),
                  Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
                  Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g l l),
@@ -135,12 +140,22 @@ main' Opts{..} = case optsFile
             Parsed -> print parsed
             Bound -> print bound
             Resolved -> print resolved
-         Pretty -> putStrLn (Template.pprint resolved)
-         Tree -> putStrLn $ case optsStage of
-            Parsed -> reprTreeString parsed
-            Bound -> reprTreeString bound
-            Resolved -> reprTreeString resolved
-         where resolved = resolvePositions contents parsed
+            Verified -> verifyBefore print
+         Pretty -> case optsStage of
+           Resolved -> putStrLn $ Template.pprint resolved
+           Verified -> verifyBefore (putStrLn . Template.pprint)
+         Tree -> case optsStage of
+            Parsed -> putStrLn $ reprTreeString parsed
+            Bound -> putStrLn $ reprTreeString bound
+            Resolved -> putStrLn $ reprTreeString resolved
+            Verified -> verifyBefore (putStrLn . reprTreeString)
+         where verifyBefore :: (a -> IO ()) -> IO ()
+               verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
+                  [] -> action resolved
+                  errors -> mapM_ (putStrLn . show) errors
+               t :: Verifier.Verification l Int Text
+               t = Verifier.Verification
+               resolved = resolvePositions contents parsed
                bound = Binder.withBindings (Binder.predefinedModuleBindings :: Binder.Environment l) parsed
       report contents (Right l) =
          putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
