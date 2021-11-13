@@ -52,15 +52,19 @@ verifyModule :: forall l pos s. (Abstract.DeeplyFoldable (Accounting l pos s) l,
                -> [Error pos]
 verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
-   <> (UnusedExtension <$> toList (Map.keysSet $ localExtensions Map.\\ usedExtensions))
+   <> (UnusedExtension
+       <$> toList (Map.keysSet (localExtensions Map.\\ usedExtensions) Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
          usedExtensions = Full.foldMap (Accounting :: Accounting l pos s) m
-         declaredExtensions = Map.filter id (withImplications $ localExtensions <> extensions)
+         declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
+                                             <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
-   <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
+   <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
+   where declaredExtensions = Map.filter id (withImplications extensions
+                                             <> Map.fromSet (const True) Extensions.includedByDefault)
 
 instance {-# overlappable #-} Accounting l pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
@@ -101,5 +105,3 @@ instance (Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
          Full.Foldable (Accounting l pos s) g where
    foldMap = Full.foldMapDownDefault
-
-

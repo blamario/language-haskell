@@ -8,7 +8,7 @@
 
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     on, off,
-                                    allExtensions, byName, implications,
+                                    allExtensions, byName, includedByDefault, implications, languageVersions,
                                     partitionContradictory, switchesByName, withImplications) where
 
 import Data.Data (Data, Typeable)
@@ -161,6 +161,13 @@ on x = ExtensionSwitch (x, True)
 
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
+
+includedByDefault :: Set Extension
+includedByDefault = Set.fromList [DoAndIfThenElse, EmptyDataDeclarations, ForeignFunctionInterface,
+                                  PatternGuards, RelaxedPolyRec]
+
+languageVersions :: Set Extension
+languageVersions = Set.fromList [Haskell98, Haskell2010]
 
 implications :: Map Extension (Map Extension Bool)
 implications = Map.fromList <$> Map.fromList [

@@ -3,7 +3,7 @@
 module Main where
 
 import Language.Haskell (Placed, resolvePositions)
-import Language.Haskell.Extensions (allExtensions, on)
+import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST (Language)
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
@@ -99,7 +99,7 @@ main' Opts{..} = case optsFile
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression
                                                 $ parseComplete (Grammar.extendedGrammar
-                                                                 $ Map.fromSet (const True) allExtensions)
+                                                                 $ Map.fromSet (const True) Extensions.allExtensions)
                                                   t)
       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
