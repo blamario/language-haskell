@@ -28,7 +28,7 @@ import qualified Language.Haskell.Template as Template
 
 import Prelude hiding (readFile)
 
-main = exampleTree "" "test/ghc/" >>= defaultMain . testGroup "GHC"
+main = exampleTree "" "test/" >>= defaultMain . testGroup "positive"
 
 width = 80
 contextLines = 3

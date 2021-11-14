@@ -92,6 +92,8 @@ instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) whe
       $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH <$> items)
 
 instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
+   prettyViaTH (ImportClassOrType name@(AST.Name local) Nothing)
+      | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.text "type" <+> Ppr.parens (prettyViaTH name)
    prettyViaTH (ImportClassOrType name members) =
       prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ImportVar name@(AST.Name local))

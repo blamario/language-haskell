@@ -92,15 +92,15 @@ instance (Eq s, IsString s) =>
       <>
       (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
       <>
-      (if null qualifiedAndAfter || any (not . isKeyword) beforeQualified then mempty
+      (if null qualifiedAndAfter || any (not . isAnyKeyword) beforeQualified then mempty
        else Map.singleton Extensions.ImportQualifiedPost [(start, end)])
-      where (beforeQualified, qualifiedAndAfter) = break isQualified (filter isToken lexemes)
-            isToken Token{} = True
-            isToken _ = False
-            isQualified Token{lexemeType= Keyword, lexemeText= "qualified"} = True
-            isQualified _ = False
-            isKeyword Token{lexemeType= Keyword} = True
-            isKeyword _ = False
+      where (beforeQualified, qualifiedAndAfter) = break (isKeyword "qualified") (filter isAnyToken lexemes)
+
+instance (Eq s, IsString s) =>
+         Accounting l pos s
+         `Transformation.At` AST.ImportItem l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, Trailing lexemes, end), AST.ImportClassOrType{}) = Const $
+      if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
 
 instance (Abstract.Context l ~ AST.Context l) =>
          Accounting l pos s
@@ -117,3 +117,15 @@ instance (Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
          Full.Foldable (Accounting l pos s) g where
    foldMap = Full.foldMapDownDefault
+
+isAnyToken :: Lexeme s -> Bool
+isAnyToken Token{} = True
+isAnyToken _ = False
+
+isAnyKeyword :: Lexeme s -> Bool
+isAnyKeyword Token{lexemeType= Keyword} = True
+isAnyKeyword _ = False
+
+isKeyword :: (Eq s, IsString s) => s -> Lexeme s -> Bool
+isKeyword s Token{lexemeType= Keyword, lexemeText= t} = s == t
+isKeyword _ _ = False
