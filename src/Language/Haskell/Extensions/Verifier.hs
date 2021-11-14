@@ -11,6 +11,7 @@ import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
+import Data.String (IsString)
 
 import qualified Transformation
 import qualified Transformation.Deep as Deep
@@ -24,6 +25,7 @@ import Language.Haskell.Extensions (Extension, ExtensionSwitch, partitionContrad
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Reserializer as Reserializer
+import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
 data Accounting l pos s = Accounting
 data Verification l pos s = Verification
@@ -77,21 +79,30 @@ instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
       uncurry UndeclaredExtensionUse
       <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
 
-instance {-# overlaps #-} (Abstract.DeeplyFoldable (Accounting l pos s) l,
-                           Abstract.Haskell l,
-                           Abstract.Module l l ~ AST.Module l l) =>
+instance (Abstract.DeeplyFoldable (Accounting l pos s) l, Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
          Verification l pos s
          `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Verification $ (_, m) = Const $ flip verifyModule m
 
-instance {-# overlaps #-} Accounting l pos s
+instance (Eq s, IsString s) =>
+         Accounting l pos s
          `Transformation.At` ExtAST.Import l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), ExtAST.Import safe _qualified package name alias spec) = Const $
+   Accounting $ ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec) = Const $
       (if safe then Map.singleton Extensions.SafeImports [(start, end)] else mempty)
       <>
       (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
+      <>
+      (if null qualifiedAndAfter || any (not . isKeyword) beforeQualified then mempty
+       else Map.singleton Extensions.ImportQualifiedPost [(start, end)])
+      where (beforeQualified, qualifiedAndAfter) = break isQualified (filter isToken lexemes)
+            isToken Token{} = True
+            isToken _ = False
+            isQualified Token{lexemeType= Keyword, lexemeText= "qualified"} = True
+            isQualified _ = False
+            isKeyword Token{lexemeType= Keyword} = True
+            isKeyword _ = False
 
-instance {-# overlaps #-} (Abstract.Context l ~ AST.Context l) =>
+instance (Abstract.Context l ~ AST.Context l) =>
          Accounting l pos s
          `Transformation.At` AST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, _, end), AST.DataDeclaration context _lhs constructors _derivings) = Const $
@@ -100,6 +111,7 @@ instance {-# overlaps #-} (Abstract.Context l ~ AST.Context l) =>
       (case snd context
        of AST.NoContext -> mempty
           _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
+   Accounting $ _ = mempty
 
 instance (Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
