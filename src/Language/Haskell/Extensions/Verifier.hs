@@ -55,13 +55,15 @@ verifyModule :: forall l pos s. (Abstract.DeeplyFoldable (Accounting l pos s) l,
 verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
    <> (UnusedExtension
-       <$> toList (Map.keysSet (localExtensions Map.\\ usedExtensions) Set.\\ Extensions.languageVersions))
+       <$> toList (Map.keysSet localExtensions Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
          usedExtensions = Full.foldMap (Accounting :: Accounting l pos s) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
+         usedExtensionsWithPremises = Map.foldMapWithKey extensionAndPremises usedExtensions
+         extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
    <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)

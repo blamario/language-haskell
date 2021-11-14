@@ -8,14 +8,16 @@
 
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     on, off,
-                                    allExtensions, byName, includedByDefault, implications, languageVersions,
-                                    partitionContradictory, switchesByName, withImplications) where
+                                    allExtensions, byName, includedByDefault, implications, inverseImplications,
+                                    languageVersions, partitionContradictory, switchesByName, withImplications) where
 
+import Data.Bool (bool)
 import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
 
 data Extension = AllowAmbiguousTypes
@@ -198,6 +200,10 @@ implications = Map.fromList <$> Map.fromList [
   (TypeOperators, [(ExplicitNamespaces, True)]),
   (Unsafe, [(SafeImports, True)])]
 
+inverseImplications :: Map Extension (Set Extension)
+inverseImplications = getUnionWith $ Map.foldMapWithKey inverse implications 
+   where inverse parent = UnionWith . Map.mapMaybe (bool Nothing $ Just $ Set.singleton parent)
+      
 -- | Given a set of extension switches, provides a 'Map' of extensions to their 'on'/'off' state an a 'Set' of
 -- contradictory extensions.
 partitionContradictory :: Set ExtensionSwitch -> (Set ExtensionSwitch, Map Extension Bool)
