@@ -109,7 +109,7 @@ main' Opts{..} = case optsFile
              Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
              Data (g Language Language e e), Data (g Language Language w w),
              Show (g Language Language e e), Show (g Language Language w w),
-             Transformation.At (Verifier.Verification l Int Text) (g l l Placed Placed),
+             Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
              Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
              Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
@@ -127,7 +127,7 @@ main' Opts{..} = case optsFile
                  Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
                  Data (g Language Language e e), Data (g Language Language w w),
                  Show (g Language Language e e), Show (g Language Language w w),
-                 Transformation.At (Verifier.Verification l Int Text) (g l l Placed Placed),
+                 Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
                  Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
                  Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g l l),
@@ -153,7 +153,7 @@ main' Opts{..} = case optsFile
                verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
                   [] -> action resolved
                   errors -> mapM_ (putStrLn . show) errors
-               t :: Verifier.Verification l Int Text
+               t :: Verifier.Verification Int Text
                t = Verifier.Verification
                resolved = resolvePositions contents parsed
                bound = Binder.withBindings (Binder.predefinedModuleBindings :: Binder.Environment l) parsed

@@ -27,26 +27,26 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
-data Accounting l pos s = Accounting
-data Verification l pos s = Verification
+data Accounting pos s = Accounting
+data Verification pos s = Verification
 
-type Accounted l pos = Const (Map Extension [(pos, pos)])
-type Verified l pos = Const (Map Extension Bool -> [Error pos])
+type Accounted pos = Const (Map Extension [(pos, pos)])
+type Verified pos = Const (Map Extension Bool -> [Error pos])
 
 data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
                | UndeclaredExtensionUse Extension [(pos, pos)]
                | UnusedExtension Extension
                  deriving (Show)
 
-instance Transformation.Transformation (Accounting l pos s) where
-    type Domain (Accounting l pos s) = Reserializer.Wrapped pos s
-    type Codomain (Accounting l pos s) = Accounted l pos
+instance Transformation.Transformation (Accounting pos s) where
+    type Domain (Accounting pos s) = Reserializer.Wrapped pos s
+    type Codomain (Accounting pos s) = Accounted pos
 
-instance Transformation.Transformation (Verification l pos s) where
-    type Domain (Verification l pos s) = Reserializer.Wrapped pos s
-    type Codomain (Verification l pos s) = Verified l pos
+instance Transformation.Transformation (Verification pos s) where
+    type Domain (Verification pos s) = Reserializer.Wrapped pos s
+    type Codomain (Verification pos s) = Verified pos
 
-verifyModule :: forall l pos s. (Abstract.DeeplyFoldable (Accounting l pos s) l,
+verifyModule :: forall l pos s. (Abstract.DeeplyFoldable (Accounting pos s) l,
                                Abstract.Haskell l,
                                Abstract.Module l l ~ AST.Module l l) =>
                   Map Extension Bool
@@ -58,7 +58,7 @@ verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
        <$> toList (Map.keysSet localExtensions Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
-         usedExtensions = Full.foldMap (Accounting :: Accounting l pos s) m
+         usedExtensions = Full.foldMap (Accounting :: Accounting pos s) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
@@ -66,28 +66,28 @@ verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
          extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
-   <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
+   <$> Map.toList (Deep.foldMap (Accounting :: Accounting pos s) m Map.\\ declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
 
-instance {-# overlappable #-} Accounting l pos s
+instance {-# overlappable #-} Accounting pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ _ = mempty
 
-instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
-         Verification l pos s
+instance {-# overlappable #-} Deep.Foldable (Accounting pos s) g =>
+         Verification pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Verification $ (_, m) = Const $ \extensions->
       uncurry UndeclaredExtensionUse
-      <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
+      <$> Map.toList (Deep.foldMap (Accounting :: Accounting pos s) m Map.\\ withImplications extensions)
 
-instance (Abstract.DeeplyFoldable (Accounting l pos s) l, Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
-         Verification l pos s
+instance (Abstract.DeeplyFoldable (Accounting pos s) l, Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
+         Verification pos s
          `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Verification $ (_, m) = Const $ flip verifyModule m
 
 instance (Eq s, IsString s) =>
-         Accounting l pos s
+         Accounting pos s
          `Transformation.At` ExtAST.Import l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec) = Const $
       (if safe then Map.singleton Extensions.SafeImports [(start, end)] else mempty)
@@ -99,13 +99,13 @@ instance (Eq s, IsString s) =>
       where (beforeQualified, qualifiedAndAfter) = break (isKeyword "qualified") (filter isAnyToken lexemes)
 
 instance (Eq s, IsString s) =>
-         Accounting l pos s
+         Accounting pos s
          `Transformation.At` AST.ImportItem l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), AST.ImportClassOrType{}) = Const $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
 
 instance (Abstract.Context l ~ AST.Context l) =>
-         Accounting l pos s
+         Accounting pos s
          `Transformation.At` AST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, _, end), AST.DataDeclaration context _lhs constructors _derivings) = Const $
       (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
@@ -115,9 +115,9 @@ instance (Abstract.Context l ~ AST.Context l) =>
           _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
    Accounting $ _ = mempty
 
-instance (Deep.Foldable (Accounting l pos s) g,
-          Transformation.At (Accounting l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
-         Full.Foldable (Accounting l pos s) g where
+instance (Deep.Foldable (Accounting pos s) g,
+          Transformation.At (Accounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
+         Full.Foldable (Accounting pos s) g where
    foldMap = Full.foldMapDownDefault
 
 isAnyToken :: Lexeme s -> Bool
