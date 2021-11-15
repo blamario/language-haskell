@@ -28,6 +28,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
 data Accounting pos s = Accounting
+data UnicodeSyntaxAccounting pos s = UnicodeSyntaxAccounting
 data Verification pos s = Verification
 
 type Accounted pos = Const (Map Extension [(pos, pos)])
@@ -41,6 +42,10 @@ data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
 instance Transformation.Transformation (Accounting pos s) where
     type Domain (Accounting pos s) = Reserializer.Wrapped pos s
     type Codomain (Accounting pos s) = Accounted pos
+
+instance Transformation.Transformation (UnicodeSyntaxAccounting pos s) where
+    type Domain (UnicodeSyntaxAccounting pos s) = Reserializer.Wrapped pos s
+    type Codomain (UnicodeSyntaxAccounting pos s) = Accounted pos
 
 instance Transformation.Transformation (Verification pos s) where
     type Domain (Verification pos s) = Reserializer.Wrapped pos s
@@ -104,20 +109,38 @@ instance (Eq s, IsString s) =>
    Accounting $ ((start, Trailing lexemes, end), AST.ImportClassOrType{}) = Const $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
 
-instance (Abstract.Context l ~ AST.Context l) =>
+instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
+          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting pos s) l) =>
          Accounting pos s
          `Transformation.At` AST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), AST.DataDeclaration context _lhs constructors _derivings) = Const $
+   Accounting $ d@((start, _, end), AST.DataDeclaration context _lhs constructors _derivings) = Const $
       (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
       <>
       (case snd context
        of AST.NoContext -> mempty
           _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
-   Accounting $ _ = mempty
+      <>
+      (Full.foldMap UnicodeSyntaxAccounting $ d)
+   Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting $ d)
+
+instance (Eq s, IsString s) =>
+         UnicodeSyntaxAccounting pos s
+         `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   UnicodeSyntaxAccounting $ ((start, Trailing lexemes, end), _)
+      | any (`elem` unicodeDelimiters) lexemes = Const (Map.singleton Extensions.UnicodeSyntax [(start, end)])
+      | otherwise = mempty
+      where unicodeDelimiters :: [Lexeme s]
+            unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]
 
 instance (Deep.Foldable (Accounting pos s) g,
           Transformation.At (Accounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
          Full.Foldable (Accounting pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Deep.Foldable (UnicodeSyntaxAccounting pos s) g,
+          Transformation.At (UnicodeSyntaxAccounting pos s)
+                            (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
+         Full.Foldable (UnicodeSyntaxAccounting pos s) g where
    foldMap = Full.foldMapDownDefault
 
 isAnyToken :: Lexeme s -> Bool
