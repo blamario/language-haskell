@@ -2,12 +2,14 @@
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module Language.Haskell.Extensions.Verifier where
 
+import Control.Applicative (liftA2)
 import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
 import Data.Functor.Compose (Compose(..))
 import Data.Map.Lazy (Map)
 import Data.Maybe (isJust)
 import Data.Map (Map)
+import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.Set (Set)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
@@ -122,6 +124,24 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
       <>
       (Full.foldMap UnicodeSyntaxAccounting $ d)
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting $ d)
+
+instance (Eq s, IsString s, LeftReductive s) =>
+         Accounting pos s
+         `Transformation.At` ExtAST.Value l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, Trailing lexemes, end), literal) = Const $
+      (if any ((isPrefixOf "0b" ||| isPrefixOf "0B") . lexemeText) lexemes
+      then Map.singleton Extensions.BinaryLiterals [(start, end)]
+       else mempty)
+      <>
+      (case hashless literal
+       of ExtAST.FloatingLiteral{} | any ((isPrefixOf "0x" ||| isPrefixOf "0X") . lexemeText) lexemes
+             -> Map.singleton Extensions.HexFloatLiterals [(start, end)]
+          _ -> mempty)
+      where hashless (ExtAST.HashLiteral l) = hashless l
+            hashless l = l
+
+(|||) :: Applicative f => f Bool -> f Bool -> f Bool
+(|||) = liftA2 (||)
 
 instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting pos s
