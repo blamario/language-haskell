@@ -1,4 +1,3 @@
-{-# Language FlexibleInstances #-}
 module Main where
 
 import Control.Monad (unless)
@@ -10,7 +9,6 @@ import Data.Monoid.Instances.Positioned (extract)
 import qualified Data.Map as Map
 import Data.Text (Text, pack, unpack)
 import Data.Text.IO (readFile)
-import GHC.Stack (HasCallStack)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath.Posix (combine)
 import Test.Tasty (TestTree, defaultMain, testGroup)
@@ -49,7 +47,7 @@ exampleTree ancestry path =
                  assertEqual "pretty=pretty'" prettyModule prettyModule''
                  assertEqual "original=pretty" originalModule'' prettyModule''
 
-prettyFile :: HasCallStack => FilePath -> Text -> IO (Text, Text)
+prettyFile :: FilePath -> Text -> IO (Text, Text)
 prettyFile path src = case parseModule (Map.singleton IdentifierSyntax True) False src of
    Right [tree] -> return (Reserializer.reserialize tree, pack $ Template.pprint tree)
    Right trees -> error (show (length trees) ++ " ambiguous parses.")
