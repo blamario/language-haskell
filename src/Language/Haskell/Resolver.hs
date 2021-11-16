@@ -56,7 +56,7 @@ instance {-# overlaps #-} forall l pos s.
                             -> Validation (NonEmpty (Error l f)) (AST.Expression l l f f)
           resolveExpression e@(AST.InfixExpression left op right)
              | (_, AST.ReferenceExpression name) <- op =
-                maybe (const $ Failure $ pure UnknownOperator)
+                maybe (const $ Failure $ pure $ UnknownOperator name)
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
           resolveExpression e@(AST.ApplyExpression left right)
              | (_, AST.Negate{}) <- left = verifyArg (Just AST.LeftAssociative) prefixMinusPrecedence right (pure e)
@@ -97,7 +97,7 @@ instance {-# overlaps #-} forall l pos s f.
                             -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
              | (_, ExtAST.ReferenceExpression name) <- op =
-                maybe (const $ Failure $ pure UnknownOperator)
+                maybe (const $ Failure $ pure $ UnknownOperator name)
                       (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
           resolveExpression (ExtAST.TupleSectionExpression items)
              | Just items' <- sequence items = Failure (TupleSectionWithNoOmission items' :| [])
@@ -146,10 +146,10 @@ data Error l f = AmbiguousParses
                | ClashingImports
                | ClashingNames
                | TupleSectionWithNoOmission (NonEmpty (f (ExtAST.Expression l l f f)))
-               | UnknownOperator
+               | UnknownOperator (ExtAST.QualifiedName l)
 
 deriving instance (Show (AST.Expression l l f f), Show (ExtAST.Expression l l f f),
-                   Show (f (ExtAST.Expression l l f f))) => Show (Error l f)
+                   Show (f (ExtAST.Expression l l f f)), Show (ExtAST.QualifiedName l)) => Show (Error l f)
 
 instance Monad (Validation (NonEmpty (Error l f))) where
    Success s >>= f = f s
