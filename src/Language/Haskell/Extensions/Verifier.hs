@@ -9,7 +9,10 @@ import Data.Functor.Compose (Compose(..))
 import Data.Map.Lazy (Map)
 import Data.Maybe (isJust)
 import Data.Map (Map)
+import Data.Semigroup (Any(Any, getAny))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
+import Data.Semigroup.Factorial (Factorial)
+import qualified Data.Semigroup.Factorial as Factorial
 import Data.Set (Set)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
@@ -122,10 +125,10 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
        of AST.NoContext -> mempty
           _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
       <>
-      (Full.foldMap UnicodeSyntaxAccounting $ d)
-   Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting $ d)
+      (Full.foldMap UnicodeSyntaxAccounting d)
+   Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
-instance (Eq s, IsString s, LeftReductive s) =>
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s
          `Transformation.At` ExtAST.Value l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), literal) = Const $
@@ -137,6 +140,14 @@ instance (Eq s, IsString s, LeftReductive s) =>
        of ExtAST.FloatingLiteral{} | any ((isPrefixOf "0x" ||| isPrefixOf "0X") . lexemeText) lexemes
              -> Map.singleton Extensions.HexFloatLiterals [(start, end)]
           _ -> mempty)
+      <>
+      ((case hashless literal
+        of ExtAST.FloatingLiteral{} -> id
+           ExtAST.IntegerLiteral{} -> id
+           _ -> const mempty)
+       $ if any (getAny . Factorial.foldMap (Any . ("_" ==)) . lexemeText) lexemes
+         then Map.singleton Extensions.NumericUnderscores [(start, end)]
+         else mempty)
       where hashless (ExtAST.HashLiteral l) = hashless l
             hashless l = l
 
