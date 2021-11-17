@@ -128,6 +128,13 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
       (Full.foldMap UnicodeSyntaxAccounting d)
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
+instance Accounting pos s
+         `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, _, end), e) = Const $
+      (case e
+       of ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions [(start, end)]
+          _ -> mempty)
+
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s
          `Transformation.At` ExtAST.Value l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
