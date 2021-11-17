@@ -145,9 +145,15 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
         of ExtAST.FloatingLiteral{} -> id
            ExtAST.IntegerLiteral{} -> id
            _ -> const mempty)
-       $ if any (getAny . Factorial.foldMap (Any . ("_" ==)) . lexemeText) lexemes
-         then Map.singleton Extensions.NumericUnderscores [(start, end)]
-         else mempty)
+       $
+       (if any (getAny . Factorial.foldMap (Any . ("_" ==)) . lexemeText) lexemes
+        then Map.singleton Extensions.NumericUnderscores [(start, end)]
+        else mempty)
+       <>
+       (if any (("-" `isPrefixOf`) . lexemeText) lexemes
+        then Map.singleton Extensions.NegativeLiterals [(start, end)]
+        else mempty)
+      )
       where hashless (ExtAST.HashLiteral l) = hashless l
             hashless l = l
 
