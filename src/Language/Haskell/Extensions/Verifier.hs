@@ -3,14 +3,16 @@
 module Language.Haskell.Extensions.Verifier where
 
 import Control.Applicative (liftA2)
+import qualified Data.Char as Char
 import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
 import Data.Functor.Compose (Compose(..))
 import Data.Map.Lazy (Map)
 import Data.Maybe (isJust)
 import Data.Map (Map)
+import Data.Monoid.Textual (TextualMonoid, characterPrefix)
 import Data.Semigroup (Any(Any, getAny))
-import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
+import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
 import Data.Semigroup.Factorial (Factorial)
 import qualified Data.Semigroup.Factorial as Factorial
 import Data.Set (Set)
@@ -33,6 +35,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
 data Accounting pos s = Accounting
+data LabelAccounting pos s = LabelAccounting
 data UnicodeSyntaxAccounting pos s = UnicodeSyntaxAccounting
 data Verification pos s = Verification
 
@@ -48,6 +51,10 @@ instance Transformation.Transformation (Accounting pos s) where
     type Domain (Accounting pos s) = Reserializer.Wrapped pos s
     type Codomain (Accounting pos s) = Accounted pos
 
+instance Transformation.Transformation (LabelAccounting pos s) where
+    type Domain (LabelAccounting pos s) = Reserializer.Wrapped pos s
+    type Codomain (LabelAccounting pos s) = Accounted pos
+
 instance Transformation.Transformation (UnicodeSyntaxAccounting pos s) where
     type Domain (UnicodeSyntaxAccounting pos s) = Reserializer.Wrapped pos s
     type Codomain (UnicodeSyntaxAccounting pos s) = Accounted pos
@@ -56,9 +63,9 @@ instance Transformation.Transformation (Verification pos s) where
     type Domain (Verification pos s) = Reserializer.Wrapped pos s
     type Codomain (Verification pos s) = Verified pos
 
-verifyModule :: forall l pos s. (Abstract.DeeplyFoldable (Accounting pos s) l,
-                               Abstract.Haskell l,
-                               Abstract.Module l l ~ AST.Module l l) =>
+verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting pos s) l,
+                               Abstract.DeeplyFoldable (LabelAccounting pos s) l,
+                               Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
                   Map Extension Bool
                -> AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
                -> [Error pos]
@@ -91,10 +98,17 @@ instance {-# overlappable #-} Deep.Foldable (Accounting pos s) g =>
       uncurry UndeclaredExtensionUse
       <$> Map.toList (Deep.foldMap (Accounting :: Accounting pos s) m Map.\\ withImplications extensions)
 
-instance (Abstract.DeeplyFoldable (Accounting pos s) l, Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
+instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting pos s) l,
+          Abstract.DeeplyFoldable (LabelAccounting pos s) l,
+          Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
          Verification pos s
          `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Verification $ (_, m) = Const $ flip verifyModule m
+
+instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting pos s) l) =>
+         Accounting pos s
+         `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ (_, m) = Const (Deep.foldMap LabelAccounting m)
 
 instance (Eq s, IsString s) =>
          Accounting pos s
@@ -171,6 +185,15 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
 
+instance TextualMonoid s =>
+         LabelAccounting pos s `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   LabelAccounting $ ((start, Trailing lexemes, end), _)
+      | any isLabel lexemes = Const (Map.singleton Extensions.OverloadedLabels [(start, end)])
+      | otherwise = mempty
+      where isLabel Token{lexemeType= Other, lexemeText= t}
+               | Just t' <- stripPrefix "#" t, Just c <- characterPrefix t' = Char.isLower c || c == '_'
+            isLabel _ = False
+
 instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
@@ -183,6 +206,11 @@ instance (Eq s, IsString s) =>
 instance (Deep.Foldable (Accounting pos s) g,
           Transformation.At (Accounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
          Full.Foldable (Accounting pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Deep.Foldable (LabelAccounting pos s) g,
+          Transformation.At (LabelAccounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
+         Full.Foldable (LabelAccounting pos s) g where
    foldMap = Full.foldMapDownDefault
 
 instance (Deep.Foldable (UnicodeSyntaxAccounting pos s) g,

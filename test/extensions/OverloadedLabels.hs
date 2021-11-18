@@ -1,0 +1,3 @@
+{-# LANGUAGE OverloadedLabels #-}
+
+f = #foo

@@ -41,6 +41,7 @@ instance {-# overlappable #-} Resolution l pos s
          `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
   Resolution $ Compose (_, Compose ((start, end), Compose (Ambiguous ((ws, x) :| [])))) =
     Compose (Success ((start, ws, end), x))
+  Resolution $ Compose (_, Compose ((start, end), _)) = Compose (Failure $ pure AmbiguousParses)
 
 instance {-# overlaps #-} forall l pos s.
          (Eq s, Eq pos, Eq (AST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)), IsString s,

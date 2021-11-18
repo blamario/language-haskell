@@ -165,7 +165,8 @@ overloadedLabelsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Pars
                       => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 overloadedLabelsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme))
-                        <|> variableIdentifier}
+                        <|> variableIdentifier,
+   variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> variableSymbol}
 
 unicodeSyntaxMixin :: forall l g t. (LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                    => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
