@@ -147,6 +147,14 @@ instance Accounting pos s
    Accounting $ ((start, _, end), e) = Const $
       (case e
        of ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions [(start, end)]
+          ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
+          _ -> mempty)
+
+instance Accounting pos s
+         `Transformation.At` ExtAST.Statement l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, _, end), e) = Const $
+      (case e
+       of ExtAST.RecursiveStatement{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
           _ -> mempty)
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>

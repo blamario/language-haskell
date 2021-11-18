@@ -222,15 +222,15 @@ recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (P
                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                                Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
                  => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-recursiveDoMixin baseGrammar = baseGrammar{
-   closedBlockExpresion = closedBlockExpresion baseGrammar
-                          <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap (statements baseGrammar),
-   statement = statement baseGrammar
+recursiveDoMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   closedBlockExpresion = closedBlockExpresion <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap statements,
+   statement = statement
                <|> Deep.InL
                    <$> wrap (Abstract.recursiveStatement
                              . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
                              <$ keyword "rec"
-                             <*> blockOf (statement baseGrammar))}
+                             <*> blockOf statement),
+   variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> variableIdentifier}
 
 parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                               Ord t, Show t, OutlineMonoid t)
