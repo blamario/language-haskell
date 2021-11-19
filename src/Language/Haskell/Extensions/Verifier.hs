@@ -144,11 +144,12 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
 
 instance Accounting pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), e) = Const $
+   Accounting $ ((start, _, end), e) = Const . ($ [(start, end)]) $
       (case e
-       of ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions [(start, end)]
-          ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
-          ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections [(start, end)]
+       of ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
+          ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
+          ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
+          ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
           _ -> mempty)
 
 instance Accounting pos s
