@@ -148,6 +148,7 @@ instance Accounting pos s
       (case e
        of ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
+          ExtAST.MultiWayIfExpression{} -> Map.singleton Extensions.MultiWayIf
           ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
           ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
