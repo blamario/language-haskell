@@ -147,6 +147,7 @@ instance Accounting pos s
    Accounting $ ((start, _, end), e) = Const . ($ [(start, end)]) $
       (case e
        of ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
+          ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
           ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
           ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
