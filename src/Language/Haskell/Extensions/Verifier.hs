@@ -148,6 +148,7 @@ instance Accounting pos s
       (case e
        of ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions [(start, end)]
           ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
+          ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections [(start, end)]
           _ -> mempty)
 
 instance Accounting pos s

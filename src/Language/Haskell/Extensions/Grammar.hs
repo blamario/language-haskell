@@ -18,6 +18,7 @@ import Data.Functor.Compose (Compose(getCompose))
 import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
+import Data.Maybe (isJust)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
@@ -246,7 +247,8 @@ tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing 
 tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    bareExpression = bareExpression
                     <|> Abstract.tupleSectionExpression
-                           <$> parens ((:|) <$> optional expression <*> some (comma *> optional expression))}
+                           <$> parens (filter (any isJust)
+                                       $ (:|) <$> optional expression <*> some (comma *> optional expression))}
 
 lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
