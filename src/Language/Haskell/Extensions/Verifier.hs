@@ -110,7 +110,7 @@ instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting pos s) l) =>
          `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ (_, m) = Const (Deep.foldMap LabelAccounting m)
 
-instance (Eq s, IsString s) =>
+instance (Eq s, IsString s, Show s) =>
          Accounting pos s
          `Transformation.At` ExtAST.Import l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec) = Const $
@@ -118,15 +118,16 @@ instance (Eq s, IsString s) =>
       <>
       (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
       <>
-      (if null qualifiedAndAfter || any (not . isAnyKeyword) beforeQualified then mempty
+      (if null qualifiedAndAfter || all isAnyKeyword beforeQualified then mempty
        else Map.singleton Extensions.ImportQualifiedPost [(start, end)])
-      where (beforeQualified, qualifiedAndAfter) = break (isKeyword "qualified") (filter isAnyToken lexemes)
+      where x@(beforeQualified, qualifiedAndAfter) = break (isKeyword "qualified") (filter isAnyToken lexemes)
 
 instance (Eq s, IsString s) =>
          Accounting pos s
          `Transformation.At` AST.ImportItem l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), AST.ImportClassOrType{}) = Const $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
+   Accounting $ _ = mempty
 
 instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting pos s) l) =>
