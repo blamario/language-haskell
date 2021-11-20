@@ -72,7 +72,8 @@ verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accou
 verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
    <> (UnusedExtension
-       <$> toList (Map.keysSet localExtensions Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
+       <$> toList (Map.keysSet (Map.filter id localExtensions)
+                   Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
          usedExtensions = Full.foldMap (Accounting :: Accounting pos s) m
