@@ -147,19 +147,20 @@ instance {-# OVERLAPS #-}
                                       <> maybe mempty (`qualifiedWith` imports spec) alias
                         where imports (Just spec) = foldMap specImports (getCompose spec mempty)
                               imports Nothing = allImports
-                              specImports (AST.ImportSpecification False items) = itemsImports items
-                              specImports (AST.ImportSpecification True items) =
+                              specImports (AST.ImportSpecification True items) = itemsImports items
+                              specImports (AST.ImportSpecification False items) =
                                  UnionWith (getUnionWith allImports `Map.difference` getUnionWith (itemsImports items))
                               allImports = moduleExports
                               itemsImports = foldMap (foldMap itemImports . ($ mempty) . getCompose)
                               itemImports (AST.ImportClassOrType name members) =
-                                 nameImport name <> foldMap (memberImports name) members
-                              itemImports (AST.ImportVar name) = nameImport name
+                                 nameImport name allImports <> foldMap (memberImports name) members
+                              itemImports (AST.ImportVar name) = nameImport name allImports
                               memberImports name AST.AllMembers = allMemberImports name
-                              memberImports name (AST.MemberList members) = foldMap (memberImport name) members
+                              memberImports name (AST.MemberList members) =
+                                foldMap (`nameImport` allMemberImports name) members
                               allMemberImports name = mempty
-                              memberImport name member = mempty
-                              nameImport name = mempty
+                              nameImport name imports =
+                                foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
                               getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
                      getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
             qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
