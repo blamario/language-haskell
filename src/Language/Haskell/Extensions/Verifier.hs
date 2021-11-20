@@ -142,17 +142,25 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
       (Full.foldMap UnicodeSyntaxAccounting d)
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
-instance Accounting pos s
+instance Abstract.Expression l ~ ExtAST.Expression l =>
+         Accounting pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, _, end), e) = Const . ($ [(start, end)]) $
       (case e
-       of ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
+       of ExtAST.ApplyExpression _ (_, r) | isBlock r -> Map.singleton Extensions.BlockArguments
+          ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
           ExtAST.MultiWayIfExpression{} -> Map.singleton Extensions.MultiWayIf
           ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
           ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
           _ -> mempty)
+      where isBlock ExtAST.CaseExpression{} = True
+            isBlock ExtAST.ConditionalExpression{} = True
+            isBlock ExtAST.DoExpression{} = True
+            isBlock ExtAST.LambdaExpression{} = True
+            isBlock ExtAST.LetExpression{} = True
+            isBlock _ = False
 
 instance Accounting pos s
          `Transformation.At` ExtAST.Statement l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
