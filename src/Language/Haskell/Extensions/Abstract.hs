@@ -25,3 +25,4 @@ class Haskell λ => ExtendedHaskell λ where
    safePackageQualifiedImportDeclaration :: Bool -> Text -> ModuleName λ -> Maybe (ModuleName λ)
                                          -> Maybe (s (ImportSpecification l l d d))
                                          -> Import λ l d s
+   infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s

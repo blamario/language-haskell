@@ -1,7 +1,8 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Import(..), Expression(..), Statement(..), Value(..),
+module Language.Haskell.Extensions.AST (Language(Language), Import(..), Expression(..),
+                                        Statement(..), Type(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -11,7 +12,7 @@ import Data.Text (Text)
 
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
-import Language.Haskell.AST (Module(..), Declaration(..), Type(..), EquationLHS(..), EquationRHS(..),
+import Language.Haskell.AST (Module(..), Declaration(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), Pattern(..),
                              TypeLHS(..), Context(..), DataConstructor(..), DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
@@ -35,6 +36,7 @@ instance Abstract.ExtendedHaskell Language where
    safeImportDeclaration q = Import True q Nothing 
    packageQualifiedImportDeclaration q p = Import False q (Just p)
    safePackageQualifiedImportDeclaration q p = Import True q (Just p)
+   infixTypeApplication = InfixTypeApplication
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -206,6 +208,17 @@ data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (M
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
 
+data Type λ l d s =
+   ConstructorType (s (Abstract.Constructor l l d d))
+   | FunctionConstructorType
+   | FunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | ListType (s (Abstract.Type l l d d))
+   | StrictType (s (Abstract.Type l l d d))
+   | TupleType (NonEmpty (s (Abstract.Type l l d d)))
+   | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | TypeVariable (Abstract.Name λ)
+
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -258,6 +271,14 @@ deriving instance (Show (s (Abstract.ImportSpecification l l d d)), Show (Abstra
 deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.ModuleName λ)) =>
                   Eq (Import λ l d s)
 
+deriving instance Typeable (Type λ l d s)
+deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
+                   Data (Abstract.QualifiedName λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
+deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
+deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) => Eq (Type λ l d s)
+
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
@@ -292,4 +313,4 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Expression, ''Statement, ''Value]))
+             [''Import, ''Type, ''Expression, ''Statement, ''Value]))

@@ -17,7 +17,7 @@ import Language.Haskell (Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
-import Language.Haskell.Extensions.AST
+import Language.Haskell.Extensions.AST as ExtAST
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr
 
@@ -328,11 +328,11 @@ statementTemplate (ExpressionStatement test) = NoBindS (wrappedExpressionTemplat
 statementTemplate (LetStatement declarations) = LetS (foldMap (declarationTemplates . extract) declarations)
 statementTemplate (RecursiveStatement statements) = RecS (statementTemplate . extract <$> statements)
 
-bangTypeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> (TH.Bang, TH.Type)
+bangTypeTemplate :: TemplateWrapper f => ExtAST.Type Language Language f f -> (TH.Bang, TH.Type)
 bangTypeTemplate (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate $ extract t)
 bangTypeTemplate t = (Bang NoSourceUnpackedness NoSourceStrictness, typeTemplate t)
 
-typeTemplate :: TemplateWrapper f => AST.Type Language Language f f -> TH.Type
+typeTemplate :: TemplateWrapper f => ExtAST.Type Language Language f f -> TH.Type
 typeTemplate (ConstructorType con) = case (extract con) of
    ConstructorReference name -> ConT (qnameTemplate name)
    EmptyListConstructor -> ListT
@@ -344,9 +344,11 @@ typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
+typeTemplate (InfixTypeApplication left op right) =
+   InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 
-freeTypeVars :: TemplateWrapper f => AST.Type Language Language f f -> [TyVarBndrUnit]
+freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
 freeTypeVars FunctionConstructorType = []
 freeTypeVars (FunctionType from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))

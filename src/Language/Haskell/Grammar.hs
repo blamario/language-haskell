@@ -202,11 +202,14 @@ grammar HaskellGrammar{..} = HaskellGrammar{
 
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
-      <|> Abstract.dataDeclaration <$ keyword "data" <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+      <|> Abstract.dataDeclaration <$ keyword "data"
+          <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap simpleType <*> (delimiter "=" *> declaredConstructors <|> pure []) <*> derivingClause
-      <|> Abstract.newtypeDeclaration <$ keyword "newtype" <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+      <|> Abstract.newtypeDeclaration <$ keyword "newtype"
+          <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
-      <|> Abstract.classDeclaration <$ keyword "class" <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
+      <|> Abstract.classDeclaration <$ keyword "class"
+          <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
           <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
@@ -580,10 +583,10 @@ grammar HaskellGrammar{..} = HaskellGrammar{
    typeVar = variableIdentifier,
    typeConstructor = constructorIdentifier,
    typeClass = constructorIdentifier,
-   variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
-   constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
-   variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> variableSymbolLexeme),
-   constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> constructorSymbolLexeme),
+   variableIdentifier = nameToken variableLexeme,
+   constructorIdentifier = nameToken constructorLexeme,
+   variableSymbol = nameToken variableSymbolLexeme,
+   constructorSymbol = nameToken constructorSymbolLexeme,
 
 -- var 	→ 	varid | ( varsym ) 	    (variable)
 -- qvar 	→ 	qvarid | ( qvarsym ) 	    (qualified variable)
@@ -862,6 +865,10 @@ delimiter s = void (lexicalToken $
               <?> ("delimiter " <> show s)
 terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
+
+nameToken :: (Abstract.Haskell l, TextualMonoid t, TokenParsing (Parser g t))
+          => Parser g t t -> Parser g t (Abstract.Name l)
+nameToken p = token (Abstract.name . Text.pack . toString mempty <$> p)
 
 whiteSpace :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"

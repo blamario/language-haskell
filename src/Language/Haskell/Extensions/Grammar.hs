@@ -1,6 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
              Rank2Types, RecordWildCards,
-             ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
+             ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies, TypeSynonymInstances #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
@@ -92,7 +92,8 @@ extensionMixins =
      (Set.fromList [EmptyCase],                  (6, emptyCaseMixin)),
      (Set.fromList [LambdaCase],                 (7, lambdaCaseMixin)),
      (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
-     (Set.fromList [BlockArguments],             (9, blockArgumentsMixin))]
+     (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
+     (Set.fromList [TypeOperators],              (9, typeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -476,6 +477,20 @@ binaryUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
          binary n '1' = 2*n + 1
          binary _ _ = error "non-binary"
          binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
+
+typeOperatorsMixin :: forall l g t. (g ~ HaskellGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
+                                LexicalParsing (Parser g t), Ord t, TextualMonoid t)
+                   => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   simpleType =
+      simpleType
+      <|> simpleInfixType <$> typeVar <*> anySymbol <*> typeVar <*> pure []
+      <|> parens (simpleInfixType <$> typeVar <*> variableSymbol <*> typeVar) <*> many typeVar,
+   typeConstructor = constructorIdentifier <|> parens anySymbol,
+   bType = bType
+           <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType) <*> qualifiedOperator <*> wrap aType}
+   where simpleInfixType left op right rest = Abstract.simpleTypeLHS op (left : right : rest)
+         anySymbol = constructorSymbol <|> variableSymbol
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
