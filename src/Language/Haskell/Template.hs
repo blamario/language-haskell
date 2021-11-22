@@ -1,4 +1,4 @@
-{-# Language CPP, FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes,
+{-# Language CPP, FlexibleContexts, FlexibleInstances, GADTs, OverloadedStrings, RankNTypes,
              ScopedTypeVariables, TemplateHaskell #-}
 
 module Language.Haskell.Template where
@@ -21,6 +21,7 @@ import Language.Haskell.Extensions.AST as ExtAST
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr
 
+import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
@@ -196,11 +197,11 @@ caseAlternativeTemplate (CaseAlternative lhs rhs wheres) =
 
 declarationTemplates :: TemplateWrapper f => Declaration Language Language f f -> [Dec]
 declarationTemplates (ClassDeclaration context lhs members)
-   | SimpleTypeLHS con vars <- extract lhs =
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [ClassD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars) []
              (foldMap (declarationTemplates . extract) members)]
 declarationTemplates (DataDeclaration context lhs constructors derivings)
-   | SimpleTypeLHS con vars <- extract lhs =
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [DataD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
             Nothing (dataConstructorTemplate . extract <$> constructors)
             $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
@@ -238,13 +239,13 @@ declarationTemplates (InstanceDeclaration context lhs wheres)
                 (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
                 (foldMap (declarationTemplates . extract) wheres)]
 declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
-   | SimpleTypeLHS con vars <- extract lhs =
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
                Nothing (dataConstructorTemplate . extract $ constructor)
                $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
    where derived (SimpleDerive name) = ConT (qnameTemplate name)
 declarationTemplates (TypeSynonymDeclaration lhs t)
-   | SimpleTypeLHS con vars <- extract lhs =
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [TySynD (nameTemplate con) (plainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
@@ -370,6 +371,15 @@ qnameTemplate :: AST.QualifiedName Language -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])
+
+extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, TemplateWrapper f)
+               => f (ExtAST.TypeLHS l l f f) -> Maybe (AST.Name l, [AST.Name l])
+extractSimpleTypeLHS = fromTypeLHS . extract
+   where fromTypeLHS :: ExtAST.TypeLHS l l f f -> Maybe (AST.Name l, [AST.Name l])
+         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, vars)
+         fromTypeLHS (SimpleTypeLHSApplication t var)
+            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [var])
+         fromTypeLHS GeneralTypeLHS{} = Nothing
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s

@@ -26,3 +26,5 @@ class Haskell λ => ExtendedHaskell λ where
                                          -> Maybe (s (ImportSpecification l l d d))
                                          -> Import λ l d s
    infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
+   simpleInfixTypeLHSApplication :: Name λ -> Name λ -> Name λ -> TypeLHS λ l d s
+   simpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> TypeLHS λ l d s

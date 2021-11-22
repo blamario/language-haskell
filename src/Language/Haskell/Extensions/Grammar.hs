@@ -484,13 +484,13 @@ typeOperatorsMixin :: forall l g t. (g ~ HaskellGrammar l t (NodeWrap t), Abstra
 typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    simpleType =
       simpleType
-      <|> simpleInfixType <$> typeVar <*> anySymbol <*> typeVar <*> pure []
-      <|> parens (simpleInfixType <$> typeVar <*> variableSymbol <*> typeVar) <*> many typeVar,
+      <|> Abstract.simpleInfixTypeLHSApplication <$> typeVar <*> anySymbol <*> typeVar
+      <|> parens (nonTerminal Report.simpleType)
+      <|> Abstract.simpleTypeLHSApplication <$> wrap (parens $ nonTerminal Report.simpleType) <*> typeVar,
    typeConstructor = constructorIdentifier <|> parens anySymbol,
    bType = bType
            <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType) <*> qualifiedOperator <*> wrap aType}
-   where simpleInfixType left op right rest = Abstract.simpleTypeLHS op (left : right : rest)
-         anySymbol = constructorSymbol <|> variableSymbol
+   where anySymbol = constructorSymbol <|> variableSymbol
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
