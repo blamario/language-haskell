@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Extensions.Verifier where
+module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification), verifyModule) where
 
 import Control.Applicative (liftA2)
 import qualified Data.Char as Char
@@ -204,6 +204,22 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       where hashless (ExtAST.HashLiteral l) = hashless l
             hashless l = l
 
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+         Accounting pos s
+         `Transformation.At` ExtAST.TypeLHS l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+      case t
+      of ExtAST.GeneralTypeLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
+         otherwise -> Map.singleton Extensions.TypeOperators [(start, end)]
+
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+         Accounting pos s
+         `Transformation.At` ExtAST.Type l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+      case t
+      of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
+         otherwise -> mempty
+
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
 
@@ -244,6 +260,10 @@ instance (Deep.Foldable (UnicodeSyntaxAccounting pos s) g,
 isAnyToken :: Lexeme s -> Bool
 isAnyToken Token{} = True
 isAnyToken _ = False
+
+isAnyDelimiter :: Lexeme s -> Bool
+isAnyDelimiter Token{lexemeType= Delimiter} = True
+isAnyDelimiter _ = False
 
 isAnyKeyword :: Lexeme s -> Bool
 isAnyKeyword Token{lexemeType= Keyword} = True
