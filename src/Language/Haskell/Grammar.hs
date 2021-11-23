@@ -7,8 +7,7 @@ module Language.Haskell.Grammar where
 
 import Control.Applicative
 import Control.Monad (void)
-import qualified Data.Char as Char (chr, isAscii, isAlphaNum, isDigit, isHexDigit, isLetter, isLower, isOctDigit,
-                                    isSpace, isSymbol, isUpper, ord)
+import qualified Data.Char as Char
 import Data.Either (lefts, isLeft, partitionEithers)
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(Compose))
@@ -855,7 +854,7 @@ storeToken p = snd <$> tmap addOtherToken (match p)
 isLineChar, isNameTailChar, isSymbol :: Char -> Bool
 isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
-isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c
+isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c || Char.isPunctuation c
 
 delimiter, terminator :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t ()
 delimiter s = void (lexicalToken $
