@@ -475,7 +475,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
    statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                                   <|> Abstract.letStatement <$ keyword "let" <*> declarations)
                <|> Deep.InR <$> expression,
-   fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <*> expression,
+   fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <* delimiter "=" <*> expression,
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
 -- 	| 	infixexp
