@@ -325,6 +325,7 @@ byName = Map.fromList [
   ("QualifiedDo", QualifiedDo),
   ("QuantifiedConstraints", QuantifiedConstraints),
   ("QuasiQuotes", QuasiQuotes),
+  ("Rank2Types", RankNTypes),
   ("RankNTypes", RankNTypes),
   ("RebindableSyntax", RebindableSyntax),
   ("RecordPuns", RecordPuns),
