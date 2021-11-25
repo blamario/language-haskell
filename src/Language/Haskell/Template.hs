@@ -282,6 +282,17 @@ dataConstructorTemplate (RecordConstructor recName fieldTypes) =
             | StrictType{} <- extract t = varBang SourceStrict t <$> toList names
             | otherwise = varBang NoSourceStrictness t <$> toList names
          varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
+dataConstructorTemplate (ExistentialConstructor vars context con) =
+  ForallC (nub $ (plainTV . nameTemplate <$> vars) <> freeConstructorVars con')
+          (contextTemplate $ extract context)
+          (dataConstructorTemplate con')
+  where con' = extract con
+
+freeConstructorVars :: TemplateWrapper f => DataConstructor Language Language f f -> [TyVarBndrUnit]
+freeConstructorVars (Constructor _ argTypes) = foldMap (freeTypeVars . extract) argTypes
+freeConstructorVars (RecordConstructor _ fieldTypes) = foldMap (freeTypeVars . fieldsType . extract) fieldTypes
+   where fieldsType (ConstructorFields _ t) = extract t
+freeConstructorVars (ExistentialConstructor _ _ con) = freeConstructorVars (extract con)
 
 fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
 fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, wrappedExpressionTemplate value)

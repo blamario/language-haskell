@@ -1,7 +1,7 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Import(..), Expression(..),
+module Language.Haskell.Extensions.AST (Language(Language), Import(..), DataConstructor(..), Expression(..),
                                         Statement(..), Type(..), TypeLHS(..), Value(..),
                                         module Report) where
 
@@ -14,7 +14,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), Declaration(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), Pattern(..),
-                             Context(..), DataConstructor(..), DerivingClause(..), Constructor(..),
+                             Context(..), DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
@@ -39,6 +39,7 @@ instance Abstract.ExtendedHaskell Language where
    infixTypeApplication = InfixTypeApplication
    simpleInfixTypeLHSApplication left op right = SimpleTypeLHS op [left, right]
    simpleTypeLHSApplication = SimpleTypeLHSApplication
+   existentialConstructor = ExistentialConstructor
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -209,6 +210,10 @@ instance Abstract.Haskell Language where
 data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
+data DataConstructor λ l d s =
+   Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
+   | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
+   | ExistentialConstructor [Abstract.Name λ] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
 data Type λ l d s =
    ConstructorType (s (Abstract.Constructor l l d d))
@@ -278,6 +283,18 @@ deriving instance (Show (s (Abstract.ImportSpecification l l d d)), Show (Abstra
 deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.ModuleName λ)) =>
                   Eq (Import λ l d s)
 
+deriving instance Typeable (DataConstructor λ l d s)
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
+                   Data (s (Abstract.FieldDeclaration l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (DataConstructor λ l d s)
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
+                   Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (DataConstructor λ l d s)
+deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstructor l l d d)),
+                   Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (DataConstructor λ l d s)
+
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
                    Data (Abstract.QualifiedName λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
@@ -329,4 +346,4 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Type, ''TypeLHS, ''Expression, ''Statement, ''Value]))
+             [''Import, ''DataConstructor, ''Type, ''TypeLHS, ''Expression, ''Statement, ''Value]))

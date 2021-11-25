@@ -93,7 +93,8 @@ extensionMixins =
      (Set.fromList [LambdaCase],                 (7, lambdaCaseMixin)),
      (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
      (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
-     (Set.fromList [TypeOperators],              (9, typeOperatorsMixin))]
+     (Set.fromList [TypeOperators],              (9, typeOperatorsMixin)),
+     (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -491,6 +492,18 @@ typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    bType = bType
            <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType) <*> qualifiedOperator <*> wrap aType}
    where anySymbol = constructorSymbol <|> variableSymbol
+
+existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                             Ord t, Show t, TextualMonoid t)
+                               => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+existentialQuantificationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   declaredConstructor =
+      Abstract.existentialConstructor <$ keyword "forall"
+                                      <*> some typeVar <* delimiter "."
+                                      <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+                                      <*> wrap declaredConstructor
+      <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow) <*> wrap declaredConstructor
+      <|> declaredConstructor}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
