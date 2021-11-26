@@ -144,12 +144,13 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
       (Full.foldMap UnicodeSyntaxAccounting d)
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
-instance Abstract.Expression l ~ ExtAST.Expression l =>
+instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
          Accounting pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, _, end), e) = Const . ($ [(start, end)]) $
       (case e
-       of ExtAST.ApplyExpression _ (_, r) | isBlock r -> Map.singleton Extensions.BlockArguments
+       of ExtAST.ApplyExpression _ ((_, Trailing (lexeme1 : _), _), r)
+             | isBlock r && not (isToken "(" lexeme1) -> Map.singleton Extensions.BlockArguments
           ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
           ExtAST.MultiWayIfExpression{} -> Map.singleton Extensions.MultiWayIf
@@ -210,7 +211,8 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
    Accounting $ ((start, Trailing lexemes, end), t) = Const $
       case t
       of ExtAST.GeneralTypeLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
-         otherwise -> Map.singleton Extensions.TypeOperators [(start, end)]
+         ExtAST.SimpleTypeLHS{} -> mempty
+         _ -> Map.singleton Extensions.TypeOperators [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s
@@ -218,7 +220,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
    Accounting $ ((start, Trailing lexemes, end), t) = Const $
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
-         otherwise -> mempty
+         _ -> mempty
 
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
@@ -272,3 +274,7 @@ isAnyKeyword _ = False
 isKeyword :: (Eq s, IsString s) => s -> Lexeme s -> Bool
 isKeyword s Token{lexemeType= Keyword, lexemeText= t} = s == t
 isKeyword _ _ = False
+
+isToken :: (Eq s, IsString s) => s -> Lexeme s -> Bool
+isToken s Token{lexemeText= t} = s == t
+isToken _ _ = False
