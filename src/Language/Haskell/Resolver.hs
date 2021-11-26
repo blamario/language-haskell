@@ -2,6 +2,7 @@
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module Language.Haskell.Resolver where
 
+import Control.Applicative ((<|>))
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
@@ -23,6 +24,7 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Disambiguator as Disambiguator
 import qualified Language.Haskell.Reserializer as Reserializer
+import Language.Haskell.Reserializer (Lexeme (Token, lexemeText, lexemeType), TokenType (Delimiter))
 
 import Prelude hiding (mod, span)
 
@@ -97,9 +99,11 @@ instance {-# overlaps #-} forall l pos s f.
       let resolveExpression :: ExtAST.Expression l l f f
                             -> Validation (NonEmpty (Error l f)) (ExtAST.Expression l l f f)
           resolveExpression e@(ExtAST.InfixExpression left op right)
-             | (_, ExtAST.ReferenceExpression name) <- op =
-                maybe (const $ Failure $ pure $ UnknownOperator name)
-                      (verifyInfixApplication verifyArg left right) (Map.lookup name bindings) (pure e)
+             | ((_, lexemes, _), ExtAST.ReferenceExpression name) <- op =
+               maybe (const $ Failure $ pure $ UnknownOperator name)
+                     (verifyInfixApplication verifyArg left right)
+                     (Map.lookup name bindings <|> defaultInfixDeclaration lexemes)
+                     (pure e)
           resolveExpression (ExtAST.TupleSectionExpression items)
              | Just items' <- sequence items = Failure (TupleSectionWithNoOmission items' :| [])
           resolveExpression e@(ExtAST.ApplyExpression left right)
@@ -125,6 +129,12 @@ instance {-# overlaps #-} forall l pos s f.
                else Failure (pure ContradictoryAssociativity)
              | otherwise = result
       in Compose (Disambiguator.unique id (pure . AmbiguousExtExpression) (resolveExpression <$> expressions))
+
+--defaultInfixDeclaration :: ExtAST.QualifiedName l -> Maybe (Binder.Binding l)
+defaultInfixDeclaration (Reserializer.Trailing lexemes)
+   | any (== Token{lexemeType= Delimiter, lexemeText= "`"}) lexemes =
+     Just (Binder.InfixDeclaration False AST.LeftAssociative 9)
+   | otherwise = Nothing
 
 verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a) -> e -> e -> Binder.Binding l -> a -> a
 verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.LeftAssociative precedence) =
