@@ -144,6 +144,12 @@ instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
       (Full.foldMap UnicodeSyntaxAccounting d)
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
+instance Accounting pos s
+         `Transformation.At` ExtAST.DataConstructor l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, _, end), ExtAST.ExistentialConstructor{}) =
+     Const (Map.singleton Extensions.ExistentialQuantification [(start, end)])
+   Accounting $ _ = mempty
+
 instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
          Accounting pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
