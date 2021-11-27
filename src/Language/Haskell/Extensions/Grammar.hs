@@ -94,7 +94,8 @@ extensionMixins =
      (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
      (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
      (Set.fromList [TypeOperators],              (9, typeOperatorsMixin)),
-     (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin))]
+     (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
+     (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -480,7 +481,7 @@ binaryUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
          binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
 typeOperatorsMixin :: forall l g t. (g ~ HaskellGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
-                                LexicalParsing (Parser g t), Ord t, TextualMonoid t)
+                                LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
    simpleType =
@@ -490,7 +491,9 @@ typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
       <|> Abstract.simpleTypeLHSApplication <$> wrap (parens $ nonTerminal Report.simpleType) <*> typeVar,
    typeConstructor = constructorIdentifier <|> parens anySymbol,
    bType = bType
-           <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType) <*> qualifiedOperator <*> wrap aType}
+      <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType)
+                                        <*> qualifiedOperator
+                                        <*> wrap aType}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -504,6 +507,26 @@ existentialQuantificationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
                                       <*> wrap declaredConstructor
       <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow) <*> wrap declaredConstructor
       <|> declaredConstructor}
+
+explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                  Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                  Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
+                                  
+                    => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+explicitForAllMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
+   topLevelDeclaration = topLevelDeclaration
+      <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+          <* keyword "forall" <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
+          <*> wrap optionalContext
+          <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
+          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure []),
+   typeTerm = typeTerm
+      <|> Abstract.forallType <$ keyword "forall"
+          <*> some typeVar <* delimiter "."
+          <*> wrap optionalContext
+          <*> wrap typeTerm,
+   typeVar = notFollowedBy (keyword "forall") *> typeVar}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

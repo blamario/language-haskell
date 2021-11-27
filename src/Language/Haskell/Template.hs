@@ -233,7 +233,7 @@ declarationTemplates (ForeignImport convention safety identification name t) =
                       (nameTemplate name) (typeTemplate $ extract t))]
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
-declarationTemplates (InstanceDeclaration context lhs wheres)
+declarationTemplates (InstanceDeclaration _vars context lhs wheres)
    | GeneralTypeLHS name t <- extract lhs =
      [InstanceD Nothing (contextTemplate $ extract context)
                 (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
@@ -359,6 +359,11 @@ typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
+typeTemplate (ForallType vars context body) =
+  ForallT (nub $ (plainTV . nameTemplate <$> vars) <> freeTypeVars type')
+          (contextTemplate $ extract context)
+          (typeTemplate type')
+  where type' = extract body
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
@@ -368,7 +373,10 @@ freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (TypeVariable name) = [plainTV $ nameTemplate name]
+freeTypeVars (ForallType vars context body) =
+  nub (freeContextVars (extract context) <> freeTypeVars (extract body)) \\ (plainTV . nameTemplate <$> vars)
 
 nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))

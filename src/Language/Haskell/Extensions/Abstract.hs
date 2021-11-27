@@ -29,3 +29,9 @@ class Haskell λ => ExtendedHaskell λ where
    simpleInfixTypeLHSApplication :: Name λ -> Name λ -> Name λ -> TypeLHS λ l d s
    simpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> TypeLHS λ l d s
    existentialConstructor :: [Name λ] -> s (Context l l d d) -> s (DataConstructor l l d d) -> DataConstructor λ l d s
+   explicitlyScopedInstanceDeclaration :: NonEmpty (Name λ)
+                                       -> s (Context l l d d)
+                                       -> s (TypeLHS l l d d)
+                                       -> [s (Declaration l l d d)]
+                                       -> Declaration λ l d s
+   forallType :: [Name λ] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s

@@ -22,8 +22,9 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.AST as AST hiding (Declaration(..))
 import qualified Language.Haskell.Extensions.AST as ExtAST
+import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
 type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
 
