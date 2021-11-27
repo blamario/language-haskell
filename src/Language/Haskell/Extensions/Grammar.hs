@@ -198,7 +198,8 @@ overloadedLabelsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGram
 
 unicodeSyntaxMixin :: forall l g t. (LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                    => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-unicodeSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+unicodeSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+   keywordForall = keywordForall <|> delimiter "∀",
    report= baseReport{
       doubleColon = doubleColon <|> delimiter "∷",
       rightDoubleArrow = rightDoubleArrow <|> delimiter "⇒",
