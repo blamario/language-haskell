@@ -5,7 +5,7 @@ module Language.Haskell.Template where
 
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
-import Data.List (nub)
+import Data.List ((\\), nub)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
 import Data.Text (Text, unpack)
@@ -283,7 +283,7 @@ dataConstructorTemplate (RecordConstructor recName fieldTypes) =
             | otherwise = varBang NoSourceStrictness t <$> toList names
          varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 dataConstructorTemplate (ExistentialConstructor vars context con) =
-  ForallC (nub $ (plainTV . nameTemplate <$> vars) <> freeConstructorVars con')
+  ForallC (nub $ (plainTVSpecified . nameTemplate <$> vars) <> changeTVFlags SpecifiedSpec (freeConstructorVars con'))
           (contextTemplate $ extract context)
           (dataConstructorTemplate con')
   where con' = extract con
