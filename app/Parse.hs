@@ -97,7 +97,7 @@ main' Opts{..} = case optsFile
                             ExpressionMode -> go parseExpression "<stdin>"
    where
       parseExpression t = getCompose
-                          $ snd <$> getCompose (Grammar.expression
+                          $ snd <$> getCompose (Grammar.expression . Grammar.report
                                                 $ parseComplete (Grammar.extendedGrammar
                                                                  $ Map.fromSet (const True) Extensions.allExtensions)
                                                   t)

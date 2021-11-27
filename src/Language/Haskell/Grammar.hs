@@ -25,7 +25,8 @@ import qualified Data.Text as Text
 import Data.Text (Text)
 import Numeric (readOct, readDec, readHex, readFloat)
 import Witherable (filter, mapMaybe)
-import Text.Grampa
+import qualified Text.Grampa
+import Text.Grampa hiding (keyword)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
@@ -833,17 +834,19 @@ instance TokenParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) wher
    token = lexicalToken
 
 instance LexicalParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
-   lexicalComment = do c <- comment
-                       lift ([[Comment c]], ())
+   lexicalComment = comment
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
    isIdentifierFollowChar = isNameTailChar
    identifierToken word = lexicalToken (filter (`notElem` reservedWords) word)
    lexicalToken p = storeToken p <* lexicalWhiteSpace
-   keyword s = lexicalToken (string s
-                             *> notSatisfyChar isNameTailChar
-                             <* lift ([[Token Keyword s]], ()))
-               <?> ("keyword " <> show s)
+   keyword = keyword
+
+keyword :: (Ord s, Show s, TextualMonoid s, LexicalParsing (Parser g s)) => s -> Parser g s ()
+keyword s = lexicalToken (string s
+                          *> notSatisfyChar isNameTailChar
+                          <* lift ([[Token Keyword s]], ()))
+            <?> ("keyword " <> show s)
 
 storeToken :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t a
 storeToken p = snd <$> tmap addOtherToken (match p)
@@ -874,10 +877,11 @@ whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespac
                        >>= \ws-> lift ([[WhiteSpace ws]], ())) <?> "whitespace")
                       <<|> pure ()
 
-comment :: (Ord t, Show t, TextualMonoid t) => Parser g t t
-comment = try (blockComment
-               <|> (string "--" <> takeCharsWhile (== '-') <* notSatisfyChar isSymbol) <> takeCharsWhile isLineChar)
-          <?> "comment"
+comment :: (Ord t, Show t, TextualMonoid t) => Parser g t ()
+comment = do c <- try (blockComment
+                       <|> (string "--" <> takeCharsWhile (== '-') <* notSatisfyChar isSymbol)
+                           <> takeCharsWhile isLineChar) <?> "comment"
+             lift ([[Comment c]], ())
    where isCommentChar c = c /= '-' && c /= '{'
          blockComment =
             string "{-"

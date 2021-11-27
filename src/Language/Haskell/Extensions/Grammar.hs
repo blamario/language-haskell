@@ -1,6 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
-             Rank2Types, RecordWildCards,
-             ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies, TypeSynonymInstances #-}
+             Rank2Types, RecordWildCards, ScopedTypeVariables,
+             TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeSynonymInstances #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
@@ -8,7 +8,7 @@
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ ignores the presence or absence of whitespace preceding the minus
 
-module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModule, module Report) where
+module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModule, report, module Report) where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -20,6 +20,7 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Maybe (isJust)
 import Data.Monoid (Dual(..), Endo(..))
+import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -30,6 +31,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Numeric
+import qualified Rank2.TH
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
@@ -50,14 +52,14 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
 
-extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                             Ord t, Show t, OutlineMonoid t,
                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                             Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
                 => Map (Set Extension)
                        (Int,
-                        GrammarBuilder (HaskellGrammar l t (NodeWrap t))
-                                       (HaskellGrammar l t (NodeWrap t))
+                        GrammarBuilder (ExtendedGrammar l t (NodeWrap t))
+                                       (ExtendedGrammar l t (NodeWrap t))
                                        (ParserT ((,) [[Lexeme t]]))
                                        t)
 extensionMixins =
@@ -119,7 +121,7 @@ languagePragmas = spaceChars
                                      <|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile  (/= '-'))
                         *> string "-}"
 
-parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                         Ord t, Show t, OutlineMonoid t,
                         Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                         Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
@@ -131,7 +133,7 @@ parseModule extensions source = case moduleExtensions of
       | let (contradictions, extensionMap) = partitionContradictory (Set.fromList extensions') ->
         if Set.null contradictions then
            (if null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
-           $ parseResults $ Report.haskellModule
+           $ parseResults $ Report.haskellModule $ report
            $ parseComplete (extendedGrammar $ withImplications $ extensionMap <> extensions) source
         else Left mempty{errorAlternatives= [StaticDescription
                                              $ "Contradictory extension switches " <> show (toList contradictions)]}
@@ -139,12 +141,12 @@ parseModule extensions source = case moduleExtensions of
    where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
 
-extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                     Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
-                 => Map Extension Bool -> Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-extendedGrammar extensions = fixGrammar (extended . Report.grammar)
+                 => Map Extension Bool -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+extendedGrammar extensions = fixGrammar (extended . reportGrammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
                     $ Map.elems $ Map.restrictKeys extensionMixins
                     $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
@@ -152,37 +154,60 @@ extendedGrammar extensions = fixGrammar (extended . Report.grammar)
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                      Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                      Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
-        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar = blockArgumentsMixin . unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin
           . parallelListComprehensionsMixin . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin
-          . multiWayIfMixin . Report.grammar
+          . multiWayIfMixin . reportGrammar
+
+reportGrammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
+                            Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+              => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+reportGrammar g@ExtendedGrammar{report= r} =
+   g{report= Report.grammar r,
+     keywordForall = keyword "forall"}
+
+data ExtendedGrammar l t f p = ExtendedGrammar {
+   report :: {-# UNPACK #-} !(HaskellGrammar l t f p),
+   keywordForall :: p ()}
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 identifierSyntaxMixin baseGrammar = baseGrammar{
-   variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
-   constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
-   variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
-   constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}
+   report= (report baseGrammar){
+      variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
+      constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
+      variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
+      constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}}
 
 overloadedLabelsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-overloadedLabelsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme))
-                        <|> variableIdentifier,
-   variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> variableSymbol}
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+overloadedLabelsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme))
+                           <|> variableIdentifier,
+      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> variableSymbol}}
 
 unicodeSyntaxMixin :: forall l g t. (LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-                   => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-unicodeSyntaxMixin baseGrammar = baseGrammar{
-   doubleColon = doubleColon baseGrammar <|> delimiter "∷",
-   rightDoubleArrow = rightDoubleArrow baseGrammar <|> delimiter "⇒",
-   rightArrow = rightArrow baseGrammar <|> delimiter "→",
-   leftArrow = leftArrow baseGrammar <|> delimiter "←"}
+                   => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+unicodeSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      doubleColon = doubleColon <|> delimiter "∷",
+      rightDoubleArrow = rightDoubleArrow <|> delimiter "⇒",
+      rightArrow = rightArrow <|> delimiter "→",
+      leftArrow = leftArrow <|> delimiter "←"}}
 
 magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-               => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-magicHashMixin baseGrammar@HaskellGrammar{..} =
+               => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+magicHashMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} =
   let integer', integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
       float', floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
       charLiteral', charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
@@ -199,7 +224,7 @@ magicHashMixin baseGrammar@HaskellGrammar{..} =
       floatHash2 = token (floatLexeme <* string "##")
       charHashLiteral = token (charLexeme <* string "#")
       stringHashLiteral = token (stringLexeme <* string "#")
-  in baseGrammar{
+  in baseGrammar{report= baseReport{
   lPattern = aPattern
               <|> Abstract.literalPattern
                   <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
@@ -220,236 +245,256 @@ magicHashMixin baseGrammar@HaskellGrammar{..} =
                  <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
                       <|> Abstract.charLiteral <$> charHashLiteral <|> Abstract.stringLiteral <$> stringHashLiteral)
              <|> Abstract.hashLiteral . Abstract.hashLiteral
-                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}
+                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
 
 recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                                Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
-                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-recursiveDoMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   closedBlockExpresion = closedBlockExpresion <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap statements,
-   statement = statement
-               <|> Deep.InL
-                   <$> wrap (Abstract.recursiveStatement
-                             . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
-                             <$ keyword "rec"
-                             <*> blockOf statement),
-   variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> variableIdentifier}
+                 => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+recursiveDoMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      closedBlockExpresion = closedBlockExpresion <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap statements,
+      statement = statement
+                  <|> Deep.InL
+                      <$> wrap (Abstract.recursiveStatement
+                                . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
+                                <$ keyword "rec"
+                                <*> blockOf statement),
+      variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> variableIdentifier}}
 
 parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                               Ord t, Show t, OutlineMonoid t)
-                                => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-parallelListComprehensionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   bareExpression = bareExpression
-                    <|> brackets (Abstract.parallelListComprehension
-                                  <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}
+                                => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+parallelListComprehensionsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      bareExpression = bareExpression
+                       <|> brackets (Abstract.parallelListComprehension
+                                     <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
 tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                  Ord t, Show t, OutlineMonoid t)
-                   => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-tupleSectionsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   bareExpression = bareExpression
-                    <|> Abstract.tupleSectionExpression
-                           <$> parens (filter (any isJust)
-                                       $ (:|) <$> optional expression <*> some (comma *> optional expression))}
+                   => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+tupleSectionsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      bareExpression = bareExpression
+                       <|> Abstract.tupleSectionExpression
+                              <$> parens (filter (any isJust)
+                                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
 
 lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-lambdaCaseMixin baseGrammar = baseGrammar{
-   closedBlockExpresion = closedBlockExpresion baseGrammar
-                          <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
-                                                            <*> alternatives baseGrammar}
+                => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+lambdaCaseMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      closedBlockExpresion = closedBlockExpresion
+                             <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
+                                                               <*> alternatives}}
 
 emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                              Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l))
-                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+                 => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 emptyCaseMixin baseGrammar = baseGrammar{
-   alternatives = blockOf (alternative baseGrammar)}
+   report= (report baseGrammar){
+      alternatives = blockOf (alternative $ report baseGrammar)}}
 
 multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
                              Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
-                => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-multiWayIfMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   closedBlockExpresion = closedBlockExpresion
-                          <|> Abstract.multiWayIfExpression <$ keyword "if"
-                                  <*> blockOf'
-                                         (Abstract.guardedExpression . toList
-                                             <$> guards <* rightArrow
-                                             <*> expression)}
+                => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+multiWayIfMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      closedBlockExpresion = closedBlockExpresion
+                             <|> Abstract.multiWayIfExpression <$ keyword "if"
+                                     <*> blockOf'
+                                            (Abstract.guardedExpression . toList
+                                                <$> guards <* rightArrow
+                                                <*> expression)}}
 
 packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                   OutlineMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-packageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> stringLiteral
-                           <*> Report.moduleId
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+packageImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> stringLiteral
+                              <*> Report.moduleId
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safeImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> Report.moduleId
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                 => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safeImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> Report.moduleId
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 importQualifiedPostMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
-                         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-importQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> flip Abstract.importDeclaration <$ keyword "import"
-                           <*> Report.moduleId
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                         => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+importQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> flip Abstract.importDeclaration <$ keyword "import"
+                              <*> Report.moduleId
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                           OutlineMonoid t)
-                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safePackageImportsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> stringLiteral
-                           <*> Report.moduleId
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safePackageImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> stringLiteral
+                              <*> Report.moduleId
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                    Ord t, Show t, OutlineMonoid t)
-                                 => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-packageImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
-                           <**> pure flip
-                           <*> stringLiteral
-                           <**> pure flip
-                           <*> Report.moduleId
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                                 => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+packageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                              <**> pure flip
+                              <*> stringLiteral
+                              <**> pure flip
+                              <*> Report.moduleId
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 Ord t, Show t, OutlineMonoid t)
-                              => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safeImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
-                           <*> Report.moduleId
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                              => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safeImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                              <*> Report.moduleId
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                        Ord t, Show t, OutlineMonoid t)
-                                     => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safePackageImportsQualifiedPostMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importDeclaration = importDeclaration
-                       <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
-                           <**> pure flip
-                           <*> stringLiteral
-                           <**> pure flip
-                           <*> Report.moduleId
-                           <*> (True <$ keyword "qualified" <|> pure False)
-                           <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}
+                                     => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+safePackageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importDeclaration = importDeclaration
+                          <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
+                              <**> pure flip
+                              <*> stringLiteral
+                              <**> pure flip
+                              <*> Report.moduleId
+                              <*> (True <$ keyword "qualified" <|> pure False)
+                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
 
 explicitNamespacesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                       OutlineMonoid t)
-                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-explicitNamespacesMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   importItem = importItem
-                <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}
+                        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+explicitNamespacesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      importItem = importItem
+                   <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}}
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
-                    => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-blockArgumentsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   lExpression = lExpression <|> wrap (Abstract.applyExpression <$> fExpression <*> wrap openBlockExpression),
-   dExpression = fExpression,
-   bareExpression = bareExpression <|> closedBlockExpresion}
+                    => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+blockArgumentsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      lExpression = lExpression <|> wrap (Abstract.applyExpression <$> fExpression <*> wrap openBlockExpression),
+      dExpression = fExpression,
+      bareExpression = bareExpression <|> closedBlockExpresion}}
 
-lexicalNegationMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+lexicalNegationMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                                  Ord t, Show t, TextualMonoid t)
-                     => GrammarBuilder (HaskellGrammar l t (NodeWrap t))
-                                       (HaskellGrammar l t (NodeWrap t))
+                     => GrammarBuilder (ExtendedGrammar l t (NodeWrap t))
+                                       (ExtendedGrammar l t (NodeWrap t))
                                        (ParserT ((,) [[Lexeme t]]))
                                        t
-lexicalNegationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   qualifiedVariableSymbol = notFollowedBy (string "-"
-                                            *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                             *> token (Report.nameQualifier <*> variableSymbol),
-   infixExpression = wrap (Abstract.infixExpression
-                              <$> nonTerminal Report.leftInfixExpression
-                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> nonTerminal Report.infixExpression)
-                     <|> lExpression,
-   leftInfixExpression =
-      wrap (Abstract.infixExpression
-               <$> nonTerminal Report.leftInfixExpression
-               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-               <*> nonTerminal Report.leftInfixExpression)
-      <|> dExpression,
-   bareExpression =
-      Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> aExpression
-      <|> parens (Abstract.rightSectionExpression
-                  <$> (notFollowedBy prefixMinus *> qualifiedOperator)
-                  <*> infixExpression)
-      <|> bareExpression}
+lexicalNegationMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      qualifiedVariableSymbol = notFollowedBy (string "-"
+                                               *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
+                                *> token (Report.nameQualifier <*> variableSymbol),
+      infixExpression = wrap (Abstract.infixExpression
+                                 <$> nonTerminal (Report.leftInfixExpression . report)
+                                 <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                                 <*> nonTerminal (Report.infixExpression . report))
+                        <|> lExpression,
+      leftInfixExpression =
+         wrap (Abstract.infixExpression
+                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                  <*> nonTerminal (Report.leftInfixExpression . report))
+         <|> dExpression,
+      bareExpression =
+         Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> aExpression
+         <|> parens (Abstract.rightSectionExpression
+                     <$> (notFollowedBy prefixMinus *> qualifiedOperator)
+                     <*> infixExpression)
+         <|> bareExpression}}
    where prefixMinus = void (string "-"
                              <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
                              <* lift ([[Token Modifier "-"]], ()))
                        <?> "prefix -"
 
-negativeLiteralsMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+negativeLiteralsMixin :: forall l t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                                   Ord t, Show t, TextualMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t))
-                                        (HaskellGrammar l t (NodeWrap t))
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t))
+                                        (ExtendedGrammar l t (NodeWrap t))
                                         (ParserT ((,) [[Lexeme t]]))
                                         t
-negativeLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
-   infixExpression = wrap (Abstract.infixExpression
-                              <$> nonTerminal Report.leftInfixExpression
-                              <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                              <*> nonTerminal Report.infixExpression
-                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
-                     <|> lExpression,
-   leftInfixExpression =
-      wrap (Abstract.infixExpression
-               <$> nonTerminal Report.leftInfixExpression
-               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-               <*> nonTerminal Report.leftInfixExpression
-               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
-      <|> dExpression,
-   integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
-   floatLexeme = (negate <$ string "-" <|> pure id) <*> floatLexeme}
+negativeLiteralsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
+      infixExpression =
+         wrap (Abstract.infixExpression
+                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                  <*> nonTerminal (Report.infixExpression . report)
+               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
+         <|> lExpression,
+      leftInfixExpression =
+         wrap (Abstract.infixExpression
+                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                  <*> nonTerminal (Report.leftInfixExpression . report)
+                  <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
+         <|> dExpression,
+      integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
+      floatLexeme = (negate <$ string "-" <|> pure id) <*> floatLexeme}}
    where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
 
 binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-binaryLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   integerLexeme =
-      (string "0b" <|> string "0B")
-      *> (foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
-      <<|> integerLexeme}
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+binaryLiteralsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      integerLexeme =
+         (string "0b" <|> string "0B")
+         *> (foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
+         <<|> integerLexeme}}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
          binary _ _ = error "non-binary"
 
 hexFloatLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                      => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-hexFloatLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
-                                 *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
-                   *> integerLexeme,
-   floatLexeme = (string "0x" <|> string "0X")
-                 *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (hexExponent <<|> pure 0)
-                    <|> readHexFloat <$> hexadecimal <*> pure mempty <*> hexExponent)
-                 <|> floatLexeme}
+                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+hexFloatLiteralsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
+                                    *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
+                      *> integerLexeme,
+      floatLexeme = (string "0x" <|> string "0X")
+                    *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (hexExponent <<|> pure 0)
+                       <|> readHexFloat <$> hexadecimal <*> pure mempty <*> hexExponent)
+                    <|> floatLexeme}}
    where hexExponent =
            (string "p" <|> string "P")
            *> (id <$ string "+" <|> negate <$ string "-" <|> pure id)
@@ -459,74 +504,80 @@ hexFloatLiteralsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
            * 2 ^^ (magnitude - Factorial.length fraction)
 
 numericUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-numericUnderscoresMixin baseGrammar@HaskellGrammar{} = baseGrammar{
-   decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit) <?> "decimal number",
-   octal = takeCharsWhile1 Char.isOctDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isOctDigit)
-           <?> "octal number",
-   hexadecimal = takeCharsWhile1 Char.isHexDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isHexDigit)
-                 <?> "hexadecimal number"}
+                        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+numericUnderscoresMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit)
+                <?> "decimal number",
+      octal = takeCharsWhile1 Char.isOctDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isOctDigit)
+              <?> "octal number",
+      hexadecimal = takeCharsWhile1 Char.isHexDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isHexDigit)
+                    <?> "hexadecimal number"}}
 
 binaryUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                        => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-binaryUnderscoresMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   integerLexeme =
-      (string "0b" <|> string "0B")
-      *> (foldl' binary 0 . toString mempty
-          <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
-      <<|> integerLexeme}
+                        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+binaryUnderscoresMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      integerLexeme =
+         (string "0b" <|> string "0B")
+         *> (foldl' binary 0 . toString mempty
+             <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
+         <<|> integerLexeme}}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
          binary _ _ = error "non-binary"
          binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
-typeOperatorsMixin :: forall l g t. (g ~ HaskellGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
+typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-typeOperatorsMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   simpleType =
-      simpleType
-      <|> Abstract.simpleInfixTypeLHSApplication <$> typeVar <*> anySymbol <*> typeVar
-      <|> parens (nonTerminal Report.simpleType)
-      <|> Abstract.simpleTypeLHSApplication <$> wrap (parens $ nonTerminal Report.simpleType) <*> typeVar,
-   typeConstructor = constructorIdentifier <|> parens anySymbol,
-   bType = bType
-      <|> Abstract.infixTypeApplication <$> wrap (nonTerminal Report.bType)
-                                        <*> qualifiedOperator
-                                        <*> wrap aType}
+typeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      simpleType =
+         simpleType
+         <|> Abstract.simpleInfixTypeLHSApplication <$> typeVar <*> anySymbol <*> typeVar
+         <|> parens (nonTerminal (Report.simpleType . report))
+         <|> Abstract.simpleTypeLHSApplication <$> wrap (parens $ nonTerminal (Report.simpleType . report)) <*> typeVar,
+      typeConstructor = constructorIdentifier <|> parens anySymbol,
+      bType = bType
+         <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
+                                           <*> qualifiedOperator
+                                           <*> wrap aType}}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              Ord t, Show t, TextualMonoid t)
-                               => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-existentialQuantificationMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   declaredConstructor =
-      Abstract.existentialConstructor <$ keyword "forall"
-                                      <*> some typeVar <* delimiter "."
-                                      <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
-                                      <*> wrap declaredConstructor
-      <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow) <*> wrap declaredConstructor
-      <|> declaredConstructor}
+                               => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+existentialQuantificationMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+   report= baseReport{
+      declaredConstructor =
+         Abstract.existentialConstructor <$ keywordForall
+                                         <*> some typeVar <* delimiter "."
+                                         <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+                                         <*> wrap declaredConstructor
+         <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow) <*> wrap declaredConstructor
+         <|> declaredConstructor}}
 
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
                                   
-                    => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-explicitForAllMixin baseGrammar@HaskellGrammar{..} = baseGrammar{
-   topLevelDeclaration = topLevelDeclaration
-      <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-          <* keyword "forall" <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
-          <*> wrap optionalContext
-          <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
-          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure []),
-   typeTerm = typeTerm
-      <|> Abstract.forallType <$ keyword "forall"
-          <*> some typeVar <* delimiter "."
-          <*> wrap optionalContext
-          <*> wrap typeTerm,
-   typeVar = notFollowedBy (keyword "forall") *> typeVar}
+                    => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+explicitForAllMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+   report= baseReport{
+      topLevelDeclaration = topLevelDeclaration
+         <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+             <* keywordForall <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
+             <*> wrap optionalContext
+             <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
+             <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure []),
+      typeTerm = typeTerm
+         <|> Abstract.forallType <$ keywordForall
+             <*> some typeVar <* delimiter "."
+             <*> wrap optionalContext
+             <*> wrap typeTerm,
+      typeVar = notFollowedBy keywordForall *> typeVar}}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
@@ -563,3 +614,15 @@ blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >
             <<|> cont []
          terminators :: [Char]
          terminators = ",;)]}"
+
+instance TokenParsing (Parser (ExtendedGrammar l t f) (LinePositioned Text)) where
+   someSpace = someLexicalSpace
+   token = lexicalToken
+
+instance LexicalParsing (Parser (ExtendedGrammar l t f) (LinePositioned Text)) where
+   lexicalComment = Report.comment
+   lexicalWhiteSpace = Report.whiteSpace
+   lexicalToken p = Report.storeToken p <* lexicalWhiteSpace
+   keyword = Report.keyword
+
+$(Rank2.TH.deriveAll ''ExtendedGrammar)
