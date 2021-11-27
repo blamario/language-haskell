@@ -65,8 +65,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    fixity :: p (Abstract.Associativity l),
    typeTerm, bType, aType :: p (Abstract.Type l l f f),
    generalTypeConstructor :: p (Abstract.Type l l f f),
-   context :: p (Abstract.Context l l f f),
-   classConstraint :: p (Abstract.Context l l f f),
+   optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
    simpleContext :: p (Abstract.Context l l f f),
    simpleConstraint :: p (Abstract.Context l l f f),
@@ -202,17 +201,17 @@ grammar HaskellGrammar{..} = HaskellGrammar{
    topLevelDeclaration =
       Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
       <|> Abstract.dataDeclaration <$ keyword "data"
-          <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+          <*> wrap optionalContext
           <*> wrap simpleType <*> (delimiter "=" *> declaredConstructors <|> pure []) <*> derivingClause
       <|> Abstract.newtypeDeclaration <$ keyword "newtype"
-          <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+          <*> wrap optionalContext
           <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
       <|> Abstract.classDeclaration <$ keyword "class"
-          <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
+          <*> wrap optionalContext
           <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
           <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
-          <*> wrap (simpleContext <* rightDoubleArrow <|> pure Abstract.noContext)
+          <*> wrap optionalContext
           <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
           <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
@@ -237,8 +236,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
    inInstanceDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
                                                         <*> wrap rhs <*> whereClauses,
    generalDeclaration =
-      Abstract.typeSignature <$> variables <* doubleColon
-                             <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext) <*> wrap typeTerm
+      Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalContext <*> wrap typeTerm
       <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)
                                      <*> (operator `sepByNonEmpty` comma),
    whereClauses = keyword "where" *> declarations <|> pure [],
@@ -286,6 +284,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	(->) 	    (function constructor)
 -- 	| 	(,{,}) 	    (tupling constructors)
 
+   optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
    context = classConstraint <|> Abstract.constraints <$> parens (wrap classConstraint `sepBy` comma),
    classConstraint = simpleConstraint
                      <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
