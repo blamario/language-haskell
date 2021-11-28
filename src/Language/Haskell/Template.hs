@@ -27,6 +27,7 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
+import Language.Haskell.TH.Syntax (VarBangType)
 
 pprint :: PrettyViaTH a => a -> String
 pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
@@ -43,7 +44,7 @@ mdoE = MDoE
 class PrettyViaTH a where
    prettyViaTH :: a -> Ppr.Doc
 
-class TemplateWrapper f where
+class Functor f => TemplateWrapper f where
    extract :: f a -> a
    isParenthesized :: f a -> Bool
 
@@ -204,8 +205,12 @@ declarationTemplates (DataDeclaration context lhs constructors derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [DataD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
             Nothing (dataConstructorTemplate . extract <$> constructors)
-            $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
-   where derived (SimpleDerive name) = ConT (qnameTemplate name)
+            $ derivingsTemplate $ extract <$> derivings]
+declarationTemplates (GADTDeclaration lhs constructors derivings)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
+     [DataD [] (nameTemplate con) (plainTV . nameTemplate <$> vars)
+            Nothing (gadtConstructorTemplate . extract <$> constructors)
+            $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates DefaultDeclaration{} = error "Template Haskell can't represent a default declaration"
 declarationTemplates (EquationDeclaration lhs rhs wheres)
    | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) rhs' declarations]
@@ -242,8 +247,7 @@ declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
                Nothing (dataConstructorTemplate . extract $ constructor)
-               $ if null derivings then [] else [DerivClause Nothing $ derived . extract <$> derivings]]
-   where derived (SimpleDerive name) = ConT (qnameTemplate name)
+               $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [TySynD (nameTemplate con) (plainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
@@ -253,6 +257,11 @@ declarationTemplates (TypeSignature names context t) =
                      of NoContext -> id
                         ctx -> ForallT (nub $ changeTVFlags InferredSpec $ freeContextVars ctx <> freeTypeVars (extract t))
                                        (contextTemplate ctx)
+
+derivingsTemplate :: [DerivingClause Language Language f f] -> [DerivClause]
+derivingsTemplate derivings =
+   if null derivings then [] else [DerivClause Nothing $ derived <$> derivings]
+   where derived (SimpleDerive name) = ConT (qnameTemplate name)
 
 contextTemplate :: TemplateWrapper f => Context Language Language f f -> Cxt
 contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
@@ -277,16 +286,34 @@ dataConstructorTemplate (Constructor name@(AST.Name local) [left, right]) | ":" 
 dataConstructorTemplate (Constructor name argTypes) =
    NormalC (nameTemplate name) (bangTypeTemplate . extract <$> argTypes)
 dataConstructorTemplate (RecordConstructor recName fieldTypes) =
-   RecC (nameTemplate recName) (concat $ fieldTypeTemplate . extract <$> fieldTypes)
-   where fieldTypeTemplate (ConstructorFields names t)
-            | StrictType{} <- extract t = varBang SourceStrict t <$> toList names
-            | otherwise = varBang NoSourceStrictness t <$> toList names
-         varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
+   RecC (nameTemplate recName) (foldMap (fieldTypeTemplate . extract) fieldTypes)
 dataConstructorTemplate (ExistentialConstructor vars context con) =
   ForallC (nub $ (plainTVSpecified . nameTemplate <$> vars) <> changeTVFlags SpecifiedSpec (freeConstructorVars con'))
           (contextTemplate $ extract context)
           (dataConstructorTemplate con')
   where con' = extract con
+
+gadtConstructorTemplate :: TemplateWrapper f => GADTConstructor Language Language f f -> Con
+gadtConstructorTemplate (GADTConstructors names vars context t)
+   | null vars, NoContext <- extract context = case extract t of
+      FunctionType arg result -> normalTemplate (extract arg :) (extract result)
+      RecordFunctionType fields result -> recordTemplate (extract <$> fields) (extract result)
+      result -> normalTemplate id result
+   | otherwise = ForallC (nub $ (plainTVSpecified . nameTemplate <$> vars)
+                                <> changeTVFlags SpecifiedSpec (freeTypeVars $ extract t))
+                         (contextTemplate $ extract context)
+                         (gadtConstructorTemplate $ GADTConstructors names [] (NoContext <$ context) t)
+   where normalTemplate args (FunctionType arg result) = normalTemplate (args . (extract arg :)) (extract result)
+         normalTemplate args result =
+            GadtC (nameTemplate <$> toList names) (bangTypeTemplate <$> args []) (typeTemplate result)
+         recordTemplate fields result =
+            RecGadtC (nameTemplate <$> toList names) (foldMap fieldTypeTemplate fields) (typeTemplate result)
+
+fieldTypeTemplate :: TemplateWrapper f => FieldDeclaration Language Language f f -> [VarBangType]
+fieldTypeTemplate (ConstructorFields names t)
+   | StrictType{} <- extract t = varBang SourceStrict t <$> toList names
+   | otherwise = varBang NoSourceStrictness t <$> toList names
+   where varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 
 freeConstructorVars :: TemplateWrapper f => DataConstructor Language Language f f -> [TyVarBndrUnit]
 freeConstructorVars (Constructor _ argTypes) = foldMap (freeTypeVars . extract) argTypes

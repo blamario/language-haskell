@@ -2,7 +2,8 @@
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Declaration(..), DataConstructor(..),
-                                        Expression(..), Statement(..), Type(..), TypeLHS(..), Value(..),
+                                        GADTConstructor(..), Expression(..), Statement(..),
+                                        Type(..), TypeLHS(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -26,6 +27,7 @@ import qualified Transformation.Shallow.TH
 data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.ExtendedHaskell Language where
+   type GADTConstructor Language = GADTConstructor Language
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
    parallelListComprehension = ParallelListComprehension
@@ -42,6 +44,9 @@ instance Abstract.ExtendedHaskell Language where
    existentialConstructor = ExistentialConstructor
    explicitlyScopedInstanceDeclaration = InstanceDeclaration . toList
    forallType = ForallType
+   gadtDeclaration = GADTDeclaration
+   gadtConstructors = GADTConstructors
+   recordFunctionType = RecordFunctionType
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -216,6 +221,8 @@ data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
    | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                      [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
+   | GADTDeclaration (s (Abstract.TypeLHS l l d d))
+                     [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | DefaultDeclaration [s (Abstract.Type l l d d)]
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
                          [s (Abstract.Declaration l l d d)]
@@ -230,6 +237,10 @@ data Declaration λ l d s =
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
+data GADTConstructor λ l d s =
+   GADTConstructors (NonEmpty (Abstract.Name λ)) [Abstract.Name λ]
+                    (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+
 data DataConstructor λ l d s =
    Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
@@ -239,6 +250,7 @@ data Type λ l d s =
    ConstructorType (s (Abstract.Constructor l l d d))
    | FunctionConstructorType
    | FunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | RecordFunctionType [s (Abstract.FieldDeclaration l l d d)] (s (Abstract.Type l l d d))
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))
    | TupleType (NonEmpty (s (Abstract.Type l l d d)))
@@ -305,18 +317,21 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
                   Eq (Import λ l d s)
 
 deriving instance Typeable (Declaration λ l d s)
-deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
+deriving instance (Data (s (Abstract.Context l l d d)),
+                   Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
-deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
+deriving instance (Show (s (Abstract.Context l l d d)),
+                   Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (Abstract.Name λ)) => Show (Declaration λ l d s)
-deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstructor l l d d)),
+deriving instance (Eq (s (Abstract.Context l l d d)),
+                   Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
@@ -334,15 +349,24 @@ deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstr
                    Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (DataConstructor λ l d s)
 
+deriving instance Typeable (GADTConstructor λ l d s)
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (GADTConstructor λ l d s)
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (GADTConstructor λ l d s)
+deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (GADTConstructor λ l d s)
+
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
-                   Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
-                   Data (Abstract.QualifiedName λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.FieldDeclaration l l d d)),
+                   Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
 deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
-                   Show (s (Abstract.Type l l d d)),
+                   Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
 deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
-                   Eq (s (Abstract.Type l l d d)),
+                   Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) => Eq (Type λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
@@ -388,4 +412,4 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Declaration, ''DataConstructor, ''Type, ''TypeLHS, ''Expression, ''Statement, ''Value]))
+             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''Expression, ''Statement, ''Value]))

@@ -33,7 +33,7 @@ import qualified Data.Text as Text
 import qualified Numeric
 import qualified Rank2.TH
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof, sepBy)
+import Text.Parser.Combinators (eof, sepBy, sepByNonEmpty)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import qualified Text.Grampa.ContextFree.SortedMemoizing as P (Parser)
@@ -97,7 +97,8 @@ extensionMixins =
      (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
      (Set.fromList [TypeOperators],              (9, typeOperatorsMixin)),
      (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
-     (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin))]
+     (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
+     (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -177,7 +178,13 @@ reportGrammar g@ExtendedGrammar{report= r} =
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: {-# UNPACK #-} !(HaskellGrammar l t f p),
-   keywordForall :: p ()}
+   keywordForall :: p (),
+   gadtConstructors :: p (Abstract.GADTConstructor l l f f),
+   constructorIDs :: p (NonEmpty (Abstract.Name l)),
+   optionalForall :: p [Abstract.Name l],
+   typeVarBinder :: p (Abstract.Name l),
+   gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
+   return_type :: p (Abstract.Type l l f f)}
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -563,7 +570,6 @@ explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
-                                  
                     => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 explicitForAllMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
    report= baseReport{
@@ -580,6 +586,37 @@ explicitForAllMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGramma
              <*> wrap typeTerm,
       typeVar = notFollowedBy keywordForall *> typeVar}}
 
+gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                              g ~ ExtendedGrammar l t (NodeWrap t),
+                              Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l),
+                              Deep.Functor (DisambiguatorTrans t) (Abstract.GADTConstructor l l))
+                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+gadtSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+   report= baseReport{
+      topLevelDeclaration = topLevelDeclaration
+         <|> Abstract.gadtDeclaration <$ keyword "data"
+             <*> wrap simpleType <* keyword "where" <*> blockOf (nonTerminal gadtConstructors) <*> derivingClause},
+   gadtConstructors=
+      Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
+                                <*> nonTerminal optionalForall
+                                <*> wrap optionalContext
+                                <*> wrap (nonTerminal gadtBody),
+   constructorIDs = constructor `sepByNonEmpty` comma,
+   optionalForall = nonTerminal keywordForall *> many (nonTerminal typeVarBinder) <|> pure [],
+   typeVarBinder = typeVar,
+   gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
+   prefix_gadt_body =
+      parens (nonTerminal prefix_gadt_body)
+      <|> nonTerminal return_type
+      <|> Abstract.functionType <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+                                <*> wrap (nonTerminal prefix_gadt_body),
+   record_gadt_body =
+      Abstract.recordFunctionType
+      <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
+      <*> wrap (nonTerminal return_type),
+   return_type = bType}
+ 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"

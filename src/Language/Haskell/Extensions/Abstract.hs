@@ -1,10 +1,17 @@
-module Language.Haskell.Extensions.Abstract (ExtendedHaskell(..), module Language.Haskell.Abstract) where
+{-# Language ConstraintKinds, FlexibleContexts, KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
+module Language.Haskell.Extensions.Abstract (ExtendedHaskell(..),
+                                             DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+                                             module Language.Haskell.Abstract) where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
-import Language.Haskell.Abstract 
+import qualified Transformation.Deep as Deep
+
+import Language.Haskell.Abstract hiding (DeeplyFunctor, DeeplyFoldable, DeeplyTraversable)
+import qualified Language.Haskell.Abstract as Report
 
 class Haskell λ => ExtendedHaskell λ where
+   type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    parallelListComprehension :: s (Expression l l d d)
@@ -35,3 +42,12 @@ class Haskell λ => ExtendedHaskell λ where
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
    forallType :: [Name λ] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
+   gadtDeclaration :: s (TypeLHS l l d d) -> [s (GADTConstructor l l d d)]
+                   -> [s (DerivingClause l l d d)] -> Declaration λ l d s
+   gadtConstructors :: NonEmpty (Name λ) -> [Name λ] -> s (Context l l d d) -> s (Type l l d d)
+                   -> GADTConstructor λ l d s
+   recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s
+
+type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Report.DeeplyFunctor t l)
+type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Report.DeeplyFoldable t l)
+type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Report.DeeplyTraversable t l)
