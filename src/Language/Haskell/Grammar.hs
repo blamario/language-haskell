@@ -77,7 +77,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
-   instanceDesignator :: p (Abstract.Type l l f f),
+   instanceDesignator :: p (Abstract.TypeLHS l l f f),
    typeVarApplications :: p (Abstract.Type l l f f),
    typeVarTuple :: p (NonEmpty (f (Abstract.Type l l f f))),
    foreignDeclaration :: p (Abstract.Declaration l l f f),
@@ -213,7 +213,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
           <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
       <|> Abstract.instanceDeclaration <$ keyword "instance"
           <*> wrap optionalContext
-          <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
+          <*> wrap instanceDesignator
           <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
       <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
       <|> foreignDeclaration
@@ -334,11 +334,13 @@ grammar HaskellGrammar{..} = HaskellGrammar{
                     *> (pure <$> wrap (Abstract.simpleDerive <$> qualifiedTypeClass)
                         <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
                     <|> pure [],
-   instanceDesignator = generalTypeConstructor
-                        <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
-                        <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
-                        <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
-                                                          <*> wrap (Abstract.typeVariable <$> typeVar)),
+   instanceDesignator =
+      Abstract.generalTypeLHS <$> qualifiedTypeClass
+         <*> wrap (generalTypeConstructor
+                   <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
+                   <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
+                   <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
+                                                     <*> wrap (Abstract.typeVariable <$> typeVar))),
    typeVarApplications = generalTypeConstructor
                          <|> Abstract.typeApplication <$> wrap typeVarApplications
                                                       <*> wrap (Abstract.typeVariable <$> typeVar),

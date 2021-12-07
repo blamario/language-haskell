@@ -98,14 +98,17 @@ instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.text "type" <+> Ppr.parens (prettyViaTH name)
    prettyViaTH (ImportClassOrType name members) =
       prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
-   prettyViaTH (ImportVar name@(AST.Name local))
-      | not (Text.null local), c <- Text.head local, Char.isLetter c || c == '_' = prettyViaTH name
-      | otherwise = Ppr.parens (prettyViaTH name)
+   prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
 
 instance PrettyViaTH (Members Language) where
-   prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> names)
+   prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
    prettyViaTH AllMembers = Ppr.text ".."
-   
+
+prettyIdentifier :: AST.Name Language -> Ppr.Doc
+prettyIdentifier name@(AST.Name local)
+   | Just (c, _) <- Text.uncons local, Char.isLetter c || c == '_' = prettyViaTH name
+   | otherwise = Ppr.parens (prettyViaTH name)
+
 instance PrettyViaTH (Declaration Language Language Placed Placed) where
    prettyViaTH x = Ppr.vcat (Ppr.ppr <$> declarationTemplates x)
 
@@ -255,8 +258,7 @@ declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
    where inContext = case extract context
                      of NoContext -> id
-                        ctx -> ForallT (nub $ changeTVFlags InferredSpec $ freeContextVars ctx <> freeTypeVars (extract t))
-                                       (contextTemplate ctx)
+                        ctx -> ForallT [] (contextTemplate ctx)
 
 derivingsTemplate :: [DerivingClause Language Language f f] -> [DerivClause]
 derivingsTemplate derivings =

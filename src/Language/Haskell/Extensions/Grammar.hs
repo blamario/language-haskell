@@ -53,7 +53,7 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 import Prelude hiding (exponent, filter, null)
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
-   report :: {-# UNPACK #-} !(HaskellGrammar l t f p),
+   report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -110,7 +110,8 @@ extensionMixins =
      (Set.fromList [TypeOperators],              (9, typeOperatorsMixin)),
      (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
      (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
-     (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin))]
+     (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin)),
+     (Set.fromList [FlexibleInstances],          (9, flexibleInstancesMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -555,6 +556,16 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                                            <*> wrap aType}}
    where anySymbol = constructorSymbol <|> variableSymbol
 
+flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                     g ~ ExtendedGrammar l t (NodeWrap t),
+                                     Ord t, Show t, TextualMonoid t)
+                       => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+flexibleInstancesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+   report= baseReport{
+      instanceDesignator =
+         Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap aType
+         <|> parens (nonTerminal $ Report.instanceDesignator . report)}}
+
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              Ord t, Show t, TextualMonoid t)
                                => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -569,23 +580,24 @@ existentialQuantificationMixin baseGrammar@ExtendedGrammar{report= baseReport@Ha
          <|> declaredConstructor}}
 
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                  g ~ ExtendedGrammar l t (NodeWrap t),
                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
-                    => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 explicitForAllMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
    report= baseReport{
       topLevelDeclaration = topLevelDeclaration
          <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
              <* keywordForall <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap (Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap instanceDesignator)
+             <*> wrap instanceDesignator
              <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure []),
       typeTerm = typeTerm
          <|> Abstract.forallType <$ keywordForall
              <*> some typeVar <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap typeTerm,
+             <*> wrap (nonTerminal $ Report.typeTerm . report),
       typeVar = notFollowedBy keywordForall *> typeVar}}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
