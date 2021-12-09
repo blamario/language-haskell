@@ -52,6 +52,18 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
 
+data ExtendedGrammar l t f p = ExtendedGrammar {
+   report :: {-# UNPACK #-} !(HaskellGrammar l t f p),
+   keywordForall :: p (),
+   gadtConstructors :: p (Abstract.GADTConstructor l l f f),
+   constructorIDs :: p (NonEmpty (Abstract.Name l)),
+   optionalForall :: p [Abstract.Name l],
+   typeVarBinder :: p (Abstract.Name l),
+   gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
+   return_type :: p (Abstract.Type l l f f)}
+
+$(Rank2.TH.deriveAll ''ExtendedGrammar)
+
 extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                             Ord t, Show t, OutlineMonoid t,
                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
@@ -175,16 +187,6 @@ reportGrammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t),
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= Report.grammar r,
      keywordForall = keyword "forall"}
-
-data ExtendedGrammar l t f p = ExtendedGrammar {
-   report :: {-# UNPACK #-} !(HaskellGrammar l t f p),
-   keywordForall :: p (),
-   gadtConstructors :: p (Abstract.GADTConstructor l l f f),
-   constructorIDs :: p (NonEmpty (Abstract.Name l)),
-   optionalForall :: p [Abstract.Name l],
-   typeVarBinder :: p (Abstract.Name l),
-   gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
-   return_type :: p (Abstract.Type l l f f)}
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -662,5 +664,3 @@ instance LexicalParsing (Parser (ExtendedGrammar l t f) (LinePositioned Text)) w
    lexicalWhiteSpace = Report.whiteSpace
    lexicalToken p = Report.storeToken p <* lexicalWhiteSpace
    keyword = Report.keyword
-
-$(Rank2.TH.deriveAll ''ExtendedGrammar)

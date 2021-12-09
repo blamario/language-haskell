@@ -387,7 +387,7 @@ typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate (ForallType vars context body) =
-  ForallT (nub $ (plainTV . nameTemplate <$> vars) <> freeTypeVars type')
+  ForallT (changeTVFlags SpecifiedSpec $ nub $ (plainTV . nameTemplate <$> vars) <> freeTypeVars type')
           (contextTemplate $ extract context)
           (typeTemplate type')
   where type' = extract body
