@@ -68,7 +68,6 @@ data HaskellGrammar l t f p = HaskellGrammar {
    generalTypeConstructor :: p (Abstract.Type l l f f),
    optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
-   simpleContext :: p (Abstract.Context l l f f),
    simpleConstraint :: p (Abstract.Context l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
    declaredConstructors :: p [f (Abstract.DataConstructor l l f f)],
@@ -291,7 +290,6 @@ grammar HaskellGrammar{..} = HaskellGrammar{
                      <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
    typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
                                                <*> wrap aType,
-   simpleContext = simpleConstraint <|> Abstract.constraints <$> parens (wrap simpleConstraint `sepBy` comma),
    simpleConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar,
    
 -- context 	→ 	class
