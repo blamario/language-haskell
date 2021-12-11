@@ -47,45 +47,15 @@ type DisambiguatorTrans t = Disambiguator.Local (Down Int) t (Transformation.Ran
 
 data HaskellGrammar l t f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
+   moduleLevel :: ModuleLevelGrammar l f p,
+   declarationLevel :: DeclarationGrammar l f p,
    body :: p ([f (Abstract.Import l l f f)], [f (Abstract.Declaration l l f f)]),
-   exports :: p [f (Abstract.Export l l f f)],
-   export :: p (Abstract.Export l l f f),
-   importDeclaration :: p (Abstract.Import l l f f),
-   importSpecification :: p (Abstract.ImportSpecification l l f f),
-   importItem :: p (Abstract.ImportItem l l f f),
-   members :: p (Abstract.Members l),
-   cname :: p (Abstract.Name l),
-   topLevelDeclaration :: p (Abstract.Declaration l l f f),
-   declarations :: p [f (Abstract.Declaration l l f f)],
-   declaration :: p (Abstract.Declaration l l f f),
-   inClassDeclaration :: p (Abstract.Declaration l l f f),
-   inInstanceDeclaration :: p (Abstract.Declaration l l f f),
-   generalDeclaration :: p (Abstract.Declaration l l f f),
-   whereClauses :: p [f (Abstract.Declaration l l f f)],
-   variables :: p (NonEmpty (Abstract.Name l)),
-   fixity :: p (Abstract.Associativity l),
    typeTerm, bType, aType :: p (Abstract.Type l l f f),
    generalTypeConstructor :: p (Abstract.Type l l f f),
    optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
    simpleConstraint :: p (Abstract.Context l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
-   declaredConstructors :: p [f (Abstract.DataConstructor l l f f)],
-   declaredConstructor :: p (Abstract.DataConstructor l l f f),
-   infixConstructorArgType :: p (Abstract.Type l l f f),
-   newConstructor :: p (Abstract.DataConstructor l l f f),
-   fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
-   derivingClause :: p [f (Abstract.DerivingClause l l f f)],
-   instanceDesignator :: p (Abstract.TypeLHS l l f f),
-   typeVarApplications :: p (Abstract.Type l l f f),
-   typeVarTuple :: p (NonEmpty (f (Abstract.Type l l f f))),
-   foreignDeclaration :: p (Abstract.Declaration l l f f),
-   callingConvention :: p (Abstract.CallingConvention l),
-   safety :: p (Abstract.CallSafety l),
-   foreignType :: p (Abstract.Type l l f f),
-   foreignReturnType :: p (Abstract.Type l l f f),
-   foreignArgType :: p (Abstract.Type l l f f),
-   functionLHS :: p (Abstract.EquationLHS l l f f),
    rhs :: p (Abstract.EquationRHS l l f f),
    guards, qualifiers :: p (NonEmpty (f (Abstract.Statement l l f f))),
    guard, qualifier :: p (Abstract.Statement l l f f),
@@ -115,8 +85,48 @@ data HaskellGrammar l t f p = HaskellGrammar {
    charLiteral, charLexeme, escape :: p Char,
    stringLiteral, stringLexeme :: p Text
 }
-                                  
+
+data ModuleLevelGrammar l f p = ModuleLevelGrammar {
+   exports :: p [f (Abstract.Export l l f f)],
+   export :: p (Abstract.Export l l f f),
+   importDeclaration :: p (Abstract.Import l l f f),
+   importSpecification :: p (Abstract.ImportSpecification l l f f),
+   importItem :: p (Abstract.ImportItem l l f f),
+   members :: p (Abstract.Members l),
+   cname :: p (Abstract.Name l)
+}
+
+data DeclarationGrammar l f p = DeclarationGrammar {
+   topLevelDeclaration :: p (Abstract.Declaration l l f f),
+   declarations :: p [f (Abstract.Declaration l l f f)],
+   declaration :: p (Abstract.Declaration l l f f),
+   inClassDeclaration :: p (Abstract.Declaration l l f f),
+   inInstanceDeclaration :: p (Abstract.Declaration l l f f),
+   generalDeclaration :: p (Abstract.Declaration l l f f),
+   whereClauses :: p [f (Abstract.Declaration l l f f)],
+   variables :: p (NonEmpty (Abstract.Name l)),
+   fixity :: p (Abstract.Associativity l),
+   declaredConstructors :: p [f (Abstract.DataConstructor l l f f)],
+   declaredConstructor :: p (Abstract.DataConstructor l l f f),
+   infixConstructorArgType :: p (Abstract.Type l l f f),
+   newConstructor :: p (Abstract.DataConstructor l l f f),
+   fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
+   derivingClause :: p [f (Abstract.DerivingClause l l f f)],
+   instanceDesignator :: p (Abstract.TypeLHS l l f f),
+   typeVarApplications :: p (Abstract.Type l l f f),
+   typeVarTuple :: p (NonEmpty (f (Abstract.Type l l f f))),
+   foreignDeclaration :: p (Abstract.Declaration l l f f),
+   callingConvention :: p (Abstract.CallingConvention l),
+   safety :: p (Abstract.CallSafety l),
+   foreignType :: p (Abstract.Type l l f f),
+   foreignReturnType :: p (Abstract.Type l l f f),
+   foreignArgType :: p (Abstract.Type l l f f),
+   functionLHS :: p (Abstract.EquationLHS l l f f)
+}
+
 $(Rank2.TH.deriveAll ''HaskellGrammar)
+$(Rank2.TH.deriveAll ''ModuleLevelGrammar)
+$(Rank2.TH.deriveAll ''DeclarationGrammar)
 
 grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
                 Ord t, Show t, OutlineMonoid t,
@@ -145,7 +155,9 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
                       Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar HaskellGrammar{..} = HaskellGrammar{
+grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
+                       declarationLevel= DeclarationGrammar{..},
+                       ..} = HaskellGrammar{
    haskellModule = wrap (optional (char '\xfeff') *> whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
                                                                <*> optional exports <* keyword "where"
@@ -166,21 +178,21 @@ grammar HaskellGrammar{..} = HaskellGrammar{
 -- body 	→ 	{ impdecls ; topdecls }
 -- 	| 	{ impdecls }
 -- 	| 	{ topdecls }
-
-   exports = parens (wrap export `sepBy` comma),
-   export = Abstract.exportVar <$> qualifiedVariable
-            <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
-            <|> Abstract.reExportModule <$ keyword "module" <*> moduleId,
-   importDeclaration = Abstract.importDeclaration <$ keyword "import"
-                       <*> (True <$ keyword "qualified" <|> pure False) <*> moduleId
-                       <*> optional (keyword "as" *> moduleId) <*> optional (wrap importSpecification),
-   importSpecification = (pure Abstract.includedImports <|> Abstract.excludedImports <$ keyword "hiding")
-                         <*> parens (wrap importItem `sepBy` comma <* optional comma),
-   importItem = Abstract.importVar <$> variable
-                <|> Abstract.importClassOrType <$> typeConstructor <*> optional members,
-   members = parens (Abstract.allMembers <$ delimiter ".."
-                     <|> Abstract.memberList <$> (cname `sepBy` comma) <* optional comma),
-   cname = variable <|> constructor,
+   moduleLevel= ModuleLevelGrammar{
+      exports = parens (wrap export `sepBy` comma),
+      export = Abstract.exportVar <$> qualifiedVariable
+               <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
+               <|> Abstract.reExportModule <$ keyword "module" <*> moduleId,
+      importDeclaration = Abstract.importDeclaration <$ keyword "import"
+                          <*> (True <$ keyword "qualified" <|> pure False) <*> moduleId
+                          <*> optional (keyword "as" *> moduleId) <*> optional (wrap importSpecification),
+      importSpecification = (pure Abstract.includedImports <|> Abstract.excludedImports <$ keyword "hiding")
+                            <*> parens (wrap importItem `sepBy` comma <* optional comma),
+      importItem = Abstract.importVar <$> variable
+                   <|> Abstract.importClassOrType <$> typeConstructor <*> optional members,
+      members = parens (Abstract.allMembers <$ delimiter ".."
+                        <|> Abstract.memberList <$> (cname `sepBy` comma) <* optional comma),
+      cname = variable <|> constructor},
 
 -- impdecls 	→ 	impdecl1 ; … ; impdecln 	    (n ≥ 1)
 -- exports 	→ 	( export1 , … , exportn [ , ] ) 	    (n ≥ 0)
@@ -198,68 +210,159 @@ grammar HaskellGrammar{..} = HaskellGrammar{
 -- 	| 	tycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
 -- cname 	→ 	var | con
 
-   topLevelDeclaration =
-      Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
-      <|> Abstract.dataDeclaration <$ keyword "data"
-          <*> wrap optionalContext
-          <*> wrap simpleType <*> (delimiter "=" *> declaredConstructors <|> pure []) <*> derivingClause
-      <|> Abstract.newtypeDeclaration <$ keyword "newtype"
-          <*> wrap optionalContext
-          <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
-      <|> Abstract.classDeclaration <$ keyword "class"
-          <*> wrap optionalContext
-          <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
-          <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
-      <|> Abstract.instanceDeclaration <$ keyword "instance"
-          <*> wrap optionalContext
-          <*> wrap instanceDesignator
-          <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
-      <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
-      <|> foreignDeclaration
-      <|> declaration,
-       
--- topdecls 	→ 	topdecl1 ; … ; topdecln 	    (n ≥ 0)
--- topdecl 	→ 	type simpletype = type
--- 	| 	data [context =>] simpletype [= constrs] [deriving]
--- 	| 	newtype [context =>] simpletype = newconstr [deriving]
--- 	| 	class [scontext =>] tycls tyvar [where cdecls]
--- 	| 	instance [scontext =>] qtycls inst [where idecls]
--- 	| 	default (type1 , … , typen) 	    (n ≥ 0)
--- 	| 	foreign fdecl
--- 	| 	decl
+   declarationLevel= DeclarationGrammar{
+      topLevelDeclaration =
+         Abstract.typeSynonymDeclaration <$ keyword "type" <*> wrap simpleType <* delimiter "=" <*> wrap typeTerm
+         <|> Abstract.dataDeclaration <$ keyword "data"
+             <*> wrap optionalContext
+             <*> wrap simpleType <*> (delimiter "=" *> declaredConstructors <|> pure []) <*> derivingClause
+         <|> Abstract.newtypeDeclaration <$ keyword "newtype"
+             <*> wrap optionalContext
+             <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> derivingClause
+         <|> Abstract.classDeclaration <$ keyword "class"
+             <*> wrap optionalContext
+             <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
+             <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
+         <|> Abstract.instanceDeclaration <$ keyword "instance"
+             <*> wrap optionalContext
+             <*> wrap instanceDesignator
+             <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
+         <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
+         <|> foreignDeclaration
+         <|> declaration,
 
-   declarations = blockOf declaration,
-   declaration = generalDeclaration
-                 <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
-                                                  <*> wrap rhs <*> whereClauses,
-   inClassDeclaration = generalDeclaration <|> inInstanceDeclaration,
-   inInstanceDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
-                                                        <*> wrap rhs <*> whereClauses,
-   generalDeclaration =
-      Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalContext <*> wrap typeTerm
-      <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)
-                                     <*> (operator `sepByNonEmpty` comma),
-   whereClauses = keyword "where" *> declarations <|> pure [],
-   variables = variable `sepByNonEmpty` comma,
-   fixity = Abstract.leftAssociative <$ keyword "infixl"
-            <|> Abstract.rightAssociative <$ keyword "infixr"
-            <|> Abstract.nonAssociative <$ keyword "infix",
-   
--- decls 	→ 	{ decl1 ; … ; decln } 	    (n ≥ 0)
--- decl 	→ 	gendecl
--- 	| 	(funlhs | pat) rhs
--- cdecls 	→ 	{ cdecl1 ; … ; cdecln } 	    (n ≥ 0)
--- cdecl 	→ 	gendecl
--- 	| 	(funlhs | var) rhs
--- idecls 	→ 	{ idecl1 ; … ; idecln } 	    (n ≥ 0)
--- idecl 	→ 	(funlhs | var) rhs
--- 	| 		    (empty)
--- gendecl 	→ 	vars :: [context =>] type 	    (type signature)
--- 	| 	fixity [integer] ops 	    (fixity declaration)
--- 	| 		    (empty declaration)
--- ops 	→ 	op1 , … , opn 	    (n ≥ 1)
--- vars 	→ 	var1 , …, varn 	    (n ≥ 1)
--- fixity 	→ 	infixl | infixr | infix
+      declarations = blockOf declaration,
+      declaration = generalDeclaration
+                    <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
+                                                     <*> wrap rhs <*> whereClauses,
+      inClassDeclaration = generalDeclaration <|> inInstanceDeclaration,
+      inInstanceDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
+                                                           <*> wrap rhs <*> whereClauses,
+      generalDeclaration =
+         Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalContext <*> wrap typeTerm
+         <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)
+                                        <*> (operator `sepByNonEmpty` comma),
+      whereClauses = keyword "where" *> declarations <|> pure [],
+      variables = variable `sepByNonEmpty` comma,
+      fixity = Abstract.leftAssociative <$ keyword "infixl"
+               <|> Abstract.rightAssociative <$ keyword "infixr"
+               <|> Abstract.nonAssociative <$ keyword "infix",
+
+   -- topdecls 	→ 	topdecl1 ; … ; topdecln 	    (n ≥ 0)
+   -- topdecl 	→ 	type simpletype = type
+   -- 	| 	data [context =>] simpletype [= constrs] [deriving]
+   -- 	| 	newtype [context =>] simpletype = newconstr [deriving]
+   -- 	| 	class [scontext =>] tycls tyvar [where cdecls]
+   -- 	| 	instance [scontext =>] qtycls inst [where idecls]
+   -- 	| 	default (type1 , … , typen) 	    (n ≥ 0)
+   -- 	| 	foreign fdecl
+   -- 	| 	decl
+   -- decls 	→ 	{ decl1 ; … ; decln } 	    (n ≥ 0)
+   -- decl 	→ 	gendecl
+   -- 	| 	(funlhs | pat) rhs
+   -- cdecls 	→ 	{ cdecl1 ; … ; cdecln } 	    (n ≥ 0)
+   -- cdecl 	→ 	gendecl
+   -- 	| 	(funlhs | var) rhs
+   -- idecls 	→ 	{ idecl1 ; … ; idecln } 	    (n ≥ 0)
+   -- idecl 	→ 	(funlhs | var) rhs
+   -- 	| 		    (empty)
+   -- gendecl 	→ 	vars :: [context =>] type 	    (type signature)
+   -- 	| 	fixity [integer] ops 	    (fixity declaration)
+   -- 	| 		    (empty declaration)
+   -- ops 	→ 	op1 , … , opn 	    (n ≥ 1)
+   -- vars 	→ 	var1 , …, varn 	    (n ≥ 1)
+   -- fixity 	→ 	infixl | infixr | infix
+
+      declaredConstructors = wrap declaredConstructor `sepBy1` delimiter "|",
+      declaredConstructor = Abstract.constructor <$> constructor
+                                                 <*> many (wrap
+                                                           $ aType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType)
+                            <|> wrap infixConstructorArgType
+                                <**> (constructorOperator
+                                      <**> (wrap infixConstructorArgType
+                                            <**> (pure $ \right op left-> Abstract.constructor op [left, right])))
+                            <|> Abstract.recordConstructor <$> constructor
+                                                           <*> braces (wrap fieldDeclaration `sepBy` comma),
+      infixConstructorArgType = bType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType,
+      newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
+                       <|> Abstract.recordConstructor <$> constructor
+                           <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
+                                                       <* doubleColon <*> wrap typeTerm)),
+      fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon
+                         <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
+
+   -- constrs 	→ 	constr1 | … | constrn 	    (n ≥ 1)
+   -- constr 	→ 	con [!] atype1 … [!] atypek 	    (arity con  =  k, k ≥ 0)
+   -- 	| 	(btype | ! atype) conop (btype | ! atype) 	    (infix conop)
+   -- 	| 	con { fielddecl1 , … , fielddecln } 	    (n ≥ 0)
+   -- newconstr 	→ 	con atype
+   -- 	| 	con { var :: type }
+   -- fielddecl 	→ 	vars :: (type | ! atype)
+
+      derivingClause = keyword "deriving"
+                       *> (pure <$> wrap (Abstract.simpleDerive <$> qualifiedTypeClass)
+                           <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
+                       <|> pure [],
+      instanceDesignator =
+         Abstract.generalTypeLHS <$> qualifiedTypeClass
+            <*> wrap (generalTypeConstructor
+                      <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
+                      <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
+                      <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
+                                                        <*> wrap (Abstract.typeVariable <$> typeVar))),
+      typeVarApplications = generalTypeConstructor
+                            <|> Abstract.typeApplication <$> wrap typeVarApplications
+                                                         <*> wrap (Abstract.typeVariable <$> typeVar),
+      typeVarTuple = (:|) <$> wrap (Abstract.typeVariable <$> typeVar)
+                          <*> some (comma *> wrap (Abstract.typeVariable <$> typeVar)),
+
+   -- deriving 	→ 	deriving (dclass | (dclass1, … , dclassn)) 	    (n ≥ 0)
+   -- dclass 	→ 	qtycls
+   -- inst 	→ 	gtycon
+   -- 	| 	( gtycon tyvar1 … tyvark ) 	    (k ≥ 0, tyvars distinct)
+   -- 	| 	( tyvar1 , … , tyvark ) 	    (k ≥ 2, tyvars distinct)
+   -- 	| 	[ tyvar ]
+   -- 	| 	( tyvar1 -> tyvar2 ) 	    tyvar1 and tyvar2 distinct
+
+      foreignDeclaration = Abstract.foreignImport <$ keyword "import" <*> callingConvention <*> optional safety
+                                                  <*> optional stringLiteral <*> variable <* doubleColon
+                                                  <*> wrap foreignType
+                           <|> Abstract.foreignExport <$ keyword "export" <*> callingConvention
+                                                      <*> optional stringLiteral <*> variable <* doubleColon
+                                                      <*> wrap foreignType,
+      callingConvention = Abstract.cCall <$ keyword "ccall" <|> Abstract.stdCall <$ keyword "stdcall"
+                          <|> Abstract.cppCall <$ keyword "cplusplus" <|> Abstract.jvmCall <$ keyword "jvm"
+                          <|> Abstract.dotNetCall <$ keyword "dotnet",
+      safety = Abstract.safeCall <$ keyword "safe" <|> Abstract.unsafeCall <$ keyword "unsafe",
+      foreignType = Abstract.functionType <$> wrap foreignArgType <* rightArrow <*> wrap foreignType
+                    <|> foreignReturnType,
+      foreignReturnType = foreignArgType
+                          <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
+                                                                 <$ terminator "(" <* terminator ")"),
+      foreignArgType = Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedTypeConstructor)
+                       <|> Abstract.typeApplication <$> wrap foreignArgType <*> wrap (Abstract.strictType <$> wrap aType),
+
+   -- fdecl 	→ 	import callconv [safety] impent var :: ftype 	    (define variable)
+   -- 	| 	export callconv expent var :: ftype 	    (expose variable)
+   -- callconv 	→ 	ccall | stdcall | cplusplus 	    (calling convention)
+   -- 	| 	jvm | dotnet
+   -- 	| 	 system-specific calling conventions
+   -- impent 	→ 	[string] 	    (see Section 8.5.1)
+   -- expent 	→ 	[string] 	    (see Section 8.5.1)
+   -- safety 	→ 	unsafe | safe
+   -- ftype 	→ 	frtype
+   -- 	| 	fatype  →  ftype
+   -- frtype 	→ 	fatype
+   -- 	| 	()
+   -- fatype 	→ 	qtycon atype1 … atypek 	    (k  ≥  0)
+
+      functionLHS = Abstract.prefixLHS <$> wrap (Abstract.variableLHS <$> variable <|> parens functionLHS)
+                                       <*> (NonEmpty.fromList <$> some (wrap aPattern))
+                    <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern
+   -- funlhs 	→ 	var apat { apat }
+   -- 	| 	pat varop pat
+   -- 	| 	( funlhs ) apat { apat }
+   },
 
    typeTerm = Abstract.functionType <$> wrap bType <* rightArrow <*> wrap typeTerm <|> bType,
    bType = Abstract.typeApplication <$> wrap bType <*> wrap aType <|> aType,
@@ -291,6 +394,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
    typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
                                                <*> wrap aType,
    simpleConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar,
+   simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,
    
 -- context 	→ 	class
 -- 	| 	( class1 , … , classn ) 	    (n ≥ 0)
@@ -299,95 +403,7 @@ grammar HaskellGrammar{..} = HaskellGrammar{
 -- scontext 	→ 	simpleclass
 -- 	| 	( simpleclass1 , … , simpleclassn ) 	    (n ≥ 0)
 -- simpleclass 	→ 	qtycls tyvar
-
-   simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,
-   declaredConstructors = wrap declaredConstructor `sepBy1` delimiter "|",
-   declaredConstructor = Abstract.constructor <$> constructor
-                                              <*> many (wrap
-                                                        $ aType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType)
-                         <|> wrap infixConstructorArgType
-                             <**> (constructorOperator
-                                   <**> (wrap infixConstructorArgType
-                                         <**> (pure $ \right op left-> Abstract.constructor op [left, right])))
-                         <|> Abstract.recordConstructor <$> constructor
-                                                        <*> braces (wrap fieldDeclaration `sepBy` comma),
-   infixConstructorArgType = bType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType,
-   newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
-                    <|> Abstract.recordConstructor <$> constructor
-                        <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
-                                                    <* doubleColon <*> wrap typeTerm)),
-   fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon
-                      <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
-
 -- simpletype 	→ 	tycon tyvar1 … tyvark 	    (k ≥ 0)
--- constrs 	→ 	constr1 | … | constrn 	    (n ≥ 1)
--- constr 	→ 	con [!] atype1 … [!] atypek 	    (arity con  =  k, k ≥ 0)
--- 	| 	(btype | ! atype) conop (btype | ! atype) 	    (infix conop)
--- 	| 	con { fielddecl1 , … , fielddecln } 	    (n ≥ 0)
--- newconstr 	→ 	con atype
--- 	| 	con { var :: type }
--- fielddecl 	→ 	vars :: (type | ! atype)
-
-   derivingClause = keyword "deriving"
-                    *> (pure <$> wrap (Abstract.simpleDerive <$> qualifiedTypeClass)
-                        <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
-                    <|> pure [],
-   instanceDesignator =
-      Abstract.generalTypeLHS <$> qualifiedTypeClass
-         <*> wrap (generalTypeConstructor
-                   <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
-                   <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
-                   <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
-                                                     <*> wrap (Abstract.typeVariable <$> typeVar))),
-   typeVarApplications = generalTypeConstructor
-                         <|> Abstract.typeApplication <$> wrap typeVarApplications
-                                                      <*> wrap (Abstract.typeVariable <$> typeVar),
-   typeVarTuple = (:|) <$> wrap (Abstract.typeVariable <$> typeVar)
-                       <*> some (comma *> wrap (Abstract.typeVariable <$> typeVar)),
-   
--- deriving 	→ 	deriving (dclass | (dclass1, … , dclassn)) 	    (n ≥ 0)
--- dclass 	→ 	qtycls
--- inst 	→ 	gtycon
--- 	| 	( gtycon tyvar1 … tyvark ) 	    (k ≥ 0, tyvars distinct)
--- 	| 	( tyvar1 , … , tyvark ) 	    (k ≥ 2, tyvars distinct)
--- 	| 	[ tyvar ]
--- 	| 	( tyvar1 -> tyvar2 ) 	    tyvar1 and tyvar2 distinct
-
-   foreignDeclaration = Abstract.foreignImport <$ keyword "import" <*> callingConvention <*> optional safety
-                                               <*> optional stringLiteral <*> variable <* doubleColon
-                                               <*> wrap foreignType
-                        <|> Abstract.foreignExport <$ keyword "export" <*> callingConvention
-                                                   <*> optional stringLiteral <*> variable <* doubleColon
-                                                   <*> wrap foreignType,
-   callingConvention = Abstract.cCall <$ keyword "ccall" <|> Abstract.stdCall <$ keyword "stdcall"
-                       <|> Abstract.cppCall <$ keyword "cplusplus" <|> Abstract.jvmCall <$ keyword "jvm"
-                       <|> Abstract.dotNetCall <$ keyword "dotnet",
-   safety = Abstract.safeCall <$ keyword "safe" <|> Abstract.unsafeCall <$ keyword "unsafe",
-   foreignType = Abstract.functionType <$> wrap foreignArgType <* rightArrow <*> wrap foreignType
-                 <|> foreignReturnType,
-   foreignReturnType = foreignArgType
-                       <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
-                                                              <$ terminator "(" <* terminator ")"),
-   foreignArgType = Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedTypeConstructor)
-                    <|> Abstract.typeApplication <$> wrap foreignArgType <*> wrap (Abstract.strictType <$> wrap aType),
-
--- fdecl 	→ 	import callconv [safety] impent var :: ftype 	    (define variable)
--- 	| 	export callconv expent var :: ftype 	    (expose variable)
--- callconv 	→ 	ccall | stdcall | cplusplus 	    (calling convention)
--- 	| 	jvm | dotnet
--- 	| 	 system-specific calling conventions
--- impent 	→ 	[string] 	    (see Section 8.5.1)
--- expent 	→ 	[string] 	    (see Section 8.5.1)
--- safety 	→ 	unsafe | safe
--- ftype 	→ 	frtype
--- 	| 	fatype  →  ftype
--- frtype 	→ 	fatype
--- 	| 	()
--- fatype 	→ 	qtycon atype1 … atypek 	    (k  ≥  0)
-
-   functionLHS = Abstract.prefixLHS <$> wrap (Abstract.variableLHS <$> variable <|> parens functionLHS)
-                                    <*> (NonEmpty.fromList <$> some (wrap aPattern))
-                 <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern,
    rhs = Abstract.normalRHS <$ delimiter "=" <*> expression
          <|> Abstract.guardedRHS . NonEmpty.fromList
              <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
@@ -396,9 +412,6 @@ grammar HaskellGrammar{..} = HaskellGrammar{
            <|> Abstract.letStatement <$ keyword "let" <*> declarations
            <|> Abstract.expressionStatement <$> infixExpression,
 
--- funlhs 	→ 	var apat { apat }
--- 	| 	pat varop pat
--- 	| 	( funlhs ) apat { apat }
 -- rhs 	→ 	= exp [where decls]
 -- 	| 	gdrhs [where decls]
 -- gdrhs 	→ 	guards = exp [gdrhs]

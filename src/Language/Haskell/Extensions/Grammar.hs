@@ -45,7 +45,8 @@ import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     on, partitionContradictory, switchesByName, withImplications)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Grammar as Report
-import Language.Haskell.Grammar (HaskellGrammar(..), Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
+import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),
+                                 Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
@@ -324,93 +325,124 @@ multiWayIfMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..
 packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                   OutlineMonoid t)
                       => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-packageImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+packageImportsMixin baseGrammar@ExtendedGrammar
+                    {report= baseReport@HaskellGrammar
+                                       {moduleLevel= baseModuleLevel@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> stringLiteral
-                              <*> Report.moduleId
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModuleLevel{
+         importDeclaration = importDeclaration
+                             <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> stringLiteral
+                                 <*> Report.moduleId
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                  => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safeImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+safeImportsMixin baseGrammar@ExtendedGrammar
+                 {report= baseReport@HaskellGrammar
+                                    {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> Report.moduleId
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> Report.moduleId
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 importQualifiedPostMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                          => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-importQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+importQualifiedPostMixin baseGrammar@ExtendedGrammar
+                         {report= baseReport@HaskellGrammar
+                                            {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> flip Abstract.importDeclaration <$ keyword "import"
-                              <*> Report.moduleId
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> flip Abstract.importDeclaration <$ keyword "import"
+                                 <*> Report.moduleId
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                           OutlineMonoid t)
                         => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safePackageImportsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+safePackageImportsMixin baseGrammar@ExtendedGrammar
+                        {report= baseReport@HaskellGrammar
+                                           {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> stringLiteral
-                              <*> Report.moduleId
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> stringLiteral
+                                 <*> Report.moduleId
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                    Ord t, Show t, OutlineMonoid t)
                                  => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-packageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+packageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar
+                                 {report= baseReport@HaskellGrammar
+                                          {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
-                              <**> pure flip
-                              <*> stringLiteral
-                              <**> pure flip
-                              <*> Report.moduleId
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
+                                 <**> pure flip
+                                 <*> stringLiteral
+                                 <**> pure flip
+                                 <*> Report.moduleId
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 Ord t, Show t, OutlineMonoid t)
                               => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safeImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+safeImportsQualifiedPostMixin baseGrammar@ExtendedGrammar
+                              {report= baseReport@HaskellGrammar
+                                                 {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
-                              <*> Report.moduleId
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
+                                 <*> Report.moduleId
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                        Ord t, Show t, OutlineMonoid t)
                                      => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-safePackageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+safePackageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar
+                                     {report= baseReport@HaskellGrammar
+                                              {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importDeclaration = importDeclaration
-                          <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
-                              <**> pure flip
-                              <*> stringLiteral
-                              <**> pure flip
-                              <*> Report.moduleId
-                              <*> (True <$ keyword "qualified" <|> pure False)
-                              <*> optional (keyword "as" *> Report.moduleId) <*> optional (wrap importSpecification)}}
+      moduleLevel= baseModule{
+         importDeclaration = importDeclaration
+                             <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
+                                 <**> pure flip
+                                 <*> stringLiteral
+                                 <**> pure flip
+                                 <*> Report.moduleId
+                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> optional (keyword "as" *> Report.moduleId)
+                                 <*> optional (wrap importSpecification)}}}
 
 explicitNamespacesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                       OutlineMonoid t)
                         => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-explicitNamespacesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+explicitNamespacesMixin baseGrammar@ExtendedGrammar
+                        {report= baseReport@HaskellGrammar
+                                           {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      importItem = importItem
-                   <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}}
+      moduleLevel= baseModule{
+         importItem = importItem
+                      <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}}}
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
@@ -560,24 +592,32 @@ flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
                                      g ~ ExtendedGrammar l t (NodeWrap t),
                                      Ord t, Show t, TextualMonoid t)
                        => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-flexibleInstancesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+flexibleInstancesMixin baseGrammar@ExtendedGrammar
+                       {report= baseReport@HaskellGrammar
+                                {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      instanceDesignator =
-         Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap aType
-         <|> parens (nonTerminal $ Report.instanceDesignator . report)}}
+             declarationLevel= baseDeclarations{
+                instanceDesignator =
+                   Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap aType
+                   <|> parens (nonTerminal $ Report.instanceDesignator . Report.declarationLevel . report)}}}
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                             g ~ ExtendedGrammar l t (NodeWrap t),
                                              Ord t, Show t, TextualMonoid t)
-                               => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-existentialQuantificationMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+                               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+existentialQuantificationMixin baseGrammar@ExtendedGrammar
+                               {report= baseReport@HaskellGrammar
+                                        {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      declaredConstructor =
-         Abstract.existentialConstructor <$ keywordForall
-                                         <*> some typeVar <* delimiter "."
-                                         <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
-                                         <*> wrap declaredConstructor
-         <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow) <*> wrap declaredConstructor
-         <|> declaredConstructor}}
+             declarationLevel= baseDeclarations{
+                declaredConstructor =
+                   Abstract.existentialConstructor <$ nonTerminal keywordForall
+                                                   <*> some typeVar <* delimiter "."
+                                                   <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
+                                                   <*> wrap declaredConstructor
+                   <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
+                                                          <*> wrap declaredConstructor
+                   <|> declaredConstructor}}}
 
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -585,14 +625,17 @@ explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                   Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
                     => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-explicitForAllMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+explicitForAllMixin baseGrammar@ExtendedGrammar
+                    {report= baseReport@HaskellGrammar
+                             {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
    report= baseReport{
-      topLevelDeclaration = topLevelDeclaration
-         <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-             <* keywordForall <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
-             <*> wrap optionalContext
-             <*> wrap instanceDesignator
-             <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure []),
+             declarationLevel= baseDeclarations{
+               topLevelDeclaration = topLevelDeclaration
+                  <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+                      <* keywordForall <*> ((:|) <$> typeVar <*> many typeVar) <* delimiter "."
+                      <*> wrap optionalContext
+                      <*> wrap instanceDesignator
+                      <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])},
       typeTerm = typeTerm
          <|> Abstract.forallType <$ keywordForall
              <*> some typeVar <* delimiter "."
@@ -606,11 +649,16 @@ gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l),
                               Deep.Functor (DisambiguatorTrans t) (Abstract.GADTConstructor l l))
                 => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-gadtSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+gadtSyntaxMixin baseGrammar@ExtendedGrammar
+                {report= baseReport@HaskellGrammar
+                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      topLevelDeclaration = topLevelDeclaration
-         <|> Abstract.gadtDeclaration <$ keyword "data"
-             <*> wrap simpleType <* keyword "where" <*> blockOf (nonTerminal gadtConstructors) <*> derivingClause},
+             declarationLevel= baseDeclarations{
+               topLevelDeclaration = topLevelDeclaration
+                  <|> Abstract.gadtDeclaration <$ keyword "data"
+                      <*> wrap simpleType <* keyword "where"
+                      <*> blockOf (nonTerminal gadtConstructors)
+                      <*> derivingClause}},
    gadtConstructors=
       Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
                                 <*> nonTerminal optionalForall
