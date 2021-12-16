@@ -10,11 +10,12 @@ import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Extensions.Verifier as Verifier
+import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
-import qualified Language.Haskell.Resolver as Resolver
 import qualified Language.Haskell.Template as Template
 
 import qualified Transformation
+import qualified Transformation.AG.Monomorphic as AG.Mono
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -110,11 +111,10 @@ main' Opts{..} = case optsFile
              Data (g Language Language e e), Data (g Language Language w w),
              Show (g Language Language e e), Show (g Language Language w w),
              Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
-             Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
+             Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
+             Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
-             Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g Language Language),
-             Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-             Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l)) =>
+             Deep.Foldable (Reserializer.Serialization Int Text) (g l l)) =>
             (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
          -> String -> Text -> IO ()
       go parser _filename contents = report contents (parser $ pure contents)
@@ -128,11 +128,10 @@ main' Opts{..} = case optsFile
                  Data (g Language Language e e), Data (g Language Language w w),
                  Show (g Language Language e e), Show (g Language Language w w),
                  Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
-                 Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder Language w)) (g Language Language),
+                 Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
+                 Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
-                 Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) (g l l),
-                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-                 Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) (g l l))
+                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l))
              => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
       report contents (Right [parsed]) = case optsOutput of
          Original -> Text.putStr (Reserializer.reserialize resolved)

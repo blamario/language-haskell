@@ -36,14 +36,12 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
-import qualified Language.Haskell.Disambiguator as Disambiguator
+import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serialization, TokenType(..), lexemes)
 
 import Prelude hiding (exponent, filter, null)
 
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
-
-type DisambiguatorTrans t = Disambiguator.Local (Down Int) t (Transformation.Rank2.Map Ambiguous Identity)
 
 data HaskellGrammar l t f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
@@ -134,12 +132,7 @@ grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
             => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
@@ -148,12 +141,7 @@ grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                      Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
         => GrammarBuilder (HaskellGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                        declarationLevel= DeclarationGrammar{..},
@@ -424,18 +412,17 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                 <|> infixExpression,
    -- infixExpression doesn't allow a conditional, let, or lambda expression on its left side
    infixExpression = wrap (Abstract.infixExpression
-                              <$> leftInfixExpression
+                              <$> dExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                               <*> infixExpression
-                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> infixExpression)
+                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> lExpression)
                      <|> lExpression,
    -- leftInfixExpression doesn't allow a conditional, let, or lambda expression on either side
    leftInfixExpression = wrap (Abstract.infixExpression
-                                  <$> leftInfixExpression
+                                  <$> dExpression
                                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                                   <*> leftInfixExpression
-                               <|> Abstract.applyExpression
-                                      <$> wrap (Abstract.negate <$ delimiter "-") <*> leftInfixExpression)
+                               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> dExpression)
                          <|> dExpression,
    lExpression = wrap openBlockExpression <|> dExpression,
    openBlockExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
@@ -448,7 +435,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    closedBlockExpresion = Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> alternatives
                           <|> Abstract.doExpression <$ keyword "do" <*> wrap statements,
    fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
-   aExpression = wrap bareExpression <|> Disambiguator.joinWrapped <$> wrap (parens expression),
+   aExpression = wrap bareExpression <|> Reserializer.joinWrapped <$> wrap (parens expression),
    bareExpression = Abstract.referenceExpression <$> qualifiedVariable
                     <|> Abstract.constructorExpression <$> wrap generalConstructor
                     <|> Abstract.literalExpression <$> wrap literal
@@ -828,19 +815,19 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- cntrl 	→ 	ascLarge | @ | [ | \ | ] | ^ | _
 -- gap 	→ 	\ whitechar {whitechar} \
 
-type NodeWrap s = Disambiguator.Wrapped (Down Int) s
+type NodeWrap s = Reserializer.Wrapped (Down Int) s
 
 wrap :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
-wrap = (Compose <$>) . (\p-> liftA3 surround getSourcePos p getSourcePos)
-         . (Compose <$>) . (ambiguous . tmap store) . ((,) (Trailing []) <$>)
+wrap = (\p-> liftA3 surround getSourcePos p getSourcePos)
+         . tmap store . ((,) (Trailing []) <$>)
    where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
-         surround start val end = ((start, end), val)
+         surround start (ls, val) end = ((start, ls, end), val)
 
 rewrap :: (NodeWrap t a -> b) -> NodeWrap t a -> NodeWrap t b
-rewrap f node@(Compose ((start, end), _)) = Compose ((start, end), pure $ f node)
+rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 
 unwrap :: NodeWrap t a -> a
-unwrap (Compose (_, Compose (Ambiguous ((_, x) :| _)))) = x
+unwrap (_, x) = x
 
 instance TokenParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
    someSpace = someLexicalSpace
@@ -902,8 +889,7 @@ comment = do c <- try (blockComment
             <> string "-}"
 
 blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
-            Deep.Foldable (Serialization (Down Int) t) node,
-            Deep.Functor (DisambiguatorTrans t) node)
+            Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
@@ -943,11 +929,10 @@ inputColumn :: (Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
 
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
-                    Deep.Foldable (Serialization (Down Int) t) node,
-                    Deep.Functor (DisambiguatorTrans t) node)
-                => Int -> t -> Disambiguator.Wrapped (Down Int) t (node (NodeWrap t) (NodeWrap t)) -> Bool
+                    Deep.Foldable (Serialization (Down Int) t) node)
+                => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
 oneExtendedLine indent _input node =
-   allIndented (lexemes $ Disambiguator.mapWrappings Disambiguator.firstChoice node)
+   allIndented (lexemes node)
    where allIndented (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented rest
          allIndented (WhiteSpace ws : Token _ tok : rest)
             | Textual.all isLineChar ws = allIndented rest

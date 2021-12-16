@@ -46,7 +46,7 @@ import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),
-                                 Parser, OutlineMonoid, DisambiguatorTrans, NodeWrap,
+                                 Parser, OutlineMonoid, NodeWrap,
                                  blockOf, delimiter, inputColumn, isSymbol,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
@@ -67,8 +67,7 @@ $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
 extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                             Ord t, Show t, OutlineMonoid t,
-                            Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                            Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
+                            Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                 => Map (Set Extension)
                        (Int,
                         GrammarBuilder (ExtendedGrammar l t (NodeWrap t))
@@ -138,8 +137,7 @@ languagePragmas = spaceChars
 
 parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                         Ord t, Show t, OutlineMonoid t,
-                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                        Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
+                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
             => Map Extension Bool -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
@@ -158,8 +156,7 @@ parseModule extensions source = case moduleExtensions of
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
-                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                    Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
+                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => Map Extension Bool -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . reportGrammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
@@ -167,8 +164,7 @@ extendedGrammar extensions = fixGrammar (extended . reportGrammar)
                     $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
 
 grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                     Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
+                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
         => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 grammar = blockArgumentsMixin . unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin
           . parallelListComprehensionsMixin . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin
@@ -179,12 +175,7 @@ reportGrammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t),
                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Expression l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Import l l),
-                            Deep.Functor (DisambiguatorTrans t) (Abstract.Statement l l))
+                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
               => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= Report.grammar r,
@@ -260,8 +251,7 @@ magicHashMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}
                  <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
 
 recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                               Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                               Abstract.DeeplyFunctor (DisambiguatorTrans t) l)
+                               Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 recursiveDoMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
    report= baseReport{
@@ -302,16 +292,14 @@ lambdaCaseMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..
                                                                <*> alternatives}}
 
 emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                             Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                             Deep.Functor (DisambiguatorTrans t) (Abstract.CaseAlternative l l))
+                             Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))
                  => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 emptyCaseMixin baseGrammar = baseGrammar{
    report= (report baseGrammar){
       alternatives = blockOf (alternative $ report baseGrammar)}}
 
 multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                             Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                             Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
+                             Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
                 => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 multiWayIfMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
    report= baseReport{
@@ -446,8 +434,7 @@ explicitNamespacesMixin baseGrammar@ExtendedGrammar
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                                  Deep.Functor (DisambiguatorTrans t) (Abstract.GuardedExpression l l))
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
                     => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 blockArgumentsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
    report= baseReport{
@@ -467,13 +454,13 @@ lexicalNegationMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGramm
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
                                 *> token (Report.nameQualifier <*> variableSymbol),
       infixExpression = wrap (Abstract.infixExpression
-                                 <$> nonTerminal (Report.leftInfixExpression . report)
+                                 <$> nonTerminal (Report.dExpression . report)
                                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                                  <*> nonTerminal (Report.infixExpression . report))
                         <|> lExpression,
       leftInfixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <$> nonTerminal (Report.dExpression . report)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                   <*> nonTerminal (Report.leftInfixExpression . report))
          <|> dExpression,
@@ -499,14 +486,14 @@ negativeLiteralsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGram
       qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
       infixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <$> nonTerminal (Report.dExpression . report)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                   <*> nonTerminal (Report.infixExpression . report)
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
          <|> lExpression,
       leftInfixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.leftInfixExpression . report)
+                  <$> nonTerminal (Report.dExpression . report)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                   <*> nonTerminal (Report.leftInfixExpression . report)
                   <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
@@ -622,8 +609,7 @@ existentialQuantificationMixin baseGrammar@ExtendedGrammar
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                                  Deep.Functor (DisambiguatorTrans t) (Abstract.Declaration l l))
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 explicitForAllMixin baseGrammar@ExtendedGrammar
                     {report= baseReport@HaskellGrammar
@@ -646,8 +632,7 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
                               Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l),
-                              Deep.Functor (DisambiguatorTrans t) (Abstract.GADTConstructor l l))
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                 => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 gadtSyntaxMixin baseGrammar@ExtendedGrammar
                 {report= baseReport@HaskellGrammar
@@ -690,7 +675,7 @@ isNameTailChar :: Char -> Bool
 isNameTailChar c = Report.isNameTailChar c || Char.isMark c
 
 blockOf' :: (Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
-             Deep.Foldable (Serialization (Down Int) t) node, Deep.Functor (DisambiguatorTrans t) node)
+             Deep.Foldable (Serialization (Down Int) t) node)
          => Parser g t (node (NodeWrap t) (NodeWrap t))
          -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >>= alignedBlock pure)

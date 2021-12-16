@@ -10,8 +10,8 @@ import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Extensions.Verifier as Verifier
 
+import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
-import qualified Language.Haskell.Resolver as Resolver
 
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -41,14 +41,13 @@ parseModule extensions verify source =
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
                      q ~ Reserializer.Wrapped (Down Int) (LinePositioned Text), r ~ Placed,
-                     Deep.Functor (Grammar.DisambiguatorTrans (LinePositioned Text)) g,
-                     Deep.Functor (Rank2.Map q r) g,
                      Full.Traversable (AG.Mono.Keep (Binder.Binder AST.Language p)) g,
-                     Full.Traversable (Resolver.Resolution AST.Language (Down Int) (LinePositioned Text)) g)
+                     Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) (LinePositioned Text)) g,
+                     Deep.Functor (Rank2.Map q r) g)
                  => Text -> p (g p p) -> r (g r r)
 resolvePositions src = Reserializer.mapWrappings (offset src) extract
                        . either (error . show) id . validationToEither
-                       . Full.traverse Resolver.Resolution
+                       . Full.traverse Reorganizer.Reorganization
                        . Binder.withBindings (Binder.preludeBindings
                                               <> Binder.predefinedModuleBindings
                                               :: Binder.Environment AST.Language)
