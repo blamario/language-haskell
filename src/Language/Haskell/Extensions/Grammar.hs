@@ -561,18 +561,23 @@ binaryUnderscoresMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGra
 typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-typeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}} = baseGrammar{
+typeOperatorsMixin baseGrammar@ExtendedGrammar
+                   {report= baseReport@HaskellGrammar
+                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-      simpleType =
-         simpleType
-         <|> Abstract.simpleInfixTypeLHSApplication <$> typeVar <*> anySymbol <*> typeVar
-         <|> parens (nonTerminal (Report.simpleType . report))
-         <|> Abstract.simpleTypeLHSApplication <$> wrap (parens $ nonTerminal (Report.simpleType . report)) <*> typeVar,
-      typeConstructor = constructorIdentifier <|> parens anySymbol,
-      bType = bType
-         <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
-                                           <*> qualifiedOperator
-                                           <*> wrap aType}}
+             declarationLevel= baseDeclarations{
+               simpleType =
+                  simpleType
+                  <|> Abstract.simpleInfixTypeLHSApplication <$> typeVar <*> anySymbol <*> typeVar
+                  <|> parens (nonTerminal (Report.simpleType . Report.declarationLevel . report))
+                  <|> Abstract.simpleTypeLHSApplication
+                               <$> wrap (parens $ nonTerminal (Report.simpleType . Report.declarationLevel . report))
+                               <*> typeVar},
+             typeConstructor = constructorIdentifier <|> parens anySymbol,
+             bType = bType
+                <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
+                                                  <*> qualifiedOperator
+                                                  <*> wrap aType}}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),

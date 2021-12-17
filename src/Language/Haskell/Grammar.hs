@@ -50,10 +50,6 @@ data HaskellGrammar l t f p = HaskellGrammar {
    body :: p ([f (Abstract.Import l l f f)], [f (Abstract.Declaration l l f f)]),
    typeTerm, bType, aType :: p (Abstract.Type l l f f),
    generalTypeConstructor :: p (Abstract.Type l l f f),
-   optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
-   typeApplications :: p (Abstract.Type l l f f),
-   simpleConstraint :: p (Abstract.Context l l f f),
-   simpleType :: p (Abstract.TypeLHS l l f f),
    rhs :: p (Abstract.EquationRHS l l f f),
    guards, qualifiers :: p (NonEmpty (f (Abstract.Statement l l f f))),
    guard, qualifier :: p (Abstract.Statement l l f f),
@@ -71,10 +67,10 @@ data HaskellGrammar l t f p = HaskellGrammar {
    variable, constructor, variableOperator, constructorOperator, operator :: p (Abstract.Name l),
    qualifiedVariable, qualifiedConstructor :: p (Abstract.QualifiedName l),
    qualifiedVariableOperator, qualifiedConstructorOperator, qualifiedOperator :: p (Abstract.QualifiedName l),
-   qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeClass, qualifiedTypeConstructor,
+   qualifiedConstructorIdentifier, qualifiedConstructorSymbol, qualifiedTypeConstructor,
       qualifiedVariableIdentifier, qualifiedVariableSymbol :: p (Abstract.QualifiedName l),
    constructorIdentifier, constructorSymbol,
-   typeClass, typeConstructor, typeVar, variableIdentifier, variableSymbol :: p (Abstract.Name l),
+   typeConstructor, typeVar, variableIdentifier, variableSymbol :: p (Abstract.Name l),
    literal :: p (Abstract.Value l l f f),
    doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p (),
    integer, integerLexeme :: p Integer,
@@ -109,6 +105,10 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    infixConstructorArgType :: p (Abstract.Type l l f f),
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
+   optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
+   typeApplications :: p (Abstract.Type l l f f),
+   simpleConstraint :: p (Abstract.Context l l f f),
+   simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
    instanceDesignator :: p (Abstract.TypeLHS l l f f),
    typeVarApplications :: p (Abstract.Type l l f f),
@@ -119,7 +119,9 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    foreignType :: p (Abstract.Type l l f f),
    foreignReturnType :: p (Abstract.Type l l f f),
    foreignArgType :: p (Abstract.Type l l f f),
-   functionLHS :: p (Abstract.EquationLHS l l f f)
+   functionLHS :: p (Abstract.EquationLHS l l f f),
+   qualifiedTypeClass :: p (Abstract.QualifiedName l),
+   typeClass :: p (Abstract.Name l)
 }
 
 $(Rank2.TH.deriveAll ''HaskellGrammar)
@@ -287,6 +289,24 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    -- 	| 	con { var :: type }
    -- fielddecl 	→ 	vars :: (type | ! atype)
 
+      optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
+      context = classConstraint <|> Abstract.constraints <$> parens (wrap classConstraint `sepBy` comma),
+      classConstraint = simpleConstraint
+                        <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
+      typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
+                                                  <*> wrap aType,
+      simpleConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar,
+      simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,
+
+   -- context 	→ 	class
+   -- 	| 	( class1 , … , classn ) 	    (n ≥ 0)
+   -- class 	→ 	qtycls tyvar
+   -- 	| 	qtycls ( tyvar atype1 … atypen ) 	    (n ≥ 1)
+   -- scontext 	→ 	simpleclass
+   -- 	| 	( simpleclass1 , … , simpleclassn ) 	    (n ≥ 0)
+   -- simpleclass 	→ 	qtycls tyvar
+   -- simpletype 	→ 	tycon tyvar1 … tyvark 	    (k ≥ 0)
+
       derivingClause = keyword "deriving"
                        *> (pure <$> wrap (Abstract.simpleDerive <$> qualifiedTypeClass)
                            <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
@@ -328,7 +348,9 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                           <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
                                                                  <$ terminator "(" <* terminator ")"),
       foreignArgType = Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedTypeConstructor)
-                       <|> Abstract.typeApplication <$> wrap foreignArgType <*> wrap (Abstract.strictType <$> wrap aType),
+                       <|> Abstract.typeApplication
+                           <$> wrap foreignArgType
+                           <*> wrap (Abstract.strictType <$> wrap aType),
 
    -- fdecl 	→ 	import callconv [safety] impent var :: ftype 	    (define variable)
    -- 	| 	export callconv expent var :: ftype 	    (expose variable)
@@ -346,10 +368,15 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 
       functionLHS = Abstract.prefixLHS <$> wrap (Abstract.variableLHS <$> variable <|> parens functionLHS)
                                        <*> (NonEmpty.fromList <$> some (wrap aPattern))
-                    <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern
+                    <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern,
    -- funlhs 	→ 	var apat { apat }
    -- 	| 	pat varop pat
    -- 	| 	( funlhs ) apat { apat }
+
+      qualifiedTypeClass = qualifiedConstructorIdentifier,
+      typeClass = constructorIdentifier
+   -- tycls 	→ 	conid 	    (type classes)
+   -- qtycls 	→ 	[ modid . ] tycls
    },
 
    typeTerm = Abstract.functionType <$> wrap bType <* rightArrow <*> wrap typeTerm <|> bType,
@@ -375,23 +402,6 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- 	| 	(->) 	    (function constructor)
 -- 	| 	(,{,}) 	    (tupling constructors)
 
-   optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
-   context = classConstraint <|> Abstract.constraints <$> parens (wrap classConstraint `sepBy` comma),
-   classConstraint = simpleConstraint
-                     <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
-   typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
-                                               <*> wrap aType,
-   simpleConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar,
-   simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,
-   
--- context 	→ 	class
--- 	| 	( class1 , … , classn ) 	    (n ≥ 0)
--- class 	→ 	qtycls tyvar
--- 	| 	qtycls ( tyvar atype1 … atypen ) 	    (n ≥ 1)
--- scontext 	→ 	simpleclass
--- 	| 	( simpleclass1 , … , simpleclassn ) 	    (n ≥ 0)
--- simpleclass 	→ 	qtycls tyvar
--- simpletype 	→ 	tycon tyvar1 … tyvark 	    (k ≥ 0)
    rhs = Abstract.normalRHS <$ delimiter "=" <*> expression
          <|> Abstract.guardedRHS . NonEmpty.fromList
              <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
@@ -573,7 +583,6 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    qualifiedVariableIdentifier = token (nameQualifier <*> variableIdentifier),
    qualifiedConstructorIdentifier = token (nameQualifier <*> constructorIdentifier),
    qualifiedTypeConstructor = qualifiedConstructorIdentifier,
-   qualifiedTypeClass = qualifiedConstructorIdentifier,
    qualifiedVariableSymbol = token (nameQualifier <*> variableSymbol),
    qualifiedConstructorSymbol = token (nameQualifier <*> constructorSymbol
                                        <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
@@ -581,7 +590,6 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 
    typeVar = variableIdentifier,
    typeConstructor = constructorIdentifier,
-   typeClass = constructorIdentifier,
    variableIdentifier = nameToken variableLexeme,
    constructorIdentifier = nameToken constructorLexeme,
    variableSymbol = nameToken variableSymbolLexeme,
@@ -602,12 +610,10 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- conid 	     	    (constructors)
 -- tyvar 	→ 	varid 	    (type variables)
 -- tycon 	→ 	conid 	    (type constructors)
--- tycls 	→ 	conid 	    (type classes)
 -- modid 	→ 	{conid .} conid 	    (modules)
 -- qvarid 	→ 	[ modid . ] varid
 -- qconid 	→ 	[ modid . ] conid
 -- qtycon 	→ 	[ modid . ] tycon
--- qtycls 	→ 	[ modid . ] tycls
 -- qvarsym 	→ 	[ modid . ] varsym
 -- qconsym 	→ 	[ modid . ] consym
 
