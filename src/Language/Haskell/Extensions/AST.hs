@@ -28,6 +28,7 @@ data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
+   type Kind Language = Type Language
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
    parallelListComprehension = ParallelListComprehension
@@ -44,9 +45,18 @@ instance Abstract.ExtendedHaskell Language where
    existentialConstructor = ExistentialConstructor
    explicitlyScopedInstanceDeclaration = InstanceDeclaration . toList
    forallType = ForallType
+   kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
    gadtDeclaration = GADTDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
+
+   kindedSimpleTypeLHSApplication = KindedSimpleTypeLHSApplication
+   kindedTypeVariable = KindedTypeVariable
+   constructorKind = ConstructorType
+   kindVariable = TypeVariable
+   functionKind = FunctionKind
+   kindApplication = KindApplication
+   groundTypeKind = GroundTypeKind
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -104,7 +114,7 @@ instance Abstract.Haskell Language where
    memberList = MemberList
 
    classDeclaration = ClassDeclaration
-   dataDeclaration = DataDeclaration
+   dataDeclaration context lhs = DataDeclaration context lhs Nothing
    defaultDeclaration = DefaultDeclaration
    equationDeclaration = EquationDeclaration
    fixityDeclaration = FixityDeclaration
@@ -220,9 +230,9 @@ data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (M
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
-   | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
+   | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                      [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
-   | GADTDeclaration (s (Abstract.TypeLHS l l d d))
+   | GADTDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                      [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | DefaultDeclaration [s (Abstract.Type l l d d)]
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
@@ -258,11 +268,16 @@ data Type λ l d s =
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
+   | KindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | ForallType [Abstract.Name λ] (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+   | GroundTypeKind
+   | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
+   | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
    | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.Name λ)
+   | KindedSimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.Name λ) (s (Abstract.Kind l l d d))
 
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -317,7 +332,7 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
                   Eq (Import λ l d s)
 
 deriving instance Typeable (Declaration λ l d s)
-deriving instance (Data (s (Abstract.Context l l d d)),
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
@@ -325,14 +340,14 @@ deriving instance (Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.ClassInstanceLHS l l d d)),
                    Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
-deriving instance (Show (s (Abstract.Context l l d d)),
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (s (Abstract.ClassInstanceLHS l l d d)),
                    Show (Abstract.Name λ)) => Show (Declaration λ l d s)
-deriving instance (Eq (s (Abstract.Context l l d d)),
+deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
@@ -362,23 +377,29 @@ deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d
 
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
-                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.FieldDeclaration l l d d)),
+                   Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (s (Abstract.FieldDeclaration l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
 deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
-                   Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (s (Abstract.FieldDeclaration l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
 deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
-                   Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (s (Abstract.FieldDeclaration l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) => Eq (Type λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
-deriving instance (Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+deriving instance (Data (s (Abstract.Kind l l d d)),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
-deriving instance (Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+deriving instance (Show (s (Abstract.Kind l l d d)),
+                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
-deriving instance (Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
+deriving instance (Eq (s (Abstract.Kind l l d d)),
+                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
 deriving instance Typeable (Expression λ l d s)

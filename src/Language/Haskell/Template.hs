@@ -202,18 +202,18 @@ caseAlternativeTemplate (CaseAlternative lhs rhs wheres) =
 declarationTemplates :: TemplateWrapper f => Declaration Language Language f f -> [Dec]
 declarationTemplates (ClassDeclaration context lhs members)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
-     [ClassD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars) []
+     [ClassD (contextTemplate $ extract context) (nameTemplate con) vars []
              (foldMap (declarationTemplates . extract) members)]
-declarationTemplates (DataDeclaration context lhs constructors derivings)
+declarationTemplates (DataDeclaration context lhs kind constructors derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
-     [DataD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
-            Nothing (dataConstructorTemplate . extract <$> constructors)
+     [DataD (contextTemplate $ extract context) (nameTemplate con) vars
+            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> constructors)
             $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (GADTDeclaration lhs constructors derivings)
+declarationTemplates (GADTDeclaration lhs kind constructors derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
-     [DataD [] (nameTemplate con) (plainTV . nameTemplate <$> vars)
-            Nothing (gadtConstructorTemplate . extract <$> constructors)
-            $ derivingsTemplate $ extract <$> derivings]
+     [DataD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
+            (gadtConstructorTemplate . extract <$> constructors)
+            (derivingsTemplate $ extract <$> derivings)]
 declarationTemplates DefaultDeclaration{} = error "Template Haskell can't represent a default declaration"
 declarationTemplates (EquationDeclaration lhs rhs wheres)
    | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) rhs' declarations]
@@ -248,12 +248,11 @@ declarationTemplates (InstanceDeclaration _vars context lhs wheres)
                 (foldMap (declarationTemplates . extract) wheres)]
 declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
-     [NewtypeD (contextTemplate $ extract context) (nameTemplate con) (plainTV . nameTemplate <$> vars)
+     [NewtypeD (contextTemplate $ extract context) (nameTemplate con) vars
                Nothing (dataConstructorTemplate . extract $ constructor)
                $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (TypeSynonymDeclaration lhs t)
-   | Just (con, vars) <- extractSimpleTypeLHS lhs =
-     [TySynD (nameTemplate con) (plainTV . nameTemplate <$> vars) (typeTemplate $ extract t)]
+   | Just (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
    where inContext = case extract context
@@ -381,18 +380,22 @@ typeTemplate (ConstructorType con) = case (extract con) of
    UnitConstructor -> TupleT 0
 typeTemplate FunctionConstructorType = ArrowT
 typeTemplate (FunctionType from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
+typeTemplate (FunctionKind from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
 typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
+typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
+typeTemplate (KindedTypeVariable name kind) = SigT (VarT $ nameTemplate name) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars context body) =
   ForallT (changeTVFlags SpecifiedSpec $ nub $ (plainTV . nameTemplate <$> vars) <> freeTypeVars type')
           (contextTemplate $ extract context)
           (typeTemplate type')
   where type' = extract body
+typeTemplate GroundTypeKind = StarT
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
@@ -412,7 +415,7 @@ nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
    | not (Text.null local), c <- Text.head local, Char.isUpper c || c == ':' = ConE (qnameTemplate name)
    | otherwise = VarE (qnameTemplate name)
 
-nameTemplate :: AST.Name Language -> TH.Name
+nameTemplate :: AST.Name l -> TH.Name
 nameTemplate (Name s) = mkName (unpack s)
 
 qnameTemplate :: AST.QualifiedName Language -> TH.Name
@@ -420,13 +423,17 @@ qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])
 
-extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, TemplateWrapper f)
-               => f (ExtAST.TypeLHS l l f f) -> Maybe (AST.Name l, [AST.Name l])
+extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l,
+                                 Abstract.Type l ~ ExtAST.Type l, l ~ Language, TemplateWrapper f)
+               => f (ExtAST.TypeLHS l l f f) -> Maybe (AST.Name l, [TyVarBndr])
 extractSimpleTypeLHS = fromTypeLHS . extract
-   where fromTypeLHS :: ExtAST.TypeLHS l l f f -> Maybe (AST.Name l, [AST.Name l])
-         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, vars)
+   where fromTypeLHS :: ExtAST.TypeLHS l l f f -> Maybe (AST.Name l, [TyVarBndr])
+         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, plainTV . nameTemplate <$> vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
-            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [var])
+            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [plainTV $ nameTemplate var])
+         fromTypeLHS (KindedSimpleTypeLHSApplication t var kind)
+            | Just (con, vars) <- extractSimpleTypeLHS t =
+              Just (con, vars ++ [kindedTV (nameTemplate var) $ typeTemplate $ extract kind])
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s

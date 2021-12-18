@@ -12,6 +12,7 @@ import qualified Language.Haskell.Abstract as Report
 
 class Haskell λ => ExtendedHaskell λ where
    type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    parallelListComprehension :: s (Expression l l d d)
@@ -35,6 +36,7 @@ class Haskell λ => ExtendedHaskell λ where
    infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
    simpleInfixTypeLHSApplication :: Name λ -> Name λ -> Name λ -> TypeLHS λ l d s
    simpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> TypeLHS λ l d s
+   kindedSimpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> s (Kind l l d d) -> TypeLHS λ l d s
    existentialConstructor :: [Name λ] -> s (Context l l d d) -> s (DataConstructor l l d d) -> DataConstructor λ l d s
    explicitlyScopedInstanceDeclaration :: NonEmpty (Name λ)
                                        -> s (Context l l d d)
@@ -42,7 +44,15 @@ class Haskell λ => ExtendedHaskell λ where
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
    forallType :: [Name λ] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
-   gadtDeclaration :: s (TypeLHS l l d d) -> [s (GADTConstructor l l d d)]
+   kindedTypeVariable :: Name λ -> s (Kind l l d d) -> Type λ l d s
+   kindVariable :: Name λ -> Kind λ l d s
+   constructorKind :: s (Constructor l l d d) -> Kind λ l d s
+   kindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
+   functionKind :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
+   groundTypeKind :: Kind λ l d s
+   kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
+                         -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
+   gadtDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (GADTConstructor l l d d)]
                    -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    gadtConstructors :: NonEmpty (Name λ) -> [Name λ] -> s (Context l l d d) -> s (Type l l d d)
                    -> GADTConstructor λ l d s
