@@ -29,6 +29,7 @@ instance Abstract.Haskell Language where
    type Pattern Language = Pattern Language
    type Statement Language = Statement Language
    type TypeLHS Language = TypeLHS Language
+   type ClassInstanceLHS Language = ClassInstanceLHS Language
 
    type Import Language = Import Language
    type ImportSpecification Language = ImportSpecification Language
@@ -137,7 +138,7 @@ instance Abstract.Haskell Language where
 
    simpleDerive = SimpleDerive
 
-   generalTypeLHS = GeneralTypeLHS
+   typeClassInstanceLHS = TypeClassInstanceLHS
    simpleTypeLHS = SimpleTypeLHS
 
    prefixLHS = PrefixLHS
@@ -200,7 +201,7 @@ data Declaration λ l d s =
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
-   | InstanceDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
+   | InstanceDeclaration (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
                          ([s (Abstract.Declaration l l d d)])
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
@@ -270,9 +271,11 @@ data Statement λ l d s =
    | ExpressionStatement (s (Abstract.Expression l l d d))
    | LetStatement [s (Abstract.Declaration l l d d)]
 
-data TypeLHS λ l d s =
-   GeneralTypeLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
+data ClassInstanceLHS λ l d s =
+   TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+
+data TypeLHS λ l (d :: * -> *) (s :: * -> *) =
+   SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
 
 data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
@@ -337,17 +340,20 @@ deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataCo
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+                   Data (s (Abstract.ClassInstanceLHS l l d d)),
                    Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+                   Show (s (Abstract.ClassInstanceLHS l l d d)),
                    Show (Abstract.Name λ)) => Show (Declaration λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstructor l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
+                   Eq (s (Abstract.ClassInstanceLHS l l d d)),
                    Eq (Abstract.Name λ)) => Eq (Declaration λ l d s)
 
 deriving instance Typeable (Expression λ l d s)
@@ -438,12 +444,15 @@ deriving instance (Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.Expres
                    Eq (s (Abstract.Pattern l l d d))) => Eq (Statement λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
-deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
-                   Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
-deriving instance (Show (s (Abstract.Type l l d d)),
-                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
-deriving instance (Eq (s (Abstract.Type l l d d)),
-                   Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
+deriving instance (Data (Abstract.Name λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
+deriving instance (Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
+deriving instance (Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
+
+deriving instance Typeable (ClassInstanceLHS λ l d s)
+deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (ClassInstanceLHS λ l d s)
+deriving instance (Show (s (Abstract.Type l l d d)), Show (Abstract.QualifiedName λ)) => Show (ClassInstanceLHS λ l d s)
+deriving instance (Eq (s (Abstract.Type l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
 
 deriving instance Typeable (Import λ l d s)
 deriving instance (Data (s (Abstract.ImportSpecification l l d d)), Data (Abstract.ModuleName λ),
@@ -549,6 +558,7 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Module, ''Export, ''Import, ''ImportItem, ''ImportSpecification,
-              ''Declaration, ''DerivingClause, ''EquationLHS, ''EquationRHS, ''TypeLHS, ''Type, ''Context,
+              ''Declaration, ''DerivingClause, ''EquationLHS, ''EquationRHS,
+              ''ClassInstanceLHS, ''TypeLHS, ''Type, ''Context,
               ''Expression, ''Value, ''Pattern, ''GuardedExpression, ''Statement,
               ''FieldBinding, ''FieldDeclaration, ''FieldPattern, ''CaseAlternative, ''Constructor, ''DataConstructor]))

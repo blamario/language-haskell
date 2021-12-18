@@ -11,6 +11,7 @@ import Data.Map.Lazy (Map)
 import Data.Maybe (isJust)
 import Data.Map (Map)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix)
+import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Any(Any, getAny))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
 import Data.Semigroup.Factorial (Factorial)
@@ -28,6 +29,7 @@ import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
+import Language.Haskell.Grammar (isSymbol)
 import Language.Haskell.Extensions (Extension, ExtensionSwitch, partitionContradictory, withImplications)
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.AST as ExtAST
@@ -213,12 +215,20 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s
+         `Transformation.At` ExtAST.ClassInstanceLHS l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+      case t
+      of ExtAST.TypeClassInstanceLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
+         _ -> Map.singleton Extensions.TypeOperators [(start, end)]
+
+instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
+         Accounting pos s
          `Transformation.At` ExtAST.TypeLHS l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, Trailing lexemes, end), t) = Const $
       case t
-      of ExtAST.GeneralTypeLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
-         ExtAST.SimpleTypeLHS{} -> mempty
-         _ -> Map.singleton Extensions.TypeOperators [(start, end)]
+      of ExtAST.SimpleTypeLHS op _ | any (Textual.any isSymbol . lexemeText) lexemes
+            -> Map.singleton Extensions.TypeOperators [(start, end)]
+         _ -> mempty
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s

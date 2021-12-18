@@ -242,7 +242,7 @@ declarationTemplates (ForeignImport convention safety identification name t) =
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
 declarationTemplates (InstanceDeclaration _vars context lhs wheres)
-   | GeneralTypeLHS name t <- extract lhs =
+   | TypeClassInstanceLHS name t <- extract lhs =
      [InstanceD Nothing (contextTemplate $ extract context)
                 (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
                 (foldMap (declarationTemplates . extract) wheres)]
@@ -427,7 +427,6 @@ extractSimpleTypeLHS = fromTypeLHS . extract
          fromTypeLHS (SimpleTypeLHS con vars) = Just (con, vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
             | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [var])
-         fromTypeLHS GeneralTypeLHS{} = Nothing
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s

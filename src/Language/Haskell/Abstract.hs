@@ -20,6 +20,7 @@ class Haskell λ where
    type GuardedExpression λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type Pattern λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type Statement λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type ClassInstanceLHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type TypeLHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
 
    type Import λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
@@ -74,7 +75,8 @@ class Haskell λ where
    foreignExport :: CallingConvention λ -> Maybe Text -> Name λ -> s (Type l l d d) -> Declaration λ l d s
    foreignImport :: CallingConvention λ -> Maybe (CallSafety λ) -> Maybe Text -> Name λ -> s (Type l l d d)
                  -> Declaration λ l d s
-   instanceDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (Declaration l l d d)] -> Declaration λ l d s
+   instanceDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> [s (Declaration l l d d)]
+                       -> Declaration λ l d s
    newtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (DataConstructor l l d d)
                       -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    typeSynonymDeclaration :: s (TypeLHS l l d d) -> s (Type l l d d) -> Declaration λ l d s
@@ -136,7 +138,7 @@ class Haskell λ where
 
    simpleDerive :: QualifiedName λ -> DerivingClause λ l d s
 
-   generalTypeLHS :: QualifiedName λ -> s (Type l l d d) -> TypeLHS λ l d s
+   typeClassInstanceLHS :: QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
    simpleTypeLHS :: Name λ -> [Name λ] -> TypeLHS λ l d s
 
    prefixLHS :: s (EquationLHS l l d d) -> NonEmpty (s (Pattern l l d d)) -> EquationLHS λ l d s
@@ -184,6 +186,7 @@ type DeeplyFunctor t l = (Deep.Functor t (Module l l),
                           Deep.Functor t (GuardedExpression l l),
                           Deep.Functor t (Pattern l l),
                           Deep.Functor t (Statement l l),
+                          Deep.Functor t (ClassInstanceLHS l l),
                           Deep.Functor t (TypeLHS l l),
                           Deep.Functor t (Import l l),
                           Deep.Functor t (ImportSpecification l l),
@@ -208,6 +211,7 @@ type DeeplyFoldable t l = (Deep.Foldable t (Module l l),
                            Deep.Foldable t (GuardedExpression l l),
                            Deep.Foldable t (Pattern l l),
                            Deep.Foldable t (Statement l l),
+                           Deep.Foldable t (ClassInstanceLHS l l),
                            Deep.Foldable t (TypeLHS l l),
                            Deep.Foldable t (Import l l),
                            Deep.Foldable t (ImportSpecification l l),
@@ -232,6 +236,7 @@ type DeeplyTraversable t l = (Deep.Traversable t (Module l l),
                               Deep.Traversable t (GuardedExpression l l),
                               Deep.Traversable t (Pattern l l),
                               Deep.Traversable t (Statement l l),
+                              Deep.Traversable t (ClassInstanceLHS l l),
                               Deep.Traversable t (TypeLHS l l),
                               Deep.Traversable t (Import l l),
                               Deep.Traversable t (ImportSpecification l l),
@@ -256,6 +261,7 @@ type Rank2lyFunctor l f = (Rank2.Functor (Module l l f),
                            Rank2.Functor (GuardedExpression l l f),
                            Rank2.Functor (Pattern l l f),
                            Rank2.Functor (Statement l l f),
+                           Rank2.Functor (ClassInstanceLHS l l f),
                            Rank2.Functor (TypeLHS l l f),
                            Rank2.Functor (Import l l f),
                            Rank2.Functor (ImportSpecification l l f),
@@ -280,6 +286,7 @@ type Rank2lyFoldable l f = (Rank2.Foldable (Module l l f),
                             Rank2.Foldable (GuardedExpression l l f),
                             Rank2.Foldable (Pattern l l f),
                             Rank2.Foldable (Statement l l f),
+                            Rank2.Foldable (ClassInstanceLHS l l f),
                             Rank2.Foldable (TypeLHS l l f),
                             Rank2.Foldable (Import l l f),
                             Rank2.Foldable (ImportSpecification l l f),
@@ -304,6 +311,7 @@ type Rank2lyTraversable l f = (Rank2.Traversable (Module l l f),
                                Rank2.Traversable (GuardedExpression l l f),
                                Rank2.Traversable (Pattern l l f),
                                Rank2.Traversable (Statement l l f),
+                               Rank2.Traversable (ClassInstanceLHS l l f),
                                Rank2.Traversable (TypeLHS l l f),
                                Rank2.Traversable (Import l l f),
                                Rank2.Traversable (ImportSpecification l l f),

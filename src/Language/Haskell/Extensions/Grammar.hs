@@ -590,7 +590,7 @@ flexibleInstancesMixin baseGrammar@ExtendedGrammar
    report= baseReport{
              declarationLevel= baseDeclarations{
                 instanceDesignator =
-                   Abstract.generalTypeLHS <$> qualifiedTypeClass <*> wrap aType
+                   Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
                    <|> parens (nonTerminal $ Report.instanceDesignator . Report.declarationLevel . report)}}}
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),

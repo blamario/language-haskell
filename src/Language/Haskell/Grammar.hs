@@ -110,7 +110,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    simpleConstraint :: p (Abstract.Context l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
-   instanceDesignator :: p (Abstract.TypeLHS l l f f),
+   instanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    typeVarApplications :: p (Abstract.Type l l f f),
    typeVarTuple :: p (NonEmpty (f (Abstract.Type l l f f))),
    foreignDeclaration :: p (Abstract.Declaration l l f f),
@@ -312,7 +312,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                            <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
                        <|> pure [],
       instanceDesignator =
-         Abstract.generalTypeLHS <$> qualifiedTypeClass
+         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass
             <*> wrap (generalTypeConstructor
                       <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
                       <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
