@@ -56,6 +56,7 @@ data Extension = AllowAmbiguousTypes
                | ExplicitForAll
                | ExplicitNamespaces
                | ExtendedDefaultRules
+               | FieldSelectors
                | FlexibleContexts
                | FlexibleInstances
                | ForeignFunctionInterface
@@ -99,6 +100,8 @@ data Extension = AllowAmbiguousTypes
                | OverlappingInstances
                | OverloadedLabels
                | OverloadedLists
+               | OverloadedRecordDot
+               | OverloadedRecordUpdate
                | OverloadedStrings
                | PackageImports
                | ParallelArrays
@@ -146,6 +149,7 @@ data Extension = AllowAmbiguousTypes
                | UndecidableInstances
                | UndecidableSuperClasses
                | UnicodeSyntax
+               | UnliftedDatatypes
                | UnliftedFFITypes
                | UnliftedNewtypes
                | Unsafe
@@ -198,6 +202,7 @@ implications = Map.fromList <$> Map.fromList [
   (TypeFamilyDependencies, [(ExplicitNamespaces, True), (KindSignatures, True),
                             (MonoLocalBinds, True), (TypeFamilies, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),
+  (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
 
 inverseImplications :: Map Extension (Set Extension)
@@ -268,6 +273,7 @@ byName = Map.fromList [
   ("ExplicitForAll", ExplicitForAll),
   ("ExplicitNamespaces", ExplicitNamespaces),
   ("ExtendedDefaultRules", ExtendedDefaultRules),
+  ("FieldSelectors", FieldSelectors),
   ("FlexibleContexts", FlexibleContexts),
   ("FlexibleInstances", FlexibleInstances),
   ("ForeignFunctionInterface", ForeignFunctionInterface),
@@ -311,6 +317,8 @@ byName = Map.fromList [
   ("OverlappingInstances", OverlappingInstances),
   ("OverloadedLabels", OverloadedLabels),
   ("OverloadedLists", OverloadedLists),
+  ("OverloadedRecordDot", OverloadedRecordDot),
+  ("OverloadedRecordUpdate", OverloadedRecordUpdate),
   ("OverloadedStrings", OverloadedStrings),
   ("PackageImports", PackageImports),
   ("ParallelArrays", ParallelArrays),
@@ -359,6 +367,7 @@ byName = Map.fromList [
   ("UndecidableInstances", UndecidableInstances),
   ("UndecidableSuperClasses", UndecidableSuperClasses),
   ("UnicodeSyntax", UnicodeSyntax),
+  ("UnliftedDatatypes", UnliftedDatatypes),
   ("UnliftedFFITypes", UnliftedFFITypes),
   ("UnliftedNewtypes", UnliftedNewtypes),
   ("Unsafe", Unsafe),
