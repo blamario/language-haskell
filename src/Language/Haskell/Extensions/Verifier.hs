@@ -27,11 +27,11 @@ import qualified Transformation.Full as Full
 import qualified Transformation.AG.Monomorphic as AG.Mono
 import Text.Grampa (Ambiguous(..))
 
-import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import Language.Haskell.Grammar (isSymbol)
 import Language.Haskell.Extensions (Extension, ExtensionSwitch, partitionContradictory, withImplications)
 import qualified Language.Haskell.Extensions as Extensions
+import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))

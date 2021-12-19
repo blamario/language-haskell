@@ -13,6 +13,7 @@ import qualified Language.Haskell.Abstract as Report
 class Haskell λ => ExtendedHaskell λ where
    type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type TypeVarBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    parallelListComprehension :: s (Expression l l d d)
@@ -37,14 +38,17 @@ class Haskell λ => ExtendedHaskell λ where
    simpleInfixTypeLHSApplication :: Name λ -> Name λ -> Name λ -> TypeLHS λ l d s
    simpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> TypeLHS λ l d s
    kindedSimpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> s (Kind l l d d) -> TypeLHS λ l d s
-   existentialConstructor :: [Name λ] -> s (Context l l d d) -> s (DataConstructor l l d d) -> DataConstructor λ l d s
-   explicitlyScopedInstanceDeclaration :: NonEmpty (Name λ)
+   existentialConstructor :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (DataConstructor l l d d)
+                          -> DataConstructor λ l d s
+   explicitlyScopedInstanceDeclaration :: NonEmpty (TypeVarBinding λ l d s)
                                        -> s (Context l l d d)
                                        -> s (ClassInstanceLHS l l d d)
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
-   forallType :: [Name λ] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
-   kindedTypeVariable :: Name λ -> s (Kind l l d d) -> Type λ l d s
+   forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
+   boundTypeVariable :: TypeVarBinding λ l d s -> Type λ l d s
+   explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
+   implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
    kindVariable :: Name λ -> Kind λ l d s
    constructorKind :: s (Constructor l l d d) -> Kind λ l d s
    kindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
@@ -54,10 +58,13 @@ class Haskell λ => ExtendedHaskell λ where
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    gadtDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (GADTConstructor l l d d)]
                    -> [s (DerivingClause l l d d)] -> Declaration λ l d s
-   gadtConstructors :: NonEmpty (Name λ) -> [Name λ] -> s (Context l l d d) -> s (Type l l d d)
+   gadtConstructors :: NonEmpty (Name λ) -> [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d)
                    -> GADTConstructor λ l d s
    recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s
 
-type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Report.DeeplyFunctor t l)
-type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Report.DeeplyFoldable t l)
-type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Report.DeeplyTraversable t l)
+type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
+                          Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)
+type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
+                           Deep.Foldable t (TypeVarBinding l l), Report.DeeplyFoldable t l)
+type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
+                              Deep.Traversable t (TypeVarBinding l l), Report.DeeplyTraversable t l)

@@ -3,7 +3,7 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Declaration(..), DataConstructor(..),
                                         GADTConstructor(..), Expression(..), Statement(..),
-                                        Type(..), TypeLHS(..), Value(..),
+                                        Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -29,6 +29,7 @@ data Language = Language deriving (Data, Eq, Show)
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
    type Kind Language = Type Language
+   type TypeVarBinding Language = TypeVarBinding Language
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
    parallelListComprehension = ParallelListComprehension
@@ -51,9 +52,11 @@ instance Abstract.ExtendedHaskell Language where
    recordFunctionType = RecordFunctionType
 
    kindedSimpleTypeLHSApplication = KindedSimpleTypeLHSApplication
-   kindedTypeVariable = KindedTypeVariable
+   explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable
+   implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable
    constructorKind = ConstructorType
-   kindVariable = TypeVariable
+   kindVariable = TypeVariable . ImplicitlyKindedTypeVariable
+   boundTypeVariable = TypeVariable
    functionKind = FunctionKind
    kindApplication = KindApplication
    groundTypeKind = GroundTypeKind
@@ -163,7 +166,7 @@ instance Abstract.Haskell Language where
    strictType = StrictType
    tupleType = TupleType
    typeApplication = TypeApplication
-   typeVariable = TypeVariable
+   typeVariable = TypeVariable . ImplicitlyKindedTypeVariable
 
    constructorReference = ConstructorReference
    emptyListConstructor = EmptyListConstructor
@@ -241,7 +244,7 @@ data Declaration λ l d s =
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
-   | InstanceDeclaration [Name λ] (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
+   | InstanceDeclaration [TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
                          ([s (Abstract.Declaration l l d d)])
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
@@ -249,13 +252,13 @@ data Declaration λ l d s =
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
 data GADTConstructor λ l d s =
-   GADTConstructors (NonEmpty (Abstract.Name λ)) [Abstract.Name λ]
+   GADTConstructors (NonEmpty (Abstract.Name λ)) [Abstract.TypeVarBinding λ l d s]
                     (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
 data DataConstructor λ l d s =
    Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
-   | ExistentialConstructor [Abstract.Name λ] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
+   | ExistentialConstructor [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
 data Type λ l d s =
    ConstructorType (s (Abstract.Constructor l l d d))
@@ -267,12 +270,15 @@ data Type λ l d s =
    | TupleType (NonEmpty (s (Abstract.Type l l d d)))
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | TypeVariable (Abstract.Name λ)
-   | KindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))
-   | ForallType [Abstract.Name λ] (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+   | TypeVariable (Abstract.TypeVarBinding λ l d s)
+   | ForallType [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
+
+data TypeVarBinding λ l d s =
+   ExplicitlyKindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))
+   | ImplicitlyKindedTypeVariable (Abstract.Name λ)
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
@@ -358,37 +364,51 @@ deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d
 deriving instance Typeable (DataConstructor λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)), Data (s (Abstract.Type l l d d)),
-                   Data (Abstract.Name λ),
+                   Data (Abstract.TypeVarBinding λ l d s), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (DataConstructor λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (DataConstructor λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstructor l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (DataConstructor λ l d s)
 
 deriving instance Typeable (GADTConstructor λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
+                   Data (Abstract.TypeVarBinding λ l d s),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (GADTConstructor λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (GADTConstructor λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (GADTConstructor λ l d s)
 
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)),
+                   Data (Abstract.TypeVarBinding λ l d s),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
 deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)),
+                   Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
 deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
                    Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)),
+                   Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) => Eq (Type λ l d s)
+
+deriving instance Typeable (TypeVarBinding λ l d s)
+deriving instance (Data (s (Abstract.Kind l l d d)), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeVarBinding λ l d s)
+deriving instance (Show (s (Abstract.Kind l l d d)), Show (Abstract.Name λ)) => Show (TypeVarBinding λ l d s)
+deriving instance (Eq (s (Abstract.Kind l l d d)), Eq (Abstract.Name λ)) => Eq (TypeVarBinding λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
 deriving instance (Data (s (Abstract.Kind l l d d)),
@@ -436,4 +456,5 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''Expression, ''Statement, ''Value]))
+             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
+              ''Expression, ''Statement, ''Value]))
