@@ -388,9 +388,8 @@ typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (
 typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
-typeTemplate (TypeVariable (ImplicitlyKindedTypeVariable name)) = VarT (nameTemplate name)
-typeTemplate (TypeVariable (ExplicitlyKindedTypeVariable name kind)) =
-   SigT (VarT $ nameTemplate name) (typeTemplate $ extract kind)
+typeTemplate (TypeVariable name) = VarT (nameTemplate name)
+typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars context body) =
   ForallT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type')
           (contextTemplate $ extract context)
@@ -407,7 +406,8 @@ freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
-freeTypeVars (TypeVariable var) = [typeVarBindingTemplate var]
+freeTypeVars (TypeVariable name) = [plainTV $ nameTemplate name]
+freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (ForallType vars context body) =
   nub (freeContextVars (extract context) <> freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
 
@@ -434,12 +434,9 @@ extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.Type
                => f (ExtAST.TypeLHS l l f f) -> Maybe (AST.Name l, [TyVarBndr])
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> Maybe (AST.Name l, [TyVarBndr])
-         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, plainTV . nameTemplate <$> vars)
+         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, typeVarBindingTemplate <$> vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
-            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [plainTV $ nameTemplate var])
-         fromTypeLHS (KindedSimpleTypeLHSApplication t var kind)
-            | Just (con, vars) <- extractSimpleTypeLHS t =
-              Just (con, vars ++ [kindedTV (nameTemplate var) $ typeTemplate $ extract kind])
+            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [typeVarBindingTemplate var])
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s

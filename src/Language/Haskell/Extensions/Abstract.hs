@@ -35,9 +35,9 @@ class Haskell λ => ExtendedHaskell λ where
                                          -> Maybe (s (ImportSpecification l l d d))
                                          -> Import λ l d s
    infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
-   simpleInfixTypeLHSApplication :: Name λ -> Name λ -> Name λ -> TypeLHS λ l d s
-   simpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> TypeLHS λ l d s
-   kindedSimpleTypeLHSApplication :: s (TypeLHS l l d d) -> Name λ -> s (Kind l l d d) -> TypeLHS λ l d s
+   simpleInfixTypeLHSApplication :: TypeVarBinding λ l d s -> Name λ -> TypeVarBinding λ l d s -> TypeLHS λ l d s
+   simpleTypeLHSApplication :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s -> TypeLHS λ l d s
+   simpleKindedTypeLHS :: Name λ -> [TypeVarBinding λ l d s] -> TypeLHS λ l d s
    existentialConstructor :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (DataConstructor l l d d)
                           -> DataConstructor λ l d s
    explicitlyScopedInstanceDeclaration :: NonEmpty (TypeVarBinding λ l d s)
@@ -46,7 +46,7 @@ class Haskell λ => ExtendedHaskell λ where
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
    forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
-   boundTypeVariable :: TypeVarBinding λ l d s -> Type λ l d s
+   kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
    implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
    kindVariable :: Name λ -> Kind λ l d s

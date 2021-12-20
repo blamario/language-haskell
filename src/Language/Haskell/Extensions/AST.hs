@@ -41,22 +41,22 @@ instance Abstract.ExtendedHaskell Language where
    packageQualifiedImportDeclaration q p = Import False q (Just p)
    safePackageQualifiedImportDeclaration q p = Import True q (Just p)
    infixTypeApplication = InfixTypeApplication
+   simpleKindedTypeLHS = SimpleTypeLHS
    simpleInfixTypeLHSApplication left op right = SimpleTypeLHS op [left, right]
    simpleTypeLHSApplication = SimpleTypeLHSApplication
    existentialConstructor = ExistentialConstructor
    explicitlyScopedInstanceDeclaration = InstanceDeclaration . toList
    forallType = ForallType
+   kindedType = KindedType
    kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
    gadtDeclaration = GADTDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
 
-   kindedSimpleTypeLHSApplication = KindedSimpleTypeLHSApplication
    explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable
    implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable
    constructorKind = ConstructorType
-   kindVariable = TypeVariable . ImplicitlyKindedTypeVariable
-   boundTypeVariable = TypeVariable
+   kindVariable = TypeVariable
    functionKind = FunctionKind
    kindApplication = KindApplication
    groundTypeKind = GroundTypeKind
@@ -166,7 +166,7 @@ instance Abstract.Haskell Language where
    strictType = StrictType
    tupleType = TupleType
    typeApplication = TypeApplication
-   typeVariable = TypeVariable . ImplicitlyKindedTypeVariable
+   typeVariable = TypeVariable
 
    constructorReference = ConstructorReference
    emptyListConstructor = EmptyListConstructor
@@ -183,7 +183,7 @@ instance Abstract.Haskell Language where
    simpleDerive = SimpleDerive
 
    typeClassInstanceLHS = TypeClassInstanceLHS
-   simpleTypeLHS = SimpleTypeLHS
+   simpleTypeLHS con = SimpleTypeLHS con . map Abstract.implicitlyKindedTypeVariable
 
    prefixLHS = PrefixLHS
    infixLHS = InfixLHS
@@ -270,8 +270,9 @@ data Type λ l d s =
    | TupleType (NonEmpty (s (Abstract.Type l l d d)))
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | TypeVariable (Abstract.TypeVarBinding λ l d s)
+   | TypeVariable (Abstract.Name λ)
    | ForallType [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+   | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
@@ -281,9 +282,8 @@ data TypeVarBinding λ l d s =
    | ImplicitlyKindedTypeVariable (Abstract.Name λ)
 
 data TypeLHS λ l d s =
-   SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
-   | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.Name λ)
-   | KindedSimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.Name λ) (s (Abstract.Kind l l d d))
+   SimpleTypeLHS (Abstract.Name λ) [Abstract.TypeVarBinding λ l d s]
+   | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
 
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -411,14 +411,14 @@ deriving instance (Show (s (Abstract.Kind l l d d)), Show (Abstract.Name λ)) =>
 deriving instance (Eq (s (Abstract.Kind l l d d)), Eq (Abstract.Name λ)) => Eq (TypeVarBinding λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
-deriving instance (Data (s (Abstract.Kind l l d d)),
+deriving instance (Data (Abstract.TypeVarBinding λ l d s),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
-deriving instance (Show (s (Abstract.Kind l l d d)),
+deriving instance (Show (Abstract.TypeVarBinding λ l d s),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
-deriving instance (Eq (s (Abstract.Kind l l d d)),
+deriving instance (Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
