@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
+{-# Language FlexibleContexts, FlexibleInstances, NamedFieldPuns, OverloadedStrings,
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeSynonymInstances #-}
 
@@ -699,21 +699,28 @@ explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                     => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 explicitForAllMixin baseGrammar@ExtendedGrammar
                     {report= baseReport@HaskellGrammar
-                             {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
+                             {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..},
+                     keywordForall} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
                topLevelDeclaration = topLevelDeclaration
                   <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-                      <* keywordForall <*> ((:|) <$> typeVarBinder <*> many typeVarBinder) <* delimiter "."
+                      <* keywordForall
+                      <*> ((:|) <$> (nonTerminal typeVarBinder) <*> many (nonTerminal typeVarBinder))
+                      <* delimiter "."
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator
                       <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])},
       typeTerm = typeTerm
          <|> Abstract.forallType <$ keywordForall
-             <*> some typeVarBinder <* delimiter "."
+             <*> some (nonTerminal typeVarBinder) <* delimiter "."
              <*> wrap optionalContext
              <*> wrap (nonTerminal $ Report.typeTerm . report),
-      typeVar = notFollowedBy keywordForall *> typeVar}}
+      typeVar = notFollowedBy keywordForall *> typeVar},
+   kind = kind baseGrammar
+      <|> Abstract.forallKind <$ keywordForall
+          <*> some (nonTerminal typeVarBinder) <* delimiter "."
+          <*> wrap (nonTerminal kind)}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),

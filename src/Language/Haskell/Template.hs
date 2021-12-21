@@ -395,6 +395,10 @@ typeTemplate (ForallType vars context body) =
           (contextTemplate $ extract context)
           (typeTemplate type')
   where type' = extract body
+typeTemplate (ForallKind vars body) =
+  ForallT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type') []
+          (typeTemplate type')
+  where type' = extract body
 typeTemplate GroundTypeKind = StarT
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
@@ -410,6 +414,9 @@ freeTypeVars (TypeVariable name) = [plainTV $ nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (ForallType vars context body) =
   nub (freeContextVars (extract context) <> freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
+freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
+freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
 
 typeVarBindingTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndr
 typeVarBindingTemplate (ExplicitlyKindedTypeVariable name kind) =

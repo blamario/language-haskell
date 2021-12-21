@@ -58,6 +58,7 @@ instance Abstract.ExtendedHaskell Language where
    constructorKind = ConstructorType
    kindVariable = TypeVariable
    functionKind = FunctionKind
+   forallKind = ForallKind
    kindApplication = KindApplication
    groundTypeKind = GroundTypeKind
 
@@ -272,6 +273,7 @@ data Type λ l d s =
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
    | ForallType [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+   | ForallKind [Abstract.TypeVarBinding λ l d s] (s (Abstract.Kind l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
