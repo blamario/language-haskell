@@ -626,7 +626,8 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                    <*> wrap optionalContext
                    <*> wrap (nonTerminal $ Report.simpleType . Report.declarationLevel . report)
                    <*> wrap (nonTerminal kindSignature)
-                   <*> (delimiter "=" *> declaredConstructors <|> pure [])
+                   <*> (delimiter "=" *> nonTerminal (Report.declaredConstructors . Report.declarationLevel . report)
+                        <|> pure [])
                    <*> Report.derivingClause baseDeclarations
             <|> Abstract.classDeclaration
                    <$ keyword "class"
@@ -717,6 +718,7 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
              <*> wrap optionalContext
              <*> wrap (nonTerminal $ Report.typeTerm . report),
       typeVar = notFollowedBy keywordForall *> typeVar},
+   optionalForall = keywordForall *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    kind = kind baseGrammar
       <|> Abstract.forallKind <$ keywordForall
           <*> some (nonTerminal typeVarBinder) <* delimiter "."
@@ -743,7 +745,7 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                                 <*> wrap optionalContext
                                 <*> wrap (nonTerminal gadtBody),
    constructorIDs = constructor `sepByNonEmpty` comma,
-   optionalForall = nonTerminal keywordForall *> some (nonTerminal typeVarBinder) <|> pure [],
+   optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
    prefix_gadt_body =
       parens (nonTerminal prefix_gadt_body)
