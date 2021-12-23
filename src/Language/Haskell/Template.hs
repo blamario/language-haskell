@@ -246,10 +246,10 @@ declarationTemplates (InstanceDeclaration _vars context lhs wheres)
      [InstanceD Nothing (contextTemplate $ extract context)
                 (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
                 (foldMap (declarationTemplates . extract) wheres)]
-declarationTemplates (NewtypeDeclaration context lhs constructor derivings)
+declarationTemplates (NewtypeDeclaration context lhs kind constructor derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) vars
-               Nothing (dataConstructorTemplate . extract $ constructor)
+               (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract $ constructor)
                $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | Just (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]

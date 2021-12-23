@@ -49,6 +49,7 @@ instance Abstract.ExtendedHaskell Language where
    forallType = ForallType
    kindedType = KindedType
    kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
+   kindedNewtypeDeclaration context lhs = NewtypeDeclaration context lhs . Just
    gadtDeclaration = GADTDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
@@ -125,7 +126,7 @@ instance Abstract.Haskell Language where
    foreignExport = ForeignExport
    foreignImport = ForeignImport
    instanceDeclaration = InstanceDeclaration []
-   newtypeDeclaration = NewtypeDeclaration
+   newtypeDeclaration context lhs = NewtypeDeclaration context lhs Nothing
    typeSynonymDeclaration = TypeSynonymDeclaration
    typeSignature = TypeSignature
 
@@ -248,7 +249,8 @@ data Declaration λ l d s =
    | InstanceDeclaration [TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
                          ([s (Abstract.Declaration l l d d)])
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
-                        (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
+                        (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
+                        [s (Abstract.DerivingClause l l d d)]
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 

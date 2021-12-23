@@ -57,8 +57,12 @@ class Haskell λ => ExtendedHaskell λ where
    groundTypeKind :: Kind λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
+   kindedNewtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
+                            -> s (DataConstructor l l d d) -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    gadtDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (GADTConstructor l l d d)]
                    -> [s (DerivingClause l l d d)] -> Declaration λ l d s
+   gadtNewtypeDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> s (GADTConstructor l l d d)
+                          -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    gadtConstructors :: NonEmpty (Name λ) -> [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d)
                    -> GADTConstructor λ l d s
    recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s

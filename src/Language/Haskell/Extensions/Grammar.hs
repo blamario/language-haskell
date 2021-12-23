@@ -58,12 +58,12 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindVar :: p (Abstract.Name l),
-   gadtConstructors :: p (Abstract.GADTConstructor l l f f),
+   gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
-   gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
+   gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
    return_type :: p (Abstract.Type l l f f)}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
@@ -629,6 +629,13 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                    <*> (delimiter "=" *> nonTerminal (Report.declaredConstructors . Report.declarationLevel . report)
                         <|> pure [])
                    <*> Report.derivingClause baseDeclarations
+            <|> Abstract.kindedNewtypeDeclaration <$ keyword "newtype"
+                   <*> wrap optionalContext
+                   <*> wrap (nonTerminal $ Report.simpleType . Report.declarationLevel . report)
+                   <*> wrap (nonTerminal kindSignature)
+                   <* delimiter "="
+                   <*> wrap (nonTerminal $ Report.newConstructor . Report.declarationLevel . report)
+                   <*> Report.derivingClause baseDeclarations
             <|> Abstract.classDeclaration
                    <$ keyword "class"
                    <*> wrap optionalContext
@@ -738,14 +745,30 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                   <|> Abstract.gadtDeclaration <$ keyword "data"
                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                       <*> blockOf (nonTerminal gadtConstructors)
+                      <*> derivingClause
+                  <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
+                      <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
+                      <*> wrap (nonTerminal gadtNewConstructor)
                       <*> derivingClause}},
    gadtConstructors=
       Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
                                 <*> nonTerminal optionalForall
                                 <*> wrap optionalContext
                                 <*> wrap (nonTerminal gadtBody),
+   gadtNewConstructor=
+      Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* doubleColon
+                                <*> nonTerminal optionalForall
+                                <*> wrap optionalContext
+                                <*> wrap (nonTerminal gadtNewBody),
    constructorIDs = constructor `sepByNonEmpty` comma,
    optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
+   gadtNewBody =
+      Abstract.functionType
+         <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+         <*> wrap (nonTerminal return_type)
+      <|> Abstract.recordFunctionType
+          <$> braces ((:[]) <$> wrap fieldDeclaration) <* rightArrow
+          <*> wrap (nonTerminal return_type),
    gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
    prefix_gadt_body =
       parens (nonTerminal prefix_gadt_body)
