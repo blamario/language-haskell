@@ -251,6 +251,11 @@ declarationTemplates (NewtypeDeclaration context lhs kind constructor derivings)
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) vars
                (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract $ constructor)
                $ derivingsTemplate $ extract <$> derivings]
+declarationTemplates (GADTNewtypeDeclaration lhs kind constructor derivings)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs =
+     [NewtypeD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
+            (gadtConstructorTemplate . extract $ constructor)
+            (derivingsTemplate $ extract <$> derivings)]
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | Just (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =

@@ -51,6 +51,7 @@ instance Abstract.ExtendedHaskell Language where
    kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
    kindedNewtypeDeclaration context lhs = NewtypeDeclaration context lhs . Just
    gadtDeclaration = GADTDeclaration
+   gadtNewtypeDeclaration = GADTNewtypeDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
 
@@ -251,6 +252,8 @@ data Declaration λ l d s =
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
                         [s (Abstract.DerivingClause l l d d)]
+   | GADTNewtypeDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+                            (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 

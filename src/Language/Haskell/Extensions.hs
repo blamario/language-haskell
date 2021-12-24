@@ -183,7 +183,7 @@ implications = Map.fromList <$> Map.fromList [
   (ExistentialQuantification, [(ExplicitForAll, True)]),
   (FlexibleInstances, [(TypeSynonymInstances, True)]),
   (FunctionalDependencies, [(MultiParamTypeClasses, True)]),
-  (GADTs, [(GADTSyntax, True), (MonoLocalBinds, True)]),
+  (GADTs, [(ExistentialQuantification, True), (GADTSyntax, True), (MonoLocalBinds, True)]),
   (Haskell98, [(NPlusKPatterns, True), (NondecreasingIndentation, True),
                (DoAndIfThenElse, False), (EmptyDataDeclarations, False),
                (ForeignFunctionInterface, False), (PatternGuards, False), (RelaxedPolyRec, False)]),

@@ -750,12 +750,12 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                       <*> wrap (nonTerminal gadtNewConstructor)
                       <*> derivingClause}},
-   gadtConstructors=
+   gadtConstructors =
       Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
                                 <*> nonTerminal optionalForall
                                 <*> wrap optionalContext
                                 <*> wrap (nonTerminal gadtBody),
-   gadtNewConstructor=
+   gadtNewConstructor =
       Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* doubleColon
                                 <*> nonTerminal optionalForall
                                 <*> wrap optionalContext
