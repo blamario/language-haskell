@@ -64,7 +64,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
-   return_type :: p (Abstract.Type l l f f)}
+   return_type, arg_type :: p (Abstract.Type l l f f)}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
@@ -779,7 +779,14 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
       Abstract.recordFunctionType
       <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
       <*> wrap (nonTerminal return_type),
-   return_type = bType}
+   return_type = Abstract.typeApplication <$> wrap (nonTerminal return_type) <*> wrap (nonTerminal arg_type)
+                 <|> parens (nonTerminal return_type)
+                 <|> Abstract.constructorType <$> wrap generalConstructor,
+   arg_type = generalTypeConstructor
+              <|> Abstract.typeVariable <$> typeVar
+              <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
+              <|> Abstract.listType <$> brackets (wrap typeTerm)
+              <|> parens typeTerm}
  
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
