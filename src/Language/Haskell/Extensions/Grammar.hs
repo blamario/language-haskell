@@ -591,6 +591,9 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                                <$> wrap (parens $ nonTerminal (Report.simpleType . Report.declarationLevel . report))
                                <*> nonTerminal typeVarBinder},
              typeConstructor = constructorIdentifier <|> parens anySymbol,
+             generalTypeConstructor =
+               generalTypeConstructor
+               <|> Abstract.constructorType <$> wrap (Abstract.constructorReference <$> parens qualifiedVariableSymbol),
              bType = bType
                 <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
                                                   <*> qualifiedOperator
@@ -620,7 +623,9 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                              {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       declarationLevel= baseDeclarations{
-         simpleType = Abstract.simpleKindedTypeLHS <$> typeConstructor <*> many (nonTerminal typeVarBinder),
+         simpleType = Abstract.simpleKindedTypeLHS
+                        <$> nonTerminal (Report.typeConstructor . report)
+                        <*> many (nonTerminal typeVarBinder),
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindedDataDeclaration <$ keyword "data"
                    <*> wrap optionalContext
