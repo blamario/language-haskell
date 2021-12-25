@@ -220,7 +220,8 @@ unicodeSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
       doubleColon = doubleColon <|> delimiter "∷",
       rightDoubleArrow = rightDoubleArrow <|> delimiter "⇒",
       rightArrow = rightArrow <|> delimiter "→",
-      leftArrow = leftArrow <|> delimiter "←"}}
+      leftArrow = leftArrow <|> delimiter "←",
+      variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> variableSymbol}}
 
 magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
