@@ -422,6 +422,9 @@ freeTypeVars (ForallType vars context body) =
 freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
+freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
+                                                       <> freeTypeVars (extract result))
+   where fieldType (ConstructorFields _names t) = extract t
 
 typeVarBindingTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
 typeVarBindingTemplate (ExplicitlyKindedTypeVariable name kind) =

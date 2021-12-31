@@ -110,12 +110,13 @@ extensionMixins =
      (Set.fromList [LambdaCase],                 (7, lambdaCaseMixin)),
      (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
      (Set.fromList [KindSignatures],             (8, kindSignaturesMixin)),
+     (Set.fromList [TypeOperators],              (8, typeOperatorsMixin)),
      (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
-     (Set.fromList [TypeOperators],              (9, typeOperatorsMixin)),
      (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
      (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
      (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin)),
-     (Set.fromList [FlexibleInstances],          (9, flexibleInstancesMixin))]
+     (Set.fromList [FlexibleInstances],          (9, flexibleInstancesMixin)),
+     (Set.fromList [GADTSyntax, TypeOperators],  (9, gadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -769,9 +770,10 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
    constructorIDs = constructor `sepByNonEmpty` comma,
    optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    gadtNewBody =
-      Abstract.functionType
-         <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
-         <*> wrap (nonTerminal return_type)
+      parens (nonTerminal gadtNewBody)
+      <|> Abstract.functionType
+          <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+          <*> wrap (nonTerminal return_type)
       <|> Abstract.recordFunctionType
           <$> braces ((:[]) <$> wrap fieldDeclaration) <* rightArrow
           <*> wrap (nonTerminal return_type),
@@ -782,9 +784,10 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
       <|> Abstract.functionType <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
                                 <*> wrap (nonTerminal prefix_gadt_body),
    record_gadt_body =
-      Abstract.recordFunctionType
-      <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
-      <*> wrap (nonTerminal return_type),
+      parens (nonTerminal record_gadt_body)
+      <|> Abstract.recordFunctionType
+          <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
+          <*> wrap (nonTerminal return_type),
    return_type = Abstract.typeApplication <$> wrap (nonTerminal return_type) <*> wrap (nonTerminal arg_type)
                  <|> parens (nonTerminal return_type)
                  <|> Abstract.constructorType <$> wrap generalConstructor,
@@ -793,7 +796,18 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
               <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
               <|> Abstract.listType <$> brackets (wrap typeTerm)
               <|> parens typeTerm}
- 
+
+gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                           g ~ ExtendedGrammar l t (NodeWrap t),
+                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+gadtSyntaxTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
+   return_type = return_type <|>
+      Abstract.infixTypeApplication <$> wrap arg_type
+                                    <*> qualifiedOperator
+                                    <*> wrap arg_type}
+
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"
