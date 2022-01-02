@@ -264,6 +264,36 @@ declarationTemplates (TypeSignature names context t) =
                      of NoContext -> id
                         ctx -> ForallT [] (contextTemplate ctx)
 
+declarationTemplates (DataFamilyDeclaration lhs kind)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs
+   = [DataFamilyD (nameTemplate con) vars (typeTemplate . extract <$> kind)]
+declarationTemplates (OpenTypeFamilyDeclaration lhs kind)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs
+   = [OpenTypeFamilyD $ TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing]
+declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs
+   = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
+                        (typeFamilyInstanceTemplate . extract <$> constructors)]
+declarationTemplates (DataFamilyInstance vars context lhs constructors derivings)
+   | TypeClassInstanceLHS name t <- extract lhs
+   = [DataInstD (contextTemplate $ extract context)
+                (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+                (typeTemplate $ extract t)
+                Nothing --(typeTemplate . extract <$> kind)
+                (dataConstructorTemplate . extract <$> constructors)
+                $ derivingsTemplate $ extract <$> derivings]
+                
+declarationTemplates (NewtypeFamilyInstance vars context lhs constructor derivings) = undefined
+declarationTemplates (GADTDataFamilyInstance vars lhs constructors derivings) = undefined
+declarationTemplates (GADTNewtypeFamilyInstance vars lhs constructor derivings) = undefined
+declarationTemplates (TypeFamilyInstance vars lhs rhs) = undefined
+
+familyKindTemplate :: TemplateWrapper f => Maybe (f (ExtAST.Type Language Language f f)) -> FamilyResultSig
+familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
+
+typeFamilyInstanceTemplate :: Declaration Language Language f f -> TySynEqn
+typeFamilyInstanceTemplate = undefined
+     
 derivingsTemplate :: [DerivingClause Language Language f f] -> [DerivClause]
 derivingsTemplate derivings =
    if null derivings then [] else [DerivClause Nothing $ derived <$> derivings]

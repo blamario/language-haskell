@@ -8,7 +8,7 @@
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ ignores the presence or absence of whitespace preceding the minus
 
-module Language.Haskell.Extensions.Grammar (grammar, extendedGrammar, parseModule, report, module Report) where
+module Language.Haskell.Extensions.Grammar (extendedGrammar, parseModule, report, module Report) where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -60,6 +60,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
+   flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
@@ -116,6 +117,7 @@ extensionMixins =
      (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
      (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin)),
      (Set.fromList [FlexibleInstances],          (9, flexibleInstancesMixin)),
+     (Set.fromList [TypeFamilies],               (9, typeFamiliesMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],  (9, gadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
@@ -168,21 +170,16 @@ extendedGrammar extensions = fixGrammar (extended . reportGrammar)
                     $ Map.elems $ Map.restrictKeys extensionMixins
                     $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
 
-grammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-grammar = blockArgumentsMixin . unicodeSyntaxMixin . identifierSyntaxMixin . magicHashMixin
-          . parallelListComprehensionsMixin . recursiveDoMixin . tupleSectionsMixin . lambdaCaseMixin . emptyCaseMixin
-          . multiWayIfMixin . reportGrammar
-
-reportGrammar :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
-              => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
-reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar{..}} =
+reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
+                                LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
+              => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
+                                        {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} =
    g{report= Report.grammar r,
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -190,9 +187,50 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar{..}} =
      kind = empty,
      bKind = empty,
      aKind = empty,
+     flexibleInstanceDesignator = 
+        Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
+        <|> parens (nonTerminal $ Report.instanceDesignator . Report.declarationLevel . report),
      optionallyKindedAndParenthesizedTypeVar = empty,
      optionallyKindedTypeVar = empty,
-     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar}
+     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar,
+     gadtConstructors =
+        Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
+                                  <*> nonTerminal optionalForall
+                                  <*> wrap optionalContext
+                                  <*> wrap (nonTerminal gadtBody),
+     gadtNewConstructor =
+        Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* doubleColon
+                                  <*> nonTerminal optionalForall
+                                  <*> wrap optionalContext
+                                  <*> wrap (nonTerminal gadtNewBody),
+     constructorIDs = constructor `sepByNonEmpty` comma,
+     gadtNewBody =
+        parens (nonTerminal gadtNewBody)
+        <|> Abstract.functionType
+            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+            <*> wrap (nonTerminal return_type)
+        <|> Abstract.recordFunctionType
+            <$> braces ((:[]) <$> wrap fieldDeclaration) <* rightArrow
+            <*> wrap (nonTerminal return_type),
+     gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
+     prefix_gadt_body =
+        parens (nonTerminal prefix_gadt_body)
+        <|> nonTerminal return_type
+        <|> Abstract.functionType <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+                                  <*> wrap (nonTerminal prefix_gadt_body),
+     record_gadt_body =
+        parens (nonTerminal record_gadt_body)
+        <|> Abstract.recordFunctionType
+            <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
+            <*> wrap (nonTerminal return_type),
+     return_type = Abstract.typeApplication <$> wrap (nonTerminal return_type) <*> wrap (nonTerminal arg_type)
+                   <|> parens (nonTerminal return_type)
+                   <|> Abstract.constructorType <$> wrap generalConstructor,
+     arg_type = generalTypeConstructor
+                <|> Abstract.typeVariable <$> typeVar
+                <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
+                <|> Abstract.listType <$> brackets (wrap typeTerm)
+                <|> parens typeTerm}
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
@@ -608,12 +646,83 @@ flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
                        => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 flexibleInstancesMixin baseGrammar@ExtendedGrammar
                        {report= baseReport@HaskellGrammar
-                                {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+                                {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
-                instanceDesignator =
-                   Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
-                   <|> parens (nonTerminal $ Report.instanceDesignator . Report.declarationLevel . report)}}}
+                instanceDesignator= flexibleInstanceDesignator}}}
+
+typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                    g ~ ExtendedGrammar l t (NodeWrap t),
+                                    Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                  => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
+                                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+  report= baseReport{
+             declarationLevel= baseDeclarations{
+                topLevelDeclaration = topLevelDeclaration
+                   <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
+                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                   <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                   <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
+                       <*> blockOf (Abstract.typeFamilyInstance
+                                    <$> nonTerminal optionalForall
+                                    <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                                    <*> wrap typeTerm)
+                   <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap optionalContext
+                       <*> wrap (nonTerminal flexibleInstanceDesignator)
+                       <*> (delimiter "=" *> declaredConstructors <|> pure [])
+                       <*> derivingClause
+                   <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap optionalContext
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap newConstructor
+                       <*> derivingClause
+                   <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* keyword "where"
+                       <*> blockOf (nonTerminal gadtConstructors)
+                       <*> derivingClause
+                   <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* keyword "where"
+                       <*> wrap (nonTerminal gadtNewConstructor)
+                       <*> derivingClause
+                   <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap typeTerm,
+                inClassDeclaration = inClassDeclaration
+                   <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
+                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                   <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
+                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature),
+                inInstanceDeclaration = inInstanceDeclaration
+                   <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap optionalContext
+                       <*> wrap (nonTerminal flexibleInstanceDesignator)
+                       <*> (delimiter "=" *> declaredConstructors <|> pure [])
+                       <*> derivingClause
+                   <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap optionalContext
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap newConstructor
+                       <*> derivingClause
+                   <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
+                       <*> nonTerminal optionalForall
+                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap typeTerm
+               }
+             }
+  }
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -757,45 +866,7 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                       <*> wrap (nonTerminal gadtNewConstructor)
                       <*> derivingClause}},
-   gadtConstructors =
-      Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
-                                <*> nonTerminal optionalForall
-                                <*> wrap optionalContext
-                                <*> wrap (nonTerminal gadtBody),
-   gadtNewConstructor =
-      Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* doubleColon
-                                <*> nonTerminal optionalForall
-                                <*> wrap optionalContext
-                                <*> wrap (nonTerminal gadtNewBody),
-   constructorIDs = constructor `sepByNonEmpty` comma,
-   optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
-   gadtNewBody =
-      parens (nonTerminal gadtNewBody)
-      <|> Abstract.functionType
-          <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
-          <*> wrap (nonTerminal return_type)
-      <|> Abstract.recordFunctionType
-          <$> braces ((:[]) <$> wrap fieldDeclaration) <* rightArrow
-          <*> wrap (nonTerminal return_type),
-   gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
-   prefix_gadt_body =
-      parens (nonTerminal prefix_gadt_body)
-      <|> nonTerminal return_type
-      <|> Abstract.functionType <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
-                                <*> wrap (nonTerminal prefix_gadt_body),
-   record_gadt_body =
-      parens (nonTerminal record_gadt_body)
-      <|> Abstract.recordFunctionType
-          <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
-          <*> wrap (nonTerminal return_type),
-   return_type = Abstract.typeApplication <$> wrap (nonTerminal return_type) <*> wrap (nonTerminal arg_type)
-                 <|> parens (nonTerminal return_type)
-                 <|> Abstract.constructorType <$> wrap generalConstructor,
-   arg_type = generalTypeConstructor
-              <|> Abstract.typeVariable <$> typeVar
-              <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
-              <|> Abstract.listType <$> brackets (wrap typeTerm)
-              <|> parens typeTerm}
+   optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
