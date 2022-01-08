@@ -275,10 +275,10 @@ declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
 declarationTemplates (DataFamilyInstance vars context lhs constructors derivings)
-   | TypeClassInstanceLHS name t <- extract lhs
+   | MultiParameterTypeClassInstanceLHS name types <- extract lhs
    = [DataInstD (contextTemplate $ extract context)
                 (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
-                (typeTemplate $ extract t)
+                (foldl' AppT (ConT $ qnameTemplate name) $ typeTemplate . extract <$> types)
                 Nothing --(typeTemplate . extract <$> kind)
                 (dataConstructorTemplate . extract <$> constructors)
                 $ derivingsTemplate $ extract <$> derivings]
@@ -286,7 +286,12 @@ declarationTemplates (DataFamilyInstance vars context lhs constructors derivings
 declarationTemplates (NewtypeFamilyInstance vars context lhs constructor derivings) = undefined
 declarationTemplates (GADTDataFamilyInstance vars lhs constructors derivings) = undefined
 declarationTemplates (GADTNewtypeFamilyInstance vars lhs constructor derivings) = undefined
-declarationTemplates (TypeFamilyInstance vars lhs rhs) = undefined
+declarationTemplates (TypeFamilyInstance vars lhs rhs)
+   | MultiParameterTypeClassInstanceLHS name types <- extract lhs
+   = [TySynInstD $
+      TySynEqn (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+               (foldl' AppT (ConT $ qnameTemplate name) $ typeTemplate . extract <$> types)
+               (typeTemplate $ extract rhs)]
 
 familyKindTemplate :: TemplateWrapper f => Maybe (f (ExtAST.Type Language Language f f)) -> FamilyResultSig
 familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)

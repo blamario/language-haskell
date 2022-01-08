@@ -60,7 +60,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
-   flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
@@ -187,9 +187,13 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
      kind = empty,
      bKind = empty,
      aKind = empty,
+     familyInstanceDesignator =
+        Abstract.multiParameterTypeClassInstanceLHS <$> qualifiedTypeClass <*> many (wrap aType)
+        <|> parens (nonTerminal familyInstanceDesignator),
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
-        <|> parens (nonTerminal $ Report.instanceDesignator . Report.declarationLevel . report),
+        <|> parens (nonTerminal flexibleInstanceDesignator),
+     optionalForall = pure [],
      optionallyKindedAndParenthesizedTypeVar = empty,
      optionallyKindedTypeVar = empty,
      typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar,
@@ -658,7 +662,7 @@ typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                   => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
-                                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+                                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, familyInstanceDesignator} = baseGrammar{
   report= baseReport{
              declarationLevel= baseDeclarations{
                 topLevelDeclaration = topLevelDeclaration
@@ -670,33 +674,33 @@ typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                        <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                        <*> blockOf (Abstract.typeFamilyInstance
                                     <$> nonTerminal optionalForall
-                                    <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                                    <*> wrap familyInstanceDesignator <* delimiter "="
                                     <*> wrap typeTerm)
                    <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
                        <*> nonTerminal optionalForall
                        <*> wrap optionalContext
-                       <*> wrap (nonTerminal flexibleInstanceDesignator)
+                       <*> wrap familyInstanceDesignator
                        <*> (delimiter "=" *> declaredConstructors <|> pure [])
                        <*> derivingClause
                    <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                        <*> nonTerminal optionalForall
                        <*> wrap optionalContext
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap familyInstanceDesignator <* delimiter "="
                        <*> wrap newConstructor
                        <*> derivingClause
                    <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
                        <*> nonTerminal optionalForall
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* keyword "where"
+                       <*> wrap familyInstanceDesignator <* keyword "where"
                        <*> blockOf (nonTerminal gadtConstructors)
                        <*> derivingClause
                    <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                        <*> nonTerminal optionalForall
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* keyword "where"
+                       <*> wrap familyInstanceDesignator <* keyword "where"
                        <*> wrap (nonTerminal gadtNewConstructor)
                        <*> derivingClause
                    <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
                        <*> nonTerminal optionalForall
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap familyInstanceDesignator <* delimiter "="
                        <*> wrap typeTerm,
                 inClassDeclaration = inClassDeclaration
                    <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
@@ -707,18 +711,18 @@ typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                    <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
                        <*> nonTerminal optionalForall
                        <*> wrap optionalContext
-                       <*> wrap (nonTerminal flexibleInstanceDesignator)
+                       <*> wrap familyInstanceDesignator
                        <*> (delimiter "=" *> declaredConstructors <|> pure [])
                        <*> derivingClause
                    <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
                        <*> nonTerminal optionalForall
                        <*> wrap optionalContext
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap familyInstanceDesignator <* delimiter "="
                        <*> wrap newConstructor
                        <*> derivingClause
                    <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
                        <*> nonTerminal optionalForall
-                       <*> wrap (nonTerminal flexibleInstanceDesignator) <* delimiter "="
+                       <*> wrap familyInstanceDesignator <* delimiter "="
                        <*> wrap typeTerm
                }
              }

@@ -3,7 +3,7 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Declaration(..), DataConstructor(..),
                                         GADTConstructor(..), Expression(..), Statement(..),
-                                        Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
+                                        ClassInstanceLHS(..), Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -15,7 +15,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), Pattern(..),
-                             Context(..), ClassInstanceLHS(..), DerivingClause(..), Constructor(..),
+                             Context(..), DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
@@ -72,6 +72,7 @@ instance Abstract.ExtendedHaskell Language where
    gadtDataFamilyInstance = GADTDataFamilyInstance
    gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance
    typeFamilyInstance = TypeFamilyInstance
+   multiParameterTypeClassInstanceLHS = MultiParameterTypeClassInstanceLHS
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -317,6 +318,10 @@ data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.TypeVarBinding λ l d s]
    | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
 
+data ClassInstanceLHS λ l d s =
+   TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | MultiParameterTypeClassInstanceLHS (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
+
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -454,6 +459,12 @@ deriving instance (Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
+deriving instance Typeable (ClassInstanceLHS λ l d s)
+deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (ClassInstanceLHS λ l d s)
+deriving instance (Show (s (Abstract.Type l l d d)), Show (Abstract.QualifiedName λ)) => Show (ClassInstanceLHS λ l d s)
+deriving instance (Eq (s (Abstract.Type l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
+
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
@@ -489,4 +500,4 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
-              ''Expression, ''Statement, ''Value]))
+              ''ClassInstanceLHS, ''Expression, ''Statement, ''Value]))

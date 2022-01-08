@@ -81,6 +81,8 @@ class Haskell λ => ExtendedHaskell λ where
                              -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
                       -> Declaration λ l d s
+   multiParameterTypeClassInstanceLHS :: QualifiedName λ -> [s (Type l l d d)] -> ClassInstanceLHS λ l d s
+
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)
