@@ -112,6 +112,7 @@ extensionMixins =
      (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
      (Set.fromList [KindSignatures],             (8, kindSignaturesMixin)),
      (Set.fromList [TypeOperators],              (8, typeOperatorsMixin)),
+     (Set.fromList [EqualityConstraints],        (8, equalityConstraintsMixin)),
      (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
      (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
      (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
@@ -643,6 +644,19 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                                                   <*> qualifiedOperator
                                                   <*> wrap aType}}
    where anySymbol = constructorSymbol <|> variableSymbol
+
+equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                     g ~ ExtendedGrammar l t (NodeWrap t),
+                                     Ord t, Show t, TextualMonoid t)
+                       => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+equalityConstraintsMixin baseGrammar@ExtendedGrammar
+                         {report= baseReport@HaskellGrammar
+                                  {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
+   report= baseReport{
+             declarationLevel= baseDeclarations{
+                constraint= constraint
+                            <|> Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
+                                <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))}}}
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),

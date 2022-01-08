@@ -52,6 +52,7 @@ data Extension = AllowAmbiguousTypes
                | EmptyCase
                | EmptyDataDeclarations
                | EmptyDataDeriving
+               | EqualityConstraints
                | ExistentialQuantification
                | ExplicitForAll
                | ExplicitNamespaces
@@ -198,9 +199,10 @@ implications = Map.fromList <$> Map.fromList [
   (ScopedTypeVariables, [(ExplicitForAll, True)]),
   (Safe, [(SafeImports, True)]),
   (Trustworthy, [(SafeImports, True)]),
-  (TypeFamilies, [(ExplicitNamespaces, True), (KindSignatures, True), (MonoLocalBinds, True)]),
-  (TypeFamilyDependencies, [(ExplicitNamespaces, True), (KindSignatures, True),
-                            (MonoLocalBinds, True), (TypeFamilies, True)]),
+  (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
+                  (KindSignatures, True), (MonoLocalBinds, True)]),
+  (TypeFamilyDependencies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
+                            (KindSignatures, True), (MonoLocalBinds, True), (TypeFamilies, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
@@ -269,6 +271,7 @@ byName = Map.fromList [
   ("EmptyDataDeclarations", EmptyDataDeclarations),
   ("EmptyDataDecls", EmptyDataDeclarations),
   ("EmptyDataDeriving", EmptyDataDeriving),
+  ("EqualityConstraints", EqualityConstraints), 
   ("ExistentialQuantification", ExistentialQuantification),
   ("ExplicitForAll", ExplicitForAll),
   ("ExplicitNamespaces", ExplicitNamespaces),

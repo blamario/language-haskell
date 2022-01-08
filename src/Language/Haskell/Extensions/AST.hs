@@ -3,7 +3,8 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Declaration(..), DataConstructor(..),
                                         GADTConstructor(..), Expression(..), Statement(..),
-                                        ClassInstanceLHS(..), Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
+                                        ClassInstanceLHS(..), Context(..),
+                                        Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -15,7 +16,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), Pattern(..),
-                             Context(..), DerivingClause(..), Constructor(..),
+                             DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
@@ -63,6 +64,7 @@ instance Abstract.ExtendedHaskell Language where
    forallKind = ForallKind
    kindApplication = KindApplication
    groundTypeKind = GroundTypeKind
+   typeEqualityConstraint = TypeEqualityConstraint
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -292,6 +294,14 @@ data DataConstructor λ l d s =
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
    | ExistentialConstructor [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
+
+data Context λ l d s =
+   SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
+   | ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | Constraints [s (Abstract.Context l l d d)]
+   | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | NoContext
+
 data Type λ l d s =
    ConstructorType (s (Abstract.Constructor l l d d))
    | FunctionConstructorType
@@ -465,6 +475,15 @@ deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedNam
 deriving instance (Show (s (Abstract.Type l l d d)), Show (Abstract.QualifiedName λ)) => Show (ClassInstanceLHS λ l d s)
 deriving instance (Eq (s (Abstract.Type l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
 
+deriving instance Typeable (Context λ l d s)
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Context λ l d s)
+deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Context λ l d s)
+deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Context λ l d s)
+
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
@@ -500,4 +519,4 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
-              ''ClassInstanceLHS, ''Expression, ''Statement, ''Value]))
+              ''ClassInstanceLHS, ''Context, ''Expression, ''Statement, ''Value]))

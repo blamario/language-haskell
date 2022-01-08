@@ -105,9 +105,8 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    infixConstructorArgType :: p (Abstract.Type l l f f),
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
-   optionalContext, context, classConstraint :: p (Abstract.Context l l f f),
+   optionalContext, context, constraint, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
-   simpleConstraint :: p (Abstract.Context l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
    instanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
@@ -290,12 +289,12 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    -- fielddecl 	→ 	vars :: (type | ! atype)
 
       optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
-      context = classConstraint <|> Abstract.constraints <$> parens (wrap classConstraint `sepBy` comma),
-      classConstraint = simpleConstraint
+      context = constraint <|> Abstract.constraints <$> parens (wrap constraint `sepBy` comma),
+      constraint = classConstraint,
+      classConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar
                         <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
       typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
                                                   <*> wrap aType,
-      simpleConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar,
       simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,
 
    -- context 	→ 	class
