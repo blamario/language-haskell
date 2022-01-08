@@ -75,6 +75,7 @@ instance Abstract.ExtendedHaskell Language where
    gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance
    typeFamilyInstance = TypeFamilyInstance
    multiParameterTypeClassInstanceLHS = MultiParameterTypeClassInstanceLHS
+   infixTypeClassInstanceLHS = InfixTypeClassInstanceLHS
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -331,6 +332,7 @@ data TypeLHS λ l d s =
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | MultiParameterTypeClassInstanceLHS (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
+   | InfixTypeClassInstanceLHS (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
 
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))

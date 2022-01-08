@@ -622,7 +622,8 @@ typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstr
                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 typeOperatorsMixin baseGrammar@ExtendedGrammar
                    {report= baseReport@HaskellGrammar
-                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..},
+                    familyInstanceDesignator} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
                simpleType =
@@ -642,7 +643,9 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
              bType = bType
                 <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
                                                   <*> qualifiedOperator
-                                                  <*> wrap aType}}
+                                                  <*> wrap aType},
+     familyInstanceDesignator = familyInstanceDesignator <|>
+        Abstract.infixTypeClassInstanceLHS <$> wrap aType <*> qualifiedOperator <*> wrap aType}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),

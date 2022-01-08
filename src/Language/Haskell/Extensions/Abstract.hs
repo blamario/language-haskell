@@ -82,6 +82,7 @@ class Haskell λ => ExtendedHaskell λ where
    typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
                       -> Declaration λ l d s
    multiParameterTypeClassInstanceLHS :: QualifiedName λ -> [s (Type l l d d)] -> ClassInstanceLHS λ l d s
+   infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
    

@@ -308,6 +308,8 @@ lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Languag
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)
 lhsTypeTemplate (MultiParameterTypeClassInstanceLHS name types) =
   foldl' AppT (ConT $ qnameTemplate name) $ typeTemplate . extract <$> types
+lhsTypeTemplate (InfixTypeClassInstanceLHS left name right) =
+  InfixT (typeTemplate $ extract left) (qnameTemplate name) (typeTemplate $ extract right)
 
 familyKindTemplate :: TemplateWrapper f => Maybe (f (ExtAST.Type Language Language f f)) -> FamilyResultSig
 familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
