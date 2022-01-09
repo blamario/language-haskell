@@ -64,40 +64,48 @@ instance {-# overlaps #-} forall l pos s f.
       let reorganizeExpression :: f (ExtAST.Expression l l f f)
                                -> Validation (NonEmpty (Error l f)) (f (ExtAST.Expression l l f f))
           reorganizeExpression
-             (lexemes', ExtAST.InfixExpression (lexemes, ExtAST.InfixExpression left op right) op' right')
-             | not (parenthesized lexemes),
-               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve op,
-               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve op',
+             (root,
+              ExtAST.InfixExpression
+                 (leftBranch, ExtAST.InfixExpression left lOp middle@((lrStart, _, _), _))
+                 rOp
+                 right@((_, _, rEnd), _))
+             | not (parenthesized leftBranch),
+               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve lOp,
+               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve rOp,
                precedence < precedence' || precedence == precedence' && associativity /= ExtAST.LeftAssociative
              = if precedence == precedence'
                   && (associativity /= associativity' || associativity == ExtAST.NonAssociative)
                then Failure (pure ContradictoryAssociativity)
-               else reorganizeExpression (lexemes, ExtAST.InfixExpression right op' right')
-                    >>= reorganizeExpression . (,) lexemes' . ExtAST.InfixExpression left op
-                        . Reserializer.adjustPositions
+               else reorganizeExpression ((lrStart, mempty, rEnd), ExtAST.InfixExpression middle rOp right)
+                    >>= reorganizeExpression . (,) root . ExtAST.InfixExpression left lOp
+                    >>= pure . Reserializer.adjustPositions
           reorganizeExpression
-             (lexemes', ExtAST.InfixExpression left' op' (lexemes, ExtAST.InfixExpression left op right))
-             | not (parenthesized lexemes),
-               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve op,
-               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve op',
+             (root,
+              ExtAST.InfixExpression left@((lStart, _, _), _) lOp
+                 (rightBranch, ExtAST.InfixExpression middle@((_, _, rlEnd), _) rOp right))
+             | not (parenthesized rightBranch),
+               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve rOp,
+               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve lOp,
                precedence < precedence' || precedence == precedence' && associativity /= ExtAST.RightAssociative
              = if precedence == precedence'
                   && (associativity /= associativity' || associativity == ExtAST.NonAssociative)
                then Failure (pure ContradictoryAssociativity)
-               else reorganizeExpression (lexemes, ExtAST.InfixExpression left' op' left)
-                    >>= \l-> reorganizeExpression (lexemes',
-                                                   ExtAST.InfixExpression (Reserializer.adjustPositions l) op right)
+               else reorganizeExpression ((lStart, mempty, rlEnd), ExtAST.InfixExpression left lOp middle)
+                    >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l rOp right)
+                    >>= pure . Reserializer.adjustPositions
           reorganizeExpression
-             (lexemes', ExtAST.ApplyExpression neg@(_, ExtAST.Negate{}) (lexemes, ExtAST.InfixExpression left op right))
-             | not (parenthesized lexemes),
+             (root,
+              ExtAST.ApplyExpression
+                 neg@((negStart, _, _), ExtAST.Negate{})
+                 (arg, ExtAST.InfixExpression left@((_, _, middleEnd), _) op right))
+             | not (parenthesized arg),
                Just (Binder.InfixDeclaration _ associativity precedence) <- resolve op,
                precedence < prefixMinusPrecedence
                || precedence == prefixMinusPrecedence && associativity /= ExtAST.RightAssociative
              = if precedence == prefixMinusPrecedence && associativity /= ExtAST.LeftAssociative
                then Failure (pure ContradictoryAssociativity)
-               else reorganizeExpression (lexemes, ExtAST.ApplyExpression neg left)
-                    >>= \l-> reorganizeExpression (lexemes',
-                                                   ExtAST.InfixExpression (Reserializer.adjustPositions l) op right)
+               else reorganizeExpression ((negStart, mempty, middleEnd), ExtAST.ApplyExpression neg left)
+                    >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l op right)
           reorganizeExpression e = Success e
           resolve ((_, lexemes, _), ExtAST.ReferenceExpression name) =
             Map.lookup name bindings <|> defaultInfixDeclaration lexemes
