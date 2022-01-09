@@ -114,7 +114,10 @@ main' Opts{..} = case optsFile
              Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
              Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
-             Deep.Foldable (Reserializer.Serialization Int Text) (g l l)) =>
+             Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+                                     (Reserializer.Wrapped (Down Int) Text)) (g l l),
+             Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+             Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l)) =>
             (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
          -> String -> Text -> IO ()
       go parser _filename contents = report contents (parser $ pure contents)
@@ -131,10 +134,16 @@ main' Opts{..} = case optsFile
                  Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
                  Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
-                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l))
+                 Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+                                         (Reserializer.Wrapped (Down Int) Text)) (g l l),
+                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+                 Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l))
              => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
       report contents (Right [parsed]) = case optsOutput of
-         Original -> Text.putStr (Reserializer.reserialize resolved)
+         Original -> case optsStage of
+            Parsed -> Text.putStr (extract $ Reserializer.reserialize parsed)
+            Resolved -> Text.putStr $ Reserializer.reserialize resolved
+            Verified -> verifyBefore (Text.putStr . Reserializer.reserialize)
          Plain -> case optsStage of
             Parsed -> print parsed
             Bound -> print bound
