@@ -217,7 +217,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
              <*> wrap instanceDesignator
              <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
          <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
-         <|> foreignDeclaration
+         <|> keyword "foreign" *> foreignDeclaration
          <|> declaration,
 
       declarations = blockOf declaration,
