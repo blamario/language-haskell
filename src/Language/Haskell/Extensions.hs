@@ -108,6 +108,7 @@ data Extension = AllowAmbiguousTypes
                | ParallelArrays
                | ParallelListComp
                | ParallelListComprehensions
+               | GratuitouslyParenthesizedTypes
                | PartialTypeSignatures
                | PatternGuards
                | PatternSynonyms
@@ -171,7 +172,8 @@ allExtensions = Set.fromList [minBound .. maxBound]
 
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations,
-                                  ForeignFunctionInterface, IdentifierSyntax, PatternGuards, RelaxedPolyRec]
+                                  ForeignFunctionInterface, IdentifierSyntax, PatternGuards,
+                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec]
 
 languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]
@@ -328,6 +330,7 @@ byName = Map.fromList [
   ("ParallelListComp", ParallelListComp),
   ("ParallelListComp", ParallelListComprehensions),
   ("ParallelListComprehensions", ParallelListComprehensions),
+  ("GratuitouslyParenthesizedTypes", GratuitouslyParenthesizedTypes),
   ("PartialTypeSignatures", PartialTypeSignatures),
   ("PatternGuards", PatternGuards),
   ("PatternSynonyms", PatternSynonyms),

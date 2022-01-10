@@ -61,6 +61,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   instanceTypeDesignator :: p (Abstract.Type l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
@@ -80,46 +81,47 @@ extensionMixins :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Pars
                                        t)
 extensionMixins =
   Map.fromList [
-     (Set.fromList [IdentifierSyntax],           (0, identifierSyntaxMixin)),
-     (Set.fromList [PackageImports],             (0, packageImportsMixin)),
-     (Set.fromList [SafeImports],                (0, safeImportsMixin)),
-     (Set.fromList [ImportQualifiedPost],        (0, importQualifiedPostMixin)),
-     (Set.fromList [ExplicitNamespaces],         (0, explicitNamespacesMixin)),
-     (Set.fromList [UnicodeSyntax],              (1, unicodeSyntaxMixin)),
-     (Set.fromList [BinaryLiterals],             (1, binaryLiteralsMixin)),
-     (Set.fromList [HexFloatLiterals],           (1, hexFloatLiteralsMixin)),
-     (Set.fromList [NumericUnderscores],         (1, numericUnderscoresMixin)),
+     (Set.fromList [IdentifierSyntax],               (0, identifierSyntaxMixin)),
+     (Set.fromList [PackageImports],                 (0, packageImportsMixin)),
+     (Set.fromList [SafeImports],                    (0, safeImportsMixin)),
+     (Set.fromList [ImportQualifiedPost],            (0, importQualifiedPostMixin)),
+     (Set.fromList [ExplicitNamespaces],             (0, explicitNamespacesMixin)),
+     (Set.fromList [UnicodeSyntax],                  (1, unicodeSyntaxMixin)),
+     (Set.fromList [BinaryLiterals],                 (1, binaryLiteralsMixin)),
+     (Set.fromList [HexFloatLiterals],               (1, hexFloatLiteralsMixin)),
+     (Set.fromList [NumericUnderscores],             (1, numericUnderscoresMixin)),
      (Set.fromList [BinaryLiterals,
-                    NumericUnderscores],         (9, binaryUnderscoresMixin)),
+                    NumericUnderscores],             (9, binaryUnderscoresMixin)),
      (Set.fromList [PackageImports,
-                    SafeImports],                (9, safePackageImportsMixin)),
+                    SafeImports],                    (9, safePackageImportsMixin)),
      (Set.fromList [PackageImports,
-                    ImportQualifiedPost],        (9, packageImportsQualifiedPostMixin)),
+                    ImportQualifiedPost],            (9, packageImportsQualifiedPostMixin)),
      (Set.fromList [SafeImports,
-                    ImportQualifiedPost],        (9, safeImportsQualifiedPostMixin)),
+                    ImportQualifiedPost],            (9, safeImportsQualifiedPostMixin)),
      (Set.fromList [PackageImports,
                     SafeImports,
-                    ImportQualifiedPost],        (9, safePackageImportsQualifiedPostMixin)),
-     (Set.fromList [NegativeLiterals],           (2, negativeLiteralsMixin)),
-     (Set.fromList [LexicalNegation],            (3, lexicalNegationMixin)),
-     (Set.fromList [MagicHash],                  (3, magicHashMixin)),
-     (Set.fromList [ParallelListComprehensions], (3, parallelListComprehensionsMixin)),
-     (Set.fromList [OverloadedLabels],           (4, overloadedLabelsMixin)),
-     (Set.fromList [RecursiveDo],                (4, recursiveDoMixin)),
-     (Set.fromList [TupleSections],              (5, tupleSectionsMixin)),
-     (Set.fromList [EmptyCase],                  (6, emptyCaseMixin)),
-     (Set.fromList [LambdaCase],                 (7, lambdaCaseMixin)),
-     (Set.fromList [MultiWayIf],                 (8, multiWayIfMixin)),
-     (Set.fromList [KindSignatures],             (8, kindSignaturesMixin)),
-     (Set.fromList [TypeOperators],              (8, typeOperatorsMixin)),
-     (Set.fromList [EqualityConstraints],        (8, equalityConstraintsMixin)),
-     (Set.fromList [BlockArguments],             (9, blockArgumentsMixin)),
-     (Set.fromList [ExistentialQuantification],  (9, existentialQuantificationMixin)),
-     (Set.fromList [ExplicitForAll],             (9, explicitForAllMixin)),
-     (Set.fromList [GADTSyntax],                 (9, gadtSyntaxMixin)),
-     (Set.fromList [FlexibleInstances],          (9, flexibleInstancesMixin)),
-     (Set.fromList [TypeFamilies],               (9, typeFamiliesMixin)),
-     (Set.fromList [GADTSyntax, TypeOperators],  (9, gadtSyntaxTypeOperatorsMixin))]
+                    ImportQualifiedPost],            (9, safePackageImportsQualifiedPostMixin)),
+     (Set.fromList [NegativeLiterals],               (2, negativeLiteralsMixin)),
+     (Set.fromList [LexicalNegation],                (3, lexicalNegationMixin)),
+     (Set.fromList [MagicHash],                      (3, magicHashMixin)),
+     (Set.fromList [ParallelListComprehensions],     (3, parallelListComprehensionsMixin)),
+     (Set.fromList [OverloadedLabels],               (4, overloadedLabelsMixin)),
+     (Set.fromList [RecursiveDo],                    (4, recursiveDoMixin)),
+     (Set.fromList [TupleSections],                  (5, tupleSectionsMixin)),
+     (Set.fromList [EmptyCase],                      (6, emptyCaseMixin)),
+     (Set.fromList [LambdaCase],                     (7, lambdaCaseMixin)),
+     (Set.fromList [MultiWayIf],                     (8, multiWayIfMixin)),
+     (Set.fromList [KindSignatures],                 (8, kindSignaturesMixin)),
+     (Set.fromList [TypeOperators],                  (8, typeOperatorsMixin)),
+     (Set.fromList [EqualityConstraints],            (8, equalityConstraintsMixin)),
+     (Set.fromList [GratuitouslyParenthesizedTypes], (8, gratuitouslyParenthesizedTypesMixin)),
+     (Set.fromList [BlockArguments],                 (9, blockArgumentsMixin)),
+     (Set.fromList [ExistentialQuantification],      (9, existentialQuantificationMixin)),
+     (Set.fromList [ExplicitForAll],                 (9, explicitForAllMixin)),
+     (Set.fromList [GADTSyntax],                     (9, gadtSyntaxMixin)),
+     (Set.fromList [FlexibleInstances],              (9, flexibleInstancesMixin)),
+     (Set.fromList [TypeFamilies],                   (9, typeFamiliesMixin)),
+     (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -194,6 +196,14 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
         <|> parens (nonTerminal flexibleInstanceDesignator),
+     instanceTypeDesignator =
+        Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))
+        <|> parens (nonTerminal instanceTypeDesignator
+                    <|> typeVarApplications
+                    <|> Abstract.tupleType <$> typeVarTuple
+                    <|> Abstract.functionType
+                        <$> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)) <* rightArrow
+                        <*> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))),
      optionalForall = pure [],
      optionallyKindedAndParenthesizedTypeVar = empty,
      optionallyKindedTypeVar = empty,
@@ -660,6 +670,32 @@ equalityConstraintsMixin baseGrammar@ExtendedGrammar
                 constraint= constraint
                             <|> Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
                                 <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))}}}
+
+gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                         g ~ ExtendedGrammar l t (NodeWrap t),
+                                         Ord t, Show t, TextualMonoid t)
+                            => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+gratuitouslyParenthesizedTypesMixin
+   baseGrammar@ExtendedGrammar
+               {report= baseReport@HaskellGrammar
+                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
+   report= baseReport{
+             declarationLevel = baseDeclarations{
+                qualifiedTypeClass = qualifiedTypeClass <|> parens qtc,
+                instanceDesignator =
+                   parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report)
+                   <|> Abstract.typeClassInstanceLHS
+                       <$> qtc
+                       <*> wrap (instanceTypeDesignator <|> generalTypeConstructor),
+                derivingClause = keyword "deriving"
+                                 *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
+                                     <|> parens (filter ((/= 1) . length)
+                                                 $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
+                                 <|> pure []},
+             generalTypeConstructor =
+                generalTypeConstructor <|> parens (nonTerminal $ Report.generalTypeConstructor . report),
+             typeVar = typeVar <|> parens (nonTerminal $ Report.typeVar . report)}}
+  where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
