@@ -773,6 +773,16 @@ typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                        <*> wrap familyInstanceDesignator <* delimiter "="
                        <*> wrap newConstructor
                        <*> derivingClause
+                   <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
+                       <*> nonTerminal optionalForall
+                       <*> wrap familyInstanceDesignator <* keyword "where"
+                       <*> blockOf (nonTerminal gadtConstructors)
+                       <*> derivingClause
+                   <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
+                       <*> nonTerminal optionalForall
+                       <*> wrap familyInstanceDesignator <* keyword "where"
+                       <*> wrap (nonTerminal gadtNewConstructor)
+                       <*> derivingClause
                    <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
                        <*> nonTerminal optionalForall
                        <*> wrap familyInstanceDesignator <* delimiter "="
