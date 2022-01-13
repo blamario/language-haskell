@@ -102,7 +102,13 @@ instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
 
 instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
+   prettyViaTH (ExplicitlyNamespacedMemberList members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
    prettyViaTH AllMembers = Ppr.text ".."
+
+instance PrettyViaTH (ModuleMember Language) where
+   prettyViaTH (DefaultMember name) = prettyIdentifier name
+   prettyViaTH (PatternMember name) = Ppr.text "pattern" <+> prettyIdentifier name
+   prettyViaTH (TypeMember name) = Ppr.text "type" <+> prettyIdentifier name
 
 prettyIdentifier :: AST.Name Language -> Ppr.Doc
 prettyIdentifier name@(AST.Name local)

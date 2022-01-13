@@ -14,6 +14,7 @@ class Haskell λ => ExtendedHaskell λ where
    type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type TypeVarBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type ModuleMember λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    parallelListComprehension :: s (Expression l l d d)
@@ -85,7 +86,9 @@ class Haskell λ => ExtendedHaskell λ where
    infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
-   
+
+   explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
+   defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)

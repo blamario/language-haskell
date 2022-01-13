@@ -99,7 +99,7 @@ instance {-# OVERLAPS #-}
           Abstract.Module l l ~ AST.Module l l, Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Export l l ~ AST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l, Abstract.ImportItem l l ~ AST.ImportItem l l,
-          Abstract.Members l ~ AST.Members l,
+          BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
          AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Module l l) (FromEnvironment l f) f where
    attribution _ node atts = foldMap moduleAttribution node
@@ -123,9 +123,8 @@ instance {-# OVERLAPS #-}
                         where exportedBy (AST.ReExportModule modName') = modName == Just modName'
                                                                          || modName == Nothing && modName' == moduleName
                               exportedBy (AST.ExportVar qn') = qn == qn'
-                              exportedBy (AST.ExportClassOrType parent members) = qn == parent || any exportedByMember members
-                              exportedByMember AST.AllMembers = error "What does this refer to !?"
-                              exportedByMember (AST.MemberList names) = elem name names
+                              exportedBy (AST.ExportClassOrType parent members) =
+                                 qn == parent || any (hasMember name) members
                      moduleGlobalScope = importedScope modImports
                                          <> requalifiedWith moduleName (AG.Mono.syn atts)
                                          <> AG.Mono.syn atts
@@ -156,19 +155,37 @@ instance {-# OVERLAPS #-}
                               itemImports (AST.ImportClassOrType name members) =
                                  nameImport name allImports <> foldMap (memberImports name) members
                               itemImports (AST.ImportVar name) = nameImport name allImports
-                              memberImports name AST.AllMembers = allMemberImports name
-                              memberImports name (AST.MemberList members) =
-                                foldMap (`nameImport` allMemberImports name) members
-                              allMemberImports name = mempty
-                              nameImport name imports =
-                                foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
-                              getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
-                     getImportName (_, ExtAST.Import _ _ _ moduleName _ _) = moduleName
             qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
             requalifiedWith moduleName = onMap (Map.mapKeysMonotonic requalify)
                where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name
             unqualified :: UnionWith (Map (AST.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
             unqualified = onMap (Map.mapKeysMonotonic $ AST.QualifiedName Nothing)
+
+class Abstract.Haskell l => BindingMembers l where
+   memberImports :: Abstract.Name l -> Abstract.Members l -> UnionWith (Map (Abstract.Name l)) (Binding l)
+   allMemberImports :: Abstract.Name l -> UnionWith (Map (Abstract.Name l)) (Binding l)
+   hasMember :: Abstract.Name l -> Abstract.Members l -> Bool
+
+instance BindingMembers AST.Language where
+  memberImports name AST.AllMembers = allMemberImports name
+  memberImports name (AST.MemberList members) = foldMap (`nameImport` allMemberImports name) members
+  allMemberImports name = mempty
+  hasMember _ AST.AllMembers = error "What does this refer to !?"
+  hasMember name (AST.MemberList names) = elem name names
+
+instance BindingMembers ExtAST.Language where
+  memberImports name ExtAST.AllMembers = allMemberImports name
+  memberImports name (ExtAST.MemberList members) = foldMap (`nameImport` allMemberImports name) members
+  memberImports name (ExtAST.ExplicitlyNamespacedMemberList members) =
+     foldMap (`memberImport` allMemberImports name) members
+     where memberImport (ExtAST.DefaultMember name) imports = nameImport name imports
+           memberImport (ExtAST.PatternMember name) imports = nameImport name imports
+           memberImport (ExtAST.TypeMember name) imports = nameImport name imports
+  allMemberImports name = mempty
+  hasMember _ ExtAST.AllMembers = error "What does this refer to !?"
+  hasMember name (ExtAST.MemberList names) = elem name names
+
+nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
 
 qualifiedModuleName :: Abstract.Haskell l => Abstract.ModuleName l -> Abstract.QualifiedName l
 qualifiedModuleName moduleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")

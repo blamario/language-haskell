@@ -60,6 +60,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
+   namespacedMember :: p (Abstract.ModuleMember l),
    familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    instanceTypeDesignator :: p (Abstract.Type l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
@@ -182,7 +183,9 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
-                                        {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} =
+                                        {moduleLevel= ModuleLevelGrammar{..},
+                                         declarationLevel= baseDeclarations@DeclarationGrammar{..},
+                                         ..}} =
    g{report= Report.grammar r,
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -190,6 +193,10 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
      kind = empty,
      bKind = empty,
      aKind = empty,
+     namespacedMember =
+        Abstract.defaultMember <$> cname
+        <|> Abstract.typeMember <$ keyword "type" <*> cname
+        <|> Abstract.patternMember <$ keyword "pattern" <*> cname,
      familyInstanceDesignator =
         Abstract.multiParameterTypeClassInstanceLHS <$> qualifiedTypeClass <*> many (wrap aType)
         <|> parens (nonTerminal familyInstanceDesignator),
@@ -490,17 +497,19 @@ safePackageImportsQualifiedPostMixin baseGrammar@ExtendedGrammar
                                  <*> optional (keyword "as" *> Report.moduleId)
                                  <*> optional (wrap importSpecification)}}}
 
-explicitNamespacesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
+explicitNamespacesMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
+                                      LexicalParsing (Parser g t), Ord t, Show t,
                                       OutlineMonoid t)
-                        => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
+                        => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 explicitNamespacesMixin baseGrammar@ExtendedGrammar
                         {report= baseReport@HaskellGrammar
                                            {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       moduleLevel= baseModule{
          importItem = importItem
-                      <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing)}}}
-
+                      <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing),
+         members = members <|> parens (Abstract.explicitlyNamespacedMemberList
+                                       <$> (nonTerminal namespacedMember `sepBy` comma) <* optional comma)}}}
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))

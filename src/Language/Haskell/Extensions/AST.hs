@@ -1,7 +1,8 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Import(..), Declaration(..), DataConstructor(..),
+module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
+                                        Declaration(..), DataConstructor(..),
                                         GADTConstructor(..), Expression(..), Statement(..),
                                         ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
@@ -20,7 +21,7 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
-                             ImportSpecification(..), ImportItem(..), Export(..), Members(..))
+                             ImportSpecification(..), ImportItem(..), Export(..))
 import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
@@ -31,6 +32,7 @@ instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
    type Kind Language = Type Language
    type TypeVarBinding Language = TypeVarBinding Language
+   type ModuleMember Language = ModuleMember Language
    hashLiteral = HashLiteral
    mdoExpression = MDoExpression
    parallelListComprehension = ParallelListComprehension
@@ -55,6 +57,11 @@ instance Abstract.ExtendedHaskell Language where
    gadtNewtypeDeclaration = GADTNewtypeDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
+
+   explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList
+   defaultMember = DefaultMember
+   patternMember = PatternMember
+   typeMember = TypeMember
 
    explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable
    implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable
@@ -246,6 +253,16 @@ instance Abstract.Haskell Language where
 
 data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
+
+data Members λ = AllMembers
+               | MemberList [Name λ]
+               | ExplicitlyNamespacedMemberList [ModuleMember λ]
+               deriving (Data, Eq, Show)
+
+data ModuleMember λ = DefaultMember (Name λ)
+                    | PatternMember (Name λ)
+                    | TypeMember (Name λ)
+                    deriving (Data, Eq, Show)
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
