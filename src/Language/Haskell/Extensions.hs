@@ -179,7 +179,16 @@ languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]
 
 implications :: Map Extension (Map Extension Bool)
-implications = Map.fromList <$> Map.fromList [
+implications = transitiveClosure directImplications directImplications
+  where transitiveClosure margin c
+           | all Map.null margin' = c
+           | otherwise = transitiveClosure margin' (Map.unionWith (<>) c margin')
+           where margin' = Map.mapWithKey (Map.foldMapWithKey . marginOf) margin
+                 marginOf k1 k2 True = Map.findWithDefault mempty k2 c Map.\\ Map.findWithDefault mempty k1 c
+                 marginOf _ _ False = mempty
+
+directImplications :: Map Extension (Map Extension Bool)
+directImplications = Map.fromList <$> Map.fromList [
   (AutoDeriveTypeable, [(DeriveDataTypeable, True)]),
   (DeriveTraversable, [(DeriveFoldable, True), (DeriveFunctor, True)]),
   (DerivingVia, [(DerivingStrategies, True)]),
@@ -192,6 +201,7 @@ implications = Map.fromList <$> Map.fromList [
                (ForeignFunctionInterface, False), (PatternGuards, False), (RelaxedPolyRec, False)]),
   (ImpredicativeTypes, [(ExplicitForAll, True), (RankNTypes, True)]),
   (IncoherentInstances, [(OverlappingInstances, True)]),
+  (KindSignatures, [(GratuitouslyParenthesizedTypes, True)]),
   (LiberalTypeSynonyms, [(ExplicitForAll, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
   (PolyKinds, [(KindSignatures, True)]),
@@ -203,8 +213,7 @@ implications = Map.fromList <$> Map.fromList [
   (Trustworthy, [(SafeImports, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
                   (KindSignatures, True), (MonoLocalBinds, True)]),
-  (TypeFamilyDependencies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
-                            (KindSignatures, True), (MonoLocalBinds, True), (TypeFamilies, True)]),
+  (TypeFamilyDependencies, [(TypeFamilies, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
