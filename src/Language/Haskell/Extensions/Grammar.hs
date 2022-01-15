@@ -65,6 +65,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    instanceTypeDesignator :: p (Abstract.Type l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
+   optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
    return_type, arg_type :: p (Abstract.Type l l f f)}
@@ -111,11 +112,11 @@ extensionMixins =
      (Set.fromList [TupleSections],                  (5, tupleSectionsMixin)),
      (Set.fromList [EmptyCase],                      (6, emptyCaseMixin)),
      (Set.fromList [LambdaCase],                     (7, lambdaCaseMixin)),
+     (Set.fromList [GratuitouslyParenthesizedTypes], (7, gratuitouslyParenthesizedTypesMixin)),
      (Set.fromList [MultiWayIf],                     (8, multiWayIfMixin)),
      (Set.fromList [KindSignatures],                 (8, kindSignaturesMixin)),
      (Set.fromList [TypeOperators],                  (8, typeOperatorsMixin)),
      (Set.fromList [EqualityConstraints],            (8, equalityConstraintsMixin)),
-     (Set.fromList [GratuitouslyParenthesizedTypes], (8, gratuitouslyParenthesizedTypesMixin)),
      (Set.fromList [BlockArguments],                 (9, blockArgumentsMixin)),
      (Set.fromList [ExistentialQuantification],      (9, existentialQuantificationMixin)),
      (Set.fromList [ExplicitForAll],                 (9, explicitForAllMixin)),
@@ -204,15 +205,16 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
         <|> parens (nonTerminal flexibleInstanceDesignator),
      instanceTypeDesignator =
-        Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))
+        Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)
         <|> parens (nonTerminal instanceTypeDesignator
                     <|> typeVarApplications
                     <|> Abstract.tupleType <$> typeVarTuple
                     <|> Abstract.functionType
-                        <$> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)) <* rightArrow
-                        <*> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))),
+                        <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar) <* rightArrow
+                        <*> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)),
      optionalForall = pure [],
-     optionallyKindedAndParenthesizedTypeVar = empty,
+     optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
+     optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
      optionallyKindedTypeVar = empty,
      typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar,
      gadtConstructors =
@@ -681,30 +683,56 @@ equalityConstraintsMixin baseGrammar@ExtendedGrammar
                                 <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))}}}
 
 gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                         g ~ ExtendedGrammar l t (NodeWrap t),
-                                         Ord t, Show t, TextualMonoid t)
+                                                  g ~ ExtendedGrammar l t (NodeWrap t),
+                                                  OutlineMonoid t, Ord t, Show t, TextualMonoid t,
+                                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                                  Deep.Foldable (Serialization (Down Int) t)
+                                                                (Abstract.GADTConstructor l l))
                             => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 gratuitouslyParenthesizedTypesMixin
    baseGrammar@ExtendedGrammar
                {report= baseReport@HaskellGrammar
-                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
+                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-             declarationLevel = baseDeclarations{
-                qualifiedTypeClass = qualifiedTypeClass <|> parens qtc,
-                instanceDesignator =
-                   parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report)
-                   <|> Abstract.typeClassInstanceLHS
-                       <$> qtc
-                       <*> wrap (instanceTypeDesignator <|> generalTypeConstructor),
-                derivingClause = keyword "deriving"
-                                 *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
-                                     <|> parens (filter ((/= 1) . length)
-                                                 $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
-                                 <|> pure []},
-             generalTypeConstructor =
-                generalTypeConstructor <|> parens (nonTerminal $ Report.generalTypeConstructor . report),
-             typeVar = typeVar <|> parens (nonTerminal $ Report.typeVar . report)}}
-  where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+      declarationLevel = baseDeclarations{
+         topLevelDeclaration = topLevelDeclaration
+            <|> Abstract.classDeclaration <$ keyword "class"
+                <*> wrap optionalContext
+                <*> wrap (Abstract.simpleKindedTypeLHS
+                          <$> typeClass
+                          <*> ((:[]) <$> parens (nonTerminal typeVarBinder)))
+                <*> (keyword "where" *> blockOf inClassDeclaration <|> pure []),
+         classConstraint = classConstraint
+            <|> Abstract.simpleConstraint
+                <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+                <*> parens (nonTerminal optionallyParenthesizedTypeVar),
+         qualifiedTypeClass = qualifiedTypeClass <|> parens qtc,
+         typeApplications =
+            Abstract.typeApplication
+            <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar <|> typeApplications)
+            <*> wrap aType,
+         typeVarApplications = generalTypeConstructor
+                               <|> Abstract.typeApplication
+                                   <$> wrap typeVarApplications
+                                   <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
+         simpleType = Abstract.simpleKindedTypeLHS
+                         <$> nonTerminal (Report.typeConstructor . report)
+                         <*> many (nonTerminal typeVarBinder),
+         instanceDesignator =
+            parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report)
+            <|> Abstract.typeClassInstanceLHS
+                <$> qtc
+                <*> wrap (nonTerminal instanceTypeDesignator <|> generalTypeConstructor),
+         derivingClause = keyword "deriving"
+                          *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
+                              <|> parens (filter ((/= 1) . length)
+                                          $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
+                          <|> pure []},
+      generalTypeConstructor =
+         generalTypeConstructor <|> parens (nonTerminal $ Report.generalTypeConstructor . report)},
+   optionallyParenthesizedTypeVar = typeVar <|> parens (nonTerminal optionallyParenthesizedTypeVar),
+   typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal optionallyParenthesizedTypeVar}
+   where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -811,8 +839,8 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
    report= baseReport{
       declarationLevel= baseDeclarations{
          simpleType = Abstract.simpleKindedTypeLHS
-                        <$> nonTerminal (Report.typeConstructor . report)
-                        <*> many (nonTerminal typeVarBinder),
+                         <$> nonTerminal (Report.typeConstructor . report)
+                         <*> many (nonTerminal typeVarBinder),
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindedDataDeclaration <$ keyword "data"
                    <*> wrap optionalContext
@@ -844,10 +872,6 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                          <|> parens (Abstract.functionType
                                      <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
                                      <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))),
-         typeVarApplications = generalTypeConstructor
-                               <|> Abstract.typeApplication
-                                   <$> wrap typeVarApplications
-                                   <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
          typeVarTuple = (:|) <$> wrap (nonTerminal optionallyKindedTypeVar)
                              <*> some (comma *> wrap (nonTerminal optionallyKindedTypeVar))},
       typeTerm = typeTerm <|>
