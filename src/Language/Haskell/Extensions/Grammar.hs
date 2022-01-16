@@ -57,6 +57,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
+   typeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -194,12 +195,30 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
      kind = empty,
      bKind = empty,
      aKind = empty,
+     typeWithWildcards =
+        Abstract.functionType <$> wrap (nonTerminal bTypeWithWildcards) <* rightArrow
+                              <*> wrap (nonTerminal typeWithWildcards)
+        <|> nonTerminal bTypeWithWildcards,
+     bTypeWithWildcards =
+        Abstract.typeApplication <$> wrap (nonTerminal bTypeWithWildcards) <*> wrap (nonTerminal aTypeWithWildcards)
+        <|> nonTerminal aTypeWithWildcards,
+     aTypeWithWildcards =
+        generalTypeConstructor
+        <|> Abstract.typeVariable <$> typeVar
+        <|> Abstract.typeWildcard <$ delimiter "_"
+        <|> Abstract.tupleType
+            <$> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
+                             <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
+        <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
+        <|> parens (nonTerminal typeWithWildcards),
      namespacedMember =
         Abstract.defaultMember <$> cname
         <|> Abstract.typeMember <$ keyword "type" <*> cname
         <|> Abstract.patternMember <$ keyword "pattern" <*> cname,
      familyInstanceDesignator =
-        Abstract.multiParameterTypeClassInstanceLHS <$> qualifiedTypeClass <*> many (wrap aType)
+        Abstract.multiParameterTypeClassInstanceLHS
+           <$> qualifiedTypeClass
+           <*> many (wrap $ nonTerminal aTypeWithWildcards)
         <|> parens (nonTerminal familyInstanceDesignator),
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType

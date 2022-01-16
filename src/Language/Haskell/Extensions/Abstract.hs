@@ -48,6 +48,7 @@ class Haskell λ => ExtendedHaskell λ where
                                        -> Declaration λ l d s
    forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
    kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
+   typeWildcard :: Type λ l d s
    explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
    implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
    kindVariable :: Name λ -> Kind λ l d s

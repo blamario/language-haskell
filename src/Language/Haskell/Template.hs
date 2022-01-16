@@ -458,6 +458,7 @@ typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
+typeTemplate TypeWildcard = WildCardT
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars context body) =
   ForallT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type')
