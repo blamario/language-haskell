@@ -269,8 +269,9 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
         <|> Abstract.recordFunctionType
             <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
             <*> wrap (nonTerminal return_type),
-     return_type = Abstract.typeApplication <$> wrap (nonTerminal return_type) <*> wrap (nonTerminal arg_type)
-                   <|> parens (nonTerminal return_type)
+     return_type = Abstract.typeApplication
+                      <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
+                      <*> wrap (nonTerminal arg_type)
                    <|> Abstract.constructorType <$> wrap generalConstructor,
      arg_type = generalTypeConstructor
                 <|> Abstract.typeVariable <$> typeVar
