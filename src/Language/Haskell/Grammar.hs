@@ -96,6 +96,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    declaration :: p (Abstract.Declaration l l f f),
    inClassDeclaration :: p (Abstract.Declaration l l f f),
    inInstanceDeclaration :: p (Abstract.Declaration l l f f),
+   equationDeclaration :: p (Abstract.Declaration l l f f),
    generalDeclaration :: p (Abstract.Declaration l l f f),
    whereClauses :: p [f (Abstract.Declaration l l f f)],
    variables :: p (NonEmpty (Abstract.Name l)),
@@ -224,9 +225,10 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       declaration = generalDeclaration
                     <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                      <*> wrap rhs <*> whereClauses,
-      inClassDeclaration = generalDeclaration <|> inInstanceDeclaration,
-      inInstanceDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
-                                                           <*> wrap rhs <*> whereClauses,
+      inClassDeclaration = generalDeclaration <|> equationDeclaration,
+      inInstanceDeclaration = equationDeclaration,
+      equationDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
+                                                         <*> wrap rhs <*> whereClauses,
       generalDeclaration =
          Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalContext <*> wrap typeTerm
          <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)

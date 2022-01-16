@@ -62,6 +62,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    namespacedMember :: p (Abstract.ModuleMember l),
+   inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
    familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    instanceTypeDesignator :: p (Abstract.Type l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
@@ -215,6 +216,7 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
         Abstract.defaultMember <$> cname
         <|> Abstract.typeMember <$ keyword "type" <*> cname
         <|> Abstract.patternMember <$ keyword "pattern" <*> cname,
+     inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignator =
         Abstract.multiParameterTypeClassInstanceLHS
            <$> qualifiedTypeClass
@@ -775,79 +777,80 @@ typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (
 typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                                                       {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, familyInstanceDesignator} = baseGrammar{
   report= baseReport{
-             declarationLevel= baseDeclarations{
-                topLevelDeclaration = topLevelDeclaration
-                   <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
-                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
-                   <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
-                   <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
-                       <*> blockOf (Abstract.typeFamilyInstance
-                                    <$> nonTerminal optionalForall
-                                    <*> wrap familyInstanceDesignator <* delimiter "="
-                                    <*> wrap typeTerm)
-                   <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap optionalContext
-                       <*> wrap familyInstanceDesignator
-                       <*> (delimiter "=" *> declaredConstructors <|> pure [])
-                       <*> derivingClause
-                   <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap optionalContext
-                       <*> wrap familyInstanceDesignator <* delimiter "="
-                       <*> wrap newConstructor
-                       <*> derivingClause
-                   <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* keyword "where"
-                       <*> blockOf (nonTerminal gadtConstructors)
-                       <*> derivingClause
-                   <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* keyword "where"
-                       <*> wrap (nonTerminal gadtNewConstructor)
-                       <*> derivingClause
-                   <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* delimiter "="
-                       <*> wrap typeTerm,
-                inClassDeclaration = inClassDeclaration
-                   <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
-                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
-                   <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
-                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature),
-                inInstanceDeclaration = inInstanceDeclaration
-                   <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap optionalContext
-                       <*> wrap familyInstanceDesignator
-                       <*> (delimiter "=" *> declaredConstructors <|> pure [])
-                       <*> derivingClause
-                   <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap optionalContext
-                       <*> wrap familyInstanceDesignator <* delimiter "="
-                       <*> wrap newConstructor
-                       <*> derivingClause
-                   <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* keyword "where"
-                       <*> blockOf (nonTerminal gadtConstructors)
-                       <*> derivingClause
-                   <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* keyword "where"
-                       <*> wrap (nonTerminal gadtNewConstructor)
-                       <*> derivingClause
-                   <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
-                       <*> nonTerminal optionalForall
-                       <*> wrap familyInstanceDesignator <* delimiter "="
-                       <*> wrap typeTerm
-               }
-             }
-  }
+    declarationLevel= baseDeclarations{
+       topLevelDeclaration = topLevelDeclaration
+          <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
+              <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+          <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+              <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+          <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+              <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
+              <*> blockOf (Abstract.typeFamilyInstance
+                           <$> nonTerminal optionalForall
+                           <*> wrap familyInstanceDesignator <* delimiter "="
+                           <*> wrap typeTerm)
+          <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
+              <*> nonTerminal optionalForall
+              <*> wrap optionalContext
+              <*> wrap familyInstanceDesignator
+              <*> (delimiter "=" *> declaredConstructors <|> pure [])
+              <*> derivingClause
+          <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+              <*> nonTerminal optionalForall
+              <*> wrap optionalContext
+              <*> wrap familyInstanceDesignator <* delimiter "="
+              <*> wrap newConstructor
+              <*> derivingClause
+          <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
+              <*> nonTerminal optionalForall
+              <*> wrap familyInstanceDesignator <* keyword "where"
+              <*> blockOf (nonTerminal gadtConstructors)
+              <*> derivingClause
+          <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+              <*> nonTerminal optionalForall
+              <*> wrap familyInstanceDesignator <* keyword "where"
+              <*> wrap (nonTerminal gadtNewConstructor)
+              <*> derivingClause
+          <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
+              <*> nonTerminal optionalForall
+              <*> wrap familyInstanceDesignator <* delimiter "="
+              <*> wrap typeTerm,
+       inClassDeclaration = inClassDeclaration
+          <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
+              <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+          <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
+              <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+          <|> nonTerminal inClassOrInstanceTypeFamilyDeclaration,
+       inInstanceDeclaration = inInstanceDeclaration <|> nonTerminal inClassOrInstanceTypeFamilyDeclaration
+      }
+  },
+  inClassOrInstanceTypeFamilyDeclaration =
+     Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
+         <*> nonTerminal optionalForall
+         <*> wrap optionalContext
+         <*> wrap familyInstanceDesignator <* delimiter "="
+         <*> declaredConstructors
+         <*> derivingClause
+     <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
+         <*> nonTerminal optionalForall
+         <*> wrap optionalContext
+         <*> wrap familyInstanceDesignator <* delimiter "="
+         <*> wrap newConstructor
+         <*> derivingClause
+     <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
+         <*> nonTerminal optionalForall
+         <*> wrap familyInstanceDesignator <* keyword "where"
+         <*> blockOf (nonTerminal gadtConstructors)
+         <*> derivingClause
+     <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
+         <*> nonTerminal optionalForall
+         <*> wrap familyInstanceDesignator <* keyword "where"
+         <*> wrap (nonTerminal gadtNewConstructor)
+         <*> derivingClause
+     <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
+         <*> nonTerminal optionalForall
+         <*> wrap familyInstanceDesignator <* delimiter "="
+         <*> wrap typeTerm}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
