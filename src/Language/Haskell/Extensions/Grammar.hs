@@ -922,7 +922,7 @@ existentialQuantificationMixin baseGrammar@ExtendedGrammar
              declarationLevel= baseDeclarations{
                 declaredConstructor =
                    Abstract.existentialConstructor <$ nonTerminal keywordForall
-                                                   <*> some (nonTerminal typeVarBinder) <* delimiter "."
+                                                   <*> many (nonTerminal typeVarBinder) <* delimiter "."
                                                    <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
                                                    <*> wrap declaredConstructor
                    <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
@@ -943,21 +943,21 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
                topLevelDeclaration = topLevelDeclaration
                   <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
                       <* keywordForall
-                      <*> ((:|) <$> (nonTerminal typeVarBinder) <*> many (nonTerminal typeVarBinder))
+                      <*> many (nonTerminal typeVarBinder)
                       <* delimiter "."
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator
                       <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])},
       typeTerm = typeTerm
          <|> Abstract.forallType <$ keywordForall
-             <*> some (nonTerminal typeVarBinder) <* delimiter "."
+             <*> many (nonTerminal typeVarBinder) <* delimiter "."
              <*> wrap optionalContext
              <*> wrap (nonTerminal $ Report.typeTerm . report),
       typeVar = notFollowedBy keywordForall *> typeVar},
-   optionalForall = keywordForall *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
+   optionalForall = keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    kind = kind baseGrammar
       <|> Abstract.forallKind <$ keywordForall
-          <*> some (nonTerminal typeVarBinder) <* delimiter "."
+          <*> many (nonTerminal typeVarBinder) <* delimiter "."
           <*> wrap (nonTerminal kind)}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -979,7 +979,7 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                       <*> wrap (nonTerminal gadtNewConstructor)
                       <*> derivingClause}},
-   optionalForall = keywordForall baseGrammar *> some (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
+   optionalForall = keywordForall baseGrammar *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),

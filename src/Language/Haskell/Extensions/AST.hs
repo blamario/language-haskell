@@ -48,7 +48,7 @@ instance Abstract.ExtendedHaskell Language where
    simpleInfixTypeLHSApplication left op right = SimpleTypeLHS op [left, right]
    simpleTypeLHSApplication = SimpleTypeLHSApplication
    existentialConstructor = ExistentialConstructor
-   explicitlyScopedInstanceDeclaration = InstanceDeclaration . toList
+   explicitlyScopedInstanceDeclaration = InstanceDeclaration
    forallType = ForallType
    kindedType = KindedType
    typeWildcard = TypeWildcard

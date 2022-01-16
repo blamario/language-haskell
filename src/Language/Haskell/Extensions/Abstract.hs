@@ -41,7 +41,7 @@ class Haskell λ => ExtendedHaskell λ where
    simpleKindedTypeLHS :: Name λ -> [TypeVarBinding λ l d s] -> TypeLHS λ l d s
    existentialConstructor :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (DataConstructor l l d d)
                           -> DataConstructor λ l d s
-   explicitlyScopedInstanceDeclaration :: NonEmpty (TypeVarBinding λ l d s)
+   explicitlyScopedInstanceDeclaration :: [TypeVarBinding λ l d s]
                                        -> s (Context l l d d)
                                        -> s (ClassInstanceLHS l l d d)
                                        -> [s (Declaration l l d d)]
