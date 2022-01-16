@@ -511,8 +511,9 @@ explicitNamespacesMixin baseGrammar@ExtendedGrammar
       moduleLevel= baseModule{
          importItem = importItem
                       <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing),
-         members = members <|> parens (Abstract.explicitlyNamespacedMemberList
-                                       <$> (nonTerminal namespacedMember `sepBy` comma) <* optional comma)}}}
+         members = parens (Abstract.allMembers <$ delimiter ".."
+                           <|> Abstract.explicitlyNamespacedMemberList
+                               <$> (nonTerminal namespacedMember `sepBy` comma) <* optional comma)}}}
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
