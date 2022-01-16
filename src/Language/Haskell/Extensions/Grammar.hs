@@ -205,13 +205,14 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
         <|> parens (nonTerminal flexibleInstanceDesignator),
      instanceTypeDesignator =
-        Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)
+        Abstract.listType
+            <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
         <|> parens (nonTerminal instanceTypeDesignator
                     <|> typeVarApplications
                     <|> Abstract.tupleType <$> typeVarTuple
                     <|> Abstract.functionType
-                        <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar) <* rightArrow
-                        <*> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)),
+                        <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
+                        <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)),
      optionalForall = pure [],
      optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
@@ -864,14 +865,6 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                                 <*> parens (Abstract.explicitlyKindedTypeVariable <$> typeVar
                                             <*> wrap (nonTerminal kindSignature)))
                    <*> (keyword "where" *> blockOf inClassDeclaration <|> pure []),
-         instanceDesignator =
-            Abstract.typeClassInstanceLHS <$> qualifiedTypeClass
-               <*> wrap (generalTypeConstructor
-                         <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
-                         <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedTypeVar)
-                         <|> parens (Abstract.functionType
-                                     <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
-                                     <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))),
          typeVarTuple = (:|) <$> wrap (nonTerminal optionallyKindedTypeVar)
                              <*> some (comma *> wrap (nonTerminal optionallyKindedTypeVar))},
       typeTerm = typeTerm <|>
@@ -886,9 +879,9 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
            <|> Abstract.kindVariable <$> nonTerminal kindVar
            <|> parens (nonTerminal kind),
    optionallyKindedAndParenthesizedTypeVar =
-      Abstract.typeVariable <$> variableIdentifier
+      Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar
       <|> parens (Abstract.kindedType
-                  <$> wrap (Abstract.typeVariable <$> variableIdentifier)
+                  <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)
                   <*> wrap (nonTerminal kindSignature)),
    optionallyKindedTypeVar =
       Abstract.typeVariable <$> variableIdentifier
