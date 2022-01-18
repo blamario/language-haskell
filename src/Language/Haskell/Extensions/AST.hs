@@ -292,14 +292,17 @@ data Declaration λ l d s =
    | ClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                                  [s (Abstract.Declaration l l d d)]
    | DataFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
-                        (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.DataConstructor l l d d)]
+                        (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+                        [s (Abstract.DataConstructor l l d d)]
                         [s (Abstract.DerivingClause l l d d)]
    | NewtypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
-                           (s (Abstract.ClassInstanceLHS l l d d)) (s (Abstract.DataConstructor l l d d))
-                           [s (Abstract.DerivingClause l l d d)]
+                           (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+                           (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | GADTDataFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+                            (Maybe (s (Abstract.Kind l l d d)))
                             [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | GADTNewtypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+                               (Maybe (s (Abstract.Kind l l d d)))
                                (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | TypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))

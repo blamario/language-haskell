@@ -280,32 +280,32 @@ declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
    | Just (con, vars) <- extractSimpleTypeLHS lhs
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
-declarationTemplates (DataFamilyInstance vars context lhs constructors derivings) =
+declarationTemplates (DataFamilyInstance vars context lhs kind constructors derivings) =
    [DataInstD (contextTemplate $ extract context)
               (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
-              Nothing --(typeTemplate . extract <$> kind)
+              (typeTemplate . extract <$> kind)
               (dataConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (NewtypeFamilyInstance vars context lhs constructor derivings) =
+declarationTemplates (NewtypeFamilyInstance vars context lhs kind constructor derivings) =
    [NewtypeInstD (contextTemplate $ extract context)
                  (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
-                 Nothing --(typeTemplate . extract <$> kind)
+                 (typeTemplate . extract <$> kind)
                  (dataConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (GADTDataFamilyInstance vars lhs constructors derivings) =
+declarationTemplates (GADTDataFamilyInstance vars lhs kind constructors derivings) =
    [DataInstD []
               (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
-              Nothing --(typeTemplate . extract <$> kind)
+              (typeTemplate . extract <$> kind)
               (gadtConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (GADTNewtypeFamilyInstance vars lhs constructor derivings) =
+declarationTemplates (GADTNewtypeFamilyInstance vars lhs kind constructor derivings) =
    [NewtypeInstD []
                  (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
-                 Nothing --(typeTemplate . extract <$> kind)
+                 (typeTemplate . extract <$> kind)
                  (gadtConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates d@TypeFamilyInstance{} = [TySynInstD $ typeFamilyInstanceTemplate d]
