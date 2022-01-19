@@ -735,10 +735,12 @@ gratuitouslyParenthesizedTypesMixin
             Abstract.typeApplication
             <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar <|> typeApplications)
             <*> wrap aType,
-         typeVarApplications = generalTypeConstructor
-                               <|> Abstract.typeApplication
-                                   <$> wrap typeVarApplications
-                                   <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
+         typeVarApplications =
+            generalTypeConstructor
+            <|> Abstract.typeApplication
+                <$> wrap (nonTerminal (Report.typeVarApplications . declarationLevel . report)
+                          <|> parens (nonTerminal $ Report.typeVarApplications . declarationLevel . report))
+                <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
          simpleType = Abstract.simpleKindedTypeLHS
                          <$> nonTerminal (Report.typeConstructor . report)
                          <*> many (nonTerminal typeVarBinder),
@@ -751,9 +753,7 @@ gratuitouslyParenthesizedTypesMixin
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
-                          <|> pure []},
-      generalTypeConstructor =
-         generalTypeConstructor <|> parens (nonTerminal $ Report.generalTypeConstructor . report)},
+                          <|> pure []}},
    optionallyParenthesizedTypeVar = typeVar <|> parens (nonTerminal optionallyParenthesizedTypeVar),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal optionallyParenthesizedTypeVar}
    where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
