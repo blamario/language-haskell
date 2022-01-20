@@ -64,7 +64,6 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    namespacedMember :: p (Abstract.ModuleMember l),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
    familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
-   instanceTypeDesignator :: p (Abstract.Type l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
@@ -189,7 +188,17 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
                                         {moduleLevel= ModuleLevelGrammar{..},
                                          declarationLevel= baseDeclarations@DeclarationGrammar{..},
                                          ..}} =
-   g{report= Report.grammar r,
+   g{report= Report.grammar r{
+               declarationLevel= baseDeclarations{
+                 instanceTypeDesignator =
+                    generalTypeConstructor
+                    <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                    <|> parens (nonTerminal (Report.instanceTypeDesignator . declarationLevel . report)
+                                <|> typeVarApplications
+                                <|> Abstract.tupleType <$> typeVarTuple
+                                <|> Abstract.functionType
+                                    <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
+                                    <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))}},
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = variableIdentifier,
@@ -225,15 +234,6 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
         <|> parens (nonTerminal flexibleInstanceDesignator),
-     instanceTypeDesignator =
-        Abstract.listType
-            <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-        <|> parens (nonTerminal instanceTypeDesignator
-                    <|> typeVarApplications
-                    <|> Abstract.tupleType <$> typeVarTuple
-                    <|> Abstract.functionType
-                        <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
-                        <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)),
      optionalForall = pure [],
      optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
@@ -744,11 +744,8 @@ gratuitouslyParenthesizedTypesMixin
          simpleType = Abstract.simpleKindedTypeLHS
                          <$> nonTerminal (Report.typeConstructor . report)
                          <*> many (nonTerminal typeVarBinder),
-         instanceDesignator =
-            parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report)
-            <|> Abstract.typeClassInstanceLHS
-                <$> qtc
-                <*> wrap (nonTerminal instanceTypeDesignator <|> generalTypeConstructor),
+         instanceDesignator = instanceDesignator
+            <|> parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report),
          derivingClause = keyword "deriving"
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
@@ -776,7 +773,8 @@ typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                   => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
-                                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, familyInstanceDesignator} = baseGrammar{
+                                                      {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..},
+                                              familyInstanceDesignator} = baseGrammar{
   report= baseReport{
     declarationLevel= baseDeclarations{
        topLevelDeclaration = topLevelDeclaration

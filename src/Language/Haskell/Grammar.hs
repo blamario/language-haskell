@@ -111,6 +111,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
    instanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   instanceTypeDesignator :: p (Abstract.Type l l f f),
    typeVarApplications :: p (Abstract.Type l l f f),
    typeVarTuple :: p (NonEmpty (f (Abstract.Type l l f f))),
    foreignDeclaration :: p (Abstract.Declaration l l f f),
@@ -312,13 +313,13 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                        *> (pure <$> wrap (Abstract.simpleDerive <$> qualifiedTypeClass)
                            <|> parens (wrap (Abstract.simpleDerive <$> qualifiedTypeClass) `sepBy` comma))
                        <|> pure [],
-      instanceDesignator =
-         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass
-            <*> wrap (generalTypeConstructor
-                      <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
-                      <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
-                      <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
-                                                        <*> wrap (Abstract.typeVariable <$> typeVar))),
+      instanceDesignator = Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap instanceTypeDesignator,
+      instanceTypeDesignator =
+         generalTypeConstructor
+         <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
+         <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
+         <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
+                                           <*> wrap (Abstract.typeVariable <$> typeVar)),
       typeVarApplications = generalTypeConstructor
                             <|> Abstract.typeApplication <$> wrap typeVarApplications
                                                          <*> wrap (Abstract.typeVariable <$> typeVar),
