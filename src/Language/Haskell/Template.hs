@@ -74,8 +74,11 @@ instance PrettyViaTH ExtensionSwitch where
    prettyViaTH (ExtensionSwitch (x, False)) = Ppr.text "No" Ppr.<> prettyViaTH (ExtensionSwitch (x, True))
 
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
-   prettyViaTH (ExportClassOrType name members) =
-      prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+   prettyViaTH (ExportClassOrType name@(AST.QualifiedName _ (AST.Name local)) members)
+      | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
+        Ppr.text "type" <+> Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
+      | otherwise = prettyViaTH name Ppr.<> prettyMembers
+      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ExportVar name) = prettyViaTH name
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
@@ -94,10 +97,11 @@ instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) whe
       $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH <$> items)
 
 instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
-   prettyViaTH (ImportClassOrType name@(AST.Name local) Nothing)
-      | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.text "type" <+> Ppr.parens (prettyViaTH name)
-   prettyViaTH (ImportClassOrType name members) =
-      prettyViaTH name Ppr.<> maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+   prettyViaTH (ImportClassOrType name@(AST.Name local) members)
+      | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
+        Ppr.text "type" <+> Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
+      | otherwise = prettyViaTH name Ppr.<> prettyMembers
+      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
 
 instance PrettyViaTH (Members Language) where

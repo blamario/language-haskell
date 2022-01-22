@@ -225,7 +225,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignator =
         Abstract.multiParameterTypeClassInstanceLHS
-           <$> qualifiedTypeClass
+           <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
            <*> many (wrap $ nonTerminal aTypeWithWildcards)
         <|> parens (nonTerminal familyInstanceDesignator),
      flexibleInstanceDesignator = 
@@ -531,8 +531,10 @@ explicitNamespacesMixin baseGrammar@ExtendedGrammar
                                            {moduleLevel= baseModule@ModuleLevelGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       moduleLevel= baseModule{
+         export = export
+            <|> keyword "type" *> (Abstract.exportClassOrType <$> parens qualifiedVariableSymbol <*> pure Nothing),
          importItem = importItem
-                      <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing),
+            <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
                                <$> (nonTerminal namespacedMember `sepBy` comma) <* optional comma)}}}
@@ -685,7 +687,8 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                   <|> parens (Abstract.infixTypeApplication
                               <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
                               <*> qualifiedOperator
-                              <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+                              <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)),
+               qualifiedTypeClass = qualifiedConstructor <|> parens qualifiedVariableSymbol},
              typeConstructor = constructorIdentifier <|> parens anySymbol,
              generalTypeConstructor = generalTypeConstructor
                <|> Abstract.constructorType <$> wrap (Abstract.constructorReference <$> parens qualifiedVariableSymbol),
