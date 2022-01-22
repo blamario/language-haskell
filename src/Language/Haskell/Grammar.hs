@@ -316,10 +316,11 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       instanceDesignator = Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap instanceTypeDesignator,
       instanceTypeDesignator =
          generalTypeConstructor
-         <|> parens (typeVarApplications <|> Abstract.tupleType <$> typeVarTuple)
          <|> Abstract.listType <$> brackets (wrap $ Abstract.typeVariable <$> typeVar)
-         <|> parens (Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
-                                           <*> wrap (Abstract.typeVariable <$> typeVar)),
+         <|> parens (typeVarApplications
+                     <|> Abstract.tupleType <$> typeVarTuple
+                     <|> Abstract.functionType <$> wrap (Abstract.typeVariable <$> typeVar) <* rightArrow
+                                               <*> wrap (Abstract.typeVariable <$> typeVar)),
       typeVarApplications = generalTypeConstructor
                             <|> Abstract.typeApplication <$> wrap typeVarApplications
                                                          <*> wrap (Abstract.typeVariable <$> typeVar),

@@ -184,11 +184,8 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
-                                        {moduleLevel= ModuleLevelGrammar{..},
-                                         declarationLevel= baseDeclarations@DeclarationGrammar{..},
-                                         ..}} =
-   g{report= Report.grammar r{
+reportGrammar g@ExtendedGrammar{report= r} =
+   g{report= r'{
                declarationLevel= baseDeclarations{
                  instanceTypeDesignator =
                     generalTypeConstructor
@@ -278,7 +275,10 @@ reportGrammar g@ExtendedGrammar{report= r@HaskellGrammar
                 <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
                 <|> Abstract.listType <$> brackets (wrap typeTerm)
                 <|> parens typeTerm}
-
+   where r'@HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
+                           declarationLevel= baseDeclarations@DeclarationGrammar{..},
+                           ..}
+                          = Report.grammar r
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t)
                       => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 identifierSyntaxMixin baseGrammar = baseGrammar{
@@ -680,17 +680,23 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                   <|> parens (nonTerminal (Report.simpleType . Report.declarationLevel . report))
                   <|> Abstract.simpleTypeLHSApplication
                                <$> wrap (parens $ nonTerminal (Report.simpleType . Report.declarationLevel . report))
-                               <*> nonTerminal typeVarBinder},
+                               <*> nonTerminal typeVarBinder,
+               instanceTypeDesignator = instanceTypeDesignator
+                  <|> parens (Abstract.infixTypeApplication
+                              <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                              <*> qualifiedOperator
+                              <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
              typeConstructor = constructorIdentifier <|> parens anySymbol,
-             generalTypeConstructor =
-               generalTypeConstructor
+             generalTypeConstructor = generalTypeConstructor
                <|> Abstract.constructorType <$> wrap (Abstract.constructorReference <$> parens qualifiedVariableSymbol),
              bType = bType
                 <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
                                                   <*> qualifiedOperator
                                                   <*> wrap aType},
      familyInstanceDesignator = familyInstanceDesignator <|>
-        Abstract.infixTypeClassInstanceLHS <$> wrap aType <*> qualifiedOperator <*> wrap aType}
+        Abstract.typeClassInstanceLHS
+           <$> qualifiedTypeClass
+           <*> parens (wrap $ Abstract.infixTypeApplication <$> wrap aType <*> qualifiedOperator <*> wrap aType)}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -764,7 +770,7 @@ flexibleInstancesMixin baseGrammar@ExtendedGrammar
                                 {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
-                instanceDesignator= flexibleInstanceDesignator}}}
+                instanceDesignator = flexibleInstanceDesignator}}}
 
 typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                     g ~ ExtendedGrammar l t (NodeWrap t),
