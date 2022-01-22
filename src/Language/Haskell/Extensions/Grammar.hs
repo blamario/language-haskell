@@ -916,7 +916,9 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                                 <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
                                 <*> parens (Abstract.explicitlyKindedTypeVariable <$> typeVar
                                             <*> wrap (nonTerminal kindSignature)))
-                   <*> (keyword "where" *> blockOf inClassDeclaration <|> pure []),
+                   <*> (keyword "where"
+                        *> blockOf (nonTerminal $ Report.inClassDeclaration . Report.declarationLevel . report)
+                        <|> pure []),
          typeVarTuple = (:|) <$> wrap (nonTerminal optionallyKindedTypeVar)
                              <*> some (comma *> wrap (nonTerminal optionallyKindedTypeVar))},
       typeTerm = typeTerm <|>
@@ -979,7 +981,9 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
                       <* delimiter "."
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator
-                      <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])},
+                      <*> (keyword "where"
+                           *> blockOf (nonTerminal $ Report.inInstanceDeclaration . declarationLevel . report)
+                           <|> pure [])},
       typeTerm = typeTerm
          <|> Abstract.forallType <$ keywordForall
              <*> many (nonTerminal typeVarBinder) <* delimiter "."
