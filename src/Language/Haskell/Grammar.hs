@@ -760,9 +760,11 @@ moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexem
 
 nameQualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
               => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-nameQualifier = Abstract.qualifiedName
-                <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
-                                  <* notFollowedBy (filter (`elem` reservedWords) $ takeCharsWhile1 isNameTailChar))
+nameQualifier =
+   Abstract.qualifiedName
+   <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
+                     <* notFollowedBy (constructorLexeme *> string "."
+                                       <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower)))
 
 asciiEscape, charEscape, controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'
