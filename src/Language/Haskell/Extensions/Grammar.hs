@@ -212,7 +212,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      aTypeWithWildcards =
         generalTypeConstructor
         <|> Abstract.typeVariable <$> typeVar
-        <|> Abstract.typeWildcard <$ delimiter "_"
+        <|> Abstract.typeWildcard <$ keyword "_"
         <|> Abstract.tupleType
             <$> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
                              <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
