@@ -63,7 +63,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    namespacedMember :: p (Abstract.ModuleMember l),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
-   familyInstanceDesignator, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   familyInstanceDesignator, familyInstanceDesignatorBase,
+   flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
@@ -187,6 +188,11 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= r'{
                declarationLevel= baseDeclarations{
+                 simpleType =
+                    Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+                    <|> Abstract.simpleTypeLHSApplication
+                        <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
+                        <*> nonTerminal typeVarBinder,
                  instanceTypeDesignator =
                     generalTypeConstructor
                     <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
@@ -223,10 +229,13 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.typeMember <$ keyword "type" <*> cname
         <|> Abstract.patternMember <$ keyword "pattern" <*> cname,
      inClassOrInstanceTypeFamilyDeclaration = empty,
+     familyInstanceDesignatorBase =
+        Abstract.classReferenceInstanceLHS <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report),
      familyInstanceDesignator =
-        Abstract.multiParameterTypeClassInstanceLHS
-           <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
-           <*> many (wrap $ nonTerminal aTypeWithWildcards)
+        nonTerminal familyInstanceDesignatorBase
+        <|> Abstract.classInstanceLHSApplication
+            <$> wrap (nonTerminal familyInstanceDesignator)
+            <*> wrap (nonTerminal aTypeWithWildcards)
         <|> parens (nonTerminal familyInstanceDesignator),
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
@@ -672,16 +681,12 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                                       {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
-               simpleType =
-                  simpleType
+               simpleType = simpleType
                   <|> Abstract.simpleInfixTypeLHSApplication
                                <$> nonTerminal typeVarBinder
                                <*> anySymbol
                                <*> nonTerminal typeVarBinder
-                  <|> parens (nonTerminal (Report.simpleType . Report.declarationLevel . report))
-                  <|> Abstract.simpleTypeLHSApplication
-                               <$> wrap (parens $ nonTerminal (Report.simpleType . Report.declarationLevel . report))
-                               <*> nonTerminal typeVarBinder,
+                  <|> parens (nonTerminal (Report.simpleType . Report.declarationLevel . report)),
                instanceTypeDesignator = instanceTypeDesignator
                   <|> parens (Abstract.infixTypeApplication
                               <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
@@ -699,7 +704,7 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
         <|> Abstract.infixTypeApplication <$> wrap (bTypeWithWildcards baseGrammar)
                                           <*> qualifiedOperator
                                           <*> wrap (nonTerminal aTypeWithWildcards),
-     familyInstanceDesignator = familyInstanceDesignator baseGrammar
+     familyInstanceDesignatorBase = familyInstanceDesignatorBase baseGrammar
         <|> Abstract.infixTypeClassInstanceLHS
                <$> wrap (bTypeWithWildcards baseGrammar)
                <*> qualifiedOperator
@@ -754,9 +759,6 @@ gratuitouslyParenthesizedTypesMixin
                 <$> wrap (nonTerminal (Report.typeVarApplications . declarationLevel . report)
                           <|> parens (nonTerminal $ Report.typeVarApplications . declarationLevel . report))
                 <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
-         simpleType = Abstract.simpleKindedTypeLHS
-                         <$> nonTerminal (Report.typeConstructor . report)
-                         <*> many (nonTerminal typeVarBinder),
          instanceDesignator = instanceDesignator
             <|> parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report),
          derivingClause = keyword "deriving"
@@ -891,9 +893,6 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                              {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       declarationLevel= baseDeclarations{
-         simpleType = Abstract.simpleKindedTypeLHS
-                         <$> nonTerminal (Report.typeConstructor . report)
-                         <*> many (nonTerminal typeVarBinder),
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindedDataDeclaration <$ keyword "data"
                    <*> wrap optionalContext

@@ -82,8 +82,9 @@ instance Abstract.ExtendedHaskell Language where
    gadtDataFamilyInstance = GADTDataFamilyInstance
    gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance
    typeFamilyInstance = TypeFamilyInstance
-   multiParameterTypeClassInstanceLHS = MultiParameterTypeClassInstanceLHS
+   classReferenceInstanceLHS = ClassReferenceInstanceLHS
    infixTypeClassInstanceLHS = InfixTypeClassInstanceLHS
+   classInstanceLHSApplication = ClassInstanceLHSApplication
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -353,8 +354,9 @@ data TypeLHS λ l d s =
 
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | MultiParameterTypeClassInstanceLHS (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
+   | ClassReferenceInstanceLHS (Abstract.QualifiedName λ)
    | InfixTypeClassInstanceLHS (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | ClassInstanceLHSApplication (s (Abstract.ClassInstanceLHS l l d d)) (s (Abstract.Type l l d d))
 
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
@@ -494,10 +496,13 @@ deriving instance (Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
 deriving instance Typeable (ClassInstanceLHS λ l d s)
-deriving instance (Data (s (Abstract.Type l l d d)), Data (Abstract.QualifiedName λ),
+deriving instance (Data (s (Abstract.ClassInstanceLHS l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (ClassInstanceLHS λ l d s)
-deriving instance (Show (s (Abstract.Type l l d d)), Show (Abstract.QualifiedName λ)) => Show (ClassInstanceLHS λ l d s)
-deriving instance (Eq (s (Abstract.Type l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
+deriving instance (Show (s (Abstract.ClassInstanceLHS l l d d)), Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.QualifiedName λ)) => Show (ClassInstanceLHS λ l d s)
+deriving instance (Eq (s (Abstract.ClassInstanceLHS l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
 
 deriving instance Typeable (Context λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),

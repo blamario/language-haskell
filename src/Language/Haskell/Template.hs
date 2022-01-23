@@ -316,8 +316,9 @@ declarationTemplates d@TypeFamilyInstance{} = [TySynInstD $ typeFamilyInstanceTe
 
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)
-lhsTypeTemplate (MultiParameterTypeClassInstanceLHS name types) =
-  foldl' AppT (ConT $ qnameTemplate name) $ typeTemplate . extract <$> types
+lhsTypeTemplate (ClassReferenceInstanceLHS name) = ConT (qnameTemplate name)
+lhsTypeTemplate (ClassInstanceLHSApplication left right) =
+  AppT (lhsTypeTemplate $ extract left) (typeTemplate $ extract right)
 lhsTypeTemplate (InfixTypeClassInstanceLHS left name right) =
   InfixT (typeTemplate $ extract left) (qnameTemplate name) (typeTemplate $ extract right)
 

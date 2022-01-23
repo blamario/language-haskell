@@ -85,8 +85,9 @@ class Haskell λ => ExtendedHaskell λ where
                              -> s (GADTConstructor l l d d) -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
                       -> Declaration λ l d s
-   multiParameterTypeClassInstanceLHS :: QualifiedName λ -> [s (Type l l d d)] -> ClassInstanceLHS λ l d s
+   classReferenceInstanceLHS :: QualifiedName λ -> ClassInstanceLHS λ l d s
    infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
+   classInstanceLHSApplication :: s (ClassInstanceLHS l l d d) -> s (Type l l d d) -> ClassInstanceLHS λ l d s
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
 
