@@ -211,6 +211,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      typeWithWildcards =
         Abstract.functionType <$> wrap (nonTerminal bTypeWithWildcards) <* rightArrow
                               <*> wrap (nonTerminal typeWithWildcards)
+        <|> Abstract.kindedType <$> wrap (nonTerminal typeWithWildcards) <*> wrap (nonTerminal kindSignature)
         <|> nonTerminal bTypeWithWildcards,
      bTypeWithWildcards =
         Abstract.typeApplication <$> wrap (nonTerminal bTypeWithWildcards) <*> wrap (nonTerminal aTypeWithWildcards)
