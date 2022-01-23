@@ -76,7 +76,8 @@ instance PrettyViaTH ExtensionSwitch where
 instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
    prettyViaTH (ExportClassOrType name@(AST.QualifiedName _ (AST.Name local)) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
-        Ppr.text "type" <+> Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
+        (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
+        Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
       where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ExportVar name) = prettyViaTH name
@@ -99,7 +100,8 @@ instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) whe
 instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
    prettyViaTH (ImportClassOrType name@(AST.Name local) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
-        Ppr.text "type" <+> Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
+        (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
+        Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
       where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
