@@ -57,14 +57,14 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
-   typeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
+   typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    namespacedMember :: p (Abstract.ModuleMember l),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
-   familyInstanceDesignator, familyInstanceDesignatorBase,
-   flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   familyInstanceDesignator, familyInstanceDesignatorApplications,
+   familyInstanceDesignatorBase, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
@@ -209,10 +209,11 @@ reportGrammar g@ExtendedGrammar{report= r} =
      bKind = empty,
      aKind = empty,
      typeWithWildcards =
-        Abstract.functionType <$> wrap (nonTerminal bTypeWithWildcards) <* rightArrow
+        Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
                               <*> wrap (nonTerminal typeWithWildcards)
         <|> Abstract.kindedType <$> wrap (nonTerminal typeWithWildcards) <*> wrap (nonTerminal kindSignature)
-        <|> nonTerminal bTypeWithWildcards,
+        <|> nonTerminal cTypeWithWildcards,
+     cTypeWithWildcards = nonTerminal bTypeWithWildcards,
      bTypeWithWildcards =
         Abstract.typeApplication <$> wrap (nonTerminal bTypeWithWildcards) <*> wrap (nonTerminal aTypeWithWildcards)
         <|> nonTerminal aTypeWithWildcards,
@@ -231,13 +232,14 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.patternMember <$ keyword "pattern" <*> cname,
      inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignatorBase =
-        Abstract.classReferenceInstanceLHS <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report),
-     familyInstanceDesignator =
+        Abstract.classReferenceInstanceLHS <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+        <|> parens (nonTerminal familyInstanceDesignator),
+     familyInstanceDesignatorApplications =
         nonTerminal familyInstanceDesignatorBase
         <|> Abstract.classInstanceLHSApplication
-            <$> wrap (nonTerminal familyInstanceDesignator)
-            <*> wrap (nonTerminal aTypeWithWildcards)
-        <|> parens (nonTerminal familyInstanceDesignator),
+            <$> wrap (nonTerminal familyInstanceDesignatorApplications)
+            <*> wrap (nonTerminal aTypeWithWildcards),
+     familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
      flexibleInstanceDesignator = 
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
         <|> parens (nonTerminal flexibleInstanceDesignator),
@@ -701,15 +703,15 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
                 <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
                                                   <*> qualifiedOperator
                                                   <*> wrap aType},
-     bTypeWithWildcards = bTypeWithWildcards baseGrammar
-        <|> Abstract.infixTypeApplication <$> wrap (bTypeWithWildcards baseGrammar)
+     cTypeWithWildcards = cTypeWithWildcards baseGrammar
+        <|> Abstract.infixTypeApplication <$> wrap (nonTerminal bTypeWithWildcards)
                                           <*> qualifiedOperator
-                                          <*> wrap (nonTerminal aTypeWithWildcards),
-     familyInstanceDesignatorBase = familyInstanceDesignatorBase baseGrammar
+                                          <*> wrap (nonTerminal cTypeWithWildcards),
+     familyInstanceDesignator = familyInstanceDesignator baseGrammar
         <|> Abstract.infixTypeClassInstanceLHS
                <$> wrap (bTypeWithWildcards baseGrammar)
                <*> qualifiedOperator
-               <*> wrap (bTypeWithWildcards baseGrammar)}
+               <*> wrap (cTypeWithWildcards baseGrammar)}
    where anySymbol = constructorSymbol <|> variableSymbol
 
 equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
