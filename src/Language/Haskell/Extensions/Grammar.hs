@@ -36,6 +36,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepByNonEmpty)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
+import Text.Grampa.Combinators (someNonEmpty)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as P (Parser)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
@@ -125,6 +126,7 @@ extensionMixins =
      (Set.fromList [GADTSyntax],                     (9, gadtSyntaxMixin)),
      (Set.fromList [FlexibleInstances],              (9, flexibleInstancesMixin)),
      (Set.fromList [TypeFamilies],                   (9, typeFamiliesMixin)),
+     (Set.fromList [TypeFamilyDependencies],         (9, typeFamilyDependenciesMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
@@ -885,6 +887,37 @@ typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
            <*> wrap (nonTerminal familyInstanceDesignator)
            <* delimiter "="
            <*> wrap typeTerm}
+typeFamilyDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                            => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+typeFamilyDependenciesMixin
+  baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
+                                                {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} =
+  baseGrammar{
+    report= baseReport{
+      declarationLevel= baseDeclarations{
+         topLevelDeclaration = topLevelDeclaration
+            <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+                <*> wrap simpleType <* delimiter "="
+                <*> nonTerminal typeVarBinder
+                <*> optional ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar)
+            <|> Abstract.injectiveClosedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+                <*> wrap simpleType <* delimiter "="
+                <*> nonTerminal typeVarBinder
+                <*> optional ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar)
+                <* keyword "where"
+                <*> blockOf (Abstract.typeFamilyInstance
+                             <$> nonTerminal optionalForall
+                             <*> wrap (nonTerminal familyInstanceDesignator) <* delimiter "="
+                             <*> wrap typeTerm),
+         inClassDeclaration = inClassDeclaration
+            <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
+                <*> wrap simpleType <* delimiter "="
+                <*> nonTerminal typeVarBinder
+                <*> (Just <$> ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar))}}}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),

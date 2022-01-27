@@ -77,6 +77,8 @@ instance Abstract.ExtendedHaskell Language where
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
    closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration
+   injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration
+   injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration
    dataFamilyInstance = DataFamilyInstance
    newtypeFamilyInstance = NewtypeFamilyInstance
    gadtDataFamilyInstance = GADTDataFamilyInstance
@@ -292,6 +294,11 @@ data Declaration λ l d s =
    | OpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
    | ClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                                  [s (Abstract.Declaration l l d d)]
+   | InjectiveOpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
+                                        (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
+   | InjectiveClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
+                                          (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
+                                          [s (Abstract.Declaration l l d d)]
    | DataFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                         (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                         [s (Abstract.DataConstructor l l d d)]

@@ -73,6 +73,11 @@ class Haskell λ => ExtendedHaskell λ where
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    closedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (Declaration l l d d)]
                                -> Declaration λ l d s
+   injectiveOpenTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+                                      -> Maybe (Name λ, NonEmpty (Name λ)) -> Declaration λ l d s
+   injectiveClosedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+                                        -> Maybe (Name λ, NonEmpty (Name λ)) -> [s (Declaration l l d d)]
+                                        -> Declaration λ l d s
    dataFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
                       -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)]
                       -> Declaration λ l d s

@@ -3,6 +3,7 @@
 
 module Language.Haskell.Template where
 
+import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
 import Data.List ((\\), nub)
@@ -285,6 +286,17 @@ declarationTemplates (OpenTypeFamilyDeclaration lhs kind)
 declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
    | Just (con, vars) <- extractSimpleTypeLHS lhs
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
+                        (typeFamilyInstanceTemplate . extract <$> constructors)]
+declarationTemplates (InjectiveOpenTypeFamilyDeclaration lhs binding injectivity)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs
+   = [OpenTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingTemplate binding)
+                                      (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
+                                       <$> injectivity))]
+declarationTemplates (InjectiveClosedTypeFamilyDeclaration lhs binding injectivity constructors)
+   | Just (con, vars) <- extractSimpleTypeLHS lhs
+   = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingTemplate binding)
+                                        (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
+                                         <$> injectivity))
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
 declarationTemplates (DataFamilyInstance vars context lhs kind constructors derivings) =
    [DataInstD (contextTemplate $ extract context)
