@@ -33,7 +33,7 @@ import qualified Data.Text as Text
 import qualified Numeric
 import qualified Rank2.TH
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof, sepBy, sepByNonEmpty)
+import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.Combinators (someNonEmpty)
@@ -127,6 +127,7 @@ extensionMixins =
      (Set.fromList [FlexibleInstances],              (9, flexibleInstancesMixin)),
      (Set.fromList [TypeFamilies],                   (9, typeFamiliesMixin)),
      (Set.fromList [TypeFamilyDependencies],         (9, typeFamilyDependenciesMixin)),
+     (Set.fromList [DataKinds],                      (9, dataKindsMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
@@ -887,6 +888,7 @@ typeFamiliesMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
            <*> wrap (nonTerminal familyInstanceDesignator)
            <* delimiter "="
            <*> wrap typeTerm}
+
 typeFamilyDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                           g ~ ExtendedGrammar l t (NodeWrap t),
                                           Ord t, Show t, TextualMonoid t, OutlineMonoid t,
@@ -918,6 +920,36 @@ typeFamilyDependenciesMixin
                 <*> wrap simpleType <* delimiter "="
                 <*> nonTerminal typeVarBinder
                 <*> (Just <$> ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar))}}}
+
+dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                  g ~ ExtendedGrammar l t (NodeWrap t),
+                                  Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                    => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
+   report= baseReport{
+      aType = aType baseReport
+        <|> Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ generalConstructor . report)
+        <|> Abstract.promotedTupleType <$ delimiter "'"
+            <*> parens ((:|) <$> wrap (nonTerminal $ typeTerm . report)
+                             <*> some (comma *> wrap (nonTerminal $ typeTerm . report)))
+        <|> Abstract.promotedListType <$ delimiter "'"
+                                      <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy` comma)
+        <|> Abstract.promotedListType
+            <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report)
+                              <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma)},
+   aTypeWithWildcards = aTypeWithWildcards baseGrammar
+      <|> Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ generalConstructor . report)
+      <|> Abstract.promotedTupleType <$ delimiter "'"
+          <*> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
+                           <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
+      <|> Abstract.promotedListType <$ delimiter "'" <*> brackets (wrap (nonTerminal typeWithWildcards) `sepBy` comma)
+      <|> Abstract.promotedListType
+          <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards)
+                            <*> wrap (nonTerminal typeWithWildcards) `sepBy1` comma),
+   aKind = aKind baseGrammar
+     <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (nonTerminal kind) <*> some (comma *> wrap (nonTerminal kind)))
+     <|> Abstract.listKind <$> brackets (wrap $ nonTerminal kind)}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),

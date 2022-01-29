@@ -489,6 +489,17 @@ typeTemplate (ForallKind vars body) =
           (typeTemplate type')
   where type' = extract body
 typeTemplate GroundTypeKind = StarT
+typeTemplate (PromotedConstructorType con) = case (extract con) of
+   ConstructorReference name -> PromotedT (qnameTemplate name)
+   EmptyListConstructor -> PromotedNilT
+   TupleConstructor n -> PromotedTupleT n
+   UnitConstructor -> PromotedTupleT 0
+typeTemplate (PromotedTupleType items) =
+   foldl' AppT (PromotedTupleT $! length items) (typeTemplate . extract <$> items)
+typeTemplate (PromotedListType items) =
+   foldr (AppT . AppT PromotedConsT) PromotedNilT (typeTemplate . extract <$> items)
+typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
+typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []

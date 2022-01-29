@@ -99,6 +99,12 @@ class Haskell λ => ExtendedHaskell λ where
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
    defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ
 
+   promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
+   promotedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s
+   promotedListType :: [s (Type l l d d)] -> Type λ l d s
+   tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
+   listKind :: s (Kind l l d d) -> Kind λ l d s
+
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),

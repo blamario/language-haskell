@@ -58,6 +58,9 @@ instance Abstract.ExtendedHaskell Language where
    gadtNewtypeDeclaration = GADTNewtypeDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
+   promotedConstructorType = PromotedConstructorType
+   promotedTupleType = PromotedTupleType
+   promotedListType = PromotedListType
 
    explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList
    defaultMember = DefaultMember
@@ -73,6 +76,8 @@ instance Abstract.ExtendedHaskell Language where
    kindApplication = KindApplication
    groundTypeKind = GroundTypeKind
    typeEqualityConstraint = TypeEqualityConstraint
+   tupleKind = TupleKind
+   listKind = ListKind
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -350,6 +355,11 @@ data Type λ l d s =
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
+   | PromotedConstructorType (s (Abstract.Constructor l l d d))
+   | PromotedTupleType (NonEmpty (s (Abstract.Type l l d d)))
+   | PromotedListType [s (Abstract.Type l l d d)]
+   | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
+   | ListKind (s (Abstract.Kind l l d d))
 
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))
