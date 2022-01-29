@@ -59,6 +59,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
+   promotedType :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -229,6 +230,11 @@ reportGrammar g@ExtendedGrammar{report= r} =
                              <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
         <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
         <|> parens (nonTerminal typeWithWildcards),
+     promotedType = 
+        Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ Report.generalConstructor . report)
+        <|> Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
+        <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
+        <|> Abstract.promotedStringLiteral <$> nonTerminal (Report.stringLiteral . report),
      namespacedMember =
         Abstract.defaultMember <$> cname
         <|> Abstract.typeMember <$ keyword "type" <*> cname
@@ -926,20 +932,24 @@ dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
                                   Ord t, Show t, TextualMonoid t, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
+dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
+                                                             {declarationLevel= baseDeclarations}} = baseGrammar{
    report= baseReport{
       aType = aType baseReport
-        <|> Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ generalConstructor . report)
-        <|> Abstract.promotedTupleType <$ delimiter "'"
-            <*> parens ((:|) <$> wrap (nonTerminal $ typeTerm . report)
-                             <*> some (comma *> wrap (nonTerminal $ typeTerm . report)))
-        <|> Abstract.promotedListType <$ delimiter "'"
-                                      <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy` comma)
-        <|> Abstract.promotedListType
-            <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report)
-                              <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma)},
+         <|> nonTerminal promotedType
+         <|> Abstract.promotedTupleType <$ delimiter "'"
+             <*> parens ((:|) <$> wrap (nonTerminal $ typeTerm . report)
+                              <*> some (comma *> wrap (nonTerminal $ typeTerm . report)))
+         <|> Abstract.promotedListType <$ delimiter "'"
+                                       <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy` comma)
+         <|> Abstract.promotedListType
+             <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report)
+                               <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma),
+      declarationLevel= baseDeclarations{
+         instanceTypeDesignator = instanceTypeDesignator baseDeclarations
+           <|> nonTerminal promotedType}},
    aTypeWithWildcards = aTypeWithWildcards baseGrammar
-      <|> Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ generalConstructor . report)
+      <|> nonTerminal promotedType
       <|> Abstract.promotedTupleType <$ delimiter "'"
           <*> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
                            <*> some (comma *> wrap (nonTerminal typeWithWildcards)))

@@ -61,6 +61,9 @@ instance Abstract.ExtendedHaskell Language where
    promotedConstructorType = PromotedConstructorType
    promotedTupleType = PromotedTupleType
    promotedListType = PromotedListType
+   promotedIntegerLiteral = PromotedIntegerLiteral
+   promotedCharLiteral = PromotedCharLiteral
+   promotedStringLiteral = PromotedStringLiteral
 
    explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList
    defaultMember = DefaultMember
@@ -358,6 +361,9 @@ data Type λ l d s =
    | PromotedConstructorType (s (Abstract.Constructor l l d d))
    | PromotedTupleType (NonEmpty (s (Abstract.Type l l d d)))
    | PromotedListType [s (Abstract.Type l l d d)]
+   | PromotedIntegerLiteral Integer
+   | PromotedCharLiteral Char
+   | PromotedStringLiteral Text
    | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
    | ListKind (s (Abstract.Kind l l d d))
 

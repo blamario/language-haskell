@@ -498,6 +498,8 @@ typeTemplate (PromotedTupleType items) =
    foldl' AppT (PromotedTupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (PromotedListType items) =
    foldr (AppT . AppT PromotedConsT) PromotedNilT (typeTemplate . extract <$> items)
+typeTemplate (PromotedIntegerLiteral n) = LitT (NumTyLit n)
+typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
 typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
 
