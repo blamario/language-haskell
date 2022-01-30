@@ -234,7 +234,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
         <|> parens (nonTerminal typeWithWildcards),
      promotedType =
-        Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ Report.generalConstructor . report)
+        Abstract.promotedConstructorType <$ terminator "'" <*> wrap (nonTerminal $ Report.generalConstructor . report)
         <|> Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
         <|> Abstract.promotedStringLiteral <$> nonTerminal (Report.stringLiteral . report),
@@ -941,23 +941,23 @@ dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
    report= baseReport{
       aType = aType baseReport
          <|> nonTerminal promotedType
-         <|> Abstract.promotedTupleType <$ delimiter "'"
+         <|> Abstract.promotedTupleType <$ terminator "'"
              <*> parens ((:|) <$> wrap (nonTerminal $ typeTerm . report)
                               <*> some (comma *> wrap (nonTerminal $ typeTerm . report)))
-         <|> Abstract.promotedListType <$ delimiter "'"
-                                       <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy` comma)
+         <|> Abstract.promotedListType <$ terminator "'"
+                                       <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy1` comma)
          <|> Abstract.promotedListType
              <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report)
                                <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma),
       declarationLevel= baseDeclarations{
          instanceTypeDesignator = instanceTypeDesignator baseDeclarations
-           <|> nonTerminal promotedType}},
+            <|> nonTerminal promotedType}},
    aTypeWithWildcards = aTypeWithWildcards baseGrammar
       <|> nonTerminal promotedType
-      <|> Abstract.promotedTupleType <$ delimiter "'"
+      <|> Abstract.promotedTupleType <$ terminator "'"
           <*> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
                            <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
-      <|> Abstract.promotedListType <$ delimiter "'" <*> brackets (wrap (nonTerminal typeWithWildcards) `sepBy` comma)
+      <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (nonTerminal typeWithWildcards) `sepBy1` comma)
       <|> Abstract.promotedListType
           <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards)
                             <*> wrap (nonTerminal typeWithWildcards) `sepBy1` comma),
