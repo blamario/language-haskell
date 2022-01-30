@@ -105,6 +105,7 @@ class Haskell λ => ExtendedHaskell λ where
    promotedIntegerLiteral :: Integer -> Type λ l d s
    promotedCharLiteral :: Char -> Type λ l d s
    promotedStringLiteral :: Text -> Type λ l d s
+   promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
    tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
    listKind :: s (Kind l l d d) -> Kind λ l d s
 

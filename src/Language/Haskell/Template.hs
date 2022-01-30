@@ -502,6 +502,8 @@ typeTemplate (PromotedIntegerLiteral n) = LitT (NumTyLit n)
 typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
 typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
+typeTemplate (PromotedInfixTypeApplication left op right) =
+   PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []

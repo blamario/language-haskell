@@ -64,6 +64,7 @@ instance Abstract.ExtendedHaskell Language where
    promotedIntegerLiteral = PromotedIntegerLiteral
    promotedCharLiteral = PromotedCharLiteral
    promotedStringLiteral = PromotedStringLiteral
+   promotedInfixTypeApplication = PromotedInfixTypeApplication
 
    explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList
    defaultMember = DefaultMember
@@ -364,6 +365,7 @@ data Type λ l d s =
    | PromotedIntegerLiteral Integer
    | PromotedCharLiteral Char
    | PromotedStringLiteral Text
+   | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
    | ListKind (s (Abstract.Kind l l d d))
 

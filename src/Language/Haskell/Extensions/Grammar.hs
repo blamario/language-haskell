@@ -129,7 +129,10 @@ extensionMixins =
      (Set.fromList [TypeFamilies],                   (9, typeFamiliesMixin)),
      (Set.fromList [TypeFamilyDependencies],         (9, typeFamilyDependenciesMixin)),
      (Set.fromList [DataKinds],                      (9, dataKindsMixin)),
-     (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin))]
+     (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin)),
+     (Set.fromList [DataKinds, TypeOperators],       (9, dataKindsTypeOperatorsMixin)),
+     (Set.fromList [DataKinds, TypeOperators,
+                    GADTSyntax],                     (9, dataKindsGadtSyntaxTypeOperatorsMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -230,7 +233,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                              <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
         <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
         <|> parens (nonTerminal typeWithWildcards),
-     promotedType = 
+     promotedType =
         Abstract.promotedConstructorType <$ delimiter "'" <*> wrap (nonTerminal $ Report.generalConstructor . report)
         <|> Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
@@ -961,6 +964,40 @@ dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
      <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (nonTerminal kind) <*> some (comma *> wrap (nonTerminal kind)))
      <|> Abstract.listKind <$> brackets (wrap $ nonTerminal kind)}
 
+dataKindsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                            => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+dataKindsTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
+                                                                {declarationLevel= baseDeclarations}} = baseGrammar{
+   report= baseReport{
+      declarationLevel= baseDeclarations{
+         instanceTypeDesignator = instanceTypeDesignator baseDeclarations
+            <|> parens (Abstract.promotedInfixTypeApplication
+                        <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                        <* terminator "'"
+                        <*> qualifiedOperator baseReport
+                        <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+      bType = bType baseReport
+         <|> Abstract.promotedInfixTypeApplication
+             <$> wrap (nonTerminal $ bType . report)
+             <* terminator "'"
+             <*> qualifiedOperator baseReport
+             <*> wrap (nonTerminal $ aType . report)},
+   cTypeWithWildcards = cTypeWithWildcards baseGrammar
+      <|> Abstract.infixTypeApplication
+          <$> wrap (nonTerminal bTypeWithWildcards)
+          <* terminator "'"
+          <*> qualifiedOperator baseReport
+          <*> wrap (nonTerminal cTypeWithWildcards),
+   familyInstanceDesignator = familyInstanceDesignator baseGrammar
+      <|> Abstract.infixTypeClassInstanceLHS
+          <$> wrap (bTypeWithWildcards baseGrammar)
+          <* terminator "'"
+          <*> qualifiedOperator baseReport
+          <*> wrap (cTypeWithWildcards baseGrammar)}
+
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
                                   Ord t, Show t, TextualMonoid t, OutlineMonoid t,
@@ -1104,6 +1141,20 @@ gadtSyntaxTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@Hask
       Abstract.infixTypeApplication <$> wrap arg_type
                                     <*> qualifiedOperator
                                     <*> wrap arg_type}
+
+dataKindsGadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                           g ~ ExtendedGrammar l t (NodeWrap t),
+                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+dataKindsGadtSyntaxTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} =
+   baseGrammar{
+      return_type = return_type <|>
+         Abstract.promotedInfixTypeApplication
+         <$> wrap arg_type
+         <* terminator "'"
+         <*> qualifiedOperator
+         <*> wrap arg_type}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
