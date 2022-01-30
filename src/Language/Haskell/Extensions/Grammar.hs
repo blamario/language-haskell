@@ -261,12 +261,12 @@ reportGrammar g@ExtendedGrammar{report= r} =
      optionallyKindedTypeVar = empty,
      typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar,
      gadtConstructors =
-        Abstract.gadtConstructors <$> nonTerminal constructorIDs <* doubleColon
+        Abstract.gadtConstructors <$> nonTerminal constructorIDs <* nonTerminal (Report.doubleColon . report)
                                   <*> nonTerminal optionalForall
                                   <*> wrap optionalContext
                                   <*> wrap (nonTerminal gadtBody),
      gadtNewConstructor =
-        Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* doubleColon
+        Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* nonTerminal (Report.doubleColon . report)
                                   <*> nonTerminal optionalForall
                                   <*> wrap optionalContext
                                   <*> wrap (nonTerminal gadtNewBody),
@@ -274,31 +274,32 @@ reportGrammar g@ExtendedGrammar{report= r} =
      gadtNewBody =
         parens (nonTerminal gadtNewBody)
         <|> Abstract.functionType
-            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
+            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType)
+            <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type)
         <|> Abstract.recordFunctionType
-            <$> braces ((:[]) <$> wrap fieldDeclaration) <* rightArrow
+            <$> braces ((:[]) <$> wrap fieldDeclaration)
+            <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type),
      gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
      prefix_gadt_body =
         parens (nonTerminal prefix_gadt_body)
         <|> nonTerminal return_type
-        <|> Abstract.functionType <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType) <* rightArrow
-                                  <*> wrap (nonTerminal prefix_gadt_body),
+        <|> Abstract.functionType
+            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType)
+            <* nonTerminal (Report.rightArrow . report)
+            <*> wrap (nonTerminal prefix_gadt_body),
      record_gadt_body =
         parens (nonTerminal record_gadt_body)
         <|> Abstract.recordFunctionType
-            <$> braces (wrap fieldDeclaration `sepBy` comma) <* rightArrow
+            <$> braces (wrap fieldDeclaration `sepBy` comma)
+            <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type),
      return_type = Abstract.typeApplication
                       <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
                       <*> wrap (nonTerminal arg_type)
                    <|> Abstract.constructorType <$> wrap generalConstructor,
-     arg_type = generalTypeConstructor
-                <|> Abstract.typeVariable <$> typeVar
-                <|> Abstract.tupleType <$> parens ((:|) <$> wrap typeTerm <*> some (comma *> wrap typeTerm))
-                <|> Abstract.listType <$> brackets (wrap typeTerm)
-                <|> parens typeTerm}
+     arg_type = nonTerminal (Report.aType . report)}
    where r'@HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                            declarationLevel= baseDeclarations@DeclarationGrammar{..},
                            ..}
@@ -714,7 +715,7 @@ typeOperatorsMixin baseGrammar@ExtendedGrammar
              bType = bType
                 <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
                                                   <*> qualifiedOperator
-                                                  <*> wrap aType},
+                                                  <*> wrap (nonTerminal (Report.aType . report))},
      cTypeWithWildcards = cTypeWithWildcards baseGrammar
         <|> Abstract.infixTypeApplication <$> wrap (nonTerminal bTypeWithWildcards)
                                           <*> qualifiedOperator
@@ -1067,15 +1068,15 @@ existentialQuantificationMixin baseGrammar@ExtendedGrammar
                                {report= baseReport@HaskellGrammar
                                         {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
-             declarationLevel= baseDeclarations{
-                declaredConstructor =
-                   Abstract.existentialConstructor <$ nonTerminal keywordForall
-                                                   <*> many (nonTerminal typeVarBinder) <* delimiter "."
-                                                   <*> wrap (context <* rightDoubleArrow <|> pure Abstract.noContext)
-                                                   <*> wrap declaredConstructor
-                   <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
-                                                          <*> wrap declaredConstructor
-                   <|> declaredConstructor}}}
+      declarationLevel= baseDeclarations{
+         declaredConstructor = declaredConstructor
+            <|> Abstract.existentialConstructor
+                <$ nonTerminal keywordForall
+                <*> many (nonTerminal typeVarBinder) <* delimiter "."
+                <*> wrap (context <* nonTerminal (Report.rightDoubleArrow . report) <|> pure Abstract.noContext)
+                <*> wrap declaredConstructor
+            <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
+                                                   <*> wrap declaredConstructor}}}
 
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
