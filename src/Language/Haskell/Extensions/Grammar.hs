@@ -961,6 +961,11 @@ dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
       <|> Abstract.promotedListType
           <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards)
                             <*> wrap (nonTerminal typeWithWildcards) `sepBy1` comma),
+   bKind = bKind baseGrammar
+     <|> Abstract.typeRepresentationKind
+         <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
+         <* notFollowedBy (fst <$> match (nonTerminal aKind))
+         <*> wrap (nonTerminal $ Report.aType . report),
    aKind = aKind baseGrammar
      <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (nonTerminal kind) <*> some (comma *> wrap (nonTerminal kind)))
      <|> Abstract.listKind <$> brackets (wrap $ nonTerminal kind)}

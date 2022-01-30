@@ -82,6 +82,7 @@ instance Abstract.ExtendedHaskell Language where
    typeEqualityConstraint = TypeEqualityConstraint
    tupleKind = TupleKind
    listKind = ListKind
+   typeRepresentationKind = TypeRepresentationKind
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -368,6 +369,7 @@ data Type λ l d s =
    | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
    | ListKind (s (Abstract.Kind l l d d))
+   | TypeRepresentationKind (s (Abstract.Type l l d d))
 
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))

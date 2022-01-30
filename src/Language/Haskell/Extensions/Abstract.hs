@@ -108,6 +108,7 @@ class Haskell λ => ExtendedHaskell λ where
    promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
    tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
    listKind :: s (Kind l l d d) -> Kind λ l d s
+   typeRepresentationKind :: s (Type l l d d) -> Kind λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)

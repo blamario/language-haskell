@@ -12,6 +12,7 @@ import qualified Data.ByteString as ByteString
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
+import GHC.Exts (TYPE)
 import Text.PrettyPrint (render)
 
 import Language.Haskell (Placed)
@@ -21,14 +22,14 @@ import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST as ExtAST
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr
+import Language.Haskell.TH.PprLib ((<+>), ($$))
+import Language.Haskell.TH.Ppr as Ppr (ppr)
+import Language.Haskell.TH.Syntax (VarBangType)
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
-import Language.Haskell.TH.PprLib ((<+>), ($$))
-import Language.Haskell.TH.Ppr as Ppr (ppr)
-import Language.Haskell.TH.Syntax (VarBangType)
 
 pprint :: PrettyViaTH a => a -> String
 pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
@@ -502,6 +503,7 @@ typeTemplate (PromotedIntegerLiteral n) = LitT (NumTyLit n)
 typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
 typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
+typeTemplate (TypeRepresentationKind t) = AppT (ConT ''TYPE) (typeTemplate $ extract t)
 typeTemplate (PromotedInfixTypeApplication left op right) =
    PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
 
