@@ -354,27 +354,32 @@ magicHashMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}
       charHashLiteral = token (charLexeme <* string "#")
       stringHashLiteral = token (stringLexeme <* string "#")
   in baseGrammar{report= baseReport{
-  lPattern = aPattern
-              <|> Abstract.literalPattern
-                  <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
-                            <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
-                                <$ delimiter "-" <*> integerHash
-                            <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.integerLiteral . negate)
-                                <$ delimiter "-" <*> integerHash2)
-              <|> Abstract.literalPattern
-                  <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float'
-                            <|> (Abstract.hashLiteral . Abstract.floatingLiteral . negate)
-                                <$ delimiter "-" <*> floatHash
-                            <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.floatingLiteral . negate)
-                                <$ delimiter "-" <*> floatHash2)
-              <|> Abstract.constructorPattern <$> wrap generalConstructor <*> some (wrap aPattern),
-   literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
-             <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
-             <|> Abstract.hashLiteral
-                 <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
-                      <|> Abstract.charLiteral <$> charHashLiteral <|> Abstract.stringLiteral <$> stringHashLiteral)
-             <|> Abstract.hashLiteral . Abstract.hashLiteral
-                 <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
+        variableIdentifier =
+           token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
+        constructorIdentifier =
+           token (Abstract.name . Text.pack . toString mempty <$> (constructorLexeme <> concatAll (string "#"))),
+        lPattern = aPattern
+                    <|> Abstract.literalPattern
+                        <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
+                                  <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
+                                      <$ delimiter "-" <*> integerHash
+                                  <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.integerLiteral . negate)
+                                      <$ delimiter "-" <*> integerHash2)
+                    <|> Abstract.literalPattern
+                        <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float'
+                                  <|> (Abstract.hashLiteral . Abstract.floatingLiteral . negate)
+                                      <$ delimiter "-" <*> floatHash
+                                  <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.floatingLiteral . negate)
+                                      <$ delimiter "-" <*> floatHash2)
+                    <|> Abstract.constructorPattern <$> wrap generalConstructor <*> some (wrap aPattern),
+         literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
+                   <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
+                   <|> Abstract.hashLiteral
+                       <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
+                            <|> Abstract.charLiteral <$> charHashLiteral
+                            <|> Abstract.stringLiteral <$> stringHashLiteral)
+                   <|> Abstract.hashLiteral . Abstract.hashLiteral
+                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
 
 recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
@@ -1167,7 +1172,7 @@ variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput
                  <?> "variable"
    where varStart c = (Char.isLetter c && not (Char.isUpper c)) ||  c == '_'
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail <?> "constructor"
-identifierTail = takeCharsWhile isNameTailChar <> concatAll (string "#") -- MagicHash
+identifierTail = takeCharsWhile isNameTailChar
 
 isNameTailChar :: Char -> Bool
 isNameTailChar c = Report.isNameTailChar c || Char.isMark c

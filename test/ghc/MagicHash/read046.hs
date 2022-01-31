@@ -1,5 +1,5 @@
 
-{-# OPTIONS_GHC -XMagicHash #-}
+{-# LANGUAGE MagicHash #-}
 
 module Foo where
 
