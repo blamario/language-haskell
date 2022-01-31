@@ -952,7 +952,7 @@ dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
          <|> Abstract.promotedListType <$ terminator "'"
                                        <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy1` comma)
          <|> Abstract.promotedListType
-             <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report)
+             <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report) <* comma
                                <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma),
       declarationLevel= baseDeclarations{
          instanceTypeDesignator = instanceTypeDesignator baseDeclarations
@@ -964,7 +964,7 @@ dataKindsMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar
                            <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
       <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (nonTerminal typeWithWildcards) `sepBy1` comma)
       <|> Abstract.promotedListType
-          <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards)
+          <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards) <* comma
                             <*> wrap (nonTerminal typeWithWildcards) `sepBy1` comma),
    bKind = bKind baseGrammar
      <|> Abstract.typeRepresentationKind
