@@ -84,6 +84,7 @@ instance Abstract.ExtendedHaskell Language where
    listKind = ListKind
    typeRepresentationKind = TypeRepresentationKind
    constraintType = ConstraintType
+   multiParameterClassConstraint = ClassConstraint
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -236,7 +237,7 @@ instance Abstract.Haskell Language where
    guardedExpression = GuardedExpression
 
    simpleConstraint = SimpleConstraint
-   classConstraint = ClassConstraint
+   classConstraint cls t = ClassConstraint cls [t]
    constraints = Constraints
    noContext = NoContext
 
@@ -338,7 +339,7 @@ data DataConstructor λ l d s =
 
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
-   | ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | ClassConstraint (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
    | Constraints [s (Abstract.Context l l d d)]
    | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | NoContext

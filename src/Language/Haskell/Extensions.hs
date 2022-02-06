@@ -90,6 +90,7 @@ data Extension = AllowAmbiguousTypes
                | MonoPatBinds
                | MonomorphismRestriction
                | MultiParamTypeClasses
+               | MultiParameterConstraints
                | MultiWayIf
                | NPlusKPatterns
                | NamedWildCards
@@ -203,6 +204,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (IncoherentInstances, [(OverlappingInstances, True)]),
   (KindSignatures, [(GratuitouslyParenthesizedTypes, True)]),
   (LiberalTypeSynonyms, [(ExplicitForAll, True)]),
+  (MultiParamTypeClasses, [(MultiParameterConstraints, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
   (PolyKinds, [(KindSignatures, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
@@ -212,7 +214,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (Safe, [(SafeImports, True)]),
   (Trustworthy, [(SafeImports, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
-                  (KindSignatures, True), (MonoLocalBinds, True)]),
+                  (KindSignatures, True), (MonoLocalBinds, True), (MultiParameterConstraints, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
