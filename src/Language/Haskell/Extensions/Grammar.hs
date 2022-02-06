@@ -740,10 +740,12 @@ equalityConstraintsMixin baseGrammar@ExtendedGrammar
                          {report= baseReport@HaskellGrammar
                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}, ..} = baseGrammar{
    report= baseReport{
-             declarationLevel= baseDeclarations{
-                constraint= constraint
-                            <|> Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
-                                <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))}}}
+      declarationLevel= baseDeclarations{
+         constraint= constraint <|> equalityConstraint},
+      typeTerm = typeTerm <|> Abstract.constraintType <$> wrap equalityConstraint}}
+   where equalityConstraint =
+            Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
+            <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))
 
 gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                   g ~ ExtendedGrammar l t (NodeWrap t),

@@ -83,6 +83,7 @@ instance Abstract.ExtendedHaskell Language where
    tupleKind = TupleKind
    listKind = ListKind
    typeRepresentationKind = TypeRepresentationKind
+   constraintType = ConstraintType
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -370,6 +371,7 @@ data Type λ l d s =
    | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
    | ListKind (s (Abstract.Kind l l d d))
    | TypeRepresentationKind (s (Abstract.Type l l d d))
+   | ConstraintType (s (Abstract.Context l l d d))
 
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))

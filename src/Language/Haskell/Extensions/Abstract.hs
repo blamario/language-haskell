@@ -95,6 +95,7 @@ class Haskell λ => ExtendedHaskell λ where
    classInstanceLHSApplication :: s (ClassInstanceLHS l l d d) -> s (Type l l d d) -> ClassInstanceLHS λ l d s
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
+   constraintType :: s (Context l l d d) -> Type λ l d s
 
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
    defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ

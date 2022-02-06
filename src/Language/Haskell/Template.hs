@@ -509,6 +509,9 @@ typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (TypeRepresentationKind t) = AppT (ConT ''TYPE) (typeTemplate $ extract t)
 typeTemplate (PromotedInfixTypeApplication left op right) =
    PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
+typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
+   [c1] -> c1
+   cs -> foldl' AppT (TupleT $! length cs) cs
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
