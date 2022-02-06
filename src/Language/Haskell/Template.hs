@@ -501,7 +501,7 @@ typeTemplate (PromotedListType items) =
    foldr (AppT . AppT PromotedConsT) PromotedNilT (typeTemplate . extract <$> items)
 typeTemplate (PromotedIntegerLiteral n) = LitT (NumTyLit n)
 typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
-#if MIN_VERSION_template_haskell(2,17,0)
+#if MIN_VERSION_template_haskell(2,18,0)
 typeTemplate (PromotedCharLiteral c) = LitT (CharTyLit c)
 #endif
 typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
