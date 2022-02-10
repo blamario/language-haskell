@@ -516,6 +516,8 @@ typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVars ConstructorType{} = []
 freeTypeVars FunctionConstructorType = []
+freeTypeVars TypeWildcard{} = []
+freeTypeVars GroundTypeKind{} = []
 freeTypeVars (FunctionType from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
@@ -529,9 +531,21 @@ freeTypeVars (ForallType vars context body) =
 freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
+freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)
+freeTypeVars (TypeRepresentationKind t) = freeTypeVars (extract t)
+freeTypeVars (ConstraintType ctx) = freeContextVars (extract ctx)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t
+freeTypeVars PromotedConstructorType{} = []
+freeTypeVars (PromotedTupleType items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (PromotedListType items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (PromotedInfixTypeApplication left _op right) =
+   nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeTypeVars PromotedIntegerLiteral{} = []
+freeTypeVars PromotedCharLiteral{} = []
+freeTypeVars PromotedStringLiteral{} = []
 
 typeVarBindingTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
 typeVarBindingTemplate (ExplicitlyKindedTypeVariable name kind) =
