@@ -85,6 +85,7 @@ instance Abstract.ExtendedHaskell Language where
    typeRepresentationKind = TypeRepresentationKind
    constraintType = ConstraintType
    multiParameterClassConstraint = ClassConstraint
+   infixConstraint = InfixConstraint
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -341,6 +342,7 @@ data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
    | ClassConstraint (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
    | Constraints [s (Abstract.Context l l d d)]
+   | InfixConstraint (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | NoContext
 

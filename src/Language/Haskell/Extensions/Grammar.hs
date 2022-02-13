@@ -132,6 +132,8 @@ extensionMixins =
      (Set.fromList [MultiParameterConstraints],      (9, multiParameterConstraintsMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin)),
      (Set.fromList [DataKinds, TypeOperators],       (9, dataKindsTypeOperatorsMixin)),
+     (Set.fromList [MultiParameterConstraints,
+                    TypeOperators],                  (9, multiParameterConstraintsTypeOperatorsMixin)),
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     (9, dataKindsGadtSyntaxTypeOperatorsMixin))]
 
@@ -741,7 +743,7 @@ equalityConstraintsMixin baseGrammar@ExtendedGrammar
                                   {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       declarationLevel= baseDeclarations{
-         constraint= constraint <|> equalityConstraint},
+         constraint = constraint <|> equalityConstraint},
       typeTerm = typeTerm <|> Abstract.constraintType <$> wrap equalityConstraint}}
    where equalityConstraint =
             Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
@@ -762,6 +764,21 @@ multiParameterConstraintsMixin baseGrammar@ExtendedGrammar
                        (many $ wrap $
                         nonTerminal optionallyKindedAndParenthesizedTypeVar
                         <|> parens (nonTerminal $ Report.typeApplications . declarationLevel . report))}}}
+
+multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                                          Ord t, Show t, TextualMonoid t)
+                                            => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+multiParameterConstraintsTypeOperatorsMixin
+   baseGrammar@ExtendedGrammar {report= baseReport@HaskellGrammar
+                                        {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+   report= baseReport{
+      declarationLevel= baseDeclarations{
+         constraint= constraint
+            <|> Abstract.infixConstraint
+                <$> wrap (nonTerminal (Report.bType . report))
+                <*> qualifiedOperator
+                <*> wrap (nonTerminal (Report.bType . report))}}}
 
 gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                   g ~ ExtendedGrammar l t (NodeWrap t),

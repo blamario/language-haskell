@@ -354,6 +354,8 @@ derivingsTemplate derivings =
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
 contextTemplate (ClassConstraint cls ts) = [foldl' AppT (ConT $ qnameTemplate cls) (typeTemplate . extract <$> ts)]
+contextTemplate (InfixConstraint left op right) =
+   [InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)]
 contextTemplate (TypeEqualityConstraint t1 t2) =
    [EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)]
 contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
@@ -362,6 +364,7 @@ contextTemplate NoContext = []
 freeContextVars :: TemplateWrapper f => ExtAST.Context Language Language f f -> [TyVarBndrUnit]
 freeContextVars (SimpleConstraint _cls var) = [plainTV $ nameTemplate var]
 freeContextVars (ClassConstraint _cls ts) = foldMap (freeTypeVars . extract) ts
+freeContextVars (InfixConstraint left op right) = freeTypeVars (extract left) <> freeTypeVars (extract right)
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
 freeContextVars NoContext = []
 

@@ -96,6 +96,7 @@ class Haskell λ => ExtendedHaskell λ where
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
    multiParameterClassConstraint :: QualifiedName λ -> [s (Type l l d d)] -> Context λ l d s
+   infixConstraint :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s
 
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
