@@ -82,7 +82,9 @@ instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
         Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
       where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
-   prettyViaTH (ExportVar name) = prettyViaTH name
+   prettyViaTH (ExportVar name@(AST.QualifiedName _ (AST.Name local)))
+      | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.parens (prettyViaTH name)
+      | otherwise = prettyViaTH name
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
 instance PrettyViaTH (Import Language Language ((,) x) ((,) x)) where
