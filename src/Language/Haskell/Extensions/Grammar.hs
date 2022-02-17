@@ -774,7 +774,7 @@ multiParameterConstraintsTypeOperatorsMixin
                                         {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
       declarationLevel= baseDeclarations{
-         constraint= constraint
+         constraint = constraint
             <|> Abstract.infixConstraint
                 <$> wrap (nonTerminal (Report.bType . report))
                 <*> qualifiedOperator
@@ -800,6 +800,11 @@ gratuitouslyParenthesizedTypesMixin
                           <$> typeClass
                           <*> ((:[]) <$> parens (nonTerminal typeVarBinder)))
                 <*> (keyword "where" *> blockOf inClassDeclaration <|> pure []),
+         constraint = constraint <|> parens (nonTerminal $ Report.constraint . declarationLevel . report),
+         context = nonTerminal (Report.constraint . declarationLevel . report)
+            <|> Abstract.constraints
+                <$> parens (filter ((1 /=) . length)
+                            $ wrap (nonTerminal (Report.constraint . declarationLevel . report)) `sepBy` comma),
          classConstraint = classConstraint
             <|> Abstract.simpleConstraint
                 <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
