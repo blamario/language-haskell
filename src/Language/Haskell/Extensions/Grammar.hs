@@ -256,7 +256,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
             <*> wrap (nonTerminal aTypeWithWildcards),
      familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
      flexibleInstanceDesignator = 
-        Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap aType
+        Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap (nonTerminal $ Report.aType . report)
         <|> parens (nonTerminal flexibleInstanceDesignator),
      optionalForall = pure [],
      optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
