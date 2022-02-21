@@ -1084,6 +1084,10 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                    <*> (keyword "where"
                         *> blockOf (nonTerminal $ Report.inClassDeclaration . Report.declarationLevel . report)
                         <|> pure []),
+         instanceTypeDesignator = instanceTypeDesignator
+            <|> Abstract.kindedType
+                <$> wrap (nonTerminal $ Report.instanceTypeDesignator . declarationLevel . report)
+                <*> wrap (nonTerminal kindSignature),
          typeVarTuple = (:|) <$> wrap (nonTerminal optionallyKindedTypeVar)
                              <*> some (comma *> wrap (nonTerminal optionallyKindedTypeVar))},
       typeTerm = typeTerm <|>
