@@ -78,6 +78,7 @@ instance Abstract.ExtendedHaskell Language where
    functionKind = FunctionKind
    forallKind = ForallKind
    kindApplication = KindApplication
+   infixKindApplication = InfixKindApplication
    groundTypeKind = GroundTypeKind
    typeEqualityConstraint = TypeEqualityConstraint
    tupleKind = TupleKind
@@ -364,6 +365,7 @@ data Type λ l d s =
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
+   | InfixKindApplication (s (Abstract.Kind l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Kind l l d d))
    | PromotedConstructorType (s (Abstract.Constructor l l d d))
    | PromotedTupleType (NonEmpty (s (Abstract.Type l l d d)))
    | PromotedListType [s (Abstract.Type l l d d)]

@@ -54,6 +54,7 @@ class Haskell λ => ExtendedHaskell λ where
    kindVariable :: Name λ -> Kind λ l d s
    constructorKind :: s (Constructor l l d d) -> Kind λ l d s
    kindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
+   infixKindApplication :: s (Kind l l d d) -> QualifiedName λ -> s (Kind l l d d) -> Kind λ l d s
    functionKind :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
    forallKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
    groundTypeKind :: Kind λ l d s

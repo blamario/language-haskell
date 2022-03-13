@@ -482,6 +482,8 @@ typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (
 typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
+typeTemplate (InfixKindApplication left op right) =
+   InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate TypeWildcard = WildCardT
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)

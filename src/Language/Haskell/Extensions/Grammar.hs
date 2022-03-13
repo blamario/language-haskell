@@ -1036,6 +1036,11 @@ dataKindsTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@Haske
              <* terminator "'"
              <*> qualifiedOperator baseReport
              <*> wrap (nonTerminal $ aType . report)},
+   bKind = bKind baseGrammar
+           <|> Abstract.infixKindApplication
+           <$> wrap (nonTerminal bKind)
+           <*> qualifiedOperator baseReport
+           <*> wrap (nonTerminal aKind),
    cTypeWithWildcards = cTypeWithWildcards baseGrammar
       <|> Abstract.infixTypeApplication
           <$> wrap (nonTerminal bTypeWithWildcards)
@@ -1163,7 +1168,8 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
    kind = kind baseGrammar
       <|> Abstract.forallKind <$ keywordForall
           <*> many (nonTerminal typeVarBinder) <* delimiter "."
-          <*> wrap (nonTerminal kind)}
+          <*> wrap (nonTerminal kind),
+   kindVar = notFollowedBy keywordForall *> kindVar baseGrammar}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
