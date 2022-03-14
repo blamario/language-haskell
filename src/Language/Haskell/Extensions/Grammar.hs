@@ -175,8 +175,9 @@ parseModule extensions source = case moduleExtensions of
         else Left mempty{errorAlternatives= [StaticDescription
                                              $ "Contradictory extension switches " <> show (toList contradictions)]}
    Right extensionses -> error (show extensionses)
-   where moduleExtensions = getCompose . fmap snd . getCompose $ simply parsePrefix languagePragmas source
+   where moduleExtensions = parseResults $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
+         getSwitch (ExtensionSwitch s) = s
 
 extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
@@ -184,8 +185,8 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (Extended
                  => Map Extension Bool -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = fixGrammar (extended . reportGrammar)
    where extended = appEndo $ getDual $ foldMap (Dual . Endo) $ map snd $ sortOn fst
-                    $ Map.elems $ Map.restrictKeys extensionMixins
-                    $ Set.powerSet (Map.keysSet $ Map.filter id extensions)
+                    $ Map.elems $ Map.filterWithKey isIncluded extensionMixins
+         isIncluded required _ = all (`Map.member` extensions) required
 
 reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,

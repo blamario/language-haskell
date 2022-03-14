@@ -238,9 +238,7 @@ partitionContradictory switches = (Map.keysSet contradictions, Map.mapKeys getEx
 
 -- | Adds the implied extensions to the given set of extension switches
 withImplications :: Map Extension Bool -> Map Extension Bool
-withImplications extensions = extensions `Map.union` Map.foldMapWithKey implied extensions
-   where implied extension True = Map.findWithDefault mempty extension implications
-         implied _ False = mempty
+withImplications extensions = extensions <> Map.unions (implications `Map.intersection` Map.filter id extensions)
 
 inverse :: ExtensionSwitch -> ExtensionSwitch
 inverse (ExtensionSwitch (ext, s)) = ExtensionSwitch (ext, not s)
