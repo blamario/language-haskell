@@ -51,6 +51,7 @@ instance Abstract.ExtendedHaskell Language where
    explicitlyScopedInstanceDeclaration = InstanceDeclaration
    forallType = ForallType
    kindedType = KindedType
+   typeKind = TypeKind
    typeWildcard = TypeWildcard
    kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
    kindedNewtypeDeclaration context lhs = NewtypeDeclaration context lhs . Just
@@ -362,6 +363,7 @@ data Type λ l d s =
    | ForallKind [Abstract.TypeVarBinding λ l d s] (s (Abstract.Kind l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | TypeWildcard
+   | TypeKind (s (Abstract.Type l l d d))
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))

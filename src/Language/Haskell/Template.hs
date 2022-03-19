@@ -486,6 +486,7 @@ typeTemplate (InfixKindApplication left op right) =
    InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate TypeWildcard = WildCardT
+typeTemplate (TypeKind t) = typeTemplate (extract t)
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars context body) =
   ForallT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type')
@@ -525,6 +526,7 @@ freeTypeVars ConstructorType{} = []
 freeTypeVars FunctionConstructorType = []
 freeTypeVars TypeWildcard{} = []
 freeTypeVars GroundTypeKind{} = []
+freeTypeVars (TypeKind t) = freeTypeVars (extract t)
 freeTypeVars (FunctionType from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
@@ -537,6 +539,7 @@ freeTypeVars (ForallType vars context body) =
   nub (freeContextVars (extract context) <> freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
 freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
 freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)

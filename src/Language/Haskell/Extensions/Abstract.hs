@@ -58,6 +58,7 @@ class Haskell λ => ExtendedHaskell λ where
    functionKind :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
    forallKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
    groundTypeKind :: Kind λ l d s
+   typeKind :: s (Type l l d d) -> Kind λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    kindedNewtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)

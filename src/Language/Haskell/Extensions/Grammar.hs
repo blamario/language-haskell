@@ -130,6 +130,7 @@ extensionMixins =
      (Set.fromList [TypeFamilyDependencies],         (9, typeFamilyDependenciesMixin)),
      (Set.fromList [DataKinds],                      (9, dataKindsMixin)),
      (Set.fromList [MultiParameterConstraints],      (9, multiParameterConstraintsMixin)),
+     (Set.fromList [PolyKinds],                      (9, polyKindsMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin)),
      (Set.fromList [DataKinds, TypeOperators],       (9, dataKindsTypeOperatorsMixin)),
      (Set.fromList [MultiParameterConstraints,
@@ -1054,6 +1055,17 @@ dataKindsTypeOperatorsMixin baseGrammar@ExtendedGrammar{report= baseReport@Haske
           <* terminator "'"
           <*> qualifiedOperator baseReport
           <*> wrap (cTypeWithWildcards baseGrammar)}
+
+polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                             g ~ ExtendedGrammar l t (NodeWrap t),
+                             Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+polyKindsMixin baseGrammar@ExtendedGrammar
+               {report= baseReport@HaskellGrammar
+                                  {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+   aKind = Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)
+      <|> Abstract.groundTypeKind <$ delimiter "*"}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
