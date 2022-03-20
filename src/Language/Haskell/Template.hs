@@ -498,6 +498,10 @@ typeTemplate (ForallKind vars body) =
   ForallT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type') []
           (typeTemplate type')
   where type' = extract body
+typeTemplate (VisibleDependentKind vars body) =
+  ForallVisT (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeTypeVars type')
+             (typeTemplate type')
+  where type' = extract body
 typeTemplate GroundTypeKind = StarT
 typeTemplate (PromotedConstructorType con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
@@ -542,6 +546,7 @@ freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTy
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
+freeTypeVars (VisibleDependentKind vars body) = nub (freeTypeVars (extract body)) \\ (typeVarBindingTemplate <$> vars)
 freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)
 freeTypeVars (TypeRepresentationKind t) = freeTypeVars (extract t)

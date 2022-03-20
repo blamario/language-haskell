@@ -135,7 +135,8 @@ extensionMixins =
      (Set.fromList [MultiParameterConstraints,
                     TypeOperators],                  (9, multiParameterConstraintsTypeOperatorsMixin)),
      (Set.fromList [DataKinds, TypeOperators,
-                    GADTSyntax],                     (9, dataKindsGadtSyntaxTypeOperatorsMixin))]
+                    GADTSyntax],                     (9, dataKindsGadtSyntaxTypeOperatorsMixin)),
+     (Set.fromList [PolyKinds, ExplicitForAll],      (9, visibleDependentKindQualificationMixin))]
 
 languagePragmas :: (Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) => Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
@@ -1066,11 +1067,22 @@ polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
                              Ord t, Show t, TextualMonoid t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-polyKindsMixin baseGrammar@ExtendedGrammar
-               {report= baseReport@HaskellGrammar
-                                  {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+polyKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
    aKind = Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)
       <|> Abstract.groundTypeKind <$ delimiter "*"}
+
+visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                     g ~ ExtendedGrammar l t (NodeWrap t),
+                                                     Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                                       => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+visibleDependentKindQualificationMixin baseGrammar = baseGrammar{
+   kind = kind baseGrammar
+     <|> Abstract.visibleDependentKind
+         <$ nonTerminal keywordForall
+         <*> many (nonTerminal typeVarBinder)
+         <* nonTerminal (Report.rightArrow . report)
+         <*> wrap (nonTerminal kind)}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
