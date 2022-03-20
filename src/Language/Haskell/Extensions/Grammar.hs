@@ -218,7 +218,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                typeTerm = nonTerminal cType},
      keywordForall = keyword "forall",
      kindSignature = empty,
-     kindVar = variableIdentifier,
+     kindVar = nonTerminal (Report.typeVar . report),
      kind = empty,
      bKind = empty,
      aKind = empty,
@@ -237,7 +237,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> nonTerminal aTypeWithWildcards,
      aTypeWithWildcards =
         generalTypeConstructor
-        <|> Abstract.typeVariable <$> typeVar
+        <|> Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)
         <|> Abstract.typeWildcard <$ keyword "_"
         <|> Abstract.tupleType
             <$> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
@@ -270,7 +270,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
      optionallyKindedTypeVar = empty,
-     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> typeVar,
+     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal (Report.typeVar . report),
      gadtConstructors =
         Abstract.gadtConstructors <$> nonTerminal constructorIDs <* nonTerminal (Report.doubleColon . report)
                                   <*> nonTerminal optionalForall
@@ -835,7 +835,8 @@ gratuitouslyParenthesizedTypesMixin
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
                           <|> pure []}},
-   optionallyParenthesizedTypeVar = typeVar <|> parens (nonTerminal optionallyParenthesizedTypeVar),
+   optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report)
+                                    <|> parens (nonTerminal optionallyParenthesizedTypeVar),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal optionallyParenthesizedTypeVar}
    where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
 
@@ -968,11 +969,11 @@ typeFamilyDependenciesMixin
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <* delimiter "="
                 <*> nonTerminal typeVarBinder
-                <*> optional ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar)
+                <*> optional dependencies
             <|> Abstract.injectiveClosedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <* delimiter "="
                 <*> nonTerminal typeVarBinder
-                <*> optional ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar)
+                <*> optional dependencies
                 <* keyword "where"
                 <*> blockOf (Abstract.typeFamilyInstance
                              <$> nonTerminal optionalForall
@@ -982,7 +983,9 @@ typeFamilyDependenciesMixin
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <* delimiter "="
                 <*> nonTerminal typeVarBinder
-                <*> (Just <$> ((,) <$> (delimiter "|" *> typeVar) <* rightArrow <*> someNonEmpty typeVar))}}}
+                <*> (Just <$> dependencies)}}}
+   where dependencies = (,) <$> (delimiter "|" *> nonTerminal (Report.typeVar . report)) <* rightArrow
+                            <*> someNonEmpty (nonTerminal $ Report.typeVar . report)
 
 dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1114,7 +1117,8 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                    <*> wrap optionalContext
                    <*> wrap (Abstract.simpleTypeLHSApplication
                                 <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
-                                <*> parens (Abstract.explicitlyKindedTypeVariable <$> typeVar
+                                <*> parens (Abstract.explicitlyKindedTypeVariable
+                                            <$> nonTerminal (Report.typeVar . report)
                                             <*> wrap (nonTerminal kindSignature)))
                    <*> (keyword "where"
                         *> blockOf (nonTerminal $ Report.inClassDeclaration . Report.declarationLevel . report)
@@ -1142,12 +1146,14 @@ kindSignaturesMixin baseGrammar@ExtendedGrammar
                   <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)
                   <*> wrap (nonTerminal kindSignature)),
    optionallyKindedTypeVar =
-      Abstract.typeVariable <$> variableIdentifier
+      Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)
       <|> Abstract.kindedType
-          <$> wrap (Abstract.typeVariable <$> variableIdentifier)
+          <$> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))
           <*> wrap (nonTerminal kindSignature),
    typeVarBinder = typeVarBinder baseGrammar
-                   <|> parens (Abstract.explicitlyKindedTypeVariable <$> typeVar <*> wrap (nonTerminal kindSignature))}
+                   <|> parens (Abstract.explicitlyKindedTypeVariable
+                               <$> nonTerminal (Report.typeVar . report)
+                               <*> wrap (nonTerminal kindSignature))}
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              g ~ ExtendedGrammar l t (NodeWrap t),
