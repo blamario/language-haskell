@@ -58,7 +58,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
-   typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
+   cType, typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
@@ -212,14 +212,20 @@ reportGrammar g@ExtendedGrammar{report= r} =
                                 <|> typeVarApplications
                                 <|> Abstract.tupleType <$> typeVarTuple
                                 <|> Abstract.functionType
-                                    <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar) <* rightArrow
-                                    <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))}},
+                                    <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                                    <* nonTerminal (Report.rightArrow . report)
+                                    <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+               typeTerm = nonTerminal cType},
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = variableIdentifier,
      kind = empty,
      bKind = empty,
      aKind = empty,
+     cType = Abstract.functionType <$> wrap (nonTerminal $ Report.bType . report)
+                                   <* nonTerminal (Report.rightArrow . report)
+                                   <*> wrap (nonTerminal cType)
+             <|> nonTerminal (Report.bType . report),
      typeWithWildcards =
         Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
                               <*> wrap (nonTerminal typeWithWildcards)
