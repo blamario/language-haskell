@@ -37,7 +37,6 @@ import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.Combinators (someNonEmpty)
-import qualified Text.Grampa.ContextFree.SortedMemoizing as P (Parser)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter)
@@ -49,7 +48,7 @@ import qualified Language.Haskell.Grammar as Report
 import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),
                                  Parser, OutlineMonoid, NodeWrap,
                                  blockOf, delimiter, terminator, inputColumn, isSymbol,
-                                 oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap)
+                                 oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap, whiteSpace)
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
 
 import Prelude hiding (exponent, filter, null)
@@ -138,19 +137,19 @@ extensionMixins =
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     (9, dataKindsGadtSyntaxTypeOperatorsMixin))]
 
-languagePragmas :: (Ord t, Show t, TextualMonoid t) => P.Parser g t [ExtensionSwitch]
+languagePragmas :: (Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) => Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
-                 *> admit (string "{-#" *> spaceChars *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
-                           *> commit (spaceChars
+                 *> admit (string "{-#" *> whiteSpace *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
+                           *> commit (whiteSpace
                                       *> liftA2 (<>)
-                                            (extension `sepBy` (string "," *> spaceChars) <* string "#-}")
+                                            (extension `sepBy` (string "," *> whiteSpace) <* string "#-}")
                                             languagePragmas)
                            <<|> comment *> commit languagePragmas
                            <<|> commit (pure mempty))
    where spaceChars = takeCharsWhile Char.isSpace
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
          extension = do extensionName <- takeCharsWhile Char.isAlphaNum
-                        void spaceChars
+                        void whiteSpace
                         case Map.lookup extensionName switchesByName of
                            Just ext -> pure ext
                            Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
@@ -176,7 +175,7 @@ parseModule extensions source = case moduleExtensions of
         else Left mempty{errorAlternatives= [StaticDescription
                                              $ "Contradictory extension switches " <> show (toList contradictions)]}
    Right extensionses -> error (show extensionses)
-   where moduleExtensions = parseResults $ simply parsePrefix languagePragmas source
+   where moduleExtensions = parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
          getSwitch (ExtensionSwitch s) = s
 
@@ -1276,13 +1275,3 @@ blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >
             <<|> cont []
          terminators :: [Char]
          terminators = ",;)]}"
-
-instance TokenParsing (Parser (ExtendedGrammar l t f) (LinePositioned Text)) where
-   someSpace = someLexicalSpace
-   token = lexicalToken
-
-instance LexicalParsing (Parser (ExtendedGrammar l t f) (LinePositioned Text)) where
-   lexicalComment = Report.comment
-   lexicalWhiteSpace = Report.whiteSpace
-   lexicalToken p = Report.storeToken p <* lexicalWhiteSpace
-   keyword = Report.keyword

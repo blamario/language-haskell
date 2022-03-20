@@ -840,11 +840,11 @@ rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 unwrap :: NodeWrap t a -> a
 unwrap (_, x) = x
 
-instance TokenParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
+instance (Ord t, Show t, TextualMonoid t) => TokenParsing (Parser g t) where
    someSpace = someLexicalSpace
    token = lexicalToken
 
-instance LexicalParsing (Parser (HaskellGrammar l t f) (LinePositioned Text)) where
+instance (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) where
    lexicalComment = comment
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
