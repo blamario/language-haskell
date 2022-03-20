@@ -366,8 +366,9 @@ contextTemplate NoContext = []
 freeContextVars :: TemplateWrapper f => ExtAST.Context Language Language f f -> [TyVarBndrUnit]
 freeContextVars (SimpleConstraint _cls var) = [plainTV $ nameTemplate var]
 freeContextVars (ClassConstraint _cls ts) = foldMap (freeTypeVars . extract) ts
-freeContextVars (InfixConstraint left op right) = freeTypeVars (extract left) <> freeTypeVars (extract right)
+freeContextVars (InfixConstraint left op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
+freeContextVars (TypeEqualityConstraint left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars NoContext = []
 
 conventionTemplate :: CallingConvention l -> Callconv

@@ -1145,7 +1145,7 @@ existentialQuantificationMixin baseGrammar@ExtendedGrammar
             <|> Abstract.existentialConstructor
                 <$ nonTerminal keywordForall
                 <*> many (nonTerminal typeVarBinder) <* delimiter "."
-                <*> wrap (context <* nonTerminal (Report.rightDoubleArrow . report) <|> pure Abstract.noContext)
+                <*> wrap (nonTerminal $ Report.optionalContext . declarationLevel . report)
                 <*> wrap declaredConstructor
             <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
                                                    <*> wrap declaredConstructor}}}
@@ -1176,6 +1176,11 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
              <*> many (nonTerminal typeVarBinder) <* delimiter "."
              <*> wrap optionalContext
              <*> wrap (nonTerminal $ Report.typeTerm . report),
+      aType = aType
+         <|> parens (Abstract.forallType []
+                     <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
+                     <* nonTerminal (Report.rightDoubleArrow . report)
+                     <*> wrap (nonTerminal $ Report.typeTerm . report)),
       typeVar = notFollowedBy keywordForall *> typeVar},
    optionalForall = keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    kind = kind baseGrammar
