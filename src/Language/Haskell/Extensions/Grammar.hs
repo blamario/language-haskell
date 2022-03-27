@@ -1073,6 +1073,13 @@ polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 polyKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
+   kind = kind baseGrammar
+      <|> Abstract.typeKind
+          <$> wrap (Abstract.forallType <$ nonTerminal keywordForall
+                    <*> many (nonTerminal typeVarBinder) <* delimiter "."
+                    <*> wrap (nonTerminal $ Report.context . declarationLevel . report)
+                    <* nonTerminal (rightDoubleArrow . report)
+                    <*> wrap (nonTerminal forallType)),
    aKind = Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)
       <|> Abstract.groundTypeKind <$ delimiter "*"}
 
@@ -1182,13 +1189,12 @@ explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                     => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 explicitForAllMixin baseGrammar@ExtendedGrammar
                     {report= baseReport@HaskellGrammar
-                             {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..},
-                     keywordForall} = baseGrammar{
+                             {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
    report= baseReport{
              declarationLevel= baseDeclarations{
                topLevelDeclaration = topLevelDeclaration
                   <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-                      <* keywordForall
+                      <* nonTerminal keywordForall
                       <*> many (nonTerminal typeVarBinder)
                       <* delimiter "."
                       <*> wrap optionalContext
@@ -1201,18 +1207,18 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
                      <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
                      <* nonTerminal (Report.rightDoubleArrow . report)
                      <*> wrap (nonTerminal $ Report.typeTerm . report)),
-      typeVar = notFollowedBy keywordForall *> typeVar},
+      typeVar = notFollowedBy (nonTerminal keywordForall) *> typeVar},
    forallType = forallType baseGrammar
-      <|> Abstract.forallType <$ keywordForall
+      <|> Abstract.forallType <$ nonTerminal keywordForall
           <*> many (nonTerminal typeVarBinder) <* delimiter "."
           <*> wrap optionalContext
           <*> wrap (nonTerminal forallType),
-   optionalForall = keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
+   optionalForall = nonTerminal keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    kind = kind baseGrammar
-      <|> Abstract.forallKind <$ keywordForall
+      <|> Abstract.forallKind <$ nonTerminal keywordForall
           <*> many (nonTerminal typeVarBinder) <* delimiter "."
           <*> wrap (nonTerminal kind),
-   kindVar = notFollowedBy keywordForall *> kindVar baseGrammar}
+   kindVar = notFollowedBy (nonTerminal keywordForall) *> kindVar baseGrammar}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1233,7 +1239,7 @@ gadtSyntaxMixin baseGrammar@ExtendedGrammar
                       <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
                       <*> wrap (nonTerminal gadtNewConstructor)
                       <*> derivingClause}},
-   optionalForall = keywordForall baseGrammar *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
+   optionalForall = nonTerminal keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
