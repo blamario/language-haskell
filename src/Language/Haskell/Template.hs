@@ -43,6 +43,13 @@ doE = DoE
 mdoE = MDoE
 #endif
 
+constructorP :: TH.Name -> [Pat] -> Pat
+#if MIN_VERSION_template_haskell(2,18,0)
+constructorP = flip ConP []
+#else
+constructorP = ConP
+#endif
+
 class PrettyViaTH a where
    prettyViaTH :: a -> Ppr.Doc
 
@@ -436,7 +443,7 @@ literalTemplate (HashLiteral _) = error "Unexpected HashLiteral"
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
 patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)
 patternTemplate (ConstructorPattern con args) = case (extract con) of
-   ConstructorReference name -> ConP (qnameTemplate name) (patternTemplate . extract <$> args)
+   ConstructorReference name -> constructorP (qnameTemplate name) (patternTemplate . extract <$> args)
    EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
    TupleConstructor{} -> TupP (patternTemplate . extract <$> toList args)
    UnitConstructor -> TupP []
@@ -503,7 +510,7 @@ typeTemplate (ForallKind vars body) =
         varBindings = typeVarBindingTemplate <$> vars
         bindingVars = bindingVarName <$> vars
 typeTemplate (VisibleDependentKind vars body) =
-  ForallVisT (changeTVFlags SpecifiedSpec $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
+  ForallVisT (changeTVFlags () $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
              (typeTemplate type')
   where type' = extract body
         varBindings = typeVarBindingTemplate <$> vars
