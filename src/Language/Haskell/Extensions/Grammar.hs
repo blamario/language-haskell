@@ -57,7 +57,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
-   cType, typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
+   cType, forallType :: p (Abstract.Type l l f f),
+   typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
@@ -215,13 +216,14 @@ reportGrammar g@ExtendedGrammar{report= r} =
                                     <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
                                     <* nonTerminal (Report.rightArrow . report)
                                     <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
-               typeTerm = nonTerminal cType},
+               typeTerm = nonTerminal forallType},
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
      kind = empty,
      bKind = empty,
      aKind = empty,
+     forallType = nonTerminal cType,
      cType = Abstract.functionType <$> wrap (nonTerminal $ Report.bType . report)
                                    <* nonTerminal (Report.rightArrow . report)
                                    <*> wrap (nonTerminal cType)
@@ -1194,17 +1196,17 @@ explicitForAllMixin baseGrammar@ExtendedGrammar
                       <*> (keyword "where"
                            *> blockOf (nonTerminal $ Report.inInstanceDeclaration . declarationLevel . report)
                            <|> pure [])},
-      typeTerm = typeTerm
-         <|> Abstract.forallType <$ keywordForall
-             <*> many (nonTerminal typeVarBinder) <* delimiter "."
-             <*> wrap optionalContext
-             <*> wrap (nonTerminal $ Report.typeTerm . report),
       aType = aType
          <|> parens (Abstract.forallType []
                      <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
                      <* nonTerminal (Report.rightDoubleArrow . report)
                      <*> wrap (nonTerminal $ Report.typeTerm . report)),
       typeVar = notFollowedBy keywordForall *> typeVar},
+   forallType = forallType baseGrammar
+      <|> Abstract.forallType <$ keywordForall
+          <*> many (nonTerminal typeVarBinder) <* delimiter "."
+          <*> wrap optionalContext
+          <*> wrap (nonTerminal forallType),
    optionalForall = keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
    kind = kind baseGrammar
       <|> Abstract.forallKind <$ keywordForall
