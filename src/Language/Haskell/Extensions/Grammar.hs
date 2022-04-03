@@ -1126,7 +1126,9 @@ standaloneKindSignaturesMixin baseGrammar@ExtendedGrammar
       declarationLevel= baseDeclarations{
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindSignature <$ keyword "type"
-                  <*> typeConstructor <* doubleColon <*> wrap (nonTerminal kind)}}}
+                  <*> typeConstructor <* doubleColon
+                  <*> wrap (nonTerminal $ Report.optionalContext . declarationLevel . report)
+                  <*> wrap (nonTerminal kind)}}}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),

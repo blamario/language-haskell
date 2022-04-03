@@ -282,12 +282,9 @@ declarationTemplates (GADTNewtypeDeclaration lhs kind constructor derivings)
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | Just (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
-   [SigD (nameTemplate name) (inContext $ typeTemplate $ extract t) | name <- toList names]
-   where inContext = case extract context
-                     of NoContext -> id
-                        ctx -> ForallT [] (contextTemplate ctx)
-declarationTemplates (KindSignature name k) =
-   [KiSigD (nameTemplate name) (typeTemplate $ extract k)]
+   [SigD (nameTemplate name) (inContext context $ typeTemplate $ extract t) | name <- toList names]
+declarationTemplates (KindSignature name context k) =
+   [KiSigD (nameTemplate name) (inContext context $ typeTemplate $ extract k)]
 
 declarationTemplates (DataFamilyDeclaration lhs kind)
    | Just (con, vars) <- extractSimpleTypeLHS lhs
@@ -589,6 +586,11 @@ typeVarBindingTemplate (ImplicitlyKindedTypeVariable name) = plainTV (nameTempla
 bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
 bindingVarName (ExplicitlyKindedTypeVariable name _) = nameTemplate name
 bindingVarName (ImplicitlyKindedTypeVariable name) = nameTemplate name
+
+inContext :: TemplateWrapper f => f (ExtAST.Context Language Language f f) -> TH.Type -> TH.Type
+inContext context = case extract context
+                     of NoContext -> id
+                        ctx -> ForallT [] (contextTemplate ctx)
 
 nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
