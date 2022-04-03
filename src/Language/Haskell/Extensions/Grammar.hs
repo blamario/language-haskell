@@ -1082,8 +1082,9 @@ polyKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
                     <*> wrap (nonTerminal $ Report.context . declarationLevel . report)
                     <* nonTerminal (rightDoubleArrow . report)
                     <*> wrap (nonTerminal forallType)),
-   aKind = Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)
-      <|> Abstract.groundTypeKind <$ delimiter "*"}
+   aKind = Abstract.groundTypeKind <$ delimiter "*"
+      <<|> parens (nonTerminal kind)
+      <<|> Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
