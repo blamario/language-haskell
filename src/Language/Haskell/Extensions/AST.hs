@@ -103,6 +103,7 @@ instance Abstract.ExtendedHaskell Language where
    classReferenceInstanceLHS = ClassReferenceInstanceLHS
    infixTypeClassInstanceLHS = InfixTypeClassInstanceLHS
    classInstanceLHSApplication = ClassInstanceLHSApplication
+   kindSignature = KindSignature
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -330,6 +331,7 @@ data Declaration λ l d s =
                                (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | TypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
+   | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
 
 data GADTConstructor λ l d s =
    GADTConstructors (NonEmpty (Abstract.Name λ)) [Abstract.TypeVarBinding λ l d s]

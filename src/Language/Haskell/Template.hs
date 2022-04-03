@@ -286,6 +286,8 @@ declarationTemplates (TypeSignature names context t) =
    where inContext = case extract context
                      of NoContext -> id
                         ctx -> ForallT [] (contextTemplate ctx)
+declarationTemplates (KindSignature name k) =
+   [KiSigD (nameTemplate name) (typeTemplate $ extract k)]
 
 declarationTemplates (DataFamilyDeclaration lhs kind)
    | Just (con, vars) <- extractSimpleTypeLHS lhs

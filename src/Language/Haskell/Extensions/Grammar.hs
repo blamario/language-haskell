@@ -131,6 +131,7 @@ extensionMixins =
      (Set.fromList [DataKinds],                      (9, dataKindsMixin)),
      (Set.fromList [MultiParameterConstraints],      (9, multiParameterConstraintsMixin)),
      (Set.fromList [PolyKinds],                      (9, polyKindsMixin)),
+     (Set.fromList [StandaloneKindSignatures],       (9, standaloneKindSignaturesMixin)),
      (Set.fromList [GADTSyntax, TypeOperators],      (9, gadtSyntaxTypeOperatorsMixin)),
      (Set.fromList [DataKinds, TypeOperators],       (9, dataKindsTypeOperatorsMixin)),
      (Set.fromList [MultiParameterConstraints,
@@ -1082,6 +1083,20 @@ polyKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
                     <*> wrap (nonTerminal forallType)),
    aKind = Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)
       <|> Abstract.groundTypeKind <$ delimiter "*"}
+
+standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                            g ~ ExtendedGrammar l t (NodeWrap t),
+                                            Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                              => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+standaloneKindSignaturesMixin baseGrammar@ExtendedGrammar
+                              {report= baseReport@HaskellGrammar
+                                       {declarationLevel= baseDeclarations@DeclarationGrammar{..}, ..}} = baseGrammar{
+   report= baseReport{
+      declarationLevel= baseDeclarations{
+         topLevelDeclaration = topLevelDeclaration
+            <|> Abstract.kindSignature <$ keyword "type"
+                  <*> typeConstructor <* doubleColon <*> wrap (nonTerminal kind)}}}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
