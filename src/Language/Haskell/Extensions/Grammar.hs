@@ -56,7 +56,7 @@ import Prelude hiding (exponent, filter, null)
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
-   kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
+   kindSignature, kind, bKind, aKind, groundTypeKind :: p (Abstract.Kind l l f f),
    cType, forallType :: p (Abstract.Type l l f f),
    typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
@@ -133,6 +133,8 @@ extensionMixins =
      (Set.fromList [PolyKinds],                      [(9, polyKindsMixin)]),
      (Set.fromList [StandaloneKindSignatures],       [(7, kindSignaturesBaseMixin),
                                                       (9, standaloneKindSignaturesMixin)]),
+     (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
+     (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
      (Set.fromList [MultiParameterConstraints,
@@ -225,6 +227,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      kind = empty,
      bKind = empty,
      aKind = empty,
+     groundTypeKind = empty,
      forallType = nonTerminal cType,
      cType = Abstract.functionType <$> wrap (nonTerminal $ Report.bType . report)
                                    <* nonTerminal (Report.rightArrow . report)
@@ -341,7 +344,6 @@ unicodeSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing 
                    => GrammarBuilder (ExtendedGrammar l t (NodeWrap t)) g (ParserT ((,) [[Lexeme t]])) t
 unicodeSyntaxMixin baseGrammar@ExtendedGrammar{report= baseReport@HaskellGrammar{..}, ..} = baseGrammar{
    keywordForall = keywordForall <|> delimiter "∀",
-   aKind = aKind <|> Abstract.groundTypeKind <$ delimiter "★",
    report= baseReport{
       doubleColon = doubleColon <|> delimiter "∷",
       rightDoubleArrow = rightDoubleArrow <|> delimiter "⇒",
@@ -1082,7 +1084,7 @@ polyKindsMixin baseGrammar@ExtendedGrammar{report= baseReport} = baseGrammar{
                     <*> wrap (nonTerminal $ Report.context . declarationLevel . report)
                     <* nonTerminal (rightDoubleArrow . report)
                     <*> wrap (nonTerminal forallType)),
-   aKind = Abstract.groundTypeKind <$ delimiter "*"
+   aKind = nonTerminal groundTypeKind
       <<|> parens (nonTerminal kind)
       <<|> Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)}
 
@@ -1111,9 +1113,25 @@ kindSignaturesBaseMixin baseGrammar@ExtendedGrammar{report= HaskellGrammar{..}} 
    bKind = Abstract.kindApplication <$> wrap (nonTerminal bKind) <*> wrap (nonTerminal aKind)
            <|> nonTerminal aKind,
    aKind = Abstract.constructorKind <$> wrap generalConstructor
-           <|> Abstract.groundTypeKind <$ delimiter "*"
+           <|> nonTerminal groundTypeKind
            <|> Abstract.kindVariable <$> nonTerminal kindVar
            <|> parens (nonTerminal kind)}
+
+starIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                              g ~ ExtendedGrammar l t (NodeWrap t),
+                              Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+starIsTypeMixin baseGrammar = baseGrammar{
+   groundTypeKind = groundTypeKind baseGrammar <|> Abstract.groundTypeKind <$ delimiter "*"}
+
+unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                     g ~ ExtendedGrammar l t (NodeWrap t),
+                                     Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                       => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
+unicodeStarIsTypeMixin baseGrammar = baseGrammar{
+   groundTypeKind = groundTypeKind baseGrammar <|> Abstract.groundTypeKind <$ delimiter "★"}
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             g ~ ExtendedGrammar l t (NodeWrap t),
