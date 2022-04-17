@@ -587,7 +587,7 @@ explicitNamespacesMixin self super@ExtendedGrammar
             <|> keyword "type" *> (Abstract.importClassOrType <$> parens variableSymbol <*> pure Nothing),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
-                               <$> (nonTerminal namespacedMember `sepBy` comma) <* optional comma)}}}
+                               <$> (namespacedMember self `sepBy` comma) <* optional comma)}}}
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
@@ -608,15 +608,15 @@ lexicalNegationMixin self super@ExtendedGrammar{report= baseReport@HaskellGramma
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
                                 *> token (Report.nameQualifier <*> variableSymbol),
       infixExpression = wrap (Abstract.infixExpression
-                                 <$> nonTerminal (Report.dExpression . report)
+                                 <$> (Report.dExpression . report $ self)
                                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                                 <*> nonTerminal (Report.infixExpression . report))
+                                 <*> (Report.infixExpression . report $ self))
                         <|> lExpression,
       leftInfixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.dExpression . report)
+                  <$> (Report.dExpression . report $ self)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> nonTerminal (Report.leftInfixExpression . report))
+                  <*> (Report.leftInfixExpression . report $ self))
          <|> dExpression,
       bareExpression =
          Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> aExpression
@@ -637,16 +637,16 @@ negativeLiteralsMixin self super@ExtendedGrammar{report= baseReport@HaskellGramm
       qualifiedVariableSymbol = notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> qualifiedVariableSymbol,
       infixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.dExpression . report)
+                  <$> (Report.dExpression . report $ self)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> nonTerminal (Report.infixExpression . report)
+                  <*> (Report.infixExpression . report $ self)
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
          <|> lExpression,
       leftInfixExpression =
          wrap (Abstract.infixExpression
-                  <$> nonTerminal (Report.dExpression . report)
+                  <$> (Report.dExpression . report $ self)
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> nonTerminal (Report.leftInfixExpression . report)
+                  <*> (Report.leftInfixExpression . report $ self)
                   <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
          <|> dExpression,
       integerLexeme = (negate <$ string "-" <|> pure id) <*> integerLexeme,
@@ -723,27 +723,27 @@ typeOperatorsMixin self super@ExtendedGrammar
              declarationLevel= baseDeclarations{
                simpleType = simpleType
                   <|> Abstract.simpleInfixTypeLHSApplication
-                               <$> nonTerminal typeVarBinder
+                               <$> typeVarBinder self
                                <*> anySymbol
-                               <*> nonTerminal typeVarBinder
-                  <|> parens (nonTerminal (Report.simpleType . Report.declarationLevel . report)),
+                               <*> typeVarBinder self
+                  <|> parens ((Report.simpleType . Report.declarationLevel . report $ self)),
                instanceTypeDesignator = instanceTypeDesignator
                   <|> parens (Abstract.infixTypeApplication
-                              <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                              <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
                               <*> qualifiedOperator
-                              <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)),
+                              <*> wrap (optionallyKindedAndParenthesizedTypeVar self)),
                qualifiedTypeClass = qualifiedConstructor <|> parens qualifiedVariableSymbol},
              typeConstructor = constructorIdentifier <|> parens anySymbol,
              generalTypeConstructor = generalTypeConstructor
                <|> Abstract.constructorType <$> wrap (Abstract.constructorReference <$> parens qualifiedVariableSymbol),
              bType = bType
-                <|> Abstract.infixTypeApplication <$> wrap (nonTerminal (Report.bType . report))
+                <|> Abstract.infixTypeApplication <$> wrap ((Report.bType . report $ self))
                                                   <*> qualifiedOperator
-                                                  <*> wrap (nonTerminal (Report.aType . report))},
+                                                  <*> wrap ((Report.aType . report $ self))},
      cTypeWithWildcards = cTypeWithWildcards super
-        <|> Abstract.infixTypeApplication <$> wrap (nonTerminal bTypeWithWildcards)
+        <|> Abstract.infixTypeApplication <$> wrap (bTypeWithWildcards self)
                                           <*> qualifiedOperator
-                                          <*> wrap (nonTerminal cTypeWithWildcards),
+                                          <*> wrap (cTypeWithWildcards self),
      familyInstanceDesignator = familyInstanceDesignator super
         <|> Abstract.infixTypeClassInstanceLHS
                <$> wrap (bTypeWithWildcards super)
@@ -762,8 +762,8 @@ equalityConstraintsMixin self super@ExtendedGrammar
          constraint = constraint <|> equalityConstraint},
       typeTerm = typeTerm <|> Abstract.constraintType <$> wrap equalityConstraint}}
    where equalityConstraint =
-            Abstract.typeEqualityConstraint <$> wrap (nonTerminal (Report.bType . report))
-            <* delimiter "~" <*> wrap (nonTerminal (Report.bType . report))
+            Abstract.typeEqualityConstraint <$> wrap ((Report.bType . report $ self))
+            <* delimiter "~" <*> wrap ((Report.bType . report $ self))
 
 multiParameterConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
@@ -778,8 +778,8 @@ multiParameterConstraintsMixin self super@ExtendedGrammar
                 <*> filter
                        ((1 /=) . length)
                        (many $ wrap $
-                        nonTerminal optionallyKindedAndParenthesizedTypeVar
-                        <|> parens (nonTerminal $ Report.typeApplications . declarationLevel . report))}}}
+                        optionallyKindedAndParenthesizedTypeVar self
+                        <|> parens (Report.typeApplications . declarationLevel . report $ self))}}}
 
 multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                           g ~ ExtendedGrammar l t (NodeWrap t),
@@ -793,9 +793,9 @@ multiParameterConstraintsTypeOperatorsMixin
       declarationLevel= baseDeclarations{
          constraint = constraint
             <|> Abstract.infixConstraint
-                <$> wrap (nonTerminal (Report.bType . report))
+                <$> wrap ((Report.bType . report $ self))
                 <*> qualifiedOperator
-                <*> wrap (nonTerminal (Report.bType . report))}}}
+                <*> wrap ((Report.bType . report $ self))}}}
 
 gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -816,39 +816,39 @@ gratuitouslyParenthesizedTypesMixin
                 <*> wrap optionalContext
                 <*> wrap (Abstract.simpleKindedTypeLHS
                           <$> typeClass
-                          <*> ((:[]) <$> parens (nonTerminal typeVarBinder)))
+                          <*> ((:[]) <$> parens (typeVarBinder self)))
                 <*> (keyword "where" *> blockOf inClassDeclaration <|> pure []),
-         constraint = constraint <|> parens (nonTerminal $ Report.constraint . declarationLevel . report),
-         context = nonTerminal (Report.constraint . declarationLevel . report)
+         constraint = constraint <|> parens (Report.constraint . declarationLevel . report $ self),
+         context = (Report.constraint . declarationLevel . report $ self)
             <|> Abstract.constraints
                 <$> parens (filter ((1 /=) . length)
-                            $ wrap (nonTerminal (Report.constraint . declarationLevel . report)) `sepBy` comma),
+                            $ wrap ((Report.constraint . declarationLevel . report $ self)) `sepBy` comma),
          classConstraint = classConstraint
             <|> Abstract.simpleConstraint
-                <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
-                <*> parens (nonTerminal optionallyParenthesizedTypeVar),
+                <$> (Report.qualifiedTypeClass . declarationLevel . report $ self)
+                <*> parens (optionallyParenthesizedTypeVar self),
          qualifiedTypeClass = qualifiedTypeClass <|> parens qtc,
          typeApplications =
             Abstract.typeApplication
-            <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar <|> typeApplications)
+            <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self <|> typeApplications)
             <*> wrap aType,
          typeVarApplications =
             generalTypeConstructor
             <|> Abstract.typeApplication
-                <$> wrap (nonTerminal (Report.typeVarApplications . declarationLevel . report)
-                          <|> parens (nonTerminal $ Report.typeVarApplications . declarationLevel . report))
-                <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
+                <$> wrap ((Report.typeVarApplications . declarationLevel . report $ self)
+                          <|> parens (Report.typeVarApplications . declarationLevel . report $ self))
+                <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
          instanceDesignator = instanceDesignator
-            <|> parens (nonTerminal $ Report.instanceDesignator . declarationLevel . report),
+            <|> parens (Report.instanceDesignator . declarationLevel . report $ self),
          derivingClause = keyword "deriving"
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
                           <|> pure []}},
-   optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report)
-                                    <|> parens (nonTerminal optionallyParenthesizedTypeVar),
-   typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal optionallyParenthesizedTypeVar}
-   where qtc = nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+   optionallyParenthesizedTypeVar = (Report.typeVar . report $ self)
+                                    <|> parens (optionallyParenthesizedTypeVar self),
+   typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
+   where qtc = (Report.qualifiedTypeClass . declarationLevel . report $ self)
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -874,92 +874,92 @@ typeFamiliesMixin self super@ExtendedGrammar{report= baseReport@HaskellGrammar
       declarationLevel= baseDeclarations{
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
-                <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
+                <*> wrap simpleType <*> optional (wrap $ kindSignature self) <* keyword "where"
                 <*> blockOf (Abstract.typeFamilyInstance
-                             <$> nonTerminal optionalForall
-                             <*> wrap (nonTerminal familyInstanceDesignator) <* delimiter "="
+                             <$> optionalForall self
+                             <*> wrap (familyInstanceDesignator self) <* delimiter "="
                              <*> wrap typeTerm)
             <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
-                <*> nonTerminal optionalForall
+                <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (nonTerminal familyInstanceDesignator)
-                <*> optional (wrap $ nonTerminal kindSignature)
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
                 <*> (delimiter "=" *> declaredConstructors <|> pure [])
                 <*> derivingClause
             <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
-                <*> nonTerminal optionalForall
+                <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (nonTerminal familyInstanceDesignator)
-                <*> optional (wrap $ nonTerminal kindSignature)
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
                 <* delimiter "="
                 <*> wrap newConstructor
                 <*> derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
-                <*> nonTerminal optionalForall
-                <*> wrap (nonTerminal familyInstanceDesignator)
-                <*> optional (wrap $ nonTerminal kindSignature)
+                <*> optionalForall self
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
-                <*> blockOf (nonTerminal gadtConstructors)
+                <*> blockOf (gadtConstructors self)
                 <*> derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
-                <*> nonTerminal optionalForall
-                <*> wrap (nonTerminal familyInstanceDesignator)
-                <*> optional (wrap $ nonTerminal kindSignature)
+                <*> optionalForall self
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
-                <*> wrap (nonTerminal gadtNewConstructor)
+                <*> wrap (gadtNewConstructor self)
                 <*> derivingClause
             <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
-                <*> nonTerminal optionalForall
-                <*> wrap (nonTerminal familyInstanceDesignator)
+                <*> optionalForall self
+                <*> wrap (familyInstanceDesignator self)
                 <* delimiter "="
                 <*> wrap typeTerm,
          inClassDeclaration = inClassDeclaration
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
-                <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
+                <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
-                <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature)
-            <|> nonTerminal inClassOrInstanceTypeFamilyDeclaration,
-         inInstanceDeclaration = inInstanceDeclaration <|> nonTerminal inClassOrInstanceTypeFamilyDeclaration
+                <*> wrap simpleType <*> optional (wrap $ kindSignature self)
+            <|> inClassOrInstanceTypeFamilyDeclaration self,
+         inInstanceDeclaration = inInstanceDeclaration <|> inClassOrInstanceTypeFamilyDeclaration self
         }
     },
     inClassOrInstanceTypeFamilyDeclaration =
        Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
-           <*> nonTerminal optionalForall
+           <*> optionalForall self
            <*> wrap optionalContext
-           <*> wrap (nonTerminal familyInstanceDesignator)
-           <*> optional (wrap $ nonTerminal kindSignature)
+           <*> wrap (familyInstanceDesignator self)
+           <*> optional (wrap $ kindSignature self)
            <* delimiter "="
            <*> declaredConstructors
            <*> derivingClause
        <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
-           <*> nonTerminal optionalForall
+           <*> optionalForall self
            <*> wrap optionalContext
-           <*> wrap (nonTerminal familyInstanceDesignator)
-           <*> optional (wrap $ nonTerminal kindSignature)
+           <*> wrap (familyInstanceDesignator self)
+           <*> optional (wrap $ kindSignature self)
            <* delimiter "="
            <*> wrap newConstructor
            <*> derivingClause
        <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
-           <*> nonTerminal optionalForall
-           <*> wrap (nonTerminal familyInstanceDesignator)
-           <*> optional (wrap $ nonTerminal kindSignature)
+           <*> optionalForall self
+           <*> wrap (familyInstanceDesignator self)
+           <*> optional (wrap $ kindSignature self)
            <* keyword "where"
-           <*> blockOf (nonTerminal gadtConstructors)
+           <*> blockOf (gadtConstructors self)
            <*> derivingClause
        <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
-           <*> nonTerminal optionalForall
-           <*> wrap (nonTerminal familyInstanceDesignator)
-           <*> optional (wrap $ nonTerminal kindSignature)
+           <*> optionalForall self
+           <*> wrap (familyInstanceDesignator self)
+           <*> optional (wrap $ kindSignature self)
            <* keyword "where"
-           <*> wrap (nonTerminal gadtNewConstructor)
+           <*> wrap (gadtNewConstructor self)
            <*> derivingClause
        <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
-           <*> nonTerminal optionalForall
-           <*> wrap (nonTerminal familyInstanceDesignator)
+           <*> optionalForall self
+           <*> wrap (familyInstanceDesignator self)
            <* delimiter "="
            <*> wrap typeTerm}
 
@@ -979,24 +979,24 @@ typeFamilyDependenciesMixin
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <* delimiter "="
-                <*> nonTerminal typeVarBinder
+                <*> typeVarBinder self
                 <*> optional dependencies
             <|> Abstract.injectiveClosedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <* delimiter "="
-                <*> nonTerminal typeVarBinder
+                <*> typeVarBinder self
                 <*> optional dependencies
                 <* keyword "where"
                 <*> blockOf (Abstract.typeFamilyInstance
-                             <$> nonTerminal optionalForall
-                             <*> wrap (nonTerminal familyInstanceDesignator) <* delimiter "="
+                             <$> optionalForall self
+                             <*> wrap (familyInstanceDesignator self) <* delimiter "="
                              <*> wrap typeTerm),
          inClassDeclaration = inClassDeclaration
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <* delimiter "="
-                <*> nonTerminal typeVarBinder
+                <*> typeVarBinder self
                 <*> (Just <$> dependencies)}}}
-   where dependencies = (,) <$> (delimiter "|" *> nonTerminal (Report.typeVar . report)) <* rightArrow
-                            <*> someNonEmpty (nonTerminal $ Report.typeVar . report)
+   where dependencies = (,) <$> (delimiter "|" *> (Report.typeVar . report $ self)) <* rightArrow
+                            <*> someNonEmpty (Report.typeVar . report $ self)
 
 dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1007,35 +1007,35 @@ dataKindsMixin self super@ExtendedGrammar{report= baseReport@HaskellGrammar
                                                              {declarationLevel= baseDeclarations}} = super{
    report= baseReport{
       aType = aType baseReport
-         <|> nonTerminal promotedType
+         <|> promotedType self
          <|> Abstract.promotedTupleType <$ terminator "'"
-             <*> parens ((:|) <$> wrap (nonTerminal $ typeTerm . report)
-                              <*> some (comma *> wrap (nonTerminal $ typeTerm . report)))
+             <*> parens ((:|) <$> wrap (typeTerm . report $ self)
+                              <*> some (comma *> wrap (typeTerm . report $ self)))
          <|> Abstract.promotedListType <$ terminator "'"
-                                       <*> brackets (wrap (nonTerminal $ typeTerm . report) `sepBy1` comma)
+                                       <*> brackets (wrap (typeTerm . report $ self) `sepBy1` comma)
          <|> Abstract.promotedListType
-             <$> brackets ((:) <$> wrap (nonTerminal $ typeTerm . report) <* comma
-                               <*> wrap (nonTerminal $ typeTerm . report) `sepBy1` comma),
+             <$> brackets ((:) <$> wrap (typeTerm . report $ self) <* comma
+                               <*> wrap (typeTerm . report $ self) `sepBy1` comma),
       declarationLevel= baseDeclarations{
          instanceTypeDesignator = instanceTypeDesignator baseDeclarations
-            <|> nonTerminal promotedType}},
+            <|> promotedType self}},
    aTypeWithWildcards = aTypeWithWildcards super
-      <|> nonTerminal promotedType
+      <|> promotedType self
       <|> Abstract.promotedTupleType <$ terminator "'"
-          <*> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
-                           <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
-      <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (nonTerminal typeWithWildcards) `sepBy1` comma)
+          <*> parens ((:|) <$> wrap (typeWithWildcards self)
+                           <*> some (comma *> wrap (typeWithWildcards self)))
+      <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (typeWithWildcards self) `sepBy1` comma)
       <|> Abstract.promotedListType
-          <$> brackets ((:) <$> wrap (nonTerminal typeWithWildcards) <* comma
-                            <*> wrap (nonTerminal typeWithWildcards) `sepBy1` comma),
+          <$> brackets ((:) <$> wrap (typeWithWildcards self) <* comma
+                            <*> wrap (typeWithWildcards self) `sepBy1` comma),
    bKind = bKind super
      <|> Abstract.typeRepresentationKind
          <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
-         <* notFollowedBy (fst <$> match (nonTerminal aKind))
-         <*> wrap (nonTerminal $ Report.aType . report),
+         <* notFollowedBy (fst <$> match (aKind self))
+         <*> wrap (Report.aType . report $ self),
    aKind = aKind super
-     <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (nonTerminal kind) <*> some (comma *> wrap (nonTerminal kind)))
-     <|> Abstract.listKind <$> brackets (wrap $ nonTerminal kind)}
+     <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (kind self) <*> some (comma *> wrap (kind self)))
+     <|> Abstract.listKind <$> brackets (wrap $ kind self)}
 
 dataKindsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                           g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1048,27 +1048,27 @@ dataKindsTypeOperatorsMixin self super@ExtendedGrammar{report= baseReport@Haskel
       declarationLevel= baseDeclarations{
          instanceTypeDesignator = instanceTypeDesignator baseDeclarations
             <|> parens (Abstract.promotedInfixTypeApplication
-                        <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                        <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
                         <* terminator "'"
                         <*> qualifiedOperator baseReport
-                        <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+                        <*> wrap (optionallyKindedAndParenthesizedTypeVar self))},
       bType = bType baseReport
          <|> Abstract.promotedInfixTypeApplication
-             <$> wrap (nonTerminal $ bType . report)
+             <$> wrap (bType . report $ self)
              <* terminator "'"
              <*> qualifiedOperator baseReport
-             <*> wrap (nonTerminal $ aType . report)},
+             <*> wrap (aType . report $ self)},
    bKind = bKind super
            <|> Abstract.infixKindApplication
-           <$> wrap (nonTerminal bKind)
+           <$> wrap (bKind self)
            <*> qualifiedOperator baseReport
-           <*> wrap (nonTerminal aKind),
+           <*> wrap (aKind self),
    cTypeWithWildcards = cTypeWithWildcards super
       <|> Abstract.infixTypeApplication
-          <$> wrap (nonTerminal bTypeWithWildcards)
+          <$> wrap (bTypeWithWildcards self)
           <* terminator "'"
           <*> qualifiedOperator baseReport
-          <*> wrap (nonTerminal cTypeWithWildcards),
+          <*> wrap (cTypeWithWildcards self),
    familyInstanceDesignator = familyInstanceDesignator super
       <|> Abstract.infixTypeClassInstanceLHS
           <$> wrap (bTypeWithWildcards super)
@@ -1084,14 +1084,14 @@ polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
 polyKindsMixin self super@ExtendedGrammar{report= baseReport} = super{
    kind = kind super
       <|> Abstract.typeKind
-          <$> wrap (Abstract.forallType <$ nonTerminal keywordForall
-                    <*> many (nonTerminal typeVarBinder) <* delimiter "."
-                    <*> wrap (nonTerminal $ Report.context . declarationLevel . report)
-                    <* nonTerminal (rightDoubleArrow . report)
-                    <*> wrap (nonTerminal forallType)),
-   aKind = nonTerminal groundTypeKind
-      <<|> parens (nonTerminal kind)
-      <<|> Abstract.typeKind <$> wrap (nonTerminal $ Report.aType . report)}
+          <$> wrap (Abstract.forallType <$ keywordForall self
+                    <*> many (typeVarBinder self) <* delimiter "."
+                    <*> wrap (Report.context . declarationLevel . report $ self)
+                    <* (rightDoubleArrow . report $ self)
+                    <*> wrap (forallType self)),
+   aKind = groundTypeKind self
+      <<|> parens (kind self)
+      <<|> Abstract.typeKind <$> wrap (Report.aType . report $ self)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1101,10 +1101,10 @@ visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskel
 visibleDependentKindQualificationMixin self super = super{
    kind = kind super
      <|> Abstract.visibleDependentKind
-         <$ nonTerminal keywordForall
-         <*> many (nonTerminal typeVarBinder)
-         <* nonTerminal (Report.rightArrow . report)
-         <*> wrap (nonTerminal kind)}
+         <$ keywordForall self
+         <*> many (typeVarBinder self)
+         <* (Report.rightArrow . report $ self)
+         <*> wrap (kind self)}
 
 kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                       g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1112,15 +1112,15 @@ kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPar
                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 kindSignaturesBaseMixin self super@ExtendedGrammar{report= HaskellGrammar{..}} = super{
-   kindSignature = doubleColon *> nonTerminal kind,
-   kind = Abstract.functionKind <$> wrap (nonTerminal bKind) <* rightArrow <*> wrap (nonTerminal kind)
-          <|> nonTerminal bKind,
-   bKind = Abstract.kindApplication <$> wrap (nonTerminal bKind) <*> wrap (nonTerminal aKind)
-           <|> nonTerminal aKind,
+   kindSignature = doubleColon *> kind self,
+   kind = Abstract.functionKind <$> wrap (bKind self) <* rightArrow <*> wrap (kind self)
+          <|> bKind self,
+   bKind = Abstract.kindApplication <$> wrap (bKind self) <*> wrap (aKind self)
+           <|> aKind self,
    aKind = Abstract.constructorKind <$> wrap generalConstructor
-           <|> nonTerminal groundTypeKind
-           <|> Abstract.kindVariable <$> nonTerminal kindVar
-           <|> parens (nonTerminal kind)}
+           <|> groundTypeKind self
+           <|> Abstract.kindVariable <$> kindVar self
+           <|> parens (kind self)}
 
 starIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1151,8 +1151,8 @@ standaloneKindSignaturesMixin self super@ExtendedGrammar
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindSignature <$ keyword "type"
                   <*> typeConstructor <* doubleColon
-                  <*> wrap (nonTerminal $ Report.optionalContext . declarationLevel . report)
-                  <*> wrap (nonTerminal kind)}}}
+                  <*> wrap (Report.optionalContext . declarationLevel . report $ self)
+                  <*> wrap (kind self)}}}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1167,17 +1167,17 @@ kindSignaturesMixin self super@ExtendedGrammar
          topLevelDeclaration = topLevelDeclaration
             <|> Abstract.kindedDataDeclaration <$ keyword "data"
                    <*> wrap optionalContext
-                   <*> wrap (nonTerminal $ Report.simpleType . Report.declarationLevel . report)
-                   <*> wrap (nonTerminal kindSignature)
-                   <*> (delimiter "=" *> nonTerminal (Report.declaredConstructors . Report.declarationLevel . report)
+                   <*> wrap (Report.simpleType . Report.declarationLevel . report $ self)
+                   <*> wrap (kindSignature self)
+                   <*> (delimiter "=" *> (Report.declaredConstructors . Report.declarationLevel . report $ self)
                         <|> pure [])
                    <*> Report.derivingClause baseDeclarations
             <|> Abstract.kindedNewtypeDeclaration <$ keyword "newtype"
                    <*> wrap optionalContext
-                   <*> wrap (nonTerminal $ Report.simpleType . Report.declarationLevel . report)
-                   <*> wrap (nonTerminal kindSignature)
+                   <*> wrap (Report.simpleType . Report.declarationLevel . report $ self)
+                   <*> wrap (kindSignature self)
                    <* delimiter "="
-                   <*> wrap (nonTerminal $ Report.newConstructor . Report.declarationLevel . report)
+                   <*> wrap (Report.newConstructor . Report.declarationLevel . report $ self)
                    <*> Report.derivingClause baseDeclarations
             <|> Abstract.classDeclaration
                    <$ keyword "class"
@@ -1185,33 +1185,33 @@ kindSignaturesMixin self super@ExtendedGrammar
                    <*> wrap (Abstract.simpleTypeLHSApplication
                                 <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
                                 <*> parens (Abstract.explicitlyKindedTypeVariable
-                                            <$> nonTerminal (Report.typeVar . report)
-                                            <*> wrap (nonTerminal kindSignature)))
+                                            <$> (Report.typeVar . report $ self)
+                                            <*> wrap (kindSignature self)))
                    <*> (keyword "where"
-                        *> blockOf (nonTerminal $ Report.inClassDeclaration . Report.declarationLevel . report)
+                        *> blockOf (Report.inClassDeclaration . Report.declarationLevel . report $ self)
                         <|> pure []),
          instanceTypeDesignator = instanceTypeDesignator
             <|> Abstract.kindedType
-                <$> wrap (nonTerminal $ Report.instanceTypeDesignator . declarationLevel . report)
-                <*> wrap (nonTerminal kindSignature),
-         typeVarTuple = (:|) <$> wrap (nonTerminal optionallyKindedTypeVar)
-                             <*> some (comma *> wrap (nonTerminal optionallyKindedTypeVar))},
+                <$> wrap (Report.instanceTypeDesignator . declarationLevel . report $ self)
+                <*> wrap (kindSignature self),
+         typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
+                             <*> some (comma *> wrap (optionallyKindedTypeVar self))},
       typeTerm = typeTerm <|>
-         Abstract.kindedType <$> wrap (nonTerminal $ Report.typeTerm . report) <*> wrap (nonTerminal kindSignature)},
+         Abstract.kindedType <$> wrap (Report.typeTerm . report $ self) <*> wrap (kindSignature self)},
    optionallyKindedAndParenthesizedTypeVar =
-      Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar
+      Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
       <|> parens (Abstract.kindedType
-                  <$> wrap (Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar)
-                  <*> wrap (nonTerminal kindSignature)),
+                  <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
+                  <*> wrap (kindSignature self)),
    optionallyKindedTypeVar =
-      Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)
+      Abstract.typeVariable <$> (Report.typeVar . report $ self)
       <|> Abstract.kindedType
-          <$> wrap (Abstract.typeVariable <$> nonTerminal (Report.typeVar . report))
-          <*> wrap (nonTerminal kindSignature),
+          <$> wrap (Abstract.typeVariable <$> (Report.typeVar . report $ self))
+          <*> wrap (kindSignature self),
    typeVarBinder = typeVarBinder super
                    <|> parens (Abstract.explicitlyKindedTypeVariable
-                               <$> nonTerminal (Report.typeVar . report)
-                               <*> wrap (nonTerminal kindSignature))}
+                               <$> (Report.typeVar . report $ self)
+                               <*> wrap (kindSignature self))}
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1224,9 +1224,9 @@ existentialQuantificationMixin self super@ExtendedGrammar
       declarationLevel= baseDeclarations{
          declaredConstructor = declaredConstructor
             <|> Abstract.existentialConstructor
-                <$ nonTerminal keywordForall
-                <*> many (nonTerminal typeVarBinder) <* delimiter "."
-                <*> wrap (nonTerminal $ Report.optionalContext . declarationLevel . report)
+                <$ keywordForall self
+                <*> many (typeVarBinder self) <* delimiter "."
+                <*> wrap (Report.optionalContext . declarationLevel . report $ self)
                 <*> wrap declaredConstructor
             <|> Abstract.existentialConstructor [] <$> wrap (context <* rightDoubleArrow)
                                                    <*> wrap declaredConstructor}}}
@@ -1243,31 +1243,31 @@ explicitForAllMixin self super@ExtendedGrammar
              declarationLevel= baseDeclarations{
                topLevelDeclaration = topLevelDeclaration
                   <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-                      <* nonTerminal keywordForall
-                      <*> many (nonTerminal typeVarBinder)
+                      <* keywordForall self
+                      <*> many (typeVarBinder self)
                       <* delimiter "."
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator
                       <*> (keyword "where"
-                           *> blockOf (nonTerminal $ Report.inInstanceDeclaration . declarationLevel . report)
+                           *> blockOf (Report.inInstanceDeclaration . declarationLevel . report $ self)
                            <|> pure [])},
       aType = aType
          <|> parens (Abstract.forallType []
-                     <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
-                     <* nonTerminal (Report.rightDoubleArrow . report)
-                     <*> wrap (nonTerminal $ Report.typeTerm . report)),
-      typeVar = notFollowedBy (nonTerminal keywordForall) *> typeVar},
+                     <$> wrap (Report.context . declarationLevel . report $ self)
+                     <* (Report.rightDoubleArrow . report $ self)
+                     <*> wrap (Report.typeTerm . report $ self)),
+      typeVar = notFollowedBy (keywordForall self) *> typeVar},
    forallType = forallType super
-      <|> Abstract.forallType <$ nonTerminal keywordForall
-          <*> many (nonTerminal typeVarBinder) <* delimiter "."
+      <|> Abstract.forallType <$ keywordForall self
+          <*> many (typeVarBinder self) <* delimiter "."
           <*> wrap optionalContext
-          <*> wrap (nonTerminal forallType),
-   optionalForall = nonTerminal keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure [],
+          <*> wrap (forallType self),
+   optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
    kind = kind super
-      <|> Abstract.forallKind <$ nonTerminal keywordForall
-          <*> many (nonTerminal typeVarBinder) <* delimiter "."
-          <*> wrap (nonTerminal kind),
-   kindVar = notFollowedBy (nonTerminal keywordForall) *> kindVar super}
+      <|> Abstract.forallKind <$ keywordForall self
+          <*> many (typeVarBinder self) <* delimiter "."
+          <*> wrap (kind self),
+   kindVar = notFollowedBy (keywordForall self) *> kindVar super}
 
 gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1281,14 +1281,14 @@ gadtSyntaxMixin self super@ExtendedGrammar
              declarationLevel= baseDeclarations{
                topLevelDeclaration = topLevelDeclaration
                   <|> Abstract.gadtDeclaration <$ keyword "data"
-                      <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
-                      <*> blockOf (nonTerminal gadtConstructors)
+                      <*> wrap simpleType <*> optional (wrap $ kindSignature self) <* keyword "where"
+                      <*> blockOf (gadtConstructors self)
                       <*> derivingClause
                   <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
-                      <*> wrap simpleType <*> optional (wrap $ nonTerminal kindSignature) <* keyword "where"
-                      <*> wrap (nonTerminal gadtNewConstructor)
+                      <*> wrap simpleType <*> optional (wrap $ kindSignature self) <* keyword "where"
+                      <*> wrap (gadtNewConstructor self)
                       <*> derivingClause}},
-   optionalForall = nonTerminal keywordForall *> many (nonTerminal typeVarBinder) <* delimiter "." <|> pure []}
+   optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
