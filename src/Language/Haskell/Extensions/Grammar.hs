@@ -198,23 +198,23 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= r'{
-               declarationLevel= baseDeclarations{
-                 simpleType =
-                    Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
-                    <|> Abstract.simpleTypeLHSApplication
-                        <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
-                        <*> nonTerminal typeVarBinder,
-                 instanceTypeDesignator =
-                    generalTypeConstructor
-                    <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-                    <|> parens (nonTerminal (Report.instanceTypeDesignator . declarationLevel . report)
-                                <|> typeVarApplications
-                                <|> Abstract.tupleType <$> typeVarTuple
-                                <|> Abstract.functionType
-                                    <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
-                                    <* nonTerminal (Report.rightArrow . report)
-                                    <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
-               typeTerm = nonTerminal forallType},
+        declarationLevel= (declarationLevel r'){
+          simpleType =
+             Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+             <|> Abstract.simpleTypeLHSApplication
+                 <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
+                 <*> nonTerminal typeVarBinder,
+          instanceTypeDesignator =
+             generalTypeConstructor
+             <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
+             <|> parens (nonTerminal (Report.instanceTypeDesignator . declarationLevel . report)
+                         <|> typeVarApplications
+                         <|> Abstract.tupleType <$> typeVarTuple
+                         <|> Abstract.functionType
+                             <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+                             <* nonTerminal (Report.rightArrow . report)
+                             <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+        typeTerm = nonTerminal forallType},
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
@@ -312,10 +312,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
                       <*> wrap (nonTerminal arg_type)
                    <|> Abstract.constructorType <$> wrap generalConstructor,
      arg_type = nonTerminal (Report.aType . report)}
-   where r'@HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
-                           declarationLevel= baseDeclarations@DeclarationGrammar{..},
-                           ..}
-                          = Report.grammar r
+   where r'@HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}, declarationLevel= DeclarationGrammar{..}, ..} =
+            Report.grammar r
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                     g ~ ExtendedGrammar l t (NodeWrap t))
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
