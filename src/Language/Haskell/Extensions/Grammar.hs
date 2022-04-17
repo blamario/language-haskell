@@ -459,64 +459,64 @@ multiWayIfMixin self super@ExtendedGrammar{report= HaskellGrammar{..}} = super{
 packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                   OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-packageImportsMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+packageImportsMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> (stringLiteral . report $ self)
                                  <*> Report.moduleId
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                g ~ ExtendedGrammar l t (NodeWrap t))
                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-safeImportsMixin self super@ExtendedGrammar{report= HaskellGrammar {moduleLevel= ModuleLevelGrammar{..}}} = super{
+safeImportsMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> Report.moduleId
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 importQualifiedPostMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                        g ~ ExtendedGrammar l t (NodeWrap t))
                          => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-importQualifiedPostMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+importQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> flip Abstract.importDeclaration <$ keyword "import"
                                  <*> Report.moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                       OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-safePackageImportsMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+safePackageImportsMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> (stringLiteral . report $ self)
                                  <*> Report.moduleId
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-packageImportsQualifiedPostMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+packageImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <**> pure flip
                                  <*> (stringLiteral . report $ self)
@@ -524,28 +524,28 @@ packageImportsQualifiedPostMixin self super@ExtendedGrammar{report= HaskellGramm
                                  <*> Report.moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-safeImportsQualifiedPostMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+safeImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> Report.moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                    Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-safePackageImportsQualifiedPostMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+safePackageImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = importDeclaration
+         importDeclaration = (importDeclaration . moduleLevel . report $ super)
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <**> pure flip
                                  <*> (stringLiteral . report $ self)
@@ -553,20 +553,20 @@ safePackageImportsQualifiedPostMixin self super@ExtendedGrammar{report= HaskellG
                                  <*> Report.moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> Report.moduleId)
-                                 <*> optional (wrap importSpecification)}}}
+                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
 
 explicitNamespacesMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                       LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                       g ~ ExtendedGrammar l t (NodeWrap t))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-explicitNamespacesMixin self super@ExtendedGrammar{report= HaskellGrammar{moduleLevel= ModuleLevelGrammar{..}}} = super{
+explicitNamespacesMixin self super = super{
    report= (report super){
       moduleLevel= (moduleLevel . report $ super){
-         export = export
+         export = (export . moduleLevel . report $ super)
             <|> Abstract.exportClassOrType <$ keyword "type"
                 <*> parens (qualifiedVariableSymbol . report $ self)
                 <*> pure Nothing,
-         importItem = importItem
+         importItem = (importItem . moduleLevel . report $ super)
             <|> Abstract.importClassOrType <$ keyword "type"
                 <*> parens (variableSymbol . report $ self)
                 <*> pure Nothing,
