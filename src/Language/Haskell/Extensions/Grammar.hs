@@ -14,6 +14,7 @@ import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
 import Data.Foldable (fold, toList)
+import Data.Function ((&))
 import Data.Functor.Compose (Compose(getCompose))
 import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -330,9 +331,9 @@ overloadedLabelsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Pars
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 overloadedLabelsMixin self super = super{
    report= (report super){
-      variableIdentifier = (variableIdentifier . report $ super)
+      variableIdentifier = (super & report & variableIdentifier)
          <|> token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme)),
-      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> (variableSymbol . report $ super)}}
+      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> (super & report & variableSymbol)}}
 
 unicodeSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                  Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
@@ -340,11 +341,11 @@ unicodeSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing 
 unicodeSyntaxMixin self super = super{
    keywordForall = keywordForall super <|> delimiter "∀",
    report= (report super){
-      doubleColon = (doubleColon . report $ super) <|> delimiter "∷",
-      rightDoubleArrow = (rightDoubleArrow . report $ super) <|> delimiter "⇒",
-      rightArrow = (rightArrow . report $ super) <|> delimiter "→",
-      leftArrow = (leftArrow . report $ super) <|> delimiter "←",
-      variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (variableSymbol . report $ super)}}
+      doubleColon = (super & report & doubleColon) <|> delimiter "∷",
+      rightDoubleArrow = (super & report & rightDoubleArrow) <|> delimiter "⇒",
+      rightArrow = (super & report & rightArrow) <|> delimiter "→",
+      leftArrow = (super & report & leftArrow) <|> delimiter "←",
+      variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (super & report & variableSymbol)}}
 
 magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                              g ~ ExtendedGrammar l t (NodeWrap t))
@@ -355,23 +356,23 @@ magicHashMixin self super =
       charLiteral', charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
       stringLiteral', stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
 
-      integer' = token ((integerLexeme . report $ self) <* notFollowedBy (string "#"))
-      float' = token ((floatLexeme . report $ self) <* notFollowedBy (string "#"))
-      charLiteral' = token ((charLexeme . report $ self) <* notFollowedBy (string "#"))
-      stringLiteral' = token ((stringLexeme . report $ self) <* notFollowedBy (string "#")) <?> "string literal"
+      integer' = token ((self & report & integerLexeme) <* notFollowedBy (string "#"))
+      float' = token ((self & report & floatLexeme) <* notFollowedBy (string "#"))
+      charLiteral' = token ((self & report & charLexeme) <* notFollowedBy (string "#"))
+      stringLiteral' = token ((self & report & stringLexeme) <* notFollowedBy (string "#")) <?> "string literal"
 
-      integerHash = token ((integerLexeme . report $ self) <* string "#" <* notFollowedBy (string "#"))
-      floatHash = token ((floatLexeme . report $ self) <* string "#" <* notFollowedBy (string "#"))
-      integerHash2 = token ((integerLexeme . report $ self) <* string "##")
-      floatHash2 = token ((floatLexeme . report $ self) <* string "##")
-      charHashLiteral = token ((charLexeme . report $ self) <* string "#")
-      stringHashLiteral = token ((stringLexeme . report $ self) <* string "#")
+      integerHash = token ((self & report & integerLexeme) <* string "#" <* notFollowedBy (string "#"))
+      floatHash = token ((self & report & floatLexeme) <* string "#" <* notFollowedBy (string "#"))
+      integerHash2 = token ((self & report & integerLexeme) <* string "##")
+      floatHash2 = token ((self & report & floatLexeme) <* string "##")
+      charHashLiteral = token ((self & report & charLexeme) <* string "#")
+      stringHashLiteral = token ((self & report & stringLexeme) <* string "#")
   in super{report= (report super){
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
         constructorIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (constructorLexeme <> concatAll (string "#"))),
-        lPattern = (aPattern . report $ self)
+        lPattern = (self & report & aPattern)
                    <|> Abstract.literalPattern
                        <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
                                  <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
@@ -385,8 +386,8 @@ magicHashMixin self super =
                                  <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.floatingLiteral . negate)
                                      <$ delimiter "-" <*> floatHash2)
                    <|> Abstract.constructorPattern
-                       <$> wrap (generalConstructor . report $ self)
-                       <*> some (wrap $ aPattern . report $ self),
+                       <$> wrap (self & report & generalConstructor)
+                       <*> some (wrap $ self & report & aPattern),
          literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
                    <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
                    <|> Abstract.hashLiteral
@@ -402,22 +403,22 @@ recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (P
                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 recursiveDoMixin self super = super{
    report= (report super){
-      closedBlockExpresion = (closedBlockExpresion . report $ super)
-         <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap (statements . report $ self),
-      statement = (statement . report $ super)
+      closedBlockExpresion = (super & report & closedBlockExpresion)
+         <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap (self & report & statements),
+      statement = (super & report & statement)
                   <|> Deep.InL
                       <$> wrap (Abstract.recursiveStatement
                                 . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
                                 <$ keyword "rec"
-                                <*> blockOf (statement . report $ self)),
-      variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (variableIdentifier . report $ super)}}
+                                <*> blockOf (self & report & statement)),
+      variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (super & report & variableIdentifier)}}
 
 parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                               Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
    report= (report super){
-      bareExpression = (bareExpression . report $ super)
+      bareExpression = (super & report & bareExpression)
                        <|> brackets (Abstract.parallelListComprehension
                                      <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
@@ -426,7 +427,7 @@ tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing 
                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}} super = super{
    report= (report super){
-      bareExpression = (bareExpression . report $ super)
+      bareExpression = (super & report & bareExpression)
          <|> Abstract.tupleSectionExpression
              <$> parens (filter (any isJust)
                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
@@ -436,9 +437,9 @@ lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 lambdaCaseMixin self super = super{
    report= (report super){
-      closedBlockExpresion = (closedBlockExpresion . report $ super)
+      closedBlockExpresion = (super & report & closedBlockExpresion)
          <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
-             <*> (alternatives . report $ self)}}
+             <*> (self & report & alternatives)}}
 
 emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
@@ -454,7 +455,7 @@ multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, rightArrow}} super = super{
    report= (report super){
-      closedBlockExpresion = (closedBlockExpresion . report $ super)
+      closedBlockExpresion = (super & report & closedBlockExpresion)
          <|> Abstract.multiWayIfExpression <$ keyword "if"
              <*> blockOf' (Abstract.guardedExpression . toList
                            <$> guards <* rightArrow <*> expression)}}
@@ -464,99 +465,99 @@ packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 packageImportsMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <*> (True <$ keyword "qualified" <|> pure False)
-                                 <*> (stringLiteral . report $ self)
+                                 <*> (self & report & stringLiteral)
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                g ~ ExtendedGrammar l t (NodeWrap t))
                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 safeImportsMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 importQualifiedPostMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                        g ~ ExtendedGrammar l t (NodeWrap t))
                          => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 importQualifiedPostMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> flip Abstract.importDeclaration <$ keyword "import"
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
                                       OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 safePackageImportsMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
-                                 <*> (stringLiteral . report $ self)
+                                 <*> (self & report & stringLiteral)
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 packageImportsQualifiedPostMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <**> pure flip
-                                 <*> (stringLiteral . report $ self)
+                                 <*> (self & report & stringLiteral)
                                  <**> pure flip
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 safeImportsQualifiedPostMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                    Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 safePackageImportsQualifiedPostMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         importDeclaration = (importDeclaration . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <**> pure flip
-                                 <*> (stringLiteral . report $ self)
+                                 <*> (self & report & stringLiteral)
                                  <**> pure flip
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap $ importSpecification . moduleLevel . report $ self)}}}
+                                 <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
 explicitNamespacesMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                       LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -564,14 +565,14 @@ explicitNamespacesMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), 
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 explicitNamespacesMixin self super = super{
    report= (report super){
-      moduleLevel= (moduleLevel . report $ super){
-         export = (export . moduleLevel . report $ super)
+      moduleLevel= (super & report & moduleLevel){
+         export = (super & report & moduleLevel & export)
             <|> Abstract.exportClassOrType <$ keyword "type"
-                <*> parens (qualifiedVariableSymbol . report $ self)
+                <*> parens (self & report & qualifiedVariableSymbol)
                 <*> pure Nothing,
-         importItem = (importItem . moduleLevel . report $ super)
+         importItem = (super & report & moduleLevel & importItem)
             <|> Abstract.importClassOrType <$ keyword "type"
-                <*> parens (variableSymbol . report $ self)
+                <*> parens (self & report & variableSymbol)
                 <*> pure Nothing,
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
@@ -584,11 +585,11 @@ blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 blockArgumentsMixin self super = super{
    report= (report super){
-      lExpression = (lExpression . report $ super)
-         <|> wrap (Abstract.applyExpression <$> (fExpression . report $ self)
-                                            <*> wrap (openBlockExpression . report $ self)),
-      dExpression = (fExpression . report $ self),
-      bareExpression = (bareExpression . report $ super) <|> (closedBlockExpresion . report $ self)}}
+      lExpression = (super & report & lExpression)
+         <|> wrap (Abstract.applyExpression <$> (self & report & fExpression)
+                                            <*> wrap (self & report & openBlockExpression)),
+      dExpression = (self & report & fExpression),
+      bareExpression = (super & report & bareExpression) <|> (self & report & closedBlockExpresion)}}
 
 lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                                    Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
@@ -597,23 +598,23 @@ lexicalNegationMixin self super = super{
    report= (report super){
       qualifiedVariableSymbol = notFollowedBy (string "-"
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                                *> token (nameQualifier <*> (variableSymbol . report $ self)),
+                                *> token (nameQualifier <*> (self & report & variableSymbol)),
       infixExpression = wrap (Abstract.infixExpression
-                                 <$> (dExpression . report $ self)
-                                 <*> wrap (Abstract.referenceExpression <$> (qualifiedOperator . report $ self))
-                                 <*> (infixExpression . report $ self))
-                        <|> (lExpression . report $ self),
+                                 <$> (self & report & dExpression)
+                                 <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
+                                 <*> (self & report & infixExpression))
+                        <|> (self & report & lExpression),
       leftInfixExpression =
          wrap (Abstract.infixExpression
-                  <$> (dExpression . report $ self)
-                  <*> wrap (Abstract.referenceExpression <$> (qualifiedOperator . report $ self))
-                  <*> (leftInfixExpression . report $ self))
-         <|> (dExpression . report $ self),
-      bareExpression = (bareExpression . report $ super)
-         <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> (aExpression . report $ self)
+                  <$> (self & report & dExpression)
+                  <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
+                  <*> (self & report & leftInfixExpression))
+         <|> (self & report & dExpression),
+      bareExpression = (super & report & bareExpression)
+         <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> (self & report & aExpression)
          <|> parens (Abstract.rightSectionExpression
-                     <$> (notFollowedBy prefixMinus *> (qualifiedOperator . report $ self))
-                     <*> (infixExpression . report $ self))}}
+                     <$> (notFollowedBy prefixMinus *> (self & report & qualifiedOperator))
+                     <*> (self & report & infixExpression))}}
    where prefixMinus = void (string "-"
                              <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
                              <* lift ([[Token Modifier "-"]], ()))
@@ -627,14 +628,14 @@ negativeLiteralsMixin self@ExtendedGrammar
                       super = super{
    report= (report super){
       qualifiedVariableSymbol =
-         notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> (qualifiedVariableSymbol . report $ super),
+         notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> (super & report & qualifiedVariableSymbol),
       infixExpression =
          wrap (Abstract.infixExpression
                   <$> dExpression
                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                   <*> infixExpression
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
-         <|> (lExpression . report $ self),
+         <|> (self & report & lExpression),
       leftInfixExpression =
          wrap (Abstract.infixExpression
                   <$> dExpression
@@ -642,8 +643,8 @@ negativeLiteralsMixin self@ExtendedGrammar
                   <*> leftInfixExpression
                <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
          <|> dExpression,
-      integerLexeme = (negate <$ string "-" <|> pure id) <*> (integerLexeme . report $ super),
-      floatLexeme = (negate <$ string "-" <|> pure id) <*> (floatLexeme . report $ super)}}
+      integerLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & integerLexeme),
+      floatLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & floatLexeme)}}
    where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
 
 binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
@@ -654,7 +655,7 @@ binaryLiteralsMixin self super = super{
       integerLexeme =
          (string "0b" <|> string "0B")
          *> (foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
-         <<|> (integerLexeme . report $ super)}}
+         <<|> (super & report & integerLexeme)}}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
          binary _ _ = error "non-binary"
@@ -666,11 +667,11 @@ hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexad
    report= (report super){
       integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
                                     *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
-                      *> (integerLexeme . report $ super),
+                      *> (super & report & integerLexeme),
       floatLexeme = (string "0x" <|> string "0X")
                     *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (hexExponent <<|> pure 0)
                        <|> readHexFloat <$> hexadecimal <*> pure mempty <*> hexExponent)
-                    <|> (floatLexeme . report $ super)}}
+                    <|> (super & report & floatLexeme)}}
    where hexExponent =
            (string "p" <|> string "P")
            *> (id <$ string "+" <|> negate <$ string "-" <|> pure id)
@@ -700,7 +701,7 @@ binaryUnderscoresMixin self super = super{
          (string "0b" <|> string "0B")
          *> (foldl' binary 0 . toString mempty
              <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
-         <<|> (integerLexeme . report $ super)}}
+         <<|> (super & report & integerLexeme)}}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
          binary _ _ = error "non-binary"
@@ -712,66 +713,66 @@ typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstr
 typeOperatorsMixin self super =
    super{
       report= (report super){
-                declarationLevel= (declarationLevel . report $ super){
-                  simpleType = (simpleType . declarationLevel . report $ super)
+                declarationLevel= (super & report & declarationLevel){
+                  simpleType = (super & report & declarationLevel & simpleType)
                      <|> Abstract.simpleInfixTypeLHSApplication
                                   <$> typeVarBinder self
                                   <*> anySymbol
                                   <*> typeVarBinder self
-                     <|> parens ((Report.simpleType . Report.declarationLevel . report $ self)),
-                  instanceTypeDesignator = (instanceTypeDesignator . declarationLevel . report $ super)
+                     <|> parens ((self & report & declarationLevel & simpleType)),
+                  instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
                      <|> parens (Abstract.infixTypeApplication
                                  <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-                                 <*> (qualifiedOperator . report $ self)
+                                 <*> (self & report & qualifiedOperator)
                                  <*> wrap (optionallyKindedAndParenthesizedTypeVar self)),
                   qualifiedTypeClass =
-                     (qualifiedConstructor . report $ self) <|> parens (qualifiedVariableSymbol . report $ self)},
-                typeConstructor = (constructorIdentifier . report $ self) <|> parens anySymbol,
-                generalTypeConstructor = (generalTypeConstructor . report $ super)
+                     (self & report & qualifiedConstructor) <|> parens (self & report & qualifiedVariableSymbol)},
+                typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
+                generalTypeConstructor = (super & report & generalTypeConstructor)
                   <|> Abstract.constructorType
-                      <$> wrap (Abstract.constructorReference <$> parens (qualifiedVariableSymbol . report $ self)),
-                bType = (bType . report $ super)
+                      <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol)),
+                bType = (super & report & bType)
                    <|> Abstract.infixTypeApplication
-                          <$> wrap (Report.bType . report $ self)
-                          <*> (qualifiedOperator . report $ self)
-                          <*> wrap (Report.aType . report $ self)},
+                          <$> wrap (self & report & Report.bType)
+                          <*> (self & report & qualifiedOperator)
+                          <*> wrap (self & report & Report.aType)},
         cTypeWithWildcards = cTypeWithWildcards super
            <|> Abstract.infixTypeApplication
                   <$> wrap (bTypeWithWildcards self)
-                  <*> (qualifiedOperator . report $ self)
+                  <*> (self & report & qualifiedOperator)
                   <*> wrap (cTypeWithWildcards self),
         familyInstanceDesignator = familyInstanceDesignator super
            <|> Abstract.infixTypeClassInstanceLHS
                   <$> wrap (bTypeWithWildcards super)
-                  <*> (qualifiedOperator . report $ self)
+                  <*> (self & report & qualifiedOperator)
                   <*> wrap (cTypeWithWildcards super)}
-   where anySymbol = (constructorSymbol . report $ self) <|> (variableSymbol . report $ self)
+   where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
 
 equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                        g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 equalityConstraintsMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         constraint = (constraint . declarationLevel . report $ super) <|> equalityConstraint},
-      typeTerm = (typeTerm . report $ super) <|> Abstract.constraintType <$> wrap equalityConstraint}}
+      declarationLevel= (super & report & declarationLevel){
+         constraint = (super & report & declarationLevel & constraint) <|> equalityConstraint},
+      typeTerm = (super & report & typeTerm) <|> Abstract.constraintType <$> wrap equalityConstraint}}
    where equalityConstraint =
-            Abstract.typeEqualityConstraint <$> wrap (bType . report $ self)
-            <* delimiter "~" <*> wrap ((bType . report $ self))
+            Abstract.typeEqualityConstraint <$> wrap (self & report & bType)
+            <* delimiter "~" <*> wrap ((self & report & bType))
 
 multiParameterConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                              g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
                                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 multiParameterConstraintsMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         constraint= (constraint . declarationLevel . report $ super)
-            <|> Abstract.multiParameterClassConstraint <$> (qualifiedTypeClass . declarationLevel . report $ self)
+      declarationLevel= (super & report & declarationLevel){
+         constraint= (super & report & declarationLevel & constraint)
+            <|> Abstract.multiParameterClassConstraint <$> (self & report & declarationLevel & qualifiedTypeClass)
                 <*> filter
                        ((1 /=) . length)
                        (many $ wrap $
                         optionallyKindedAndParenthesizedTypeVar self
-                        <|> parens (typeApplications . declarationLevel . report $ self))}}}
+                        <|> parens (self & report & declarationLevel & typeApplications))}}}
 
 multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                           g ~ ExtendedGrammar l t (NodeWrap t),
@@ -779,12 +780,12 @@ multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedH
                                             => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 multiParameterConstraintsTypeOperatorsMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         constraint = (constraint . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         constraint = (super & report & declarationLevel & constraint)
             <|> Abstract.infixConstraint
-                <$> wrap ((bType . report $ self))
-                <*> (qualifiedOperator . report $ self)
-                <*> wrap ((bType . report $ self))}}}
+                <$> wrap ((self & report & bType))
+                <*> (self & report & qualifiedOperator)
+                <*> wrap ((self & report & bType))}}}
 
 gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -795,47 +796,47 @@ gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l
                             => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 gratuitouslyParenthesizedTypesMixin self super = super{
    report= (report super){
-      declarationLevel = (declarationLevel . report $ super){
-         topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+      declarationLevel = (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
             <|> Abstract.classDeclaration <$ keyword "class"
-                <*> wrap (optionalContext . declarationLevel . report $ self)
+                <*> wrap (self & report & declarationLevel & optionalContext)
                 <*> wrap (Abstract.simpleKindedTypeLHS
-                          <$> (typeClass . declarationLevel . report $ self)
+                          <$> (self & report & declarationLevel & typeClass)
                           <*> ((:[]) <$> parens (typeVarBinder self)))
-                <*> (keyword "where" *> blockOf (inClassDeclaration . declarationLevel . report $ self) <|> pure []),
-         constraint = (constraint . declarationLevel . report $ super)
-            <|> parens (Report.constraint . declarationLevel . report $ self),
-         context = (Report.constraint . declarationLevel . report $ self)
+                <*> (keyword "where" *> blockOf (self & report & declarationLevel & inClassDeclaration) <|> pure []),
+         constraint = (super & report & declarationLevel & constraint)
+            <|> parens (self & report & declarationLevel & Report.constraint),
+         context = (self & report & declarationLevel & Report.constraint)
             <|> Abstract.constraints
                 <$> parens (filter ((1 /=) . length)
-                            $ wrap ((Report.constraint . declarationLevel . report $ self)) `sepBy` comma),
-         classConstraint = (classConstraint . declarationLevel . report $ super)
+                            $ wrap ((self & report & declarationLevel & Report.constraint)) `sepBy` comma),
+         classConstraint = (super & report & declarationLevel & classConstraint)
             <|> Abstract.simpleConstraint
-                <$> (Report.qualifiedTypeClass . declarationLevel . report $ self)
+                <$> (self & report & declarationLevel & Report.qualifiedTypeClass)
                 <*> parens (optionallyParenthesizedTypeVar self),
-         qualifiedTypeClass = (qualifiedTypeClass . declarationLevel . report $ super) <|> parens qtc,
+         qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
          typeApplications =
             Abstract.typeApplication
             <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
-                      <|> (typeApplications . declarationLevel . report $ self))
-            <*> wrap (aType . report $ self),
+                      <|> (self & report & declarationLevel & typeApplications))
+            <*> wrap (self & report & aType),
          typeVarApplications =
-            (generalTypeConstructor . report $ self)
+            (self & report & generalTypeConstructor)
             <|> Abstract.typeApplication
-                <$> wrap ((Report.typeVarApplications . declarationLevel . report $ self)
-                          <|> parens (Report.typeVarApplications . declarationLevel . report $ self))
+                <$> wrap ((self & report & declarationLevel & Report.typeVarApplications)
+                          <|> parens (self & report & declarationLevel & Report.typeVarApplications))
                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
-         instanceDesignator = (instanceDesignator . declarationLevel . report $ super)
-            <|> parens (Report.instanceDesignator . declarationLevel . report $ self),
+         instanceDesignator = (super & report & declarationLevel & instanceDesignator)
+            <|> parens (self & report & declarationLevel & Report.instanceDesignator),
          derivingClause = keyword "deriving"
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
                           <|> pure []}},
-   optionallyParenthesizedTypeVar = (Report.typeVar . report $ self)
+   optionallyParenthesizedTypeVar = (self & report & Report.typeVar)
                                     <|> parens (optionallyParenthesizedTypeVar self),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
-   where qtc = (Report.qualifiedTypeClass . declarationLevel . report $ self)
+   where qtc = (self & report & declarationLevel & Report.qualifiedTypeClass)
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -843,7 +844,7 @@ flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 flexibleInstancesMixin self super = super{
    report= (report super){
-             declarationLevel= (declarationLevel . report $ super){
+             declarationLevel= (super & report & declarationLevel){
                 instanceDesignator = flexibleInstanceDesignator self}}}
 
 typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -859,8 +860,8 @@ typeFamiliesMixin self@ExtendedGrammar
                   super =
   super{
     report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
@@ -870,7 +871,7 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> blockOf (Abstract.typeFamilyInstance
                              <$> optionalForall self
                              <*> wrap (familyInstanceDesignator self) <* delimiter "="
-                             <*> wrap (typeTerm . report $ self))
+                             <*> wrap (self & report & typeTerm))
             <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
@@ -904,14 +905,14 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> optionalForall self
                 <*> wrap (familyInstanceDesignator self)
                 <* delimiter "="
-                <*> wrap (typeTerm . report $ self),
-         inClassDeclaration = (inClassDeclaration . declarationLevel . report $ super)
+                <*> wrap (self & report & typeTerm),
+         inClassDeclaration = (super & report & declarationLevel & inClassDeclaration)
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> inClassOrInstanceTypeFamilyDeclaration self,
-         inInstanceDeclaration = (inInstanceDeclaration . declarationLevel . report $ super)
+         inInstanceDeclaration = (super & report & declarationLevel & inInstanceDeclaration)
             <|> inClassOrInstanceTypeFamilyDeclaration self
         }
     },
@@ -950,7 +951,7 @@ typeFamiliesMixin self@ExtendedGrammar
            <*> optionalForall self
            <*> wrap (familyInstanceDesignator self)
            <* delimiter "="
-           <*> wrap (typeTerm . report $ self)}
+           <*> wrap (self & report & typeTerm)}
 
 typeFamilyDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                           g ~ ExtendedGrammar l t (NodeWrap t),
@@ -963,8 +964,8 @@ typeFamilyDependenciesMixin
   super =
   super{
     report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <* delimiter "="
                 <*> typeVarBinder self
@@ -977,14 +978,14 @@ typeFamilyDependenciesMixin
                 <*> blockOf (Abstract.typeFamilyInstance
                              <$> optionalForall self
                              <*> wrap (familyInstanceDesignator self) <* delimiter "="
-                             <*> wrap (typeTerm . report $ self)),
-         inClassDeclaration = (inClassDeclaration . declarationLevel . report $ super)
+                             <*> wrap (self & report & typeTerm)),
+         inClassDeclaration = (super & report & declarationLevel & inClassDeclaration)
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <* delimiter "="
                 <*> typeVarBinder self
                 <*> (Just <$> dependencies)}}}
-   where dependencies = (,) <$> (delimiter "|" *> (typeVar . report $ self)) <* (rightArrow . report $ self)
-                            <*> someNonEmpty (typeVar . report $ self)
+   where dependencies = (,) <$> (delimiter "|" *> (self & report & typeVar)) <* (self & report & rightArrow)
+                            <*> someNonEmpty (self & report & typeVar)
 
 dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -993,18 +994,18 @@ dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 dataKindsMixin self super = super{
    report= (report super){
-      aType = (aType . report $ super)
+      aType = (super & report & aType)
          <|> promotedType self
          <|> Abstract.promotedTupleType <$ terminator "'"
-             <*> parens ((:|) <$> wrap (typeTerm . report $ self)
-                              <*> some (comma *> wrap (typeTerm . report $ self)))
+             <*> parens ((:|) <$> wrap (self & report & typeTerm)
+                              <*> some (comma *> wrap (self & report & typeTerm)))
          <|> Abstract.promotedListType <$ terminator "'"
-                                       <*> brackets (wrap (typeTerm . report $ self) `sepBy1` comma)
+                                       <*> brackets (wrap (self & report & typeTerm) `sepBy1` comma)
          <|> Abstract.promotedListType
-             <$> brackets ((:) <$> wrap (typeTerm . report $ self) <* comma
-                               <*> wrap (typeTerm . report $ self) `sepBy1` comma),
-      declarationLevel= (declarationLevel . report $ super){
-         instanceTypeDesignator = (instanceTypeDesignator . declarationLevel . report $ super)
+             <$> brackets ((:) <$> wrap (self & report & typeTerm) <* comma
+                               <*> wrap (self & report & typeTerm) `sepBy1` comma),
+      declarationLevel= (super & report & declarationLevel){
+         instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
             <|> promotedType self}},
    aTypeWithWildcards = aTypeWithWildcards super
       <|> promotedType self
@@ -1019,7 +1020,7 @@ dataKindsMixin self super = super{
      <|> Abstract.typeRepresentationKind
          <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
          <* notFollowedBy (fst <$> match (aKind self))
-         <*> wrap (Report.aType . report $ self),
+         <*> wrap (self & report & Report.aType),
    aKind = aKind super
      <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (kind self) <*> some (comma *> wrap (kind self)))
      <|> Abstract.listKind <$> brackets (wrap $ kind self)}
@@ -1031,35 +1032,35 @@ dataKindsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lexica
                             => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 dataKindsTypeOperatorsMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         instanceTypeDesignator = (instanceTypeDesignator . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
             <|> parens (Abstract.promotedInfixTypeApplication
                         <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
                         <* terminator "'"
-                        <*> (qualifiedOperator . report $ super)
+                        <*> (super & report & qualifiedOperator)
                         <*> wrap (optionallyKindedAndParenthesizedTypeVar self))},
-      bType = (bType . report $ super)
+      bType = (super & report & bType)
          <|> Abstract.promotedInfixTypeApplication
-             <$> wrap (bType . report $ self)
+             <$> wrap (self & report & bType)
              <* terminator "'"
-             <*> (qualifiedOperator . report $ super)
-             <*> wrap (aType . report $ self)},
+             <*> (super & report & qualifiedOperator)
+             <*> wrap (self & report & aType)},
    bKind = bKind super
            <|> Abstract.infixKindApplication
            <$> wrap (bKind self)
-           <*> (qualifiedOperator . report $ super)
+           <*> (super & report & qualifiedOperator)
            <*> wrap (aKind self),
    cTypeWithWildcards = cTypeWithWildcards super
       <|> Abstract.infixTypeApplication
           <$> wrap (bTypeWithWildcards self)
           <* terminator "'"
-          <*> (qualifiedOperator . report $ super)
+          <*> (super & report & qualifiedOperator)
           <*> wrap (cTypeWithWildcards self),
    familyInstanceDesignator = familyInstanceDesignator super
       <|> Abstract.infixTypeClassInstanceLHS
           <$> wrap (bTypeWithWildcards super)
           <* terminator "'"
-          <*> (qualifiedOperator . report $ super)
+          <*> (super & report & qualifiedOperator)
           <*> wrap (cTypeWithWildcards super)}
 
 polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1072,12 +1073,12 @@ polyKindsMixin self super = super{
       <|> Abstract.typeKind
           <$> wrap (Abstract.forallType <$ keywordForall self
                     <*> many (typeVarBinder self) <* delimiter "."
-                    <*> wrap (Report.context . declarationLevel . report $ self)
-                    <* (rightDoubleArrow . report $ self)
+                    <*> wrap (self & report & declarationLevel & Report.context)
+                    <* (self & report & rightDoubleArrow)
                     <*> wrap (forallType self)),
    aKind = groundTypeKind self
       <<|> parens (kind self)
-      <<|> Abstract.typeKind <$> wrap (Report.aType . report $ self)}
+      <<|> Abstract.typeKind <$> wrap (self & report & Report.aType)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1089,7 +1090,7 @@ visibleDependentKindQualificationMixin self super = super{
      <|> Abstract.visibleDependentKind
          <$ keywordForall self
          <*> many (typeVarBinder self)
-         <* (Report.rightArrow . report $ self)
+         <* (self & report & Report.rightArrow)
          <*> wrap (kind self)}
 
 kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1098,12 +1099,12 @@ kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPar
                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 kindSignaturesBaseMixin self super = super{
-   kindSignature = (doubleColon . report $ self) *> kind self,
-   kind = Abstract.functionKind <$> wrap (bKind self) <* (rightArrow . report $ self) <*> wrap (kind self)
+   kindSignature = (self & report & doubleColon) *> kind self,
+   kind = Abstract.functionKind <$> wrap (bKind self) <* (self & report & rightArrow) <*> wrap (kind self)
           <|> bKind self,
    bKind = Abstract.kindApplication <$> wrap (bKind self) <*> wrap (aKind self)
            <|> aKind self,
-   aKind = Abstract.constructorKind <$> wrap (generalConstructor . report $ self)
+   aKind = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
            <|> groundTypeKind self
            <|> Abstract.kindVariable <$> kindVar self
            <|> parens (kind self)}
@@ -1131,12 +1132,12 @@ standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lexi
                               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 standaloneKindSignaturesMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
             <|> Abstract.kindSignature <$ keyword "type"
-                  <*> (typeConstructor . report $ self)
-                  <* (doubleColon . report $ self)
-                  <*> wrap (Report.optionalContext . declarationLevel . report $ self)
+                  <*> (self & report & typeConstructor)
+                  <* (self & report & doubleColon)
+                  <*> wrap (self & report & declarationLevel & Report.optionalContext)
                   <*> wrap (kind self)}}}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1152,8 +1153,8 @@ kindSignaturesMixin
    super =
    super{
       report= (report super){
-         declarationLevel= (declarationLevel . report $ super){
-            topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+         declarationLevel= (super & report & declarationLevel){
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                <|> Abstract.kindedDataDeclaration <$ keyword "data"
                       <*> wrap optionalContext
                       <*> wrap simpleType
@@ -1173,32 +1174,32 @@ kindSignaturesMixin
                       <*> wrap (Abstract.simpleTypeLHSApplication
                                    <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
                                    <*> parens (Abstract.explicitlyKindedTypeVariable
-                                               <$> (Report.typeVar . report $ self)
+                                               <$> (self & report & Report.typeVar)
                                                <*> wrap (kindSignature self)))
                       <*> (keyword "where"
                            *> blockOf inClassDeclaration
                            <|> pure []),
-            instanceTypeDesignator = (instanceTypeDesignator . declarationLevel . report $ super)
+            instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
                <|> Abstract.kindedType
-                   <$> wrap (instanceTypeDesignator . declarationLevel . report $ self)
+                   <$> wrap (self & report & declarationLevel & instanceTypeDesignator)
                    <*> wrap (kindSignature self),
             typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
                                 <*> some (comma *> wrap (optionallyKindedTypeVar self))},
-         typeTerm = (typeTerm . report $ super) <|>
-            Abstract.kindedType <$> wrap (typeTerm . report $ self) <*> wrap (kindSignature self)},
+         typeTerm = (super & report & typeTerm) <|>
+            Abstract.kindedType <$> wrap (self & report & typeTerm) <*> wrap (kindSignature self)},
       optionallyKindedAndParenthesizedTypeVar =
          Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
          <|> parens (Abstract.kindedType
                      <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
                      <*> wrap (kindSignature self)),
       optionallyKindedTypeVar =
-         Abstract.typeVariable <$> (typeVar . report $ self)
+         Abstract.typeVariable <$> (self & report & typeVar)
          <|> Abstract.kindedType
-             <$> wrap (Abstract.typeVariable <$> (typeVar . report $ self))
+             <$> wrap (Abstract.typeVariable <$> (self & report & typeVar))
              <*> wrap (kindSignature self),
       typeVarBinder = typeVarBinder super
                       <|> parens (Abstract.explicitlyKindedTypeVariable
-                                  <$> (typeVar . report $ self)
+                                  <$> (self & report & typeVar)
                                   <*> wrap (kindSignature self))}
 
 existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1207,17 +1208,17 @@ existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lex
                                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 existentialQuantificationMixin self super = super{
    report= (report super){
-      declarationLevel= (declarationLevel . report $ super){
-         declaredConstructor = (declaredConstructor . declarationLevel . report $ super)
+      declarationLevel= (super & report & declarationLevel){
+         declaredConstructor = (super & report & declarationLevel & declaredConstructor)
             <|> Abstract.existentialConstructor
                 <$ keywordForall self
                 <*> many (typeVarBinder self) <* delimiter "."
-                <*> wrap (Report.optionalContext . declarationLevel . report $ self)
-                <*> wrap (declaredConstructor . declarationLevel . report $ super)
+                <*> wrap (self & report & declarationLevel & Report.optionalContext)
+                <*> wrap (super & report & declarationLevel & declaredConstructor)
             <|> Abstract.existentialConstructor []
-                <$> wrap (context . declarationLevel . report $ self)
-                <* (rightDoubleArrow . report $ self)
-                <*> wrap (declaredConstructor . declarationLevel . report $ super)}}}
+                <$> wrap (self & report & declarationLevel & context)
+                <* (self & report & rightDoubleArrow)
+                <*> wrap (super & report & declarationLevel & declaredConstructor)}}}
 
 explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1231,8 +1232,8 @@ explicitForAllMixin
    super =
    super{
       report= (report super){
-                declarationLevel= (declarationLevel . report $ super){
-                  topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+                declarationLevel= (super & report & declarationLevel){
+                  topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                      <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
                          <* keywordForall self
                          <*> many (typeVarBinder self)
@@ -1240,14 +1241,14 @@ explicitForAllMixin
                          <*> wrap optionalContext
                          <*> wrap instanceDesignator
                          <*> (keyword "where"
-                              *> blockOf (Report.inInstanceDeclaration . declarationLevel . report $ self)
+                              *> blockOf (self & report & declarationLevel & Report.inInstanceDeclaration)
                               <|> pure [])},
-         aType = (aType . report $ super)
+         aType = (super & report & aType)
             <|> parens (Abstract.forallType []
-                        <$> wrap (Report.context . declarationLevel . report $ self)
-                        <* (Report.rightDoubleArrow . report $ self)
-                        <*> wrap (Report.typeTerm . report $ self)),
-         typeVar = notFollowedBy (keywordForall self) *> (typeVar . report $ super)},
+                        <$> wrap (self & report & declarationLevel & Report.context)
+                        <* (self & report & Report.rightDoubleArrow)
+                        <*> wrap (self & report & Report.typeTerm)),
+         typeVar = notFollowedBy (keywordForall self) *> (super & report & typeVar)},
       forallType = forallType super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
@@ -1270,8 +1271,8 @@ gadtSyntaxMixin
    super =
    super{
       report= (report super){
-         declarationLevel= (declarationLevel . report $ super){
-            topLevelDeclaration = (topLevelDeclaration . declarationLevel . report $ super)
+         declarationLevel= (super & report & declarationLevel){
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                <|> Abstract.gadtDeclaration <$ keyword "data"
                    <*> wrap simpleType
                    <*> optional (wrap $ kindSignature self) <* keyword "where"
@@ -1292,7 +1293,7 @@ gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lexic
 gadtSyntaxTypeOperatorsMixin self super = super{
    return_type = return_type super <|>
       Abstract.infixTypeApplication <$> wrap (arg_type self)
-                                    <*> (qualifiedOperator . report $ self)
+                                    <*> (self & report & qualifiedOperator)
                                     <*> wrap (arg_type self)}
 
 dataKindsGadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1306,7 +1307,7 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
          Abstract.promotedInfixTypeApplication
          <$> wrap (arg_type self)
          <* terminator "'"
-         <*> (qualifiedOperator . report $ self)
+         <*> (self & report & qualifiedOperator)
          <*> wrap (arg_type self)}
 
 variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
