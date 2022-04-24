@@ -49,8 +49,12 @@ class Haskell λ => ExtendedHaskell λ where
    forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
    kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    typeWildcard :: Type λ l d s
+
    explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
    implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
+   inferredTypeVariable :: Name λ -> TypeVarBinding λ l d s
+   inferredExplicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
+
    kindVariable :: Name λ -> Kind λ l d s
    constructorKind :: s (Constructor l l d d) -> Kind λ l d s
    kindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
@@ -116,6 +120,10 @@ class Haskell λ => ExtendedHaskell λ where
    tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
    listKind :: s (Kind l l d d) -> Kind λ l d s
    typeRepresentationKind :: s (Type l l d d) -> Kind λ l d s
+
+   visibleTypeApplication :: s (Expression l l d d) -> s (Type l l d d) -> Expression λ l d s
+   constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
+                                          -> Pattern λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)

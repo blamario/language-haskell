@@ -840,6 +840,12 @@ rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 unwrap :: NodeWrap t a -> a
 unwrap (_, x) = x
 
+whiteSpaceTrailing :: NodeWrap t a -> Bool
+whiteSpaceTrailing ((_, Trailing [], _), _) = False
+whiteSpaceTrailing ((_, Trailing ws, _), _)
+  | WhiteSpace{} <- last ws = True
+  | otherwise = False
+
 instance (Ord t, Show t, TextualMonoid t) => TokenParsing (Parser g t) where
    someSpace = someLexicalSpace
    token = lexicalToken

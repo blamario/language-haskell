@@ -21,7 +21,8 @@ import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST as ExtAST
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
-import Language.Haskell.TH.Datatype.TyVarBndr
+import Language.Haskell.TH.Datatype.TyVarBndr (Specificity (SpecifiedSpec), TyVarBndrUnit,
+                                               changeTVFlags, kindedTV, plainTV)
 import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
 import Language.Haskell.TH.Syntax (VarBangType)
@@ -41,13 +42,6 @@ mdoE = MDoE Nothing
 #else
 doE = DoE
 mdoE = MDoE
-#endif
-
-constructorP :: TH.Name -> [Pat] -> Pat
-#if MIN_VERSION_template_haskell(2,18,0)
-constructorP = flip ConP []
-#else
-constructorP = ConP
 #endif
 
 class PrettyViaTH a where
@@ -199,6 +193,7 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
+expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
 guardedTemplate (GuardedExpression statements result) =
@@ -441,8 +436,13 @@ literalTemplate (HashLiteral _) = error "Unexpected HashLiteral"
 
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
 patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)
-patternTemplate (ConstructorPattern con args) = case (extract con) of
-   ConstructorReference name -> constructorP (qnameTemplate name) (patternTemplate . extract <$> args)
+patternTemplate (ConstructorPattern con typeApps args) = case (extract con) of
+   ConstructorReference name ->
+#if MIN_VERSION_template_haskell(2,18,0)
+      ConP (qnameTemplate name) (typeTemplate .extract <$> typeApps) (patternTemplate . extract <$> args)
+#else
+      ConP (qnameTemplate name) (patternTemplate . extract <$> args)
+#endif
    EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
    TupleConstructor{} -> TupP (patternTemplate . extract <$> toList args)
    UnitConstructor -> TupP []
@@ -579,13 +579,18 @@ freeTypeVars PromotedCharLiteral{} = []
 freeTypeVars PromotedStringLiteral{} = []
 
 typeVarBindingTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
-typeVarBindingTemplate (ExplicitlyKindedTypeVariable name kind) =
+typeVarBindingTemplate (ExplicitlyKindedTypeVariable False name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingTemplate (ImplicitlyKindedTypeVariable name) = plainTV (nameTemplate name)
+typeVarBindingTemplate (ImplicitlyKindedTypeVariable False name) = plainTV (nameTemplate name)
+#if MIN_VERSION_template_haskell(2,18,0)
+typeVarBindingTemplate (ExplicitlyKindedTypeVariable True name kind) =
+   KindedTV (nameTemplate name) TH.InferredSpec (typeTemplate $ extract kind)
+typeVarBindingTemplate (ImplicitlyKindedTypeVariable True name) = PlainTV (nameTemplate name) TH.InferredSpec
+#endif
 
 bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
-bindingVarName (ExplicitlyKindedTypeVariable name _) = nameTemplate name
-bindingVarName (ImplicitlyKindedTypeVariable name) = nameTemplate name
+bindingVarName (ExplicitlyKindedTypeVariable _ name _) = nameTemplate name
+bindingVarName (ImplicitlyKindedTypeVariable _ name) = nameTemplate name
 
 inContext :: TemplateWrapper f => f (ExtAST.Context Language Language f f) -> TH.Type -> TH.Type
 inContext context = case extract context

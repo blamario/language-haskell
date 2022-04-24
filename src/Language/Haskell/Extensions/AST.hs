@@ -3,7 +3,7 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..),
-                                        GADTConstructor(..), Expression(..), Statement(..),
+                                        GADTConstructor(..), Expression(..), Pattern(..), Statement(..),
                                         ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), Value(..),
                                         module Report) where
@@ -16,8 +16,7 @@ import Data.Text (Text)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
-                             GuardedExpression(..), Pattern(..),
-                             DerivingClause(..), Constructor(..),
+                             GuardedExpression(..), DerivingClause(..), Constructor(..),
                              FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
@@ -73,8 +72,11 @@ instance Abstract.ExtendedHaskell Language where
    patternMember = PatternMember
    typeMember = TypeMember
 
-   explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable
-   implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable
+   explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable False
+   implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable False
+   inferredTypeVariable = ImplicitlyKindedTypeVariable True
+   inferredExplicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable True
+   
    constructorKind = ConstructorType
    kindVariable = TypeVariable
    functionKind = FunctionKind
@@ -104,6 +106,9 @@ instance Abstract.ExtendedHaskell Language where
    infixTypeClassInstanceLHS = InfixTypeClassInstanceLHS
    classInstanceLHSApplication = ClassInstanceLHSApplication
    kindSignature = KindSignature
+
+   visibleTypeApplication = VisibleTypeApplication
+   constructorPatternWithTypeApplications = ConstructorPattern
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -193,7 +198,7 @@ instance Abstract.Haskell Language where
    typedExpression = TypedExpression
 
    asPattern = AsPattern
-   constructorPattern = ConstructorPattern
+   constructorPattern = flip ConstructorPattern []
    infixPattern = InfixPattern
    irrefutablePattern = IrrefutablePattern
    listPattern = ListPattern
@@ -385,8 +390,8 @@ data Type λ l d s =
    | ConstraintType (s (Abstract.Context l l d d))
 
 data TypeVarBinding λ l d s =
-   ExplicitlyKindedTypeVariable (Abstract.Name λ) (s (Abstract.Kind l l d d))
-   | ImplicitlyKindedTypeVariable (Abstract.Name λ)
+   ExplicitlyKindedTypeVariable Bool (Abstract.Name λ) (s (Abstract.Kind l l d d))
+   | ImplicitlyKindedTypeVariable Bool (Abstract.Name λ)
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.TypeVarBinding λ l d s]
@@ -427,6 +432,19 @@ data Expression λ l d s =
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
    | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+   | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+
+data Pattern λ l d s =
+   AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
+   | ConstructorPattern (s (Abstract.Constructor l l d d)) [s (Abstract.Type l l d d)] [s (Abstract.Pattern l l d d)]
+   | InfixPattern (s (Abstract.Pattern l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
+   | IrrefutablePattern (s (Abstract.Pattern l l d d))
+   | ListPattern [s (Abstract.Pattern l l d d)]
+   | LiteralPattern (s (Abstract.Value l l d d))
+   | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
+   | VariablePattern (Abstract.Name λ)
+   | WildcardPattern
 
 data Statement λ l d s =
    BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
@@ -573,6 +591,20 @@ deriving instance (Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Co
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
                    Eq (Abstract.QualifiedName λ)) => Eq (Expression λ l d s)
 
+deriving instance Typeable (Pattern λ l d s)
+deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Value l l d d)),
+                   Data (s (Abstract.Type l l d d)),
+                   Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
+deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.FieldPattern l l d d)),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Value l l d d)),
+                   Show (s (Abstract.Type l l d d)),
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
+deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.FieldPattern l l d d)),
+                   Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),
+                   Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Pattern λ l d s)
+
 deriving instance Typeable (Statement λ l d s)
 deriving instance (Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.Expression l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
@@ -588,4 +620,4 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
-              ''ClassInstanceLHS, ''Context, ''Expression, ''Statement, ''Value]))
+              ''ClassInstanceLHS, ''Context, ''Expression, ''Pattern, ''Statement, ''Value]))

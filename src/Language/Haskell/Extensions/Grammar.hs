@@ -131,6 +131,7 @@ extensionMixins =
      (Set.fromList [StandaloneKindSignatures],       [(7, kindSignaturesBaseMixin),
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
+     (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
@@ -1124,6 +1125,28 @@ unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 unicodeStarIsTypeMixin self super = super{
    groundTypeKind = groundTypeKind super <|> Abstract.groundTypeKind <$ delimiter "★"}
+
+typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                    g ~ ExtendedGrammar l t (NodeWrap t),
+                                    Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+typeApplicationsMixin self super = super{
+   report = (report super){
+      bareExpression = bareExpression (super & report)
+         <|> Abstract.visibleTypeApplication
+             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & bareExpression)
+             <* delimiter "@"
+             <*> wrap (aTypeWithWildcards self),
+      lPattern = lPattern (super & report)
+         <|> Abstract.constructorPatternWithTypeApplications
+             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & generalConstructor)
+             <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
+             <*> many (wrap $ self & report & aPattern)
+      },
+     typeVarBinder = typeVarBinder super
+        <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar)
+   }
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             g ~ ExtendedGrammar l t (NodeWrap t),
