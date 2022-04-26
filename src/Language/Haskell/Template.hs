@@ -337,6 +337,8 @@ lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name)
 lhsTypeTemplate (ClassReferenceInstanceLHS name) = ConT (qnameTemplate name)
 lhsTypeTemplate (ClassInstanceLHSApplication left right) =
   AppT (lhsTypeTemplate $ extract left) (typeTemplate $ extract right)
+lhsTypeTemplate (ClassInstanceLHSKindApplication left right) =
+  AppKindT (lhsTypeTemplate $ extract left) (typeTemplate $ extract right)
 lhsTypeTemplate (InfixTypeClassInstanceLHS left name right) =
   InfixT (typeTemplate $ extract left) (qnameTemplate name) (typeTemplate $ extract right)
 
@@ -537,6 +539,7 @@ typeTemplate (PromotedInfixTypeApplication left op right) =
 typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
    [c1] -> c1
    cs -> foldl' AppT (TupleT $! length cs) cs
+typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
 freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVarBindings = map plainTV . freeTypeVars

@@ -1074,12 +1074,12 @@ polyKindsMixin self super = super{
       <|> Abstract.typeKind
           <$> wrap (Abstract.forallType <$ keywordForall self
                     <*> many (typeVarBinder self) <* delimiter "."
-                    <*> wrap (self & report & declarationLevel & Report.context)
+                    <*> wrap (self & report & declarationLevel & context)
                     <* (self & report & rightDoubleArrow)
                     <*> wrap (forallType self)),
    aKind = groundTypeKind self
       <<|> parens (kind self)
-      <<|> Abstract.typeKind <$> wrap (self & report & Report.aType)}
+      <<|> Abstract.typeKind <$> wrap (self & report & aType)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1129,23 +1129,33 @@ unicodeStarIsTypeMixin self super = super{
 typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                     g ~ ExtendedGrammar l t (NodeWrap t),
                                     Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 typeApplicationsMixin self super = super{
    report = (report super){
-      bareExpression = bareExpression (super & report)
+      aType = (super & report & aType)
+         <|> Abstract.visibleKindApplication
+             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & aType)
+             <* delimiter "@"
+             <*> wrap (aKind self),
+      bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
              <$> filter Report.whiteSpaceTrailing (wrap $ self & report & bareExpression)
              <* delimiter "@"
              <*> wrap (aTypeWithWildcards self),
-      lPattern = lPattern (super & report)
+      lPattern = (super & report & lPattern)
          <|> Abstract.constructorPatternWithTypeApplications
              <$> filter Report.whiteSpaceTrailing (wrap $ self & report & generalConstructor)
              <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
              <*> many (wrap $ self & report & aPattern)
       },
      typeVarBinder = typeVarBinder super
-        <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar)
+        <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
+     familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
+        <|> Abstract.classInstanceLHSKindApplication
+            <$> filter Report.whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
+            <* delimiter "@"
+            <*> wrap (self & aKind)
    }
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
