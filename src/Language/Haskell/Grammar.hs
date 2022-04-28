@@ -840,12 +840,6 @@ rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 unwrap :: NodeWrap t a -> a
 unwrap (_, x) = x
 
-whiteSpaceTrailing :: (Show t, Factorial.Factorial t, Deep.Foldable (Serialization (Down Int) t) node)
-                   => NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
-whiteSpaceTrailing node
-  | ws@(_:_) <- lexemes node, WhiteSpace{} <- last ws = True
-  | otherwise = False
-
 instance (Ord t, Show t, TextualMonoid t) => TokenParsing (Parser g t) where
    someSpace = someLexicalSpace
    token = lexicalToken

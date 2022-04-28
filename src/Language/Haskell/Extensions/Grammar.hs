@@ -51,7 +51,7 @@ import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), Dec
                                  blockOf, delimiter, terminator, inputColumn, isSymbol,
                                  moduleId, nameQualifier,
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap, whiteSpace)
-import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..))
+import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..), lexemes)
 
 import Prelude hiding (exponent, filter, null)
 
@@ -1135,27 +1135,27 @@ typeApplicationsMixin self super = super{
    report = (report super){
       aType = (super & report & aType)
          <|> Abstract.visibleKindApplication
-             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & aType)
+             <$> filter whiteSpaceTrailing (wrap $ self & report & aType)
              <* delimiter "@"
              <*> wrap (aKind self),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
-             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & bareExpression)
+             <$> filter whiteSpaceTrailing (wrap $ self & report & bareExpression)
              <* delimiter "@"
              <*> wrap (aTypeWithWildcards self),
       lPattern = (super & report & lPattern)
          <|> Abstract.constructorPatternWithTypeApplications
-             <$> filter Report.whiteSpaceTrailing (wrap $ self & report & generalConstructor)
+             <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
              <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
              <*> many (wrap $ self & report & aPattern)
       },
-     typeVarBinder = typeVarBinder super
-        <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
-     familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
-        <|> Abstract.classInstanceLHSKindApplication
-            <$> filter Report.whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
-            <* delimiter "@"
-            <*> wrap (self & aKind)
+   typeVarBinder = typeVarBinder super
+      <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
+   familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
+      <|> Abstract.classInstanceLHSKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
+          <* delimiter "@"
+          <*> wrap (self & aKind)
    }
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1352,6 +1352,12 @@ identifierTail = takeCharsWhile isNameTailChar
 
 isNameTailChar :: Char -> Bool
 isNameTailChar c = Report.isNameTailChar c || Char.isMark c
+
+whiteSpaceTrailing :: (Show t, Factorial.Factorial t, Deep.Foldable (Serialization (Down Int) t) node)
+                   => NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
+whiteSpaceTrailing node
+  | ws@(_:_) <- lexemes node, WhiteSpace{} <- last ws = True
+  | otherwise = False
 
 blockOf' :: (Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node)
