@@ -218,6 +218,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
                   (KindSignatures, True), (MonoLocalBinds, True), (MultiParameterConstraints, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
+  (TypeInType, [(PolyKinds, True), (DataKinds, True), (KindSignatures, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
