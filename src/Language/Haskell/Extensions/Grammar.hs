@@ -61,7 +61,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindSignature, kind, bKind, aKind, groundTypeKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    cType, forallType :: p (Abstract.Type l l f f),
-   typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
+   typeWithWildcards, forallTypeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
+   cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
@@ -235,9 +236,12 @@ reportGrammar g@ExtendedGrammar{report= r} =
                                    <*> wrap (nonTerminal cType)
              <|> nonTerminal (Report.bType . report),
      typeWithWildcards =
+        Abstract.kindedType <$> wrap (nonTerminal forallTypeWithWildcards) <*> wrap (nonTerminal kindSignature)
+        <|> nonTerminal forallTypeWithWildcards,
+     forallTypeWithWildcards = nonTerminal arrowTypeWithWildcards,
+     arrowTypeWithWildcards =
         Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
-                              <*> wrap (nonTerminal typeWithWildcards)
-        <|> Abstract.kindedType <$> wrap (nonTerminal typeWithWildcards) <*> wrap (nonTerminal kindSignature)
+                              <*> wrap (nonTerminal arrowTypeWithWildcards)
         <|> nonTerminal cTypeWithWildcards,
      cTypeWithWildcards = nonTerminal bTypeWithWildcards,
      bTypeWithWildcards =
@@ -1328,6 +1332,11 @@ explicitForAllMixin
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap optionalContext
              <*> wrap (forallType self),
+      forallTypeWithWildcards = forallTypeWithWildcards super
+         <|> Abstract.forallType <$ keywordForall self
+             <*> many (typeVarBinder self) <* delimiter "."
+             <*> wrap optionalContext
+             <*> wrap (forallTypeWithWildcards self),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self
