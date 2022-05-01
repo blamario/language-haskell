@@ -540,6 +540,7 @@ typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
    [c1] -> c1
    cs -> foldl' AppT (TupleT $! length cs) cs
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
+typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
 freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
 freeTypeVarBindings = map plainTV . freeTypeVars

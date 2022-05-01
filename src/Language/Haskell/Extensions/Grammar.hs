@@ -59,6 +59,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind, groundTypeKind :: p (Abstract.Kind l l f f),
+   kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    cType, forallType :: p (Abstract.Type l l f f),
    typeWithWildcards, cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
@@ -74,7 +75,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
-   return_type, arg_type :: p (Abstract.Type l l f f)}
+   return_type, base_return_type, arg_type :: p (Abstract.Type l l f f)}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
@@ -224,6 +225,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
      kind = empty,
      bKind = empty,
      aKind = empty,
+     kindWithWildCards = empty,
+     bKindWithWildcards = empty,
+     aKindWithWildcards = empty,
      groundTypeKind = empty,
      forallType = nonTerminal cType,
      cType = Abstract.functionType <$> wrap (nonTerminal $ Report.bType . report)
@@ -313,7 +317,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
      return_type = Abstract.typeApplication
                       <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
                       <*> wrap (nonTerminal arg_type)
-                   <|> Abstract.constructorType <$> wrap generalConstructor,
+                   <|> nonTerminal base_return_type,
+     base_return_type = Abstract.constructorType <$> wrap generalConstructor,
      arg_type = nonTerminal (Report.aType . report)}
    where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
 
@@ -1079,7 +1084,10 @@ polyKindsMixin self super = super{
                     <*> wrap (forallType self)),
    aKind = groundTypeKind self
       <<|> parens (kind self)
-      <<|> Abstract.typeKind <$> wrap (self & report & aType)}
+      <<|> Abstract.typeKind <$> wrap (self & report & aType),
+   aKindWithWildcards = groundTypeKind self
+      <<|> parens (kindWithWildCards self)
+      <<|> Abstract.typeKind <$> wrap (self & aTypeWithWildcards)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1108,7 +1116,20 @@ kindSignaturesBaseMixin self super = super{
    aKind = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
            <|> groundTypeKind self
            <|> Abstract.kindVariable <$> kindVar self
-           <|> parens (kind self)}
+           <|> parens (kind self),
+   kindWithWildCards =
+      Abstract.functionKind
+               <$> wrap (bKindWithWildcards self)
+               <* (self & report & rightArrow)
+               <*> wrap (kindWithWildCards self)
+      <|> bKindWithWildcards self,
+   bKindWithWildcards =
+      Abstract.kindApplication <$> wrap (bKindWithWildcards self) <*> wrap (aKindWithWildcards self)
+      <|> aKindWithWildcards self,
+   aKindWithWildcards = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
+      <|> groundTypeKind self
+      <|> Abstract.kindVariable <$> kindVar self
+      <|> parens (kindWithWildCards self)}
 
 starIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                               g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1133,11 +1154,11 @@ typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsi
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 typeApplicationsMixin self super = super{
    report = (report super){
-      aType = (super & report & aType)
+      bType = (super & report & bType)
          <|> Abstract.visibleKindApplication
-             <$> filter whiteSpaceTrailing (wrap $ self & report & aType)
+             <$> filter whiteSpaceTrailing (wrap $ self & report & bType)
              <* delimiter "@"
-             <*> wrap (aKind self),
+             <*> wrap (aKindWithWildcards self),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
              <$> filter whiteSpaceTrailing (wrap $ self & report & bareExpression)
@@ -1149,13 +1170,33 @@ typeApplicationsMixin self super = super{
              <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
              <*> many (wrap $ self & report & aPattern)
       },
+   base_return_type = (super & base_return_type)
+      <|> Abstract.visibleKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & base_return_type)
+          <* delimiter "@"
+          <*> wrap (aKindWithWildcards self),
+   bTypeWithWildcards = (super & bTypeWithWildcards)
+      <|> Abstract.visibleKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & bTypeWithWildcards)
+          <* delimiter "@"
+          <*> wrap (aKindWithWildcards self),
+   bKind = (super & bKind)
+      <|> Abstract.visibleKindKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & bKind)
+          <* delimiter "@"
+          <*> wrap (aKindWithWildcards self),
+   bKindWithWildcards = (super & bKindWithWildcards)
+      <|> Abstract.visibleKindKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & bKindWithWildcards)
+          <* delimiter "@"
+          <*> wrap (aKindWithWildcards self),
    typeVarBinder = typeVarBinder super
       <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
    familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
           <* delimiter "@"
-          <*> wrap (self & aKind)
+          <*> wrap (self & aKindWithWildcards)
    }
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),

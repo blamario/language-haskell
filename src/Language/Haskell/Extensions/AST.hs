@@ -110,6 +110,7 @@ instance Abstract.ExtendedHaskell Language where
 
    visibleTypeApplication = VisibleTypeApplication
    visibleKindApplication = VisibleKindApplication
+   visibleKindKindApplication = VisibleKindKindApplication
    constructorPatternWithTypeApplications = ConstructorPattern
 
 instance Abstract.Haskell Language where
@@ -391,6 +392,7 @@ data Type λ l d s =
    | TypeRepresentationKind (s (Abstract.Type l l d d))
    | ConstraintType (s (Abstract.Context l l d d))
    | VisibleKindApplication (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
+   | VisibleKindKindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
 
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable Bool (Abstract.Name λ) (s (Abstract.Kind l l d d))
