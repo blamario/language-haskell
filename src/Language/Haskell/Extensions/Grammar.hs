@@ -60,8 +60,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind, groundTypeKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
-   cType, forallType :: p (Abstract.Type l l f f),
-   typeWithWildcards, forallTypeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
+   cType, arrowType :: p (Abstract.Type l l f f),
+   typeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
    cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedType :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
@@ -219,7 +219,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                              <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
                              <* nonTerminal (Report.rightArrow . report)
                              <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
-        typeTerm = nonTerminal forallType},
+        typeTerm = nonTerminal arrowType},
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
@@ -230,15 +230,14 @@ reportGrammar g@ExtendedGrammar{report= r} =
      bKindWithWildcards = empty,
      aKindWithWildcards = empty,
      groundTypeKind = empty,
-     forallType = nonTerminal cType,
-     cType = Abstract.functionType <$> wrap (nonTerminal $ Report.bType . report)
-                                   <* nonTerminal (Report.rightArrow . report)
-                                   <*> wrap (nonTerminal cType)
-             <|> nonTerminal (Report.bType . report),
+     arrowType = nonTerminal cType
+        <|> Abstract.functionType <$> wrap (nonTerminal cType)
+                                  <* nonTerminal (Report.rightArrow . report)
+                                  <*> wrap (nonTerminal arrowType),
+     cType = nonTerminal (Report.bType . report),
      typeWithWildcards =
-        Abstract.kindedType <$> wrap (nonTerminal forallTypeWithWildcards) <*> wrap (nonTerminal kindSignature)
-        <|> nonTerminal forallTypeWithWildcards,
-     forallTypeWithWildcards = nonTerminal arrowTypeWithWildcards,
+        Abstract.kindedType <$> wrap (nonTerminal arrowTypeWithWildcards) <*> wrap (nonTerminal kindSignature)
+        <|> nonTerminal arrowTypeWithWildcards,
      arrowTypeWithWildcards =
         Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
                               <*> wrap (nonTerminal arrowTypeWithWildcards)
@@ -740,12 +739,12 @@ typeOperatorsMixin self super =
                 typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
                 generalTypeConstructor = (super & report & generalTypeConstructor)
                   <|> Abstract.constructorType
-                      <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol)),
-                bType = (super & report & bType)
-                   <|> Abstract.infixTypeApplication
-                          <$> wrap (self & report & Report.bType)
-                          <*> (self & report & qualifiedOperator)
-                          <*> wrap (self & report & Report.aType)},
+                      <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
+        cType = (super & cType)
+           <|> Abstract.infixTypeApplication
+                  <$> wrap (self & cType)
+                  <*> (self & report & qualifiedOperator)
+                  <*> wrap (self & report & Report.bType),
         cTypeWithWildcards = cTypeWithWildcards super
            <|> Abstract.infixTypeApplication
                   <$> wrap (bTypeWithWildcards self)
@@ -1048,18 +1047,18 @@ dataKindsTypeOperatorsMixin self super = super{
                         <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
                         <* terminator "'"
                         <*> (super & report & qualifiedOperator)
-                        <*> wrap (optionallyKindedAndParenthesizedTypeVar self))},
-      bType = (super & report & bType)
-         <|> Abstract.promotedInfixTypeApplication
-             <$> wrap (self & report & bType)
-             <* terminator "'"
-             <*> (super & report & qualifiedOperator)
-             <*> wrap (self & report & aType)},
+                        <*> wrap (optionallyKindedAndParenthesizedTypeVar self))}},
    bKind = bKind super
            <|> Abstract.infixKindApplication
            <$> wrap (bKind self)
            <*> (super & report & qualifiedOperator)
            <*> wrap (aKind self),
+   cType = (super & cType)
+      <|> Abstract.promotedInfixTypeApplication
+          <$> wrap (self & cType)
+          <* terminator "'"
+          <*> (super & report & qualifiedOperator)
+             <*> wrap (self & report & bType),
    cTypeWithWildcards = cTypeWithWildcards super
       <|> Abstract.infixTypeApplication
           <$> wrap (bTypeWithWildcards self)
@@ -1085,7 +1084,7 @@ polyKindsMixin self super = super{
                     <*> many (typeVarBinder self) <* delimiter "."
                     <*> wrap (self & report & declarationLevel & context)
                     <* (self & report & rightDoubleArrow)
-                    <*> wrap (forallType self)),
+                    <*> wrap (arrowType self)),
    aKind = groundTypeKind self
       <<|> parens (kind self)
       <<|> Abstract.typeKind <$> wrap (self & report & aType),
@@ -1327,16 +1326,16 @@ explicitForAllMixin
                         <* (self & report & Report.rightDoubleArrow)
                         <*> wrap (self & report & Report.typeTerm)),
          typeVar = notFollowedBy (keywordForall self) *> (super & report & typeVar)},
-      forallType = forallType super
+      arrowType = arrowType super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap (forallType self),
-      forallTypeWithWildcards = forallTypeWithWildcards super
+             <*> wrap (arrowType self),
+      arrowTypeWithWildcards = arrowTypeWithWildcards super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap (forallTypeWithWildcards self),
+             <*> wrap (arrowTypeWithWildcards self),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self
