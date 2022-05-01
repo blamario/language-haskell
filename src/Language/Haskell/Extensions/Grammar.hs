@@ -247,7 +247,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         Abstract.typeApplication <$> wrap (nonTerminal bTypeWithWildcards) <*> wrap (nonTerminal aTypeWithWildcards)
         <|> nonTerminal aTypeWithWildcards,
      aTypeWithWildcards =
-        generalTypeConstructor
+        nonTerminal (Report.generalTypeConstructor . report)
         <|> Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)
         <|> Abstract.typeWildcard <$ keyword "_"
         <|> Abstract.tupleType
