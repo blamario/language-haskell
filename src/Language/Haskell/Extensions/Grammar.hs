@@ -1165,7 +1165,7 @@ typeApplicationsMixin self super = super{
              <*> wrap (aKindWithWildcards self),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
-             <$> filter whiteSpaceTrailing (wrap $ self & report & bareExpression)
+             <$> filter whiteSpaceTrailing (self & report & aExpression)
              <* delimiter "@"
              <*> wrap (aTypeWithWildcards self),
       lPattern = (super & report & lPattern)
