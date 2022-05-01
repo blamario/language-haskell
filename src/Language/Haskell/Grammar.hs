@@ -549,7 +549,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
                         <|> Abstract.unitConstructor <$ terminator "(" <* terminator ")"
                         <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
-                        <|> Abstract.tupleConstructor . length <$> parens (some comma),
+                        <|> Abstract.tupleConstructor . succ . length <$> parens (some comma),
 
 -- pat 	→ 	lpat qconop pat 	    (infix constructor)
 -- 	| 	lpat
