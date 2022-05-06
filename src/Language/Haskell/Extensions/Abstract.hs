@@ -49,6 +49,7 @@ class Haskell λ => ExtendedHaskell λ where
    forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
    kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    typeWildcard :: Type λ l d s
+   groundType :: Type λ l d s
 
    explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
    implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
@@ -63,7 +64,6 @@ class Haskell λ => ExtendedHaskell λ where
    forallKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
    groundTypeKind :: Kind λ l d s
    typeKind :: s (Type l l d d) -> Kind λ l d s
-   visibleDependentKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    kindedNewtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
@@ -117,6 +117,7 @@ class Haskell λ => ExtendedHaskell λ where
    promotedCharLiteral :: Char -> Type λ l d s
    promotedStringLiteral :: Text -> Type λ l d s
    promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
+   visibleDependentType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
    tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
    listKind :: s (Kind l l d d) -> Kind λ l d s
    typeRepresentationKind :: s (Type l l d d) -> Kind λ l d s

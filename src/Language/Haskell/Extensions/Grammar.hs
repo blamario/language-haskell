@@ -58,8 +58,9 @@ import Prelude hiding (exponent, filter, null)
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
-   kindSignature, kind, bKind, aKind, groundTypeKind :: p (Abstract.Kind l l f f),
+   kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
+   groundTypeKind :: p (),
    cType, arrowType :: p (Abstract.Type l l f f),
    typeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
    cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
@@ -1078,19 +1079,16 @@ polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 polyKindsMixin self super = super{
-   kind = kind super
-      <|> Abstract.typeKind
-          <$> wrap (Abstract.forallType <$ keywordForall self
-                    <*> many (typeVarBinder self) <* delimiter "."
-                    <*> wrap (self & report & declarationLevel & context)
-                    <* (self & report & rightDoubleArrow)
-                    <*> wrap (arrowType self)),
-   aKind = groundTypeKind self
-      <<|> parens (kind self)
-      <<|> Abstract.typeKind <$> wrap (self & report & aType),
-   aKindWithWildcards = groundTypeKind self
-      <<|> parens (kindWithWildCards self)
-      <<|> Abstract.typeKind <$> wrap (self & aTypeWithWildcards)}
+   report= (report super){
+      aType = (super & report & aType)
+          <|> Abstract.groundType <$ groundTypeKind self
+      },
+   aTypeWithWildcards = aTypeWithWildcards super
+       <|> Abstract.groundType <$ groundTypeKind self,
+   kind = Abstract.typeKind <$> wrap (self & report & typeTerm),
+   kindWithWildCards = Abstract.typeKind <$> wrap (self & typeWithWildcards),
+   aKind = Abstract.typeKind <$> wrap (self & report & aType),
+   aKindWithWildcards = Abstract.typeKind <$> wrap (self & aTypeWithWildcards)}
 
 visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1098,12 +1096,18 @@ visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskel
                                                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 visibleDependentKindQualificationMixin self super = super{
-   kind = kind super
-     <|> Abstract.visibleDependentKind
+   arrowType = arrowType super
+     <|> Abstract.visibleDependentType
          <$ keywordForall self
          <*> many (typeVarBinder self)
          <* (self & report & Report.rightArrow)
-         <*> wrap (kind self)}
+         <*> wrap (arrowType self),
+   arrowTypeWithWildcards = arrowTypeWithWildcards super
+     <|> Abstract.visibleDependentType
+         <$ keywordForall self
+         <*> many (typeVarBinder self)
+         <* (self & report & Report.rightArrow)
+         <*> wrap (arrowTypeWithWildcards self)}
 
 kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                       g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1117,7 +1121,7 @@ kindSignaturesBaseMixin self super = super{
    bKind = Abstract.kindApplication <$> wrap (bKind self) <*> wrap (aKind self)
            <|> aKind self,
    aKind = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
-           <|> groundTypeKind self
+           <|> Abstract.groundTypeKind <$ groundTypeKind self
            <|> Abstract.kindVariable <$> kindVar self
            <|> parens (kind self),
    kindWithWildCards =
@@ -1130,7 +1134,7 @@ kindSignaturesBaseMixin self super = super{
       Abstract.kindApplication <$> wrap (bKindWithWildcards self) <*> wrap (aKindWithWildcards self)
       <|> aKindWithWildcards self,
    aKindWithWildcards = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
-      <|> groundTypeKind self
+      <|> Abstract.groundTypeKind <$ groundTypeKind self
       <|> Abstract.kindVariable <$> kindVar self
       <|> parens (kindWithWildCards self)}
 
@@ -1140,7 +1144,7 @@ starIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 starIsTypeMixin self super = super{
-   groundTypeKind = groundTypeKind super <|> Abstract.groundTypeKind <$ delimiter "*"}
+   groundTypeKind = groundTypeKind super <|> delimiter "*"}
 
 unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1148,7 +1152,7 @@ unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
                                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 unicodeStarIsTypeMixin self super = super{
-   groundTypeKind = groundTypeKind super <|> Abstract.groundTypeKind <$ delimiter "★"}
+   groundTypeKind = groundTypeKind super <|> delimiter "★"}
 
 typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                     g ~ ExtendedGrammar l t (NodeWrap t),

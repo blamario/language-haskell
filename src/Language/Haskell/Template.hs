@@ -510,7 +510,7 @@ typeTemplate (ForallKind vars body) =
   where type' = extract body
         varBindings = typeVarBindingTemplate <$> vars
         bindingVars = bindingVarName <$> vars
-typeTemplate (VisibleDependentKind vars body) =
+typeTemplate (VisibleDependentType vars body) =
   ForallVisT (changeTVFlags () $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
              (typeTemplate type')
   where type' = extract body
@@ -565,7 +565,7 @@ freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTy
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
-freeTypeVars (VisibleDependentKind vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
+freeTypeVars (VisibleDependentType vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
 freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)
 freeTypeVars (TypeRepresentationKind t) = freeTypeVars (extract t)
