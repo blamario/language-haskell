@@ -1408,9 +1408,12 @@ isNameTailChar c = Report.isNameTailChar c || Char.isMark c
 
 whiteSpaceTrailing :: (Show t, Factorial.Factorial t, Deep.Foldable (Serialization (Down Int) t) node)
                    => NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
-whiteSpaceTrailing node
-  | ws@(_:_) <- lexemes node, WhiteSpace{} <- last ws = True
-  | otherwise = False
+whiteSpaceTrailing node = case lexemes node of
+  ws@(_:_) -> case last ws of
+    WhiteSpace{} -> True
+    Comment{} -> True
+    _ -> False
+  _ -> False
 
 blockOf' :: (Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node)
