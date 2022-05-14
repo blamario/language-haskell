@@ -64,7 +64,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    cType, arrowType :: p (Abstract.Type l l f f),
    typeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
    cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
-   promotedType :: p (Abstract.Type l l f f),
+   promotedLiteral :: p (Abstract.Type l l f f),
+   instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -211,15 +212,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
                  <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                  <*> nonTerminal typeVarBinder,
           instanceTypeDesignator =
-             generalTypeConstructor
+             nonTerminal (Report.generalTypeConstructor . report)
              <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-             <|> parens (nonTerminal (Report.instanceTypeDesignator . declarationLevel . report)
-                         <|> typeVarApplications
-                         <|> Abstract.tupleType <$> typeVarTuple
-                         <|> Abstract.functionType
-                             <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
-                             <* nonTerminal (Report.rightArrow . report)
-                             <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar))},
+             <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         typeTerm = nonTerminal arrowType},
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -256,9 +251,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
                              <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
         <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
         <|> parens (nonTerminal typeWithWildcards),
-     promotedType =
-        Abstract.promotedConstructorType <$ terminator "'" <*> wrap (nonTerminal $ Report.generalConstructor . report)
-        <|> Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
+     promotedLiteral =
+        Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
         <|> Abstract.promotedStringLiteral <$> nonTerminal (Report.stringLiteral . report),
      namespacedMember =
@@ -275,9 +269,17 @@ reportGrammar g@ExtendedGrammar{report= r} =
             <$> wrap (nonTerminal familyInstanceDesignatorApplications)
             <*> wrap (nonTerminal aTypeWithWildcards),
      familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
-     flexibleInstanceDesignator = 
+     flexibleInstanceDesignator =
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap (nonTerminal $ Report.aType . report)
         <|> parens (nonTerminal flexibleInstanceDesignator),
+     instanceTypeDesignatorInsideParens =
+        nonTerminal (Report.typeVarApplications . declarationLevel . report)
+        <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
+        <|> Abstract.tupleType <$> typeVarTuple
+        <|> Abstract.functionType
+            <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
+            <* nonTerminal (Report.rightArrow . report)
+            <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
      optionalForall = pure [],
      optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
@@ -730,11 +732,6 @@ typeOperatorsMixin self super =
                                   <*> anySymbol
                                   <*> typeVarBinder self
                      <|> parens ((self & report & declarationLevel & simpleType)),
-                  instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
-                     <|> parens (Abstract.infixTypeApplication
-                                 <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-                                 <*> (self & report & qualifiedOperator)
-                                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self)),
                   qualifiedTypeClass =
                      (self & report & qualifiedConstructor) <|> parens (self & report & qualifiedVariableSymbol)},
                 typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
@@ -751,6 +748,11 @@ typeOperatorsMixin self super =
                   <$> wrap (bTypeWithWildcards self)
                   <*> (self & report & qualifiedOperator)
                   <*> wrap (cTypeWithWildcards self),
+        instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
+           <|> Abstract.infixTypeApplication
+               <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
+               <*> (self & report & qualifiedOperator)
+               <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
         familyInstanceDesignator = familyInstanceDesignator super
            <|> Abstract.infixTypeClassInstanceLHS
                   <$> wrap (bTypeWithWildcards super)
@@ -843,6 +845,8 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
                           <|> pure []}},
+   instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
+      <|> parens (self & instanceTypeDesignatorInsideParens),
    optionallyParenthesizedTypeVar = (self & report & Report.typeVar)
                                     <|> parens (optionallyParenthesizedTypeVar self),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
@@ -1005,7 +1009,7 @@ dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Par
 dataKindsMixin self super = super{
    report= (report super){
       aType = (super & report & aType)
-         <|> promotedType self
+         <|> promotedLiteral self
          <|> Abstract.promotedTupleType <$ terminator "'"
              <*> parens ((:|) <$> wrap (self & report & typeTerm)
                               <*> some (comma *> wrap (self & report & typeTerm)))
@@ -1014,11 +1018,13 @@ dataKindsMixin self super = super{
          <|> Abstract.promotedListType
              <$> brackets ((:) <$> wrap (self & report & typeTerm) <* comma
                                <*> wrap (self & report & typeTerm) `sepBy1` comma),
+      generalTypeConstructor = (super & report & generalTypeConstructor)
+         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (nonTerminal $ Report.generalConstructor . report),
       declarationLevel= (super & report & declarationLevel){
          instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
-            <|> promotedType self}},
+            <|> promotedLiteral self}},
    aTypeWithWildcards = aTypeWithWildcards super
-      <|> promotedType self
+      <|> promotedLiteral self
       <|> Abstract.promotedTupleType <$ terminator "'"
           <*> parens ((:|) <$> wrap (typeWithWildcards self)
                            <*> some (comma *> wrap (typeWithWildcards self)))
@@ -1041,14 +1047,12 @@ dataKindsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lexica
                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 dataKindsTypeOperatorsMixin self super = super{
-   report= (report super){
-      declarationLevel= (super & report & declarationLevel){
-         instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
-            <|> parens (Abstract.promotedInfixTypeApplication
-                        <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-                        <* terminator "'"
-                        <*> (super & report & qualifiedOperator)
-                        <*> wrap (optionallyKindedAndParenthesizedTypeVar self))}},
+   instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
+      <|> Abstract.promotedInfixTypeApplication
+          <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
+          <* terminator "'"
+          <*> (super & report & qualifiedOperator)
+          <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
    bKind = bKind super
            <|> Abstract.infixKindApplication
            <$> wrap (bKind self)
@@ -1260,14 +1264,14 @@ kindSignaturesMixin
                       <*> (keyword "where"
                            *> blockOf inClassDeclaration
                            <|> pure []),
-            instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
-               <|> Abstract.kindedType
-                   <$> wrap (self & report & declarationLevel & instanceTypeDesignator)
-                   <*> wrap (kindSignature self),
             typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
                                 <*> some (comma *> wrap (optionallyKindedTypeVar self))},
          typeTerm = (super & report & typeTerm) <|>
             Abstract.kindedType <$> wrap (self & report & typeTerm) <*> wrap (kindSignature self)},
+      instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
+         <|> Abstract.kindedType
+             <$> wrap (self & instanceTypeDesignatorInsideParens)
+             <*> wrap (kindSignature self),
       optionallyKindedAndParenthesizedTypeVar =
          Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
          <|> parens (Abstract.kindedType
