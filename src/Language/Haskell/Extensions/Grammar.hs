@@ -1265,7 +1265,14 @@ kindSignaturesMixin
                            *> blockOf inClassDeclaration
                            <|> pure []),
             typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
-                                <*> some (comma *> wrap (optionallyKindedTypeVar self))},
+                                <*> some (comma *> wrap (optionallyKindedTypeVar self)),
+           classConstraint = (super & report & declarationLevel & classConstraint)
+              <|> Abstract.multiParameterClassConstraint
+                  <$> (self & report & declarationLevel & qualifiedTypeClass)
+                  <*> parens (pure
+                              <$> wrap (Abstract.kindedType
+                                        <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
+                                        <*> wrap (kindSignature self)))},
          typeTerm = (super & report & typeTerm) <|>
             Abstract.kindedType <$> wrap (self & report & typeTerm) <*> wrap (kindSignature self)},
       instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
