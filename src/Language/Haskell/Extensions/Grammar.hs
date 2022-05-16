@@ -1320,7 +1320,7 @@ explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing
 explicitForAllMixin
    self@ExtendedGrammar{
       report= HaskellGrammar{
-         declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
+         declarationLevel= DeclarationGrammar{context, optionalContext, instanceDesignator}}}
    super =
    super{
       report= (report super){
@@ -1345,12 +1345,26 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap (arrowType self),
+             <*> wrap (arrowType self)
+         <|> Abstract.functionType
+             <$> wrap (nonTerminal cType)
+             <* nonTerminal (Report.rightArrow . report)
+             <*> wrap (Abstract.forallType []
+                       <$> wrap context
+                       <* (self & report & rightDoubleArrow)
+                       <*> wrap (arrowType self)),
       arrowTypeWithWildcards = arrowTypeWithWildcards super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap optionalContext
-             <*> wrap (arrowTypeWithWildcards self),
+             <*> wrap (arrowTypeWithWildcards self)
+         <|> Abstract.functionType
+             <$> wrap (nonTerminal cType)
+             <* nonTerminal (Report.rightArrow . report)
+             <*> wrap (Abstract.forallType []
+                       <$> wrap context
+                       <* (self & report & rightDoubleArrow)
+                       <*> wrap (arrowTypeWithWildcards self)),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self
