@@ -92,7 +92,6 @@ extensionMixins =
      (Set.fromList [PackageImports],                 [(0, packageImportsMixin)]),
      (Set.fromList [SafeImports],                    [(0, safeImportsMixin)]),
      (Set.fromList [ImportQualifiedPost],            [(0, importQualifiedPostMixin)]),
-     (Set.fromList [ExplicitNamespaces],             [(0, explicitNamespacesMixin)]),
      (Set.fromList [UnicodeSyntax],                  [(1, unicodeSyntaxMixin)]),
      (Set.fromList [BinaryLiterals],                 [(1, binaryLiteralsMixin)]),
      (Set.fromList [HexFloatLiterals],               [(1, hexFloatLiteralsMixin)]),
@@ -122,6 +121,7 @@ extensionMixins =
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
      (Set.fromList [EqualityConstraints],            [(8, equalityConstraintsMixin)]),
+     (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
      (Set.fromList [ExplicitForAll],                 [(9, explicitForAllMixin)]),
@@ -725,19 +725,33 @@ typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstr
 typeOperatorsMixin self super =
    super{
       report= (report super){
-                declarationLevel= (super & report & declarationLevel){
-                  simpleType = (super & report & declarationLevel & simpleType)
-                     <|> Abstract.simpleInfixTypeLHSApplication
-                                  <$> typeVarBinder self
-                                  <*> anySymbol
-                                  <*> typeVarBinder self
-                     <|> parens ((self & report & declarationLevel & simpleType)),
-                  qualifiedTypeClass =
-                     (self & report & qualifiedConstructor) <|> parens (self & report & qualifiedVariableSymbol)},
-                typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
-                generalTypeConstructor = (super & report & generalTypeConstructor)
-                  <|> Abstract.constructorType
-                      <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
+         moduleLevel= (super & report & moduleLevel){
+            export = Abstract.exportVar <$> (self & report & qualifiedVariable)
+               <|> Abstract.exportClassOrType <$> (self & report & qualifiedConstructorIdentifier) <*> pure Nothing
+               <|> Abstract.exportClassOrType
+                   <$> (self & report & qualifiedTypeConstructor)
+                   <*> (Just <$> (self & report & moduleLevel & members))
+               <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId,
+            importItem = Abstract.importVar <$> (self & report & variable)
+               <|> Abstract.importClassOrType
+                   <$> (self & report & constructorIdentifier) <*> pure Nothing
+               <|> Abstract.importClassOrType
+                   <$> (self & report & typeConstructor)
+                   <*> (Just <$> (self & report & moduleLevel & members))},
+         declarationLevel= (super & report & declarationLevel){
+            simpleType = (super & report & declarationLevel & simpleType)
+               <|> Abstract.simpleInfixTypeLHSApplication
+                            <$> typeVarBinder self
+                            <*> anySymbol
+                            <*> typeVarBinder self
+               <|> parens ((self & report & declarationLevel & simpleType)),
+            qualifiedTypeClass =
+               (self & report & qualifiedConstructor) <|> parens (self & report & qualifiedVariableSymbol)},
+         typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
+         qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedSymbol,
+         generalTypeConstructor = (super & report & generalTypeConstructor)
+           <|> Abstract.constructorType
+               <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
         cType = (super & cType)
            <|> Abstract.infixTypeApplication
                   <$> wrap (self & cType)
@@ -759,6 +773,7 @@ typeOperatorsMixin self super =
                   <*> (self & report & qualifiedOperator)
                   <*> wrap (cTypeWithWildcards super)}
    where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
+         anyQualifiedSymbol = (self & report & qualifiedConstructorSymbol) <|> (self & report & qualifiedVariableSymbol)
 
 equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                        g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
