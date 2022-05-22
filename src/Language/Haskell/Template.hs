@@ -497,25 +497,26 @@ typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate TypeWildcard = WildCardT
 typeTemplate (TypeKind t) = typeTemplate (extract t)
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
-typeTemplate (ForallType vars context body) =
-  ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars)))
-          (contextTemplate $ extract context)
-          (typeTemplate type')
-  where type' = extract body
-        varBindings = typeVarBindingTemplate <$> vars
-        bindingVars = bindingVarName <$> vars
+typeTemplate (ForallType vars body) =
+   ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars))) []
+           (typeTemplate type')
+   where type' = extract body
+         varBindings = typeVarBindingTemplate <$> vars
+         bindingVars = bindingVarName <$> vars
 typeTemplate (ForallKind vars body) =
-  ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars))) []
-          (typeTemplate type')
-  where type' = extract body
-        varBindings = typeVarBindingTemplate <$> vars
-        bindingVars = bindingVarName <$> vars
+   ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars))) []
+           (typeTemplate type')
+   where type' = extract body
+         varBindings = typeVarBindingTemplate <$> vars
+         bindingVars = bindingVarName <$> vars
+typeTemplate (ConstrainedType context body) =
+   ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
 typeTemplate (VisibleDependentType vars body) =
-  ForallVisT (changeTVFlags () $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
-             (typeTemplate type')
-  where type' = extract body
-        varBindings = typeVarBindingTemplate <$> vars
-        bindingVars = bindingVarName <$> vars
+   ForallVisT (changeTVFlags () $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
+              (typeTemplate type')
+   where type' = extract body
+         varBindings = typeVarBindingTemplate <$> vars
+         bindingVars = bindingVarName <$> vars
 typeTemplate GroundTypeKind = StarT
 typeTemplate (PromotedConstructorType con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
@@ -561,8 +562,8 @@ freeTypeVars (VisibleKindKindApplication k1 k2) = freeTypeVars (extract k1) <> f
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
-freeTypeVars (ForallType vars context body) =
-  nub (freeContextVars (extract context) <> freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
+freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName <$> vars)
+freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
 freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))

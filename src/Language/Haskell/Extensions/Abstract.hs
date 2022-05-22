@@ -46,7 +46,8 @@ class Haskell λ => ExtendedHaskell λ where
                                        -> s (ClassInstanceLHS l l d d)
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
-   forallType :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
+   forallType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
+   constrainedType :: s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
    kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    typeWildcard :: Type λ l d s
    groundType :: Type λ l d s

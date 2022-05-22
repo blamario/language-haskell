@@ -1339,46 +1339,34 @@ explicitForAllMixin
    super = super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
-           topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
-              <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-                  <* keywordForall self
-                  <*> many (typeVarBinder self)
-                  <* delimiter "."
-                  <*> wrap optionalContext
-                  <*> wrap instanceDesignator
-                  <*> (keyword "where"
-                       *> blockOf (self & report & declarationLevel & inInstanceDeclaration)
-                       <|> pure [])},
-         aType = (super & report & aType)
-            <|> parens (Abstract.forallType []
-                        <$> wrap context
-                        <* (self & report & rightDoubleArrow)
-                        <*> wrap (self & report & typeTerm)),
+            optionalTypeSignatureContext = pure Abstract.noContext,
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+               <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+                   <* keywordForall self
+                   <*> many (typeVarBinder self)
+                   <* delimiter "."
+                   <*> wrap optionalContext
+                   <*> wrap instanceDesignator
+                   <*> (keyword "where"
+                        *> blockOf (self & report & declarationLevel & inInstanceDeclaration)
+                        <|> pure [])},
          typeVar = notFollowedBy (keywordForall self) *> (super & report & typeVar)},
       arrowType = arrowType super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap optionalContext
              <*> wrap (arrowType self)
-         <|> Abstract.functionType
-             <$> wrap (nonTerminal cType)
-             <* nonTerminal (Report.rightArrow . report)
-             <*> wrap (Abstract.forallType []
-                       <$> wrap context
-                       <* (self & report & rightDoubleArrow)
-                       <*> wrap (arrowType self)),
+         <|> Abstract.constrainedType
+             <$> wrap context
+             <* (self & report & rightDoubleArrow)
+             <*> wrap (arrowType self),
       arrowTypeWithWildcards = arrowTypeWithWildcards super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap optionalContext
              <*> wrap (arrowTypeWithWildcards self)
-         <|> Abstract.functionType
-             <$> wrap (nonTerminal cType)
-             <* nonTerminal (Report.rightArrow . report)
-             <*> wrap (Abstract.forallType []
-                       <$> wrap context
-                       <* (self & report & rightDoubleArrow)
-                       <*> wrap (arrowTypeWithWildcards self)),
+         <|> Abstract.constrainedType
+             <$> wrap context
+             <* (self & report & rightDoubleArrow)
+             <*> wrap (arrowType self),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self

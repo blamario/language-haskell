@@ -106,7 +106,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    infixConstructorArgType :: p (Abstract.Type l l f f),
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
-   optionalContext, context, constraint, classConstraint :: p (Abstract.Context l l f f),
+   optionalContext, optionalTypeSignatureContext, context, constraint, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
@@ -231,9 +231,10 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       equationDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
                                                          <*> wrap rhs <*> whereClauses,
       generalDeclaration =
-         Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalContext <*> wrap typeTerm
+         Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalTypeSignatureContext <*> wrap typeTerm
          <|> Abstract.fixityDeclaration <$> fixity <*> optional (fromIntegral <$> integer)
                                         <*> (operator `sepByNonEmpty` comma),
+      optionalTypeSignatureContext = optionalContext,
       whereClauses = keyword "where" *> declarations <|> pure [],
       variables = variable `sepByNonEmpty` comma,
       fixity = Abstract.leftAssociative <$ keyword "infixl"
