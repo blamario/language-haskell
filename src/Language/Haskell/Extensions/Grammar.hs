@@ -756,7 +756,7 @@ typeOperatorsMixin self super =
            <|> Abstract.infixTypeApplication
                   <$> wrap (self & cType)
                   <*> (self & report & qualifiedOperator)
-                  <*> wrap (self & report & Report.bType),
+                  <*> wrap (self & report & bType),
         cTypeWithWildcards = cTypeWithWildcards super
            <|> Abstract.infixTypeApplication
                   <$> wrap (bTypeWithWildcards self)
@@ -832,14 +832,14 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           <*> ((:[]) <$> parens (typeVarBinder self)))
                 <*> (keyword "where" *> blockOf (self & report & declarationLevel & inClassDeclaration) <|> pure []),
          constraint = (super & report & declarationLevel & constraint)
-            <|> parens (self & report & declarationLevel & Report.constraint),
-         context = (self & report & declarationLevel & Report.constraint)
+            <|> parens (self & report & declarationLevel & constraint),
+         context = (self & report & declarationLevel & constraint)
             <|> Abstract.constraints
                 <$> parens (filter ((1 /=) . length)
-                            $ wrap ((self & report & declarationLevel & Report.constraint)) `sepBy` comma),
+                            $ wrap ((self & report & declarationLevel & constraint)) `sepBy` comma),
          classConstraint = (super & report & declarationLevel & classConstraint)
             <|> Abstract.simpleConstraint
-                <$> (self & report & declarationLevel & Report.qualifiedTypeClass)
+                <$> (self & report & declarationLevel & qualifiedTypeClass)
                 <*> parens (optionallyParenthesizedTypeVar self),
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
          typeApplications =
@@ -850,11 +850,11 @@ gratuitouslyParenthesizedTypesMixin self super = super{
          typeVarApplications =
             (self & report & generalTypeConstructor)
             <|> Abstract.typeApplication
-                <$> wrap ((self & report & declarationLevel & Report.typeVarApplications)
-                          <|> parens (self & report & declarationLevel & Report.typeVarApplications))
+                <$> wrap ((self & report & declarationLevel & typeVarApplications)
+                          <|> parens (self & report & declarationLevel & typeVarApplications))
                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator)
-            <|> parens (self & report & declarationLevel & Report.instanceDesignator),
+            <|> parens (self & report & declarationLevel & instanceDesignator),
          derivingClause = keyword "deriving"
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
@@ -862,10 +862,10 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           <|> pure []}},
    instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
       <|> parens (self & instanceTypeDesignatorInsideParens),
-   optionallyParenthesizedTypeVar = (self & report & Report.typeVar)
+   optionallyParenthesizedTypeVar = (self & report & typeVar)
                                     <|> parens (optionallyParenthesizedTypeVar self),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
-   where qtc = (self & report & declarationLevel & Report.qualifiedTypeClass)
+   where qtc = (self & report & declarationLevel & qualifiedTypeClass)
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1034,7 +1034,7 @@ dataKindsMixin self super = super{
              <$> brackets ((:) <$> wrap (self & report & typeTerm) <* comma
                                <*> wrap (self & report & typeTerm) `sepBy1` comma),
       generalTypeConstructor = (super & report & generalTypeConstructor)
-         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (nonTerminal $ Report.generalConstructor . report),
+         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (self & report & generalConstructor),
       declarationLevel= (super & report & declarationLevel){
          instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
             <|> promotedLiteral self}},
@@ -1051,7 +1051,7 @@ dataKindsMixin self super = super{
      <|> Abstract.typeRepresentationKind
          <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
          <* notFollowedBy (fst <$> match (aKind self))
-         <*> wrap (self & report & Report.aType),
+         <*> wrap (self & report & aType),
    aKind = aKind super
      <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (kind self) <*> some (comma *> wrap (kind self)))
      <|> Abstract.listKind <$> brackets (wrap $ kind self)}
@@ -1119,13 +1119,13 @@ visibleDependentKindQualificationMixin self super = super{
      <|> Abstract.visibleDependentType
          <$ keywordForall self
          <*> many (typeVarBinder self)
-         <* (self & report & Report.rightArrow)
+         <* (self & report & rightArrow)
          <*> wrap (arrowType self),
    arrowTypeWithWildcards = arrowTypeWithWildcards super
      <|> Abstract.visibleDependentType
          <$ keywordForall self
          <*> many (typeVarBinder self)
-         <* (self & report & Report.rightArrow)
+         <* (self & report & rightArrow)
          <*> wrap (arrowTypeWithWildcards self)}
 
 kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1237,7 +1237,7 @@ standaloneKindSignaturesMixin self super = super{
             <|> Abstract.kindSignature <$ keyword "type"
                   <*> (self & report & typeConstructor)
                   <* (self & report & doubleColon)
-                  <*> wrap (self & report & declarationLevel & Report.optionalContext)
+                  <*> wrap (self & report & declarationLevel & optionalContext)
                   <*> wrap (kind self)}}}
 
 kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1274,7 +1274,7 @@ kindSignaturesMixin
                       <*> wrap (Abstract.simpleTypeLHSApplication
                                    <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
                                    <*> parens (Abstract.explicitlyKindedTypeVariable
-                                               <$> (self & report & Report.typeVar)
+                                               <$> (self & report & typeVar)
                                                <*> wrap (kindSignature self)))
                       <*> (keyword "where"
                            *> blockOf inClassDeclaration
@@ -1320,7 +1320,7 @@ existentialQuantificationMixin self super = super{
             <|> Abstract.existentialConstructor
                 <$ keywordForall self
                 <*> many (typeVarBinder self) <* delimiter "."
-                <*> wrap (self & report & declarationLevel & Report.optionalContext)
+                <*> wrap (self & report & declarationLevel & optionalContext)
                 <*> wrap (super & report & declarationLevel & declaredConstructor)
             <|> Abstract.existentialConstructor []
                 <$> wrap (self & report & declarationLevel & context)
@@ -1339,22 +1339,22 @@ explicitForAllMixin
    super =
    super{
       report= (report super){
-                declarationLevel= (super & report & declarationLevel){
-                  topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
-                     <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
-                         <* keywordForall self
-                         <*> many (typeVarBinder self)
-                         <* delimiter "."
-                         <*> wrap optionalContext
-                         <*> wrap instanceDesignator
-                         <*> (keyword "where"
-                              *> blockOf (self & report & declarationLevel & Report.inInstanceDeclaration)
-                              <|> pure [])},
+         declarationLevel= (super & report & declarationLevel){
+           topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+              <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+                  <* keywordForall self
+                  <*> many (typeVarBinder self)
+                  <* delimiter "."
+                  <*> wrap optionalContext
+                  <*> wrap instanceDesignator
+                  <*> (keyword "where"
+                       *> blockOf (self & report & declarationLevel & inInstanceDeclaration)
+                       <|> pure [])},
          aType = (super & report & aType)
             <|> parens (Abstract.forallType []
-                        <$> wrap (self & report & declarationLevel & Report.context)
-                        <* (self & report & Report.rightDoubleArrow)
-                        <*> wrap (self & report & Report.typeTerm)),
+                        <$> wrap context
+                        <* (self & report & rightDoubleArrow)
+                        <*> wrap (self & report & typeTerm)),
          typeVar = notFollowedBy (keywordForall self) *> (super & report & typeVar)},
       arrowType = arrowType super
          <|> Abstract.forallType <$ keywordForall self
