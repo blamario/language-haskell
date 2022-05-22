@@ -1336,8 +1336,7 @@ explicitForAllMixin
    self@ExtendedGrammar{
       report= HaskellGrammar{
          declarationLevel= DeclarationGrammar{context, optionalContext, instanceDesignator}}}
-   super =
-   super{
+   super = super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
@@ -1394,8 +1393,7 @@ gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Pa
                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 gadtSyntaxMixin
    self@ExtendedGrammar{report= HaskellGrammar{declarationLevel= DeclarationGrammar{simpleType, derivingClause}}}
-   super =
-   super{
+   super = super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
             topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
