@@ -727,14 +727,18 @@ typeOperatorsMixin self super =
       report= (report super){
          moduleLevel= (super & report & moduleLevel){
             export = Abstract.exportVar <$> (self & report & qualifiedVariable)
-               <|> Abstract.exportClassOrType <$> (self & report & qualifiedConstructorIdentifier) <*> pure Nothing
+               <|> Abstract.exportClassOrType
+                   <$> ((self & report & qualifiedConstructorIdentifier)
+                        <|> parens (self & report & qualifiedConstructorSymbol))
+                   <*> pure Nothing
                <|> Abstract.exportClassOrType
                    <$> (self & report & qualifiedTypeConstructor)
                    <*> (Just <$> (self & report & moduleLevel & members))
                <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId,
             importItem = Abstract.importVar <$> (self & report & variable)
                <|> Abstract.importClassOrType
-                   <$> (self & report & constructorIdentifier) <*> pure Nothing
+                   <$> ((self & report & constructorIdentifier) <|> parens (self & report & constructorSymbol))
+                   <*> pure Nothing
                <|> Abstract.importClassOrType
                    <$> (self & report & typeConstructor)
                    <*> (Just <$> (self & report & moduleLevel & members))},
