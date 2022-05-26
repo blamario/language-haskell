@@ -746,7 +746,7 @@ typeOperatorsMixin self super =
                             <*> typeVarBinder self
                <|> parens ((self & report & declarationLevel & simpleType)),
             qualifiedTypeClass =
-               (self & report & qualifiedConstructor) <|> parens (self & report & qualifiedVariableSymbol)},
+               (super & report & declarationLevel & qualifiedTypeClass) <|> parens anyQualifiedSymbol},
          typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
          qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedSymbol,
          generalTypeConstructor = (super & report & generalTypeConstructor)
