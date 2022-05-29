@@ -21,8 +21,9 @@ import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST as ExtAST
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
-import Language.Haskell.TH.Datatype.TyVarBndr (Specificity (SpecifiedSpec), TyVarBndrUnit,
-                                               changeTVFlags, kindedTV, plainTV)
+import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit,
+                                               kindedTV, plainTV, kindedTVInferred, plainTVInferred,
+                                               kindedTVSpecified, plainTVSpecified)
 import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
 import Language.Haskell.TH.Syntax (VarBangType)
@@ -293,39 +294,39 @@ declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
 declarationTemplates (InjectiveOpenTypeFamilyDeclaration lhs binding injectivity)
    | Just (con, vars) <- extractSimpleTypeLHS lhs
-   = [OpenTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingTemplate binding)
+   = [OpenTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
                                       (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
                                        <$> injectivity))]
 declarationTemplates (InjectiveClosedTypeFamilyDeclaration lhs binding injectivity constructors)
    | Just (con, vars) <- extractSimpleTypeLHS lhs
-   = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingTemplate binding)
+   = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
                                         (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
                                          <$> injectivity))
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
 declarationTemplates (DataFamilyInstance vars context lhs kind constructors derivings) =
    [DataInstD (contextTemplate $ extract context)
-              (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
               (dataConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (NewtypeFamilyInstance vars context lhs kind constructor derivings) =
    [NewtypeInstD (contextTemplate $ extract context)
-                 (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
                  (typeTemplate . extract <$> kind)
                  (dataConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (GADTDataFamilyInstance vars lhs kind constructors derivings) =
    [DataInstD []
-              (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
               (gadtConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates (GADTNewtypeFamilyInstance vars lhs kind constructor derivings) =
    [NewtypeInstD []
-                 (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
                  (typeTemplate . extract <$> kind)
                  (gadtConstructorTemplate $ extract constructor)
@@ -347,7 +348,7 @@ familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
 
 typeFamilyInstanceTemplate :: TemplateWrapper f => Declaration Language Language f f -> TySynEqn
 typeFamilyInstanceTemplate (TypeFamilyInstance vars lhs rhs) =
-   TySynEqn (if null vars then Nothing else Just $ typeVarBindingTemplate <$> vars)
+   TySynEqn (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
             (lhsTypeTemplate $ extract lhs)
             (typeTemplate $ extract rhs)
      
@@ -387,7 +388,7 @@ dataConstructorTemplate (Constructor name argTypes) =
 dataConstructorTemplate (RecordConstructor recName fieldTypes) =
    RecC (nameTemplate recName) (foldMap (fieldTypeTemplate . extract) fieldTypes)
 dataConstructorTemplate (ExistentialConstructor vars context con) =
-  ForallC (changeTVFlags SpecifiedSpec $ nub $ (typeVarBindingTemplate <$> vars) <> freeConstructorVars con')
+  ForallC (nub $ typeVarBindingSpecTemplate <$> vars)
           (contextTemplate $ extract context)
           (dataConstructorTemplate con')
   where con' = extract con
@@ -398,8 +399,7 @@ gadtConstructorTemplate (GADTConstructors names vars context t)
       FunctionType arg result -> normalTemplate (extract arg :) (extract result)
       RecordFunctionType fields result -> recordTemplate (extract <$> fields) (extract result)
       result -> normalTemplate id result
-   | otherwise = ForallC (changeTVFlags SpecifiedSpec $ nub
-                          $ (typeVarBindingTemplate <$> vars) <> (plainTV <$> freeTypeVars (extract t)))
+   | otherwise = ForallC (nub $ typeVarBindingSpecTemplate <$> vars)
                          (contextTemplate $ extract context)
                          (gadtConstructorTemplate $ GADTConstructors names [] (NoContext <$ context) t)
    where normalTemplate args (FunctionType arg result) = normalTemplate (args . (extract arg :)) (extract result)
@@ -414,7 +414,7 @@ fieldTypeTemplate (ConstructorFields names t)
    | otherwise = varBang NoSourceStrictness t <$> toList names
    where varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
 
-freeConstructorVars :: TemplateWrapper f => DataConstructor Language Language f f -> [TyVarBndrUnit]
+freeConstructorVars :: TemplateWrapper f => DataConstructor Language Language f f -> [TyVarBndrSpec]
 freeConstructorVars (Constructor _ argTypes) = foldMap (freeTypeVarBindings . extract) argTypes
 freeConstructorVars (RecordConstructor _ fieldTypes) = foldMap (freeTypeVarBindings . fieldsType . extract) fieldTypes
    where fieldsType (ConstructorFields _ t) = extract t
@@ -498,24 +498,22 @@ typeTemplate TypeWildcard = WildCardT
 typeTemplate (TypeKind t) = typeTemplate (extract t)
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars body) =
-   ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars))) []
-           (typeTemplate type')
+   ForallT varBindings [] (typeTemplate type')
    where type' = extract body
-         varBindings = typeVarBindingTemplate <$> vars
+         varBindings = typeVarBindingSpecTemplate <$> vars
          bindingVars = bindingVarName <$> vars
 typeTemplate (ForallKind vars body) =
-   ForallT (changeTVFlags SpecifiedSpec $ varBindings <> (plainTV <$> (nub (freeTypeVars type') \\ bindingVars))) []
-           (typeTemplate type')
+   ForallT varBindings [] (typeTemplate type')
    where type' = extract body
-         varBindings = typeVarBindingTemplate <$> vars
+         varBindings = typeVarBindingSpecTemplate <$> vars
          bindingVars = bindingVarName <$> vars
 typeTemplate (ConstrainedType context body) =
    ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
 typeTemplate (VisibleDependentType vars body) =
-   ForallVisT (changeTVFlags () $ (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars)))
+   ForallVisT (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars))
               (typeTemplate type')
    where type' = extract body
-         varBindings = typeVarBindingTemplate <$> vars
+         varBindings = typeVarBindingUnitTemplate <$> vars
          bindingVars = bindingVarName <$> vars
 typeTemplate GroundTypeKind = StarT
 typeTemplate (PromotedConstructorType con) = case (extract con) of
@@ -543,8 +541,8 @@ typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
-freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrUnit]
-freeTypeVarBindings = map plainTV . freeTypeVars
+freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrSpec]
+freeTypeVarBindings = map plainTVInferred . freeTypeVars
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TH.Name]
 freeTypeVars ConstructorType{} = []
@@ -585,15 +583,18 @@ freeTypeVars PromotedIntegerLiteral{} = []
 freeTypeVars PromotedCharLiteral{} = []
 freeTypeVars PromotedStringLiteral{} = []
 
-typeVarBindingTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
-typeVarBindingTemplate (ExplicitlyKindedTypeVariable False name kind) =
+typeVarBindingUnitTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
+typeVarBindingUnitTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingTemplate (ImplicitlyKindedTypeVariable False name) = plainTV (nameTemplate name)
-#if MIN_VERSION_template_haskell(2,18,0)
-typeVarBindingTemplate (ExplicitlyKindedTypeVariable True name kind) =
-   KindedTV (nameTemplate name) TH.InferredSpec (typeTemplate $ extract kind)
-typeVarBindingTemplate (ImplicitlyKindedTypeVariable True name) = PlainTV (nameTemplate name) TH.InferredSpec
-#endif
+typeVarBindingUnitTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
+
+typeVarBindingSpecTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrSpec
+typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable False name kind) =
+   kindedTVSpecified (nameTemplate name) (typeTemplate $ extract kind)
+typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable False name) = plainTVSpecified (nameTemplate name)
+typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable True name kind) =
+   kindedTVInferred (nameTemplate name) (typeTemplate $ extract kind)
+typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable True name) = plainTVInferred (nameTemplate name)
 
 bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
 bindingVarName (ExplicitlyKindedTypeVariable _ name _) = nameTemplate name
@@ -622,9 +623,9 @@ extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.Type
                => f (ExtAST.TypeLHS l l f f) -> Maybe (AST.Name l, [TyVarBndrUnit])
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> Maybe (AST.Name l, [TyVarBndrUnit])
-         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, typeVarBindingTemplate <$> vars)
+         fromTypeLHS (SimpleTypeLHS con vars) = Just (con, typeVarBindingUnitTemplate <$> vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
-            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [typeVarBindingTemplate var])
+            | Just (con, vars) <- extractSimpleTypeLHS t = Just (con, vars ++ [typeVarBindingUnitTemplate var])
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s
