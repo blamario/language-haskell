@@ -19,7 +19,7 @@ import Data.Functor.Compose (Compose(getCompose))
 import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Textual (TextualMonoid, toString)
@@ -441,7 +441,7 @@ tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}} supe
    report= (report super){
       bareExpression = (super & report & bareExpression)
          <|> Abstract.tupleSectionExpression
-             <$> parens (filter (any isJust)
+             <$> parens (filter (\l-> any isJust l && any isNothing l)
                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
 
 lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
