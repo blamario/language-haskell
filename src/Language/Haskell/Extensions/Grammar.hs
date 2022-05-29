@@ -293,7 +293,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
      gadtNewConstructor =
         Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* nonTerminal (Report.doubleColon . report)
                                   <*> nonTerminal optionalForall
-                                  <*> wrap optionalContext
+                                  <*> wrap (pure Abstract.noContext
+                                            <|> context *> rightDoubleArrow
+                                                *> fail "No context allowed on GADT newtype")
                                   <*> wrap (nonTerminal gadtNewBody),
      constructorIDs = constructor `sepByNonEmpty` comma,
      gadtNewBody =
@@ -864,12 +866,70 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
                           <|> pure []}},
+   gadtConstructors = (super & gadtConstructors)
+      <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
+                                    <* (self & report & doubleColon)
+                                    <**> pure uncurry3
+                                    <*> (parens forallAndContextAndBody <|> forallAndParenContextBody),
+   gadtNewConstructor = (super & gadtNewConstructor)
+      <|> Abstract.gadtConstructors <$> ((:|[]) <$> (self & report & constructor))
+                                    <* (self & report & doubleColon)
+                                    <**> pure uncurry3
+                                    <*> parens forallAndNewBody,
+   gadtNewBody = (super & gadtNewBody)
+      <|> Abstract.functionType
+          <$> wrap ((self & report & bType)
+                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+          <* (self & report & Report.rightArrow)
+          <*> wrap paren_return_type
+      <|> Abstract.recordFunctionType
+          <$> braces ((:[]) <$> wrap (self & report & declarationLevel & fieldDeclaration))
+          <* (self & report & Report.rightArrow)
+          <*> wrap paren_return_type,
+   record_gadt_body = (super & record_gadt_body)
+      <|> Abstract.recordFunctionType
+          <$> braces (wrap (self & report & declarationLevel & fieldDeclaration) `sepBy` comma)
+          <* (self & report & Report.rightArrow)
+          <*> wrap paren_return_type,
    instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
       <|> parens (self & instanceTypeDesignatorInsideParens),
    optionallyParenthesizedTypeVar = (self & report & typeVar)
                                     <|> parens (optionallyParenthesizedTypeVar self),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
    where qtc = (self & report & declarationLevel & qualifiedTypeClass)
+         paren_return_type = parens ((self & return_type) <|> parens paren_return_type)
+         optionalContextAndGadtBody =
+            contextAndGadtBody <|> (,) <$> wrap (pure Abstract.noContext) <*> wrap (self & gadtBody)
+         contextAndGadtBody =
+            (,) <$> wrap (self & report & declarationLevel & context)
+                <*  (self & report & rightDoubleArrow)
+                <*> wrap (self & gadtBody)
+            <|> parens contextAndGadtBody
+         forallAndContextAndBody =
+            (,,) <$ keywordForall self
+                 <*> many (typeVarBinder self)
+                 <* delimiter "."
+                 <**> pure uncurry
+                 <*> optionalContextAndGadtBody
+            <|> uncurry ((,,) []) <$> contextAndGadtBody
+            <|> parens forallAndContextAndBody
+         forallAndParenContextBody =
+            (,,) <$ keywordForall self
+                 <*> many (typeVarBinder self)
+                 <* delimiter "."
+                 <**> pure uncurry
+                 <*> parens contextAndGadtBody
+         forallAndNewBody =
+            (,,) <$ keywordForall self
+                 <*> many (typeVarBinder self)
+                 <* delimiter "."
+                 <*> wrap (pure Abstract.noContext
+                           <|> (self & report & declarationLevel & context)
+                               *> (self & report & rightDoubleArrow)
+                               *> fail "No context allowed on GADT newtype")
+                 <*> wrap (self & gadtNewBody)
+            <|> parens forallAndNewBody
+         uncurry3 f (a, b, c) = f a b c
 
 flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                      g ~ ExtendedGrammar l t (NodeWrap t),
