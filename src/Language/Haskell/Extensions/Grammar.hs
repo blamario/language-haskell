@@ -1200,9 +1200,9 @@ typeApplicationsMixin self super = super{
              <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
              <*> many (wrap $ self & report & aPattern)
       },
-   base_return_type = (super & base_return_type)
+   return_type = (super & return_type)
       <|> Abstract.visibleKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & base_return_type)
+          <$> filter whiteSpaceTrailing (wrap $ self & return_type)
           <* delimiter "@"
           <*> wrap (aKindWithWildcards self),
    bTypeWithWildcards = (super & bTypeWithWildcards)
