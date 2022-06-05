@@ -322,6 +322,7 @@ byName = Map.fromList [
   ("MonoLocalBinds", MonoLocalBinds),
   ("MonoPatBinds", MonoPatBinds),
   ("MonomorphismRestriction", MonomorphismRestriction),
+  ("MultiParameterConstraints", MultiParameterConstraints),
   ("MultiParamTypeClasses", MultiParamTypeClasses),
   ("MultiWayIf", MultiWayIf),
   ("NPlusKPatterns", NPlusKPatterns),
