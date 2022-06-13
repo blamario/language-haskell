@@ -331,6 +331,12 @@ declarationTemplates (GADTNewtypeFamilyInstance vars lhs kind constructor derivi
                  (gadtConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates d@TypeFamilyInstance{} = [TySynInstD $ typeFamilyInstanceTemplate d]
+declarationTemplates (TypeRoleDeclaration name roles) =
+   [RoleAnnotD (qnameTemplate name) (roleTemplate <$> roles)]
+   where roleTemplate NominalRole = NominalR
+         roleTemplate RepresentationalRole = RepresentationalR
+         roleTemplate PhantomRole = PhantomR
+         roleTemplate InferredRole = InferR
 
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)

@@ -136,6 +136,7 @@ extensionMixins =
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
+     (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
@@ -1237,10 +1238,29 @@ unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalPars
 unicodeStarIsTypeMixin self super = super{
    groundTypeKind = groundTypeKind super <|> delimiter "★"}
 
+roleAnnotationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                       g ~ ExtendedGrammar l t (NodeWrap t),
+                                       Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                       Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+roleAnnotationsMixin self super = super{
+   report = (report super) {
+      declarationLevel= (super & report & declarationLevel) {
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+            <|> Abstract.typeRoleDeclaration <$ keyword "type" <* keyword "role"
+                <*> (self & report & qualifiedTypeConstructor)
+                <*> some (Abstract.nominalRole <$ keyword "nominal"
+                          <|> Abstract.representationalRole <$ keyword "representational"
+                          <|> Abstract.phantomRole <$ keyword "phantom"
+                          <|> Abstract.inferredRole <$ keyword "_")
+         }
+      }
+   }
+
 typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                    g ~ ExtendedGrammar l t (NodeWrap t),
-                                    Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                                        g ~ ExtendedGrammar l t (NodeWrap t),
+                                        Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 typeApplicationsMixin self super = super{
    report = (report super){

@@ -15,6 +15,7 @@ class Haskell λ => ExtendedHaskell λ where
    type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type TypeVarBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
    type ModuleMember λ = x | x -> λ
+   type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    parallelListComprehension :: s (Expression l l d d)
@@ -65,6 +66,7 @@ class Haskell λ => ExtendedHaskell λ where
    forallKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
    groundTypeKind :: Kind λ l d s
    typeKind :: s (Type l l d d) -> Kind λ l d s
+   typeRoleDeclaration :: QualifiedName λ -> [TypeRole λ] -> Declaration λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    kindedNewtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
@@ -110,6 +112,11 @@ class Haskell λ => ExtendedHaskell λ where
 
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
    defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ
+
+   inferredRole :: TypeRole λ
+   nominalRole :: TypeRole λ
+   representationalRole :: TypeRole λ
+   phantomRole :: TypeRole λ
 
    promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
    promotedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s
