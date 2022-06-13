@@ -29,7 +29,7 @@ import qualified Text.Grampa
 import Text.Grampa hiding (keyword)
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, try)
+import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, sepEndBy, try)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
@@ -170,7 +170,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- 	| 	{ impdecls }
 -- 	| 	{ topdecls }
    moduleLevel= ModuleLevelGrammar{
-      exports = parens (wrap export `sepBy` comma),
+      exports = parens (wrap export `sepEndBy` comma),
       export = Abstract.exportVar <$> qualifiedVariable
                <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
                <|> Abstract.reExportModule <$ keyword "module" <*> moduleId,
@@ -178,11 +178,11 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                           <*> (True <$ keyword "qualified" <|> pure False) <*> moduleId
                           <*> optional (keyword "as" *> moduleId) <*> optional (wrap importSpecification),
       importSpecification = (pure Abstract.includedImports <|> Abstract.excludedImports <$ keyword "hiding")
-                            <*> parens (wrap importItem `sepBy` comma <* optional comma),
+                            <*> parens (wrap importItem `sepEndBy` comma),
       importItem = Abstract.importVar <$> variable
                    <|> Abstract.importClassOrType <$> typeConstructor <*> optional members,
       members = parens (Abstract.allMembers <$ delimiter ".."
-                        <|> Abstract.memberList <$> (cname `sepBy` comma) <* optional comma),
+                        <|> Abstract.memberList <$> cname `sepEndBy` comma),
       cname = variable <|> constructor},
 
 -- impdecls 	→ 	impdecl1 ; … ; impdecln 	    (n ≥ 1)
