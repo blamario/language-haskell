@@ -584,11 +584,11 @@ explicitNamespacesMixin self super = super{
          export = (super & report & moduleLevel & export)
             <|> Abstract.exportClassOrType <$ keyword "type"
                 <*> parens (self & report & qualifiedVariableSymbol)
-                <*> pure Nothing,
+                <*> optional (self & report & moduleLevel & members),
          importItem = (super & report & moduleLevel & importItem)
             <|> Abstract.importClassOrType <$ keyword "type"
                 <*> parens (self & report & variableSymbol)
-                <*> pure Nothing,
+                <*> optional (self & report & moduleLevel & members),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
                                <$> (namespacedMember self `sepBy` comma) <* optional comma)}}}
