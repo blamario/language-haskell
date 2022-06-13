@@ -142,7 +142,6 @@ instance PrettyViaTH (AST.Name Language) where
 instance PrettyViaTH (QualifiedName Language) where
    prettyViaTH x = Ppr.pprName (qnameTemplate x)
 
-
 expressionTemplate :: TemplateWrapper f => Expression Language Language f f -> Exp
 expressionTemplate (ApplyExpression f x) = AppE (wrappedExpressionTemplate f) (wrappedExpressionTemplate x)
 expressionTemplate (ConditionalExpression test true false) =
@@ -341,7 +340,7 @@ lhsTypeTemplate (ClassInstanceLHSApplication left right) =
 lhsTypeTemplate (ClassInstanceLHSKindApplication left right) =
   AppKindT (lhsTypeTemplate $ extract left) (typeTemplate $ extract right)
 lhsTypeTemplate (InfixTypeClassInstanceLHS left name right) =
-  InfixT (typeTemplate $ extract left) (qnameTemplate name) (typeTemplate $ extract right)
+  InfixT (wrappedTypeTemplate left) (qnameTemplate name) (wrappedTypeTemplate right)
 
 familyKindTemplate :: TemplateWrapper f => Maybe (f (ExtAST.Type Language Language f f)) -> FamilyResultSig
 familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
@@ -361,7 +360,7 @@ contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> 
 contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
 contextTemplate (ClassConstraint cls ts) = [foldl' AppT (ConT $ qnameTemplate cls) (typeTemplate . extract <$> ts)]
 contextTemplate (InfixConstraint left op right) =
-   [InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)]
+   [InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)]
 contextTemplate (TypeEqualityConstraint t1 t2) =
    [EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)]
 contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
@@ -490,9 +489,9 @@ typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTempl
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
-   InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
+   InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)
 typeTemplate (InfixKindApplication left op right) =
-   InfixT (typeTemplate $ extract left) (qnameTemplate op) (typeTemplate $ extract right)
+   InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate TypeWildcard = WildCardT
 typeTemplate (TypeKind t) = typeTemplate (extract t)
@@ -540,6 +539,9 @@ typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
    cs -> foldl' AppT (TupleT $! length cs) cs
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
+
+wrappedTypeTemplate :: TemplateWrapper f => f (ExtAST.Type Language Language f f) -> TH.Type
+wrappedTypeTemplate x = (if isParenthesized x then ParensT else id) (typeTemplate $ extract x)
 
 freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrSpec]
 freeTypeVarBindings = map plainTVInferred . freeTypeVars
