@@ -1,7 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
              Rank2Types, RecordWildCards,
              ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
-{-# OPTIONS_GHC -ddump-splices -ddump-to-file #-}
 
 module Language.Haskell.Grammar where
 
@@ -129,7 +128,7 @@ $(Rank2.TH.deriveAll ''HaskellGrammar)
 $(Rank2.TH.deriveAll ''ModuleLevelGrammar)
 $(Rank2.TH.deriveAll ''DeclarationGrammar)
 
-grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (NodeWrap t)) t),
+grammar2010 :: (Abstract.Haskell l,
                 Ord t, Show t, OutlineMonoid t,
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -139,7 +138,7 @@ grammar2010 :: (Abstract.Haskell l, LexicalParsing (Parser (HaskellGrammar l t (
             => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
-grammar :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+grammar :: forall l g t. (Abstract.Haskell l, Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
@@ -750,16 +749,14 @@ asciiSymbols = Set.fromList "!#$%&*+./<=>?@\\^|-~:"
 -- consym 	→ 	( : {symbol})⟨reservedop⟩
 -- reservedop 	→ 	.. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
 
-moduleId :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-         => Parser g t (Abstract.ModuleName l)
+moduleId :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t (Abstract.ModuleName l)
 moduleId = Abstract.moduleName <$> token moduleLexeme
 
-moduleLexeme :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-             => Parser g t (NonEmpty (Abstract.Name l))
+moduleLexeme :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t (NonEmpty (Abstract.Name l))
 moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme <?> "module name")
                `sepByNonEmpty` string "."
 
-nameQualifier :: (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
+nameQualifier :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
               => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
 nameQualifier =
    Abstract.qualifiedName
@@ -767,7 +764,7 @@ nameQualifier =
                      <* notFollowedBy (constructorLexeme *> string "."
                                        <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower)))
 
-asciiEscape, charEscape, controlEscape :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
+asciiEscape, charEscape, controlEscape :: (Ord t, Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'
              <|> '\b' <$ char 'b'
              <|> '\f' <$ char 'f'
@@ -854,7 +851,7 @@ instance (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) where
    lexicalToken p = storeToken p <* lexicalWhiteSpace
    keyword = keyword
 
-keyword :: (Ord s, Show s, TextualMonoid s, LexicalParsing (Parser g s)) => s -> Parser g s ()
+keyword :: (Ord s, Show s, TextualMonoid s) => s -> Parser g s ()
 keyword s = lexicalToken (string s
                           *> notSatisfyChar isNameTailChar
                           <* lift ([[Token Keyword s]], ()))
@@ -870,7 +867,7 @@ isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c || Char.isPunctuation c
 
-delimiter, terminator :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => t -> Parser g t ()
+delimiter, terminator :: (Ord t, Show t, TextualMonoid t) => t -> Parser g t ()
 delimiter s = void (lexicalToken $
                     string s
                     <* notSatisfyChar isSymbol
@@ -879,11 +876,10 @@ delimiter s = void (lexicalToken $
 terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
 
-nameToken :: (Abstract.Haskell l, TextualMonoid t, TokenParsing (Parser g t))
-          => Parser g t t -> Parser g t (Abstract.Name l)
+nameToken :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t t -> Parser g t (Abstract.Name l)
 nameToken p = token (Abstract.name . Text.pack . toString mempty <$> p)
 
-whiteSpace :: (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) => Parser g t ()
+whiteSpace :: (Ord t, Show t, TextualMonoid t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = ((takeCharsWhile1 Char.isSpace
                        >>= \ws-> lift ([[WhiteSpace ws]], ())) <?> "whitespace")
@@ -900,8 +896,7 @@ comment = do c <- try (blockComment
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
-blockOf :: (Ord t, Show t, OutlineMonoid t, TokenParsing (Parser g t),
-            Deep.Foldable (Serialization (Down Int) t) node)
+blockOf :: (Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
