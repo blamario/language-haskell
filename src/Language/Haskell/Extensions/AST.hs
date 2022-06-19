@@ -63,6 +63,8 @@ instance Abstract.ExtendedHaskell Language where
    gadtNewtypeDeclaration = GADTNewtypeDeclaration
    gadtConstructors = GADTConstructors
    recordFunctionType = RecordFunctionType
+   linearFunctionType = LinearFunctionType
+   multiplicityFunctionType = MultiplicityFunctionType
    promotedConstructorType = PromotedConstructorType
    promotedTupleType = PromotedTupleType
    promotedListType = PromotedListType
@@ -380,6 +382,8 @@ data Type λ l d s =
    ConstructorType (s (Abstract.Constructor l l d d))
    | FunctionConstructorType
    | FunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | LinearFunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | MultiplicityFunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | RecordFunctionType [s (Abstract.FieldDeclaration l l d d)] (s (Abstract.Type l l d d))
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))

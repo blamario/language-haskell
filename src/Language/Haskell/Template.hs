@@ -1,4 +1,4 @@
-{-# Language CPP, FlexibleContexts, FlexibleInstances, GADTs, OverloadedStrings, RankNTypes,
+{-# Language CPP, DataKinds, FlexibleContexts, FlexibleInstances, GADTs, OverloadedStrings, RankNTypes,
              ScopedTypeVariables, TemplateHaskell #-}
 
 module Language.Haskell.Template where
@@ -13,6 +13,7 @@ import Data.Text (Text, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
 import GHC.Exts (TYPE)
+import qualified GHC.Types
 import Text.PrettyPrint (render)
 
 import Language.Haskell (Placed)
@@ -489,6 +490,12 @@ typeTemplate (ConstructorType con) = case (extract con) of
 typeTemplate FunctionConstructorType = ArrowT
 typeTemplate (FunctionType from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
 typeTemplate (FunctionKind from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
+#if MIN_VERSION_template_haskell(2,17,0)
+typeTemplate (LinearFunctionType from to) =
+   MulArrowT `AppT` PromotedT 'GHC.Types.One `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
+typeTemplate (MultiplicityFunctionType from mult to) =
+   MulArrowT `AppT` typeTemplate (extract mult) `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
+#endif
 typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)

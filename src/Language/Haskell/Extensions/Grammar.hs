@@ -136,7 +136,9 @@ extensionMixins =
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
+     (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
+     (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
@@ -1308,6 +1310,39 @@ typeApplicationsMixin self super = super{
           <* delimiter "@"
           <*> wrap (self & aKindWithWildcards)
    }
+
+linearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                   g ~ ExtendedGrammar l t (NodeWrap t),
+                                   Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+linearTypesMixin self super = super{
+  arrowType = (super & arrowType)
+    <|> Abstract.linearFunctionType
+        <$> wrap (self & cType)
+        <* delimiter "%"
+        <* keyword "1"
+        <* (self & report & rightArrow)
+        <*> wrap (self & arrowType)
+    <|> Abstract.multiplicityFunctionType
+        <$> wrap (self & cType)
+        <* delimiter "%"
+        <* notFollowedBy (keyword "1")
+        <*> wrap (self & report & aType)
+        <* (self & report & rightArrow)
+        <*> wrap (self & arrowType)}
+
+unicodeLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+unicodeLinearTypesMixin self super = super{
+  arrowType = (super & arrowType)
+    <|> Abstract.linearFunctionType
+        <$> wrap (self & cType)
+        <* delimiter "⊸"
+        <*> wrap (self & arrowType)}
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             g ~ ExtendedGrammar l t (NodeWrap t),

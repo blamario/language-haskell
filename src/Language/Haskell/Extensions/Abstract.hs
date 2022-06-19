@@ -78,6 +78,8 @@ class Haskell λ => ExtendedHaskell λ where
    gadtConstructors :: NonEmpty (Name λ) -> [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d)
                    -> GADTConstructor λ l d s
    recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s
+   multiplicityFunctionType :: s (Type l l d d) -> s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
+   linearFunctionType :: s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
 
    dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
