@@ -138,7 +138,10 @@ extensionMixins =
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
+     (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
+     (Set.fromList [GADTSyntax, LinearTypes,
+                    UnicodeSyntax],                  [(9, gadtUnicodeLinearTypesMixin)]),
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
@@ -1332,6 +1335,41 @@ linearTypesMixin self super = super{
         <* (self & report & rightArrow)
         <*> wrap (self & arrowType)}
 
+gadtLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                       g ~ ExtendedGrammar l t (NodeWrap t),
+                                       Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtLinearTypesMixin self super = super{
+  prefix_gadt_body = (super & prefix_gadt_body)
+    <|> Abstract.linearFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "%"
+        <* keyword "1"
+        <* (self & report & rightArrow)
+        <*> wrap (self & prefix_gadt_body)
+    <|> Abstract.multiplicityFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "%"
+        <* notFollowedBy (keyword "1")
+        <*> wrap (self & report & aType)
+        <* (self & report & rightArrow)
+        <*> wrap (self & prefix_gadt_body),
+  gadtNewBody = (super & gadtNewBody)
+    <|> Abstract.linearFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "%"
+        <* keyword "1"
+        <* (self & report & rightArrow)
+        <*> wrap (self & return_type)
+    <|> Abstract.multiplicityFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "%"
+        <* notFollowedBy (keyword "1")
+        <*> wrap (self & report & aType)
+        <* (self & report & rightArrow)
+        <*> wrap (self & return_type)}
+
 unicodeLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                           g ~ ExtendedGrammar l t (NodeWrap t),
                                           Ord t, Show t, TextualMonoid t, OutlineMonoid t,
@@ -1343,6 +1381,23 @@ unicodeLinearTypesMixin self super = super{
         <$> wrap (self & cType)
         <* delimiter "⊸"
         <*> wrap (self & arrowType)}
+
+gadtUnicodeLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                              g ~ ExtendedGrammar l t (NodeWrap t),
+                                              Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtUnicodeLinearTypesMixin self super = super{
+  prefix_gadt_body = (super & prefix_gadt_body)
+    <|> Abstract.linearFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "⊸"
+        <*> wrap (self & prefix_gadt_body),
+  gadtNewBody = (super & gadtNewBody)
+    <|> Abstract.linearFunctionType
+        <$> wrap ((self & report & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+        <* delimiter "⊸"
+        <*> wrap (self & return_type)}
 
 standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                             g ~ ExtendedGrammar l t (NodeWrap t),
