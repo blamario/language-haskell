@@ -332,7 +332,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                       <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
                       <*> wrap (nonTerminal arg_type)
                    <|> nonTerminal base_return_type,
-     base_return_type = Abstract.constructorType <$> wrap generalConstructor,
+     base_return_type = Abstract.constructorType <$> wrap (nonTerminal $ Report.generalConstructor . report),
      arg_type = nonTerminal (Report.aType . report)}
    where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
 
