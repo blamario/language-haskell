@@ -32,6 +32,7 @@ import Data.Set (Set)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Numeric
+import qualified Rank2
 import qualified Rank2.TH
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty)
@@ -151,7 +152,8 @@ extensionMixins =
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)])]
 
-languagePragmas :: (Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) => Parser g t [ExtensionSwitch]
+languagePragmas :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) =>
+                   Parser g t [ExtensionSwitch]
 languagePragmas = spaceChars
                  *> admit (string "{-#" *> whiteSpace *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (whiteSpace
@@ -1596,7 +1598,7 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
          <*> (self & report & qualifiedOperator)
          <*> wrap (arg_type self)}
 
-variableLexeme, constructorLexeme, identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
+variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"
    where varStart c = (Char.isLetter c && not (Char.isUpper c)) ||  c == '_'
@@ -1615,7 +1617,7 @@ whiteSpaceTrailing node = case lexemes node of
     _ -> False
   _ -> False
 
-blockOf' :: (Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
+blockOf' :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node)
          => Parser g t (node (NodeWrap t) (NodeWrap t))
          -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]

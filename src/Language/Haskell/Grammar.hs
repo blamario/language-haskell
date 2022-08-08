@@ -30,6 +30,7 @@ import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, sepEndBy, try)
 import Text.Parser.Token (braces, brackets, comma, parens)
+import qualified Rank2
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Rank2
@@ -138,7 +139,7 @@ grammar2010 :: (Abstract.Haskell l,
             => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = fixGrammar grammar
 
-grammar :: forall l g t. (Abstract.Haskell l, Ord t, Show t, OutlineMonoid t,
+grammar :: forall l g t. (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
@@ -720,7 +721,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- exponent 	→ 	(e | E) [+ | -] decimal
  
 variableLexeme, constructorLexeme, variableSymbolLexeme, constructorSymbolLexeme,
-   identifierTail :: (Ord t, Show t, TextualMonoid t) => Parser g t t
+   identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` reservedWords) (satisfyCharInput varStart <> identifierTail) <?> "variable"
    where varStart c = Char.isLower c ||  c == '_'
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail <?> "constructor"
@@ -749,14 +750,15 @@ asciiSymbols = Set.fromList "!#$%&*+./<=>?@\\^|-~:"
 -- consym 	→ 	( : {symbol})⟨reservedop⟩
 -- reservedop 	→ 	.. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
 
-moduleId :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t (Abstract.ModuleName l)
+moduleId :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t (Abstract.ModuleName l)
 moduleId = Abstract.moduleName <$> token moduleLexeme
 
-moduleLexeme :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t (NonEmpty (Abstract.Name l))
+moduleLexeme :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t) =>
+                Parser g t (NonEmpty (Abstract.Name l))
 moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme <?> "module name")
                `sepByNonEmpty` string "."
 
-nameQualifier :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
+nameQualifier :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
               => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
 nameQualifier =
    Abstract.qualifiedName
@@ -764,7 +766,7 @@ nameQualifier =
                      <* notFollowedBy (constructorLexeme *> string "."
                                        <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower)))
 
-asciiEscape, charEscape, controlEscape :: (Ord t, Show t, TextualMonoid t) => Parser g t Char
+asciiEscape, charEscape, controlEscape :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'
              <|> '\b' <$ char 'b'
              <|> '\f' <$ char 'f'
@@ -826,7 +828,7 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 
 type NodeWrap s = Reserializer.Wrapped (Down Int) s
 
-wrap :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
+wrap :: (Rank2.Apply g, Ord t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
 wrap = (\p-> liftA3 surround getSourcePos p getSourcePos)
          . tmap store . ((,) (Trailing []) <$>)
    where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
@@ -838,11 +840,11 @@ rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 unwrap :: NodeWrap t a -> a
 unwrap (_, x) = x
 
-instance (Ord t, Show t, TextualMonoid t) => TokenParsing (Parser g t) where
+instance (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => TokenParsing (Parser g t) where
    someSpace = someLexicalSpace
    token = lexicalToken
 
-instance (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) where
+instance (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) where
    lexicalComment = comment
    lexicalWhiteSpace = whiteSpace
    isIdentifierStartChar = Char.isLetter
@@ -851,13 +853,13 @@ instance (Ord t, Show t, TextualMonoid t) => LexicalParsing (Parser g t) where
    lexicalToken p = storeToken p <* lexicalWhiteSpace
    keyword = keyword
 
-keyword :: (Ord s, Show s, TextualMonoid s) => s -> Parser g s ()
+keyword :: (Rank2.Apply g, Ord s, Show s, TextualMonoid s) => s -> Parser g s ()
 keyword s = lexicalToken (string s
                           *> notSatisfyChar isNameTailChar
                           <* lift ([[Token Keyword s]], ()))
             <?> ("keyword " <> show s)
 
-storeToken :: (Ord t, TextualMonoid t) => Parser g t a -> Parser g t a
+storeToken :: (Rank2.Apply g, Ord t, TextualMonoid t) => Parser g t a -> Parser g t a
 storeToken p = snd <$> tmap addOtherToken (match p)
    where addOtherToken ([], (i, x)) = ([[Token Other i]], (i, x))
          addOtherToken (t, (i, x)) = (t, (i, x))
@@ -867,7 +869,7 @@ isLineChar c = c /= '\n' && c /= '\r' && c /= '\f'
 isNameTailChar c = Char.isAlphaNum c || c == '_' || c == '\''
 isSymbol c = if Char.isAscii c then c `Set.member` asciiSymbols else Char.isSymbol c || Char.isPunctuation c
 
-delimiter, terminator :: (Ord t, Show t, TextualMonoid t) => t -> Parser g t ()
+delimiter, terminator :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => t -> Parser g t ()
 delimiter s = void (lexicalToken $
                     string s
                     <* notSatisfyChar isSymbol
@@ -876,16 +878,17 @@ delimiter s = void (lexicalToken $
 terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ()))
                <?> ("terminating delimiter " <> show s)
 
-nameToken :: (Abstract.Haskell l, Ord t, Show t, TextualMonoid t) => Parser g t t -> Parser g t (Abstract.Name l)
+nameToken :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t) =>
+             Parser g t t -> Parser g t (Abstract.Name l)
 nameToken p = token (Abstract.name . Text.pack . toString mempty <$> p)
 
-whiteSpace :: (Ord t, Show t, TextualMonoid t) => Parser g t ()
+whiteSpace :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
    where spaceChars = ((takeCharsWhile1 Char.isSpace
                        >>= \ws-> lift ([[WhiteSpace ws]], ())) <?> "whitespace")
                       <<|> pure ()
 
-comment :: (Ord t, Show t, TextualMonoid t) => Parser g t ()
+comment :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t ()
 comment = do c <- try (blockComment
                        <|> (string "--" <> takeCharsWhile (== '-') <* notSatisfyChar isSymbol)
                            <> takeCharsWhile isLineChar) <?> "comment"
@@ -896,7 +899,7 @@ comment = do c <- try (blockComment
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
-blockOf :: (Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
+blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
@@ -932,7 +935,7 @@ class TextualMonoid t => OutlineMonoid t where
 instance OutlineMonoid (LinePositioned Text) where
    currentColumn = column
 
-inputColumn :: (Ord t, OutlineMonoid t) => Parser g t Int
+inputColumn :: (Rank2.Apply g, Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
 
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
