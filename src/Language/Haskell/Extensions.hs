@@ -174,7 +174,7 @@ allExtensions = Set.fromList [minBound .. maxBound]
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   ForeignFunctionInterface, IdentifierSyntax, MultiParameterConstraints, PatternGuards,
-                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec]
+                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, TraditionalRecordSyntax]
 
 languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]

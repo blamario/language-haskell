@@ -104,7 +104,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    declaredConstructors :: p [f (Abstract.DataConstructor l l f f)],
    declaredConstructor :: p (Abstract.DataConstructor l l f f),
    infixConstructorArgType :: p (Abstract.Type l l f f),
-   newConstructor :: p (Abstract.DataConstructor l l f f),
+   newConstructor, newRecordConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
    optionalContext, optionalTypeSignatureContext, context, constraint, classConstraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
@@ -277,10 +277,10 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                             <|> Abstract.recordConstructor <$> constructor
                                                            <*> braces (wrap fieldDeclaration `sepBy` comma),
       infixConstructorArgType = bType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType,
-      newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
-                       <|> Abstract.recordConstructor <$> constructor
-                           <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
-                                                       <* doubleColon <*> wrap typeTerm)),
+      newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType) <|> newRecordConstructor,
+      newRecordConstructor = Abstract.recordConstructor <$> constructor
+                             <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
+                                                         <* doubleColon <*> wrap typeTerm)),
       fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon
                          <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
 

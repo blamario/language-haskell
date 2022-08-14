@@ -10,6 +10,8 @@
 
 module Language.Haskell.Extensions.Grammar (extendedGrammar, parseModule, report, module Report) where
 
+import Debug.Trace
+
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
@@ -57,6 +59,7 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..), 
 import Prelude hiding (exponent, filter, null)
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
+   original_report :: HaskellGrammar l t f p,
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
@@ -139,6 +142,7 @@ extensionMixins =
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
+     (Set.fromList [TraditionalRecordSyntax],        [(9, traditionalRecordSyntaxMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
      (Set.fromList [GADTSyntax, LinearTypes,
@@ -201,7 +205,7 @@ extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (Extended
                  => Map Extension Bool -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions =
    overlay reportGrammar (map snd $ reverse $ sortOn fst $ fold $ Map.filterWithKey isIncluded extensionMixins)
-   where isIncluded required _ = all (`Map.member` extensions) required
+   where isIncluded required _ = all (\e-> Map.findWithDefault False e extensions) required
 
 reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -212,17 +216,22 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
               => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
 reportGrammar g@ExtendedGrammar{report= r} =
-   g{report= r'{
+   g{original_report = r',
+     report= r'{
         declarationLevel= (declarationLevel r'){
-          simpleType =
-             Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
-             <|> Abstract.simpleTypeLHSApplication
-                 <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
-                 <*> nonTerminal typeVarBinder,
-          instanceTypeDesignator =
-             nonTerminal (Report.generalTypeConstructor . report)
-             <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-             <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
+           simpleType =
+              Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+              <|> Abstract.simpleTypeLHSApplication
+                  <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
+                  <*> nonTerminal typeVarBinder,
+           instanceTypeDesignator =
+              nonTerminal (Report.generalTypeConstructor . report)
+              <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
+              <|> parens (nonTerminal instanceTypeDesignatorInsideParens),
+           fieldDeclaration = empty,
+           newRecordConstructor = empty},
+        fieldBinding = empty,
+        fieldPattern = empty,
         typeTerm = nonTerminal arrowType},
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -313,10 +322,10 @@ reportGrammar g@ExtendedGrammar{report= r} =
             <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type)
         <|> Abstract.recordFunctionType
-            <$> braces ((:[]) <$> wrap fieldDeclaration)
+            <$> braces ((:[]) <$> wrap (nonTerminal $ Report.fieldDeclaration . declarationLevel . report))
             <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type),
-     gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
+     gadtBody = nonTerminal prefix_gadt_body,
      prefix_gadt_body =
         parens (nonTerminal prefix_gadt_body)
         <|> nonTerminal return_type
@@ -327,7 +336,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      record_gadt_body =
         parens (nonTerminal record_gadt_body)
         <|> Abstract.recordFunctionType
-            <$> braces (wrap fieldDeclaration `sepBy` comma)
+            <$> braces (wrap (nonTerminal $ Report.fieldDeclaration . declarationLevel . report) `sepBy` comma)
             <* nonTerminal (Report.rightArrow . report)
             <*> wrap (nonTerminal return_type),
      return_type = Abstract.typeApplication
@@ -1597,6 +1606,21 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
          <* terminator "'"
          <*> (self & report & qualifiedOperator)
          <*> wrap (arg_type self)}
+
+traditionalRecordSyntaxMixin :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                 g ~ ExtendedGrammar l t (NodeWrap t),
+                                 Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                             => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+traditionalRecordSyntaxMixin self super =
+   super{
+      report = (super & report){
+         declarationLevel = (super & report & declarationLevel){
+            fieldDeclaration = (super & original_report & declarationLevel & fieldDeclaration),
+            newRecordConstructor = (super & original_report & declarationLevel & newRecordConstructor)},
+         fieldBinding = (super & original_report & fieldBinding),
+         fieldPattern = (super & original_report & fieldPattern)},
+      gadtBody = gadtBody super <|> record_gadt_body self}
 
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)

@@ -89,14 +89,15 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} = case optsFile
                  of Just file -> (if file == "-" then getContents else readFile file)
-                                 >>= go (Grammar.parseModule mempty) file
+                                 >>= go parseModule file
                     Nothing ->
                         forever $
                         getLine >>=
                         case optsMode of
-                            ModuleMode     -> go (Grammar.parseModule mempty) "<stdin>"
+                            ModuleMode     -> go parseModule "<stdin>"
                             ExpressionMode -> go parseExpression "<stdin>"
    where
+      parseModule = Grammar.parseModule (Map.fromSet (const True) Extensions.includedByDefault)
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression . Grammar.report
                                                 $ parseComplete (Grammar.extendedGrammar
