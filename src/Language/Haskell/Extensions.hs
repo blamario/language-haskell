@@ -93,6 +93,7 @@ data Extension = AllowAmbiguousTypes
                | MultiParameterConstraints
                | MultiWayIf
                | NPlusKPatterns
+               | NamedFieldPuns
                | NamedWildCards
                | NegativeLiterals
                | NondecreasingIndentation
@@ -120,7 +121,6 @@ data Extension = AllowAmbiguousTypes
                | QuasiQuotes
                | RankNTypes
                | RebindableSyntax
-               | RecordPuns
                | RecordWildCards
                | RecursiveDo
                | RelaxedLayout
@@ -326,6 +326,7 @@ byName = Map.fromList [
   ("MultiParamTypeClasses", MultiParamTypeClasses),
   ("MultiWayIf", MultiWayIf),
   ("NPlusKPatterns", NPlusKPatterns),
+  ("NamedFieldPuns", NamedFieldPuns),
   ("NamedWildCards", NamedWildCards),
   ("NegativeLiterals", NegativeLiterals),
   ("NondecreasingIndentation", NondecreasingIndentation),
@@ -355,7 +356,6 @@ byName = Map.fromList [
   ("Rank2Types", RankNTypes),
   ("RankNTypes", RankNTypes),
   ("RebindableSyntax", RebindableSyntax),
-  ("RecordPuns", RecordPuns),
   ("RecordWildCards", RecordWildCards),
   ("RecursiveDo", RecursiveDo),
   ("RelaxedLayout", RelaxedLayout),

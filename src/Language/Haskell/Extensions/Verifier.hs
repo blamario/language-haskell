@@ -66,11 +66,11 @@ instance Transformation.Transformation (Verification pos s) where
     type Codomain (Verification pos s) = Verified pos
 
 verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting pos s) l,
-                               Abstract.DeeplyFoldable (LabelAccounting pos s) l,
-                               Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
-                  Map Extension Bool
-               -> AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
-               -> [Error pos]
+                                 Abstract.DeeplyFoldable (LabelAccounting pos s) l,
+                                 Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
+                Map Extension Bool
+             -> AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
+             -> [Error pos]
 verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
    <> (UnusedExtension

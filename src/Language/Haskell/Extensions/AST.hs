@@ -2,8 +2,8 @@
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
-                                        Declaration(..), DataConstructor(..),
-                                        GADTConstructor(..), Expression(..), Pattern(..), Statement(..),
+                                        Declaration(..), DataConstructor(..), GADTConstructor(..),
+                                        Expression(..), Pattern(..), FieldBinding(..), FieldPattern(..), Statement(..),
                                         ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..), Value(..),
                                         module Report) where
@@ -17,7 +17,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
                              GuardedExpression(..), DerivingClause(..), Constructor(..),
-                             FieldDeclaration(..), FieldBinding(..), FieldPattern(..), CaseAlternative(..),
+                             FieldDeclaration(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
                              ImportSpecification(..), ImportItem(..), Export(..))
@@ -124,6 +124,9 @@ instance Abstract.ExtendedHaskell Language where
    visibleKindApplication = VisibleKindApplication
    visibleKindKindApplication = VisibleKindKindApplication
    constructorPatternWithTypeApplications = ConstructorPattern
+
+   punnedFieldBinding = PunnedFieldBinding
+   punnedFieldPattern = PunnedFieldPattern
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -369,7 +372,6 @@ data DataConstructor λ l d s =
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
    | ExistentialConstructor [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
-
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
    | ClassConstraint (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
@@ -462,6 +464,10 @@ data Expression λ l d s =
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
 
+data FieldBinding λ l d s =
+  FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+  | PunnedFieldBinding (Abstract.QualifiedName λ)
+
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
    | ConstructorPattern (s (Abstract.Constructor l l d d)) [s (Abstract.Type l l d d)] [s (Abstract.Pattern l l d d)]
@@ -473,6 +479,10 @@ data Pattern λ l d s =
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
+
+data FieldPattern λ l d s =
+  FieldPattern (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
+  | PunnedFieldPattern (Abstract.QualifiedName λ)
 
 data Statement λ l d s =
    BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
@@ -621,6 +631,14 @@ deriving instance (Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Co
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
                    Eq (Abstract.QualifiedName λ)) => Eq (Expression λ l d s)
 
+deriving instance Typeable (FieldBinding λ l d s)
+deriving instance (Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldBinding λ l d s)
+deriving instance (Show (s (Abstract.Expression l l d d)), Show (Abstract.QualifiedName λ)) =>
+                  Show (FieldBinding λ l d s)
+deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedName λ)) =>
+                  Eq (FieldBinding λ l d s)
+
 deriving instance Typeable (Pattern λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Value l l d d)),
@@ -634,6 +652,12 @@ deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Fi
 deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.FieldPattern l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Pattern λ l d s)
+
+deriving instance Typeable (FieldPattern λ l d s)
+deriving instance (Data (s (Abstract.Pattern l l d d)), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldPattern λ l d s)
+deriving instance (Show (s (Abstract.Pattern l l d d)), Show (Abstract.QualifiedName λ)) => Show (FieldPattern λ l d s)
+deriving instance (Eq (s (Abstract.Pattern l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (FieldPattern λ l d s)
 
 deriving instance Typeable (Statement λ l d s)
 deriving instance (Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.Expression l l d d)),
@@ -650,4 +674,5 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
-              ''ClassInstanceLHS, ''Context, ''Expression, ''Pattern, ''Statement, ''Value]))
+              ''ClassInstanceLHS, ''Context, ''Expression, ''FieldBinding, ''Pattern, ''FieldPattern, ''Statement,
+              ''Value]))

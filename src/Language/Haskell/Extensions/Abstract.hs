@@ -81,6 +81,9 @@ class Haskell λ => ExtendedHaskell λ where
    multiplicityFunctionType :: s (Type l l d d) -> s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
    linearFunctionType :: s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
 
+   punnedFieldBinding :: QualifiedName λ -> FieldBinding λ l d s
+   punnedFieldPattern :: QualifiedName λ -> FieldPattern λ l d s
+
    dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    closedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (Declaration l l d d)]

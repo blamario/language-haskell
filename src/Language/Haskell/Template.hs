@@ -428,6 +428,7 @@ freeConstructorVars (ExistentialConstructor _ _ con) = freeConstructorVars (extr
 
 fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
 fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, wrappedExpressionTemplate value)
+fieldBindingTemplate (PunnedFieldBinding name) = (qnameTemplate name, VarE $ qnameTemplate name)
 
 literalTemplate :: TemplateWrapper f => Value Language Language f f -> Lit
 literalTemplate (CharLiteral c) = CharL c
@@ -461,7 +462,9 @@ patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> items
 patternTemplate (LiteralPattern value) = LitP (literalTemplate $ extract value)
 patternTemplate (RecordPattern constructor fields) =
    RecP (qnameTemplate constructor) (fieldPatternTemplate . extract <$> fields)
-   where fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
+   where
+     fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
+     fieldPatternTemplate (PunnedFieldPattern q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate WildcardPattern = WildP
@@ -632,6 +635,9 @@ qnameTemplate :: AST.QualifiedName Language -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ nameText <$> toList m ++ [name])
+
+baseName :: AST.QualifiedName Language -> AST.Name Language
+baseName (QualifiedName _ name) = name
 
 extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l,
                                  Abstract.Type l ~ ExtAST.Type l, l ~ Language, TemplateWrapper f)

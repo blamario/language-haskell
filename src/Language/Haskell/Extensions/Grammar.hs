@@ -139,6 +139,7 @@ extensionMixins =
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
+     (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
      (Set.fromList [GADTSyntax, LinearTypes,
@@ -1585,10 +1586,12 @@ gadtSyntaxTypeOperatorsMixin self super = super{
                                     <*> wrap (arg_type self)}
 
 dataKindsGadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                           g ~ ExtendedGrammar l t (NodeWrap t),
-                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+                                                        g ~ ExtendedGrammar l t (NodeWrap t),
+                                                        Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                                        Deep.Foldable
+                                                           (Serialization (Down Int) t)
+                                                           (Abstract.GADTConstructor l l))
+                                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 dataKindsGadtSyntaxTypeOperatorsMixin self super =
    super{
       return_type = return_type super <|>
@@ -1597,6 +1600,19 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
          <* terminator "'"
          <*> (self & report & qualifiedOperator)
          <*> wrap (arg_type self)}
+
+namedFieldPunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                      g ~ ExtendedGrammar l t (NodeWrap t),
+                                      Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                      Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+namedFieldPunsMixin self super =
+   super{
+      report = (report super){
+         fieldBinding = (super & report & fieldBinding) <|>
+            Abstract.punnedFieldBinding <$> (self & report & qualifiedVariable),
+         fieldPattern = (super & report & fieldPattern) <|>
+            Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
