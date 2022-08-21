@@ -132,24 +132,28 @@ instance (Eq s, IsString s) =>
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
    Accounting $ _ = mempty
 
-instance (Abstract.Context l ~ AST.Context l, Eq s, IsString s,
+instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting pos s) l) =>
          Accounting pos s
-         `Transformation.At` AST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ d@((start, _, end), AST.DataDeclaration context _lhs constructors _derivings) = Const $
+         `Transformation.At` ExtAST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ d@((start, _, end), ExtAST.DataDeclaration context _lhs _kind constructors _derivings) = Const $
       (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
       <>
       (case snd context
-       of AST.NoContext -> mempty
+       of ExtAST.NoContext -> mempty
           _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
       <>
       (Full.foldMap UnicodeSyntaxAccounting d)
+   Accounting $ d@((start, _, end), ExtAST.GADTDeclaration context _lhs constructors _derivings) = Const $
+     Map.singleton Extensions.GADTSyntax [(start, end)]
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
 instance Accounting pos s
          `Transformation.At` ExtAST.DataConstructor l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
    Accounting $ ((start, _, end), ExtAST.ExistentialConstructor{}) =
      Const (Map.singleton Extensions.ExistentialQuantification [(start, end)])
+   Accounting $ ((start, _, end), ExtAST.RecordConstructor{}) =
+      Const (Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
    Accounting $ _ = mempty
 
 instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
@@ -232,10 +236,21 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting pos s
+         `Transformation.At` ExtAST.FieldBinding l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, _, end), t) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+         Accounting pos s
+         `Transformation.At` ExtAST.FieldPattern l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+   Accounting $ ((start, _, end), t) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+         Accounting pos s
          `Transformation.At` ExtAST.Type l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+   Accounting $ ((start, _, end), t) = Const $
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
+         ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
          _ -> mempty
 
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
