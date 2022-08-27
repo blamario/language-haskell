@@ -140,6 +140,7 @@ extensionMixins =
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
+     (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
      (Set.fromList [GADTSyntax, LinearTypes,
@@ -1614,6 +1615,16 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
+nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                                g ~ ExtendedGrammar l t (NodeWrap t),
+                                                Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                              => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+nondecreasingIndentationMixin self super =
+   super{
+      report = (report super){
+         statements = Report.blockWith nonDecreasingIndentLine (self & report & statement) >>= Report.verifyStatements}}
+
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"
@@ -1658,3 +1669,21 @@ blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >
             <<|> cont []
          terminators :: [Char]
          terminators = ",;)]}"
+
+nonDecreasingIndentLine :: (Ord t, Show t, OutlineMonoid t,
+                            Deep.Foldable (Serialization (Down Int) t) node)
+                        => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
+nonDecreasingIndentLine indent _input node = allIndented False (lexemes node) where
+   allIndented nested (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented nested rest
+   allIndented nested (WhiteSpace ws : rest@(Token _ tok : _))
+      | Textual.all Report.isLineChar ws = allIndented nested rest
+      | tokenIndent < indent = False
+      | tokenIndent == indent && not nested && tok `Set.notMember` Report.reservedWords
+        && all (`notElem` terminators) (Textual.characterPrefix tok) = False
+      where tokenIndent = Report.currentColumn (Factorial.dropWhile (const True) ws)
+   allIndented False (Token Keyword k : rest)
+      | k `elem` ["do", "of", "let", "where"] = allIndented True rest
+   allIndented nested (x : rest) = allIndented nested rest
+   allIndented _ [] = True
+   terminators :: [Char]
+   terminators = ",;)]}"

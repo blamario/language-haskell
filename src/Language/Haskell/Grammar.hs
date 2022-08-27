@@ -479,13 +479,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                                <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* rightArrow
                                                                                     <*> expression))
                  <*> whereClauses,
-   statements = blockOf statement >>= \stats->
-                   if null stats then fail "empty do block"
-                   else Abstract.guardedExpression
-                           (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap
-                            <$> init stats)
-                        <$> either (const $ fail "do block must end with an expression") pure
-                                   (Deep.eitherFromSum $ unwrap $ last stats),
+   statements = blockOf statement >>= verifyStatements,
    statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                                   <|> Abstract.letStatement <$ keyword "let" <*> declarations)
                <|> Deep.InR <$> expression,
@@ -899,12 +893,28 @@ comment = do c <- try (blockComment
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
+verifyStatements :: (Abstract.Haskell l, Rank2.Apply g, Ord t) =>
+   [NodeWrap t (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) (NodeWrap t) (NodeWrap t))]
+   -> Parser g t (Abstract.GuardedExpression l l (NodeWrap t) (NodeWrap t))
+verifyStatements [] = fail "empty do block"
+verifyStatements stats = Abstract.guardedExpression
+                            (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap
+                             <$> init stats)
+                         <$> either (const $ fail "do block must end with an expression") pure
+                                    (Deep.eitherFromSum $ unwrap $ last stats)
+
 blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockOf p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
+blockOf = blockWith oneExtendedLine
+
+blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
+          => (Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool)
+          -> Parser g t (node (NodeWrap t) (NodeWrap t))
+          -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
+blockWith lineFilter p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
             do rest <- getInput
-               maybeItem <- opt (filter (oneExtendedLine indent rest) $ wrap p)
+               maybeItem <- opt (filter (lineFilter indent rest) $ wrap p)
                case maybeItem of
                   Nothing -> cont []
                   Just item -> do
