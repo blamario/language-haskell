@@ -127,6 +127,8 @@ instance Abstract.ExtendedHaskell Language where
 
    punnedFieldBinding = PunnedFieldBinding
    punnedFieldPattern = PunnedFieldPattern
+   getField = GetField
+   fieldProjection = FieldProjection
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -463,6 +465,8 @@ data Expression λ l d s =
    | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+   | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
+   | FieldProjection (NonEmpty (Abstract.Name λ))
 
 data FieldBinding λ l d s =
   FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -616,20 +620,21 @@ deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstrac
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
-                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)), Data (Abstract.QualifiedName λ),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
+                   Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
 deriving instance (Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
-                   Show (Abstract.QualifiedName λ)) => Show (Expression λ l d s)
+                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Expression λ l d s)
 deriving instance (Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
-                   Eq (Abstract.QualifiedName λ)) => Eq (Expression λ l d s)
+                   Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Expression λ l d s)
 
 deriving instance Typeable (FieldBinding λ l d s)
 deriving instance (Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),

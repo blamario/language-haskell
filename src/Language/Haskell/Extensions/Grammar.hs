@@ -140,6 +140,7 @@ extensionMixins =
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
+     (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -815,7 +816,12 @@ multiParameterConstraintsMixin self super = super{
                        ((1 /=) . length)
                        (many $ wrap $
                         optionallyKindedAndParenthesizedTypeVar self
-                        <|> parens (self & report & declarationLevel & typeApplications))}}}
+                        <|> parens (self & report & declarationLevel & typeApplications)),
+         instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
+            Abstract.classInstanceLHSApplication
+               <$> wrap (self & report & declarationLevel & instanceDesignator)
+               <*> wrap ((self & report & declarationLevel & instanceTypeDesignator)
+                         <|> Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar))}}}
 
 multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                           g ~ ExtendedGrammar l t (NodeWrap t),
@@ -1615,6 +1621,25 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
+overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                           g ~ ExtendedGrammar l t (NodeWrap t),
+                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+overloadedRecordDotMixin self super =
+   super{
+      report = (report super){
+         qualifiedVariableSymbol =
+            notFollowedBy (string "." *> satisfyCharInput varStart) *> (super & report & qualifiedVariableSymbol),
+         bareExpression = (super & report & bareExpression) <|>
+            Abstract.getField <$> (self & report & aExpression) <* prefixDot <*> (self & report & variableIdentifier)
+            <|>
+            Abstract.fieldProjection <$> parens (someNonEmpty $ prefixDot *> (self & report & variableIdentifier))}}
+   where prefixDot = void (string "."
+                           <* lookAhead (satisfyCharInput varStart)
+                           <* lift ([[Token Modifier "."]], ()))
+                     <?> "prefix ."
+
 nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 g ~ ExtendedGrammar l t (NodeWrap t),
                                                 Ord t, Show t, OutlineMonoid t, TextualMonoid t,
@@ -1628,9 +1653,11 @@ nondecreasingIndentationMixin self super =
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
                  <?> "variable"
-   where varStart c = (Char.isLetter c && not (Char.isUpper c)) ||  c == '_'
 constructorLexeme = satisfyCharInput Char.isUpper <> identifierTail <?> "constructor"
 identifierTail = takeCharsWhile isNameTailChar
+
+varStart :: Char -> Bool
+varStart c = (Char.isLetter c && not (Char.isUpper c)) ||  c == '_'
 
 isNameTailChar :: Char -> Bool
 isNameTailChar c = Report.isNameTailChar c || Char.isMark c

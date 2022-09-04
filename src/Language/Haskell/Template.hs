@@ -195,6 +195,8 @@ expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . e
 expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
+expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
+expressionTemplate (FieldProjection fields) = ProjectionE (Text.unpack . getName <$> fields)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
 guardedTemplate (GuardedExpression statements result) =
@@ -260,10 +262,8 @@ declarationTemplates (ForeignImport convention safety identification name t) =
                       (nameTemplate name) (typeTemplate $ extract t))]
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
-declarationTemplates (InstanceDeclaration _vars context lhs wheres)
-   | TypeClassInstanceLHS name t <- extract lhs =
-     [InstanceD Nothing (contextTemplate $ extract context)
-                (AppT (ConT $ qnameTemplate name) $ typeTemplate $ extract t)
+declarationTemplates (InstanceDeclaration _vars context lhs wheres) =
+     [InstanceD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)
                 (foldMap (declarationTemplates . extract) wheres)]
 declarationTemplates (NewtypeDeclaration context lhs kind constructor derivings)
    | Just (con, vars) <- extractSimpleTypeLHS lhs =

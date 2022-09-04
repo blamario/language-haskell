@@ -536,7 +536,7 @@ data Members λ = AllMembers
                | MemberList [Name λ]
                deriving (Data, Eq, Show)
 
-newtype Name λ = Name Text deriving (Data, Eq, Ord, Show)
+newtype Name λ = Name {getName :: Text} deriving (Data, Eq, Ord, Show)
 
 data QualifiedName λ = QualifiedName (Maybe (Abstract.ModuleName λ)) (Abstract.Name λ)
 
