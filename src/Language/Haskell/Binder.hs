@@ -4,7 +4,7 @@
 -- | Monomorphic attribute grammar for establishing the static identifier bindings
 
 module Language.Haskell.Binder (
-   Binder, Binding(ErroneousBinding, ModuleBinding, InfixDeclaration), Environment, WithEnvironment,
+   Binder, Binding(ErroneousBinding, ModuleBinding, ClassDeclaration, InfixDeclaration), Environment, WithEnvironment,
    predefinedModuleBindings, preludeBindings, withBindings) where
 
 import Data.Data (Data, Typeable)
@@ -38,21 +38,29 @@ type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
 data Binding l = ErroneousBinding String
                | ModuleBinding (UnionWith (Map (AST.Name l)) (Binding l))
+               | ClassDeclaration (Environment l)
                | InfixDeclaration Bool (AST.Associativity l) Int
-               deriving (Data, Typeable, Eq, Show)
+               deriving Typeable
+
+deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
+                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (Binding l)
+deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (Binding l)
+deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Binding l)
 
 deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
 deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 
-instance Semigroup (Binding l) where
+instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Semigroup (Binding l) where
    a@InfixDeclaration{} <> InfixDeclaration False _ _ = a
    InfixDeclaration False _ _ <> a@InfixDeclaration{} = a
    a <> b
       | a == b = a
       | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
 
-instance Monoid (Binding l) where
+instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Monoid (Binding l) where
    mempty = ModuleBinding (UnionWith mempty)
 
 withBindings :: (Full.Traversable (AG.Mono.Keep (Binder l p)) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
@@ -69,9 +77,11 @@ instance Transformation (AG.Mono.Keep (Binder l f)) where
    type Codomain (AG.Mono.Keep (Binder l f)) = FromEnvironment l f
 
 instance {-# OVERLAPS #-}
-         (Abstract.Haskell l, Abstract.EquationLHS l ~ AST.EquationLHS l,
+         (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Ord (Abstract.QualifiedName l), Foldable f) =>
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
          AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Declaration l l) (FromEnvironment l f) f
          where
    attribution _ node atts = atts{AG.Mono.syn= synthesis, AG.Mono.inh= bequest}
@@ -80,7 +90,9 @@ instance {-# OVERLAPS #-}
                UnionWith (Map.fromList [(Abstract.qualifiedName Nothing name,
                                          InfixDeclaration True associativity $ fromMaybe 9 precedence)
                                         | name <- toList names])
-            export AST.ClassDeclaration{} = AG.Mono.syn atts
+            export (ExtAST.ClassDeclaration _ lhs decls)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = AG.Mono.syn atts <> UnionWith (Map.singleton name (ClassDeclaration $ AG.Mono.syn atts))
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton (Abstract.qualifiedName Nothing name)
@@ -90,6 +102,7 @@ instance {-# OVERLAPS #-}
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
             getOperatorName (AST.VariableLHS name) = [name]
             getOperatorName _ = []
+            getTypeName (ExtAST.SimpleTypeLHS name _) = [Abstract.qualifiedName Nothing name]
             bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
             bequeath _ = AG.Mono.inh atts
             synthesis = foldMap export node
