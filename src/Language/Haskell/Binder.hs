@@ -1,7 +1,11 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,  OverloadedStrings,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
-module Language.Haskell.Binder where
+-- | Monomorphic attribute grammar for establishing the static identifier bindings
+
+module Language.Haskell.Binder (
+   Binder, Binding(ErroneousBinding, ModuleBinding, InfixDeclaration), Environment, WithEnvironment,
+   predefinedModuleBindings, preludeBindings, withBindings) where
 
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)

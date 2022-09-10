@@ -5,6 +5,7 @@
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
 -- * @TransformListComp@ is not supported by TemplateHaskell
+-- * @OverloadedRecordUpdate@ is not supported by TemplateHaskell
 -- * @Arrows@ is not supported by TemplateHaskell
 -- * @LexicalNegation@ ignores the presence or absence of whitespace preceding the minus
 

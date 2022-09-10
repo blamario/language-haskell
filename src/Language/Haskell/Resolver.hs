@@ -1,6 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Resolver where
+
+-- | An AST traversal for selecting the correct infix operator applications
+
+module Language.Haskell.Resolver (resolveModules) where
 
 import Control.Applicative ((<|>))
 import Data.Either (partitionEithers)

@@ -1,6 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Reorganizer where
+
+-- | An AST traversal for adjusting the infix operator applications
+
+module Language.Haskell.Reorganizer (Reorganization (Reorganization), reorganizeModules) where
 
 import Control.Applicative ((<|>))
 import Data.Either (partitionEithers)
