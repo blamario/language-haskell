@@ -1,5 +1,5 @@
 {-# Language CPP, DataKinds, FlexibleContexts, FlexibleInstances, GADTs, OverloadedStrings, RankNTypes,
-             ScopedTypeVariables, TemplateHaskell #-}
+             ScopedTypeVariables, TemplateHaskell, TypeOperators #-}
 
 module Language.Haskell.Template where
 

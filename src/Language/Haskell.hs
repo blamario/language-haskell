@@ -1,4 +1,5 @@
-{-# Language FlexibleContexts, GADTs, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
+{-# Language FlexibleContexts, GADTs, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving,
+             TypeFamilies, TypeOperators #-}
 
 -- | The programming language Haskell
 

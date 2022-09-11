@@ -1,5 +1,5 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+             StandaloneDeriving, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Language.Haskell.AST where
 

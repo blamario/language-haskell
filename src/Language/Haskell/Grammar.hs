@@ -1,6 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
-             Rank2Types, RecordWildCards,
-             ScopedTypeVariables, TemplateHaskell, TupleSections, TypeSynonymInstances #-}
+             Rank2Types, RecordWildCards, ScopedTypeVariables,
+             TemplateHaskell, TupleSections, TypeOperators, TypeSynonymInstances #-}
 
 module Language.Haskell.Grammar where
 

@@ -1,6 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, NamedFieldPuns, OverloadedStrings,
              Rank2Types, RecordWildCards, ScopedTypeVariables,
-             TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeSynonymInstances #-}
+             TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
