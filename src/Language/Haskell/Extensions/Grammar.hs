@@ -40,7 +40,7 @@ import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.Combinators (someNonEmpty)
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift)
+import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (autochain, ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter)
 
@@ -180,8 +180,8 @@ languagePragmas = spaceChars
                         *> string "-}"
 
 parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                        Ord t, Show t, OutlineMonoid t,
-                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                            Ord t, Show t, OutlineMonoid t,
+                            Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
             => Map Extension Bool -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
 parseModule extensions source = case moduleExtensions of
@@ -192,8 +192,7 @@ parseModule extensions source = case moduleExtensions of
            (if null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
            $ parseResults $ Report.haskellModule $ report
            $ parseComplete (extendedGrammar $ withImplications $ extensionMap <> extensions) source
-        else Left mempty{errorAlternatives= [StaticDescription
-                                             $ "Contradictory extension switches " <> show (toList contradictions)]}
+        else Left mempty{errorAlternatives= ["Contradictory extension switches " <> show (toList contradictions)]}
    Right extensionses -> error (show extensionses)
    where moduleExtensions = parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose

@@ -26,7 +26,7 @@ import Numeric (readOct, readDec, readHex, readFloat)
 import Witherable (filter, mapMaybe)
 import qualified Text.Grampa
 import Text.Grampa hiding (keyword)
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
+import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (ParserT, autochain, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, sepEndBy, try)
 import Text.Parser.Token (braces, brackets, comma, parens)

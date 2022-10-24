@@ -24,7 +24,7 @@ import Data.Map (Map)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
 import Data.Text (Text)
-import Text.Grampa (ParseResults, ParseFailure (errorAlternatives), FailureDescription (StaticDescription))
+import Text.Grampa (ParseResults, ParseFailure (errorAlternatives))
 import Text.Parser.Input.Position (offset)
 
 import Prelude hiding (readFile)
@@ -59,4 +59,4 @@ checkRestrictions :: Map Extension Bool
                   -> ParseResults (LinePositioned Text) (AST.Module AST.Language AST.Language Placed Placed)
 checkRestrictions extensions m = case Verifier.verifyModule extensions m of
    [] -> pure m
-   errors -> Left mempty{errorAlternatives= StaticDescription . show <$> errors}
+   errors -> Left mempty{errorAlternatives= show <$> errors}
