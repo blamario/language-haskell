@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, OverloadedStrings #-}
+{-# Language DeriveDataTypeable, FlexibleInstances, OverloadedStrings, TypeFamilies, TypeOperators #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
@@ -11,11 +11,13 @@ module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     allExtensions, byName, includedByDefault, implications, inverseImplications,
                                     languageVersions, partitionContradictory, switchesByName, withImplications) where
 
+import Data.Bifunctor (first)
 import Data.Bool (bool)
 import Data.Data (Data, Typeable)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
+import Data.Function.Memoize (Memoizable (memoize))
 import Data.Set (Set)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
@@ -161,6 +163,12 @@ data Extension = AllowAmbiguousTypes
 
 newtype ExtensionSwitch = ExtensionSwitch (Extension, Bool)
                           deriving (Data, Eq, Ord, Show)
+
+instance Memoizable (Set Extension) where
+   memoize f s = memoize (f . setFromBits) [Set.member e s | e <- [minBound .. maxBound]]
+
+setFromBits :: [Bool] -> Set Extension
+setFromBits = Set.fromList . map fst . filter snd . zip [minBound .. maxBound]
 
 off, on :: Extension -> ExtensionSwitch
 -- | The off-switch for an extension

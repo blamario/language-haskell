@@ -21,6 +21,7 @@ import Data.List (foldl', null, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Maybe (isJust, isNothing)
+import Data.Function.Memoize (memoize)
 import Data.Monoid (Dual(..), Endo(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Textual (TextualMonoid, toString)
@@ -191,20 +192,24 @@ parseModule extensions source = case moduleExtensions of
         if Set.null contradictions then
            (if null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
            $ parseResults $ Report.haskellModule $ report
-           $ parseComplete (extendedGrammar $ withImplications $ extensionMap <> extensions) source
+           $ parseComplete (extendedGrammar $ positiveKeys $ withImplications $ extensionMap <> extensions) source
         else Left mempty{errorAlternatives= ["Contradictory extension switches " <> show (toList contradictions)]}
-   Right extensionses -> error (show extensionses)
+   Right extensionses -> error ("Ambiguous extensions: " <> show extensionses)
    where moduleExtensions = parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
+         positiveKeys = Map.keysSet . Map.filter id
          getSwitch (ExtensionSwitch s) = s
 
-extendedGrammar :: (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
+extendedGrammar :: forall l t.
+                   (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t,
                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-                 => Map Extension Bool -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-extendedGrammar extensions =
-   overlay reportGrammar (map snd $ reverse $ sortOn fst $ fold $ Map.filterWithKey isIncluded extensionMixins)
-   where isIncluded required _ = all (\e-> Map.findWithDefault False e extensions) required
+                 => Set Extension -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+extendedGrammar extensions = memoize extendWith mixinKeys
+   where mixinKeys :: [Set Extension]
+         mixinKeys =  filter (all (`Set.member` extensions)) $ toList $ Map.keysSet $ extensionMixins @l @_ @t
+         extendWith :: [Set Extension] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+         extendWith = overlay reportGrammar . map snd . reverse . sortOn fst . fold . map (extensionMixins Map.!)
 
 reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,

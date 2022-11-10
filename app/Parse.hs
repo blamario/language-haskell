@@ -101,9 +101,7 @@ main' Opts{..} = case optsFile
       parseModule = Grammar.parseModule (Map.fromSet (const True) Extensions.includedByDefault)
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression . Grammar.report
-                                                $ parseComplete (Grammar.extendedGrammar
-                                                                 $ Map.fromSet (const True) Extensions.allExtensions)
-                                                  t)
+                                                $ parseComplete (Grammar.extendedGrammar Extensions.allExtensions) t)
       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
              e ~ Binder.WithEnvironment Language w,

@@ -137,7 +137,7 @@ grammar2010 :: (Abstract.Haskell l,
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
             => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-grammar2010 = fixGrammar grammar
+grammar2010 = autochain $ fixGrammar grammar
 
 grammar :: forall l g t. (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
