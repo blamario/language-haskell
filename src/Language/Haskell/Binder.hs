@@ -7,7 +7,7 @@
 module Language.Haskell.Binder (
    Binder,
    Binding(ErroneousBinding, ModuleBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
-   TypeBinding(ClassDeclaration), ValueBinding(InfixDeclaration),
+   TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
    Environment, WithEnvironment,
    lookupType, lookupValue,
    predefinedModuleBindings, preludeBindings, withBindings) where
@@ -35,6 +35,8 @@ import qualified Language.Haskell.AST as AST hiding (Declaration(..))
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
+type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
+
 type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
 
 type WithEnvironment l = Compose ((,) (AG.Mono.Atts (Environment l)))
@@ -48,7 +50,7 @@ data Binding l = ErroneousBinding String
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
                deriving Typeable
 
-data TypeBinding l = ClassDeclaration (Environment l)
+data TypeBinding l = TypeClass (LocalEnvironment l)
 
 data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int deriving (Typeable, Data, Eq, Show)
 
@@ -109,7 +111,7 @@ instance Transformation (AG.Mono.Keep (Binder l f)) where
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
-          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
@@ -123,7 +125,9 @@ instance {-# OVERLAPS #-}
                                         | name <- toList names])
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
-               = AG.Mono.syn atts <> UnionWith (Map.singleton name (TypeBinding $ ClassDeclaration $ AG.Mono.syn atts))
+               = AG.Mono.syn atts
+                 <> UnionWith (Map.singleton name (TypeBinding $ TypeClass
+                                                   $ onMap (Map.mapKeysMonotonic baseName) $ AG.Mono.syn atts))
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton (Abstract.qualifiedName Nothing name)
@@ -133,7 +137,7 @@ instance {-# OVERLAPS #-}
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
             getOperatorName (AST.VariableLHS name) = [name]
             getOperatorName _ = []
-            getTypeName (ExtAST.SimpleTypeLHS name _) = [Abstract.qualifiedName Nothing name]
+            getTypeName (ExtAST.SimpleTypeLHS name _) = [unqualifiedName name]
             bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
             bequeath _ = AG.Mono.inh atts
             synthesis = foldMap export node
@@ -237,7 +241,12 @@ nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup n
 
 qualifiedModuleName :: Abstract.Haskell l => Abstract.ModuleName l -> Abstract.QualifiedName l
 qualifiedModuleName moduleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
+
+baseName :: AST.QualifiedName l -> Abstract.Name l
 baseName (AST.QualifiedName _ name) = name
+
+unqualifiedName :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l
+unqualifiedName = Abstract.qualifiedName Nothing
 
 preludeName :: Abstract.Haskell l => Abstract.ModuleName l
 preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])
