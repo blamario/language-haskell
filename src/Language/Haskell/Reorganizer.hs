@@ -63,7 +63,7 @@ instance {-# overlaps #-} forall l pos s f.
           Abstract.Name l ~ ExtAST.Name l) =>
          Reorganization l pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-  _res $ Compose (AG.Mono.Atts{AG.Mono.inh= UnionWith bindings}, expression) =
+  _res $ Compose (AG.Mono.Atts{AG.Mono.inh= bindings}, expression) =
       let reorganizeExpression :: f (ExtAST.Expression l l f f)
                                -> Validation (NonEmpty (Error l f)) (f (ExtAST.Expression l l f f))
           reorganizeExpression
@@ -111,7 +111,7 @@ instance {-# overlaps #-} forall l pos s f.
                     >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l op right)
           reorganizeExpression e = Success e
           resolve ((_, lexemes, _), ExtAST.ReferenceExpression name) =
-            Map.lookup name bindings <|> defaultInfixDeclaration lexemes
+            Binder.lookupValue name bindings <|> defaultInfixDeclaration lexemes
       in Compose (reorganizeExpression expression)
 
 --defaultInfixDeclaration :: ExtAST.QualifiedName l -> Maybe (Binder.Binding l)
@@ -120,7 +120,8 @@ defaultInfixDeclaration (Reserializer.Trailing lexemes)
      Just (Binder.InfixDeclaration False AST.LeftAssociative 9)
    | otherwise = Nothing
 
-verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a) -> e -> e -> Binder.Binding l -> a -> a
+verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a)
+                       -> e -> e -> Binder.ValueBinding l -> a -> a
 verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.LeftAssociative precedence) =
    verifyArg (Just AST.LeftAssociative) precedence left . verifyArg Nothing precedence right
 verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.RightAssociative precedence) =

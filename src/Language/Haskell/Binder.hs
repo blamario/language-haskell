@@ -1,10 +1,15 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,  OverloadedStrings,
-             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase, MultiParamTypeClasses,
+             OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Monomorphic attribute grammar for establishing the static identifier bindings
 
 module Language.Haskell.Binder (
-   Binder, Binding(ErroneousBinding, ModuleBinding, ClassDeclaration, InfixDeclaration), Environment, WithEnvironment,
+   Binder,
+   Binding(ErroneousBinding, ModuleBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
+   TypeBinding(ClassDeclaration), ValueBinding(InfixDeclaration),
+   Environment, WithEnvironment,
+   lookupType, lookupValue,
    predefinedModuleBindings, preludeBindings, withBindings) where
 
 import Data.Data (Data, Typeable)
@@ -38,14 +43,38 @@ type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
 data Binding l = ErroneousBinding String
                | ModuleBinding (UnionWith (Map (AST.Name l)) (Binding l))
-               | ClassDeclaration (Environment l)
-               | InfixDeclaration Bool (AST.Associativity l) Int
+               | TypeBinding (TypeBinding l)
+               | ValueBinding (ValueBinding l)
+               | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
                deriving Typeable
+
+data TypeBinding l = ClassDeclaration (Environment l)
+
+data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int deriving (Typeable, Data, Eq, Show)
+
+lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
+           => AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
+lookupType name (UnionWith env) = Map.lookup name env >>= \case
+  TypeBinding t -> Just t
+  TypeAndValueBinding t _ -> Just t
+  _ -> Nothing
+
+lookupValue :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
+            => AST.QualifiedName l -> Environment l -> Maybe (ValueBinding l)
+lookupValue name (UnionWith env) = Map.lookup name env >>= \case
+  ValueBinding v -> Just v
+  TypeAndValueBinding _ v -> Just v
+  _ -> Nothing
 
 deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
                    Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (Binding l)
 deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (Binding l)
 deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Binding l)
+
+deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
+                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (TypeBinding l)
+deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (TypeBinding l)
+deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (TypeBinding l)
 
 deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
@@ -53,8 +82,10 @@ deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 
 instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Semigroup (Binding l) where
-   a@InfixDeclaration{} <> InfixDeclaration False _ _ = a
-   InfixDeclaration False _ _ <> a@InfixDeclaration{} = a
+   a@(ValueBinding InfixDeclaration{}) <> ValueBinding (InfixDeclaration False _ _) = a
+   ValueBinding (InfixDeclaration False _ _) <> a@(ValueBinding InfixDeclaration{}) = a
+   ValueBinding v <> TypeBinding t = TypeAndValueBinding t v
+   TypeBinding t <> ValueBinding v = TypeAndValueBinding t v
    a <> b
       | a == b = a
       | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
@@ -88,15 +119,15 @@ instance {-# OVERLAPS #-}
       where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export (AST.FixityDeclaration associativity precedence names) =
                UnionWith (Map.fromList [(Abstract.qualifiedName Nothing name,
-                                         InfixDeclaration True associativity $ fromMaybe 9 precedence)
+                                         ValueBinding $ InfixDeclaration True associativity $ fromMaybe 9 precedence)
                                         | name <- toList names])
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
-               = AG.Mono.syn atts <> UnionWith (Map.singleton name (ClassDeclaration $ AG.Mono.syn atts))
+               = AG.Mono.syn atts <> UnionWith (Map.singleton name (TypeBinding $ ClassDeclaration $ AG.Mono.syn atts))
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton (Abstract.qualifiedName Nothing name)
-                            $ InfixDeclaration False AST.LeftAssociative 9)
+                            $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
@@ -225,7 +256,7 @@ preludeBindings = UnionWith (Map.mapKeysMonotonic (Abstract.qualifiedName Nothin
 
 unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
                                Abstract.Associativity l ~ AST.Associativity l) => Map.Map (Abstract.Name l) (Binding l)
-unqualifiedPreludeBindings = Map.fromList $
+unqualifiedPreludeBindings = Map.fromList $ map (ValueBinding <$>) $
    [(Abstract.name "!!", InfixDeclaration True Abstract.leftAssociative 9),
     (Abstract.name ".", InfixDeclaration True Abstract.rightAssociative 9)]
    ++
