@@ -49,9 +49,9 @@ resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
 resolvePositions src = Reserializer.mapWrappings (offset src) extract
                        . either (error . show) id . validationToEither
                        . Full.traverse Reorganizer.Reorganization
-                       . Binder.withBindings (Binder.preludeBindings
-                                              <> Binder.predefinedModuleBindings
-                                              :: Binder.Environment AST.Language)
+                       . Binder.withBindings
+                            Binder.predefinedModuleBindings
+                            (Binder.preludeBindings :: Binder.Environment AST.Language)
 
 
 checkRestrictions :: Map Extension Bool

@@ -6,9 +6,9 @@
 
 module Language.Haskell.Binder (
    Binder,
-   Binding(ErroneousBinding, ModuleBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
+   Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
-   Environment, WithEnvironment,
+   Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue,
    predefinedModuleBindings, preludeBindings, withBindings) where
 
@@ -35,16 +35,17 @@ import qualified Language.Haskell.AST as AST hiding (Declaration(..))
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
+type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
+
 type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
-type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
+type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
 type WithEnvironment l = Compose ((,) (AG.Mono.Atts (Environment l)))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
 data Binding l = ErroneousBinding String
-               | ModuleBinding (UnionWith (Map (AST.Name l)) (Binding l))
                | TypeBinding (TypeBinding l)
                | ValueBinding (ValueBinding l)
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
@@ -94,16 +95,16 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
 
 instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Monoid (Binding l) where
-   mempty = ModuleBinding (UnionWith mempty)
+   mempty = ErroneousBinding "nothing here"
 
 withBindings :: (Full.Traversable (AG.Mono.Keep (Binder l p)) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
-             => Environment l -> p (g p p) -> q (g q q)
-withBindings = flip (Full.traverse (AG.Mono.Keep Binder))
+             => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
+withBindings modEnv = flip (Full.traverse (AG.Mono.Keep $ Binder modEnv))
 
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
 onMap f (UnionWith x) = UnionWith (f x)
 
-data Binder l (f :: Type -> Type) = Binder
+data Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
 
 instance Transformation (AG.Mono.Keep (Binder l f)) where
    type Domain (AG.Mono.Keep (Binder l f)) = f
@@ -154,7 +155,7 @@ instance {-# OVERLAPS #-}
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
          AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Module l l) (FromEnvironment l f) f where
-   attribution _ node atts = foldMap moduleAttribution node
+   attribution (AG.Mono.Keep (Binder modEnv)) node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
                               -> AG.Mono.Atts (Environment l)
             moduleAttribution (AST.ExtendedModule extensions body) = atts
@@ -167,9 +168,7 @@ instance {-# OVERLAPS #-}
                atts{AG.Mono.syn= exportedScope, AG.Mono.inh= moduleGlobalScope}
                where exportedScope, moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
-                     exportedScope = UnionWith $ Map.singleton (qualifiedModuleName moduleName) $ ModuleBinding
-                                     $ UnionWith $ Map.mapKeys baseName $ Map.filterWithKey (const . exported)
-                                     $ getUnionWith moduleGlobalScope
+                     exportedScope = UnionWith $ Map.filterWithKey (const . exported) $ getUnionWith moduleGlobalScope
                      exported qn@(AST.QualifiedName modName name) =
                         maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
                         where exportedBy (AST.ReExportModule modName') = modName == Just modName'
@@ -182,10 +181,10 @@ instance {-# OVERLAPS #-}
                                          <> AG.Mono.syn atts
             importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
-            importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith $ AG.Mono.inh atts)
+            importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith modEnv)
                where importsFromModule :: UnionWith (Map (AST.Name l)) (Binding l)
                                        -> ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
-                     importsFrom (AST.QualifiedName (Just moduleName) _) (ModuleBinding moduleExports)
+                     importsFrom moduleName moduleExports
                         | null matchingImports && moduleName == preludeName = unqualified moduleExports
                         | otherwise = foldMap (importsFromModule moduleExports) matchingImports
                         where matchingImports = foldMap (foldMap matchingImport . ($ mempty) . getCompose) modImports
@@ -252,11 +251,10 @@ preludeName :: Abstract.Haskell l => Abstract.ModuleName l
 preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])
 
 predefinedModuleBindings :: (Abstract.Haskell l, Ord (Abstract.QualifiedName l),
-                             Abstract.QualifiedName l ~ AST.QualifiedName l,
+                             Abstract.ModuleName l ~ AST.ModuleName l,
                              Abstract.Name l ~ AST.Name l,
-                             Abstract.Associativity l ~ AST.Associativity l) => Environment l
-predefinedModuleBindings = UnionWith (Map.fromList [(qualifiedModuleName preludeName,
-                                                     ModuleBinding $ UnionWith unqualifiedPreludeBindings)])
+                             Abstract.Associativity l ~ AST.Associativity l) => ModuleEnvironment l
+predefinedModuleBindings = UnionWith (Map.fromList [(preludeName, UnionWith unqualifiedPreludeBindings)])
 
 preludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
                     Abstract.QualifiedName l ~ AST.QualifiedName l,

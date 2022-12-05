@@ -164,7 +164,10 @@ main' Opts{..} = case optsFile
                t :: Verifier.Verification Int Text
                t = Verifier.Verification
                resolved = resolvePositions contents parsed
-               bound = Binder.withBindings (Binder.predefinedModuleBindings :: Binder.Environment l) parsed
+               bound = Binder.withBindings
+                          Binder.predefinedModuleBindings
+                          (Binder.preludeBindings :: Binder.Environment l)
+                          parsed
       report contents (Right l) =
          putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
          >> report contents (Right [l !! optsIndex])
