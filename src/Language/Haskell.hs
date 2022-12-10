@@ -17,7 +17,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
-import qualified Transformation.AG.Monomorphic as AG.Mono
+import qualified Transformation.AG.Dimorphic as Di
 
 import Data.Either.Validation (validationToEither)
 import Data.Map (Map)
@@ -42,7 +42,7 @@ parseModule extensions verify source =
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
                      q ~ Reserializer.Wrapped (Down Int) (LinePositioned Text), r ~ Placed,
-                     Full.Traversable (AG.Mono.Keep (Binder.Binder AST.Language p)) g,
+                     Full.Traversable (Di.Keep (Binder.Binder AST.Language p)) g,
                      Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) (LinePositioned Text)) g,
                      Deep.Functor (Rank2.Map q r) g)
                  => Text -> p (g p p) -> r (g r r)

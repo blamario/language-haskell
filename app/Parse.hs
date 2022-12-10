@@ -16,11 +16,10 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
 
 import qualified Transformation
-import qualified Transformation.AG.Monomorphic as AG.Mono
+import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
-import qualified Transformation.AG.Monomorphic
 
 import Control.Monad
 import Data.Data (Data)
@@ -106,12 +105,12 @@ main' Opts{..} = case optsFile
              a ~ g l l Placed Placed, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
              e ~ Binder.WithEnvironment Language w,
              Abstract.QualifiedName l ~ AST.QualifiedName l,
-             Data (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
-             Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+             Data (Di.Atts (Binder.Environment Language) (Binder.Environment Language)),
+             Show (Di.Atts (Binder.Environment Language) (Binder.Environment Language)),
              Data (g Language Language e e), Data (g Language Language w w),
              Show (g Language Language e e), Show (g Language Language w w),
              Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
-             Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
+             Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
              Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
@@ -126,12 +125,12 @@ main' Opts{..} = case optsFile
                  a ~ Placed (g l l Placed Placed), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
                  e ~ Binder.WithEnvironment Language w,
                  Abstract.QualifiedName l ~ AST.QualifiedName l,
-                 Data (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
-                 Show (Transformation.AG.Monomorphic.Atts (Binder.Environment Language)),
+                 Data (Di.Atts (Binder.Environment Language) (Binder.Environment Language)),
+                 Show (Di.Atts (Binder.Environment Language) (Binder.Environment Language)),
                  Data (g Language Language e e), Data (g Language Language w w),
                  Show (g Language Language e e), Show (g Language Language w w),
                  Transformation.At (Verifier.Verification Int Text) (g l l Placed Placed),
-                 Full.Traversable (Transformation.AG.Monomorphic.Keep (Binder.Binder l w)) (g l l),
+                 Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
                  Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed) (g l l),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))

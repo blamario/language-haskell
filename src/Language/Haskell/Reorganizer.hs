@@ -22,7 +22,7 @@ import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
-import qualified Transformation.AG.Monomorphic as AG.Mono
+import qualified Transformation.AG.Dimorphic as Di
 import Text.Grampa (Ambiguous(..))
 import Text.Parser.Input.Position (Position)
 
@@ -63,7 +63,7 @@ instance {-# overlaps #-} forall l pos s f.
           Abstract.Name l ~ ExtAST.Name l) =>
          Reorganization l pos s
          `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-  _res $ Compose (AG.Mono.Atts{AG.Mono.inh= bindings}, expression) =
+  _res $ Compose (Di.Atts{Di.inh= bindings}, expression) =
       let reorganizeExpression :: f (ExtAST.Expression l l f f)
                                -> Validation (NonEmpty (Error l f)) (f (ExtAST.Expression l l f f))
           reorganizeExpression

@@ -25,7 +25,7 @@ import qualified Data.Map.Lazy as Map
 import qualified Rank2
 import Transformation (Transformation)
 import qualified Transformation
-import qualified Transformation.AG.Monomorphic as AG.Mono
+import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
@@ -41,7 +41,7 @@ type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
 type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
-type WithEnvironment l = Compose ((,) (AG.Mono.Atts (Environment l)))
+type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (Environment l)))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
@@ -97,18 +97,18 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Monoid (Binding l) where
    mempty = ErroneousBinding "nothing here"
 
-withBindings :: (Full.Traversable (AG.Mono.Keep (Binder l p)) g, q ~ Compose ((,) (AG.Mono.Atts (Environment l))) p)
+withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ Compose ((,) (Di.Atts (Environment l) (Environment l))) p)
              => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
-withBindings modEnv = flip (Full.traverse (AG.Mono.Keep $ Binder modEnv))
+withBindings modEnv = flip (Full.traverse (Di.Keep $ Binder modEnv))
 
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
 onMap f (UnionWith x) = UnionWith (f x)
 
 data Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
 
-instance Transformation (AG.Mono.Keep (Binder l f)) where
-   type Domain (AG.Mono.Keep (Binder l f)) = f
-   type Codomain (AG.Mono.Keep (Binder l f)) = FromEnvironment l f
+instance Transformation (Di.Keep (Binder l f)) where
+   type Domain (Di.Keep (Binder l f)) = f
+   type Codomain (Di.Keep (Binder l f)) = FromEnvironment l f
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
@@ -116,9 +116,15 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Declaration l l) (FromEnvironment l f) f
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (Environment l)
+            (AST.Declaration l l)
+            (FromEnvironment l f)
+            f
          where
-   attribution _ node atts = atts{AG.Mono.syn= synthesis, AG.Mono.inh= bequest}
+   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= bequest}
       where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export (AST.FixityDeclaration associativity precedence names) =
                UnionWith (Map.fromList [(Abstract.qualifiedName Nothing name,
@@ -126,9 +132,9 @@ instance {-# OVERLAPS #-}
                                         | name <- toList names])
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
-               = AG.Mono.syn atts
+               = Di.syn atts
                  <> UnionWith (Map.singleton name (TypeBinding $ TypeClass
-                                                   $ onMap (Map.mapKeysMonotonic baseName) $ AG.Mono.syn atts))
+                                                   $ onMap (Map.mapKeysMonotonic baseName) $ Di.syn atts))
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton (Abstract.qualifiedName Nothing name)
@@ -139,8 +145,8 @@ instance {-# OVERLAPS #-}
             getOperatorName (AST.VariableLHS name) = [name]
             getOperatorName _ = []
             getTypeName (ExtAST.SimpleTypeLHS name _) = [unqualifiedName name]
-            bequeath AST.EquationDeclaration{} = AG.Mono.syn atts <> AG.Mono.inh atts
-            bequeath _ = AG.Mono.inh atts
+            bequeath AST.EquationDeclaration{} = Di.syn atts <> Di.inh atts
+            bequeath _ = Di.inh atts
             synthesis = foldMap export node
             bequest = foldMap bequeath node
 
@@ -154,18 +160,24 @@ instance {-# OVERLAPS #-}
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l, Abstract.ImportItem l l ~ AST.ImportItem l l,
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
-         AG.Mono.Attribution (AG.Mono.Keep (Binder l f)) (Environment l) (AST.Module l l) (FromEnvironment l f) f where
-   attribution (AG.Mono.Keep (Binder modEnv)) node atts = foldMap moduleAttribution node
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (Environment l)
+            (AST.Module l l)
+            (FromEnvironment l f) f
+         where
+   attribution (Di.Keep (Binder modEnv)) node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
-                              -> AG.Mono.Atts (Environment l)
+                              -> Di.Atts (Environment l) (Environment l)
             moduleAttribution (AST.ExtendedModule extensions body) = atts
             moduleAttribution (AST.AnonymousModule modImports body) =
-               AG.Mono.Atts{AG.Mono.inh= moduleGlobalScope,
-                            AG.Mono.syn= onMap (Map.filterWithKey (const . (== mainName))) moduleGlobalScope}
-               where moduleGlobalScope = importedScope modImports <> AG.Mono.syn atts
+               Di.Atts{Di.inh= moduleGlobalScope,
+                            Di.syn= onMap (Map.filterWithKey (const . (== mainName))) moduleGlobalScope}
+               where moduleGlobalScope = importedScope modImports <> Di.syn atts
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
-               atts{AG.Mono.syn= exportedScope, AG.Mono.inh= moduleGlobalScope}
+               atts{Di.syn= exportedScope, Di.inh= moduleGlobalScope}
                where exportedScope, moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
                      exportedScope = UnionWith $ Map.filterWithKey (const . exported) $ getUnionWith moduleGlobalScope
@@ -177,8 +189,8 @@ instance {-# OVERLAPS #-}
                               exportedBy (AST.ExportClassOrType parent members) =
                                  qn == parent || any (hasMember name) members
                      moduleGlobalScope = importedScope modImports
-                                         <> requalifiedWith moduleName (AG.Mono.syn atts)
-                                         <> AG.Mono.syn atts
+                                         <> requalifiedWith moduleName (Di.syn atts)
+                                         <> Di.syn atts
             importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith modEnv)
