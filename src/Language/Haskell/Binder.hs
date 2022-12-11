@@ -41,7 +41,7 @@ type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
 type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
-type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (Environment l)))
+type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l)))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
@@ -97,7 +97,7 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Monoid (Binding l) where
    mempty = ErroneousBinding "nothing here"
 
-withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ Compose ((,) (Di.Atts (Environment l) (Environment l))) p)
+withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l))) p)
              => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings modEnv = flip (Full.traverse (Di.Keep $ Binder modEnv))
 
@@ -119,33 +119,31 @@ instance {-# OVERLAPS #-}
          Di.Attribution
             (Di.Keep (Binder l f))
             (Environment l)
-            (Environment l)
+            (LocalEnvironment l)
             (AST.Declaration l l)
             (FromEnvironment l f)
             f
          where
    attribution _ node atts = atts{Di.syn= synthesis, Di.inh= bequest}
-      where bequeath, export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
+      where bequeath :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
+            export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.FixityDeclaration associativity precedence names) =
-               UnionWith (Map.fromList [(Abstract.qualifiedName Nothing name,
+               UnionWith (Map.fromList [(name,
                                          ValueBinding $ InfixDeclaration True associativity $ fromMaybe 9 precedence)
                                         | name <- toList names])
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
-               = Di.syn atts
-                 <> UnionWith (Map.singleton name (TypeBinding $ TypeClass
-                                                   $ onMap (Map.mapKeysMonotonic baseName) $ Di.syn atts))
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ TypeClass $ Di.syn atts)
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
-               = UnionWith (Map.singleton (Abstract.qualifiedName Nothing name)
-                            $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
+               = UnionWith (Map.singleton name $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
             getOperatorName (AST.VariableLHS name) = [name]
             getOperatorName _ = []
-            getTypeName (ExtAST.SimpleTypeLHS name _) = [unqualifiedName name]
-            bequeath AST.EquationDeclaration{} = Di.syn atts <> Di.inh atts
+            getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
+            bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
             bequeath _ = Di.inh atts
             synthesis = foldMap export node
             bequest = foldMap bequeath node
@@ -163,24 +161,29 @@ instance {-# OVERLAPS #-}
          Di.Attribution
             (Di.Keep (Binder l f))
             (Environment l)
-            (Environment l)
+            (LocalEnvironment l)
             (AST.Module l l)
             (FromEnvironment l f) f
          where
    attribution (Di.Keep (Binder modEnv)) node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
-                              -> Di.Atts (Environment l) (Environment l)
+                              -> Di.Atts (Environment l) (LocalEnvironment l)
             moduleAttribution (AST.ExtendedModule extensions body) = atts
             moduleAttribution (AST.AnonymousModule modImports body) =
-               Di.Atts{Di.inh= moduleGlobalScope,
-                            Di.syn= onMap (Map.filterWithKey (const . (== mainName))) moduleGlobalScope}
-               where moduleGlobalScope = importedScope modImports <> Di.syn atts
+               Di.Atts{
+                  Di.inh= moduleGlobalScope,
+                  Di.syn= onMap
+                                  (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . (== mainName)))
+                                  moduleGlobalScope}
+               where moduleGlobalScope = importedScope modImports <> unqualified (Di.syn atts)
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
                atts{Di.syn= exportedScope, Di.inh= moduleGlobalScope}
-               where exportedScope, moduleGlobalScope :: Environment l
+               where exportedScope :: LocalEnvironment l
+                     moduleGlobalScope :: Environment l
                      exported :: AST.QualifiedName l -> Bool
-                     exportedScope = UnionWith $ Map.filterWithKey (const . exported) $ getUnionWith moduleGlobalScope
+                     exportedScope = UnionWith $ Map.mapKeysMonotonic baseName $ Map.filterWithKey (const . exported)
+                                     $ getUnionWith moduleGlobalScope
                      exported qn@(AST.QualifiedName modName name) =
                         maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
                         where exportedBy (AST.ReExportModule modName') = modName == Just modName'
@@ -189,8 +192,8 @@ instance {-# OVERLAPS #-}
                               exportedBy (AST.ExportClassOrType parent members) =
                                  qn == parent || any (hasMember name) members
                      moduleGlobalScope = importedScope modImports
-                                         <> requalifiedWith moduleName (Di.syn atts)
-                                         <> Di.syn atts
+                                         <> qualifiedWith moduleName (Di.syn atts)
+                                         <> unqualified (Di.syn atts)
             importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
             importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith modEnv)
@@ -203,7 +206,6 @@ instance {-# OVERLAPS #-}
                               matchingImport i@(ExtAST.Import _ _ _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
-                     importsFrom _ _ = mempty
                      importsFromModule moduleExports (ExtAST.Import _ qualified _ name alias spec)
                         | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                         | otherwise = unqualified (imports spec)
@@ -218,11 +220,6 @@ instance {-# OVERLAPS #-}
                               itemImports (AST.ImportClassOrType name members) =
                                  nameImport name allImports <> foldMap (memberImports name) members
                               itemImports (AST.ImportVar name) = nameImport name allImports
-            qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
-            requalifiedWith moduleName = onMap (Map.mapKeysMonotonic requalify)
-               where requalify (AST.QualifiedName Nothing name) = AST.QualifiedName (Just moduleName) name
-            unqualified :: UnionWith (Map (AST.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
-            unqualified = onMap (Map.mapKeysMonotonic $ AST.QualifiedName Nothing)
 
 class Abstract.Haskell l => BindingMembers l where
    memberImports :: Abstract.Name l -> Abstract.Members l -> UnionWith (Map (Abstract.Name l)) (Binding l)
@@ -250,8 +247,12 @@ instance BindingMembers ExtAST.Language where
 
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
 
-qualifiedModuleName :: Abstract.Haskell l => Abstract.ModuleName l -> Abstract.QualifiedName l
-qualifiedModuleName moduleName = Abstract.qualifiedName (Just moduleName) (Abstract.name "[module]")
+qualifiedWith :: Abstract.Haskell l
+              => Abstract.ModuleName l -> UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
+qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
+
+unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
+unqualified = onMap (Map.mapKeysMonotonic unqualifiedName)
 
 baseName :: AST.QualifiedName l -> Abstract.Name l
 baseName (AST.QualifiedName _ name) = name
