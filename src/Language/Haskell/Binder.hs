@@ -52,8 +52,13 @@ data Binding l = ErroneousBinding String
                deriving Typeable
 
 data TypeBinding l = TypeClass (LocalEnvironment l)
+                   | DataType
 
-data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int deriving (Typeable, Data, Eq, Show)
+data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int
+                    | DataConstructor
+                    | RecordConstructor
+                    | RecordField
+                    deriving (Typeable, Data, Eq, Show)
 
 lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
            => AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
@@ -137,6 +142,9 @@ instance {-# OVERLAPS #-}
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton name $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
+            export (AST.DataDeclaration _context lhs _kind _constructors _derivings)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding DataType)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
@@ -220,6 +228,68 @@ instance {-# OVERLAPS #-}
                               itemImports (AST.ImportClassOrType name members) =
                                  nameImport name allImports <> foldMap (memberImports name) members
                               itemImports (AST.ImportVar name) = nameImport name allImports
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (AST.DataConstructor l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+      where export :: AST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
+            export (AST.RecordConstructor name _flds) = UnionWith (Map.singleton name $ ValueBinding RecordConstructor)
+            synthesis = foldMap export node <>  Di.syn atts
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (ExtAST.DataConstructor l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+      where export :: ExtAST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
+            export (ExtAST.RecordConstructor name _fields) =
+               UnionWith (Map.singleton name $ ValueBinding RecordConstructor)
+            export ExtAST.ExistentialConstructor{} = mempty
+            synthesis = foldMap export node <>  Di.syn atts
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (AST.FieldDeclaration l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+      where export :: AST.FieldDeclaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (AST.ConstructorFields names t) =
+               UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
+            synthesis = foldMap export node <>  Di.syn atts
 
 class Abstract.Haskell l => BindingMembers l where
    memberImports :: Abstract.Name l -> Abstract.Members l -> UnionWith (Map (Abstract.Name l)) (Binding l)
