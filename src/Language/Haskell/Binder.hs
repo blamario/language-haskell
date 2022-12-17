@@ -148,7 +148,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= bequest}
+   attribution _ node atts = atts{Di.syn= foldMap export node, Di.inh= bequest}
       where bequeath :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
             export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.FixityDeclaration associativity precedence names) =
@@ -164,6 +164,15 @@ instance {-# OVERLAPS #-}
             export (AST.DataDeclaration _context lhs _kind _constructors _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.NewtypeDeclaration _context lhs _kind _constructor _derivings)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.GADTDeclaration lhs _kind _constructors _derivings)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.GADTNewtypeDeclaration lhs _kind _constructor _derivings)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
@@ -173,7 +182,6 @@ instance {-# OVERLAPS #-}
             getTypeName (ExtAST.SimpleTypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
             bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
             bequeath _ = Di.inh atts
-            synthesis = foldMap export node
             bequest = foldMap bequeath node
 
 -- | Resolve ambiguities in a single module. The imports are resolved using the given map of already resolved
@@ -263,12 +271,11 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (AST.RecordConstructor name _flds) =
                UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
-            synthesis = foldMap export node <>  Di.syn atts
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -284,13 +291,34 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
                UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
             export ExtAST.ExistentialConstructor{} = mempty
-            synthesis = foldMap export node <>  Di.syn atts
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (ExtAST.GADTConstructor l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+      where export :: ExtAST.GADTConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (ExtAST.GADTConstructors names vars _ctx t)
+              | Map.null (getUnionWith $ Di.syn atts)
+              = UnionWith $ Map.fromList [(name, ValueBinding DataConstructor) | name <- toList names]
+              | otherwise
+              = UnionWith $ Map.fromList [(name, ValueBinding $ RecordConstructor $ Di.syn atts) | name <- toList names]
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -306,11 +334,10 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.FieldDeclaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
-            synthesis = foldMap export node <>  Di.syn atts
 
 class Abstract.Haskell l => BindingMembers l where
    memberImports :: Abstract.Name l -> Abstract.Members l -> UnionWith (Map (Abstract.Name l)) (Binding l)
