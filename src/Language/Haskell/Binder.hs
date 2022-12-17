@@ -54,10 +54,12 @@ data Binding l = ErroneousBinding String
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
 
-data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int
+data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBinding l))
                     | DataConstructor
                     | RecordConstructor (LocalEnvironment l) -- fields
                     | RecordField
+                    | DefinedValue
+                    | RecordFieldAndValue
                     deriving Typeable
 
 lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
@@ -95,10 +97,22 @@ deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 
 instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Semigroup (Binding l) where
-   a@(ValueBinding InfixDeclaration{}) <> ValueBinding (InfixDeclaration False _ _) = a
-   ValueBinding (InfixDeclaration False _ _) <> a@(ValueBinding InfixDeclaration{}) = a
    ValueBinding v <> TypeBinding t = TypeAndValueBinding t v
    TypeBinding t <> ValueBinding v = TypeAndValueBinding t v
+   b@ErroneousBinding{} <> _ = b
+   _ <> b@ErroneousBinding{} = b
+   a@(ValueBinding InfixDeclaration{}) <> b@(ValueBinding InfixDeclaration{}) =
+      ErroneousBinding ("Clashing infix declarations: " ++ show (a, b))
+   ValueBinding (InfixDeclaration assoc fixity Nothing) <> ValueBinding b =
+      ValueBinding (InfixDeclaration assoc fixity $ Just b)
+   ValueBinding (InfixDeclaration assoc fixity (Just b1)) <> ValueBinding b2 =
+      ValueBinding (InfixDeclaration assoc fixity Nothing) <> (ValueBinding b1 <> ValueBinding b2)
+   ValueBinding b <> ValueBinding (InfixDeclaration assoc fixity Nothing) =
+      ValueBinding (InfixDeclaration assoc fixity $ Just b)
+   ValueBinding b1 <> ValueBinding (InfixDeclaration assoc fixity (Just b2)) =
+      (ValueBinding b1 <> ValueBinding b2) <> ValueBinding (InfixDeclaration assoc fixity Nothing)
+   ValueBinding RecordField <> ValueBinding DefinedValue = ValueBinding RecordFieldAndValue
+   ValueBinding DefinedValue <> ValueBinding RecordField = ValueBinding RecordFieldAndValue
    a <> b
       | a == b = a
       | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
@@ -139,14 +153,14 @@ instance {-# OVERLAPS #-}
             export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.FixityDeclaration associativity precedence names) =
                UnionWith (Map.fromList [(name,
-                                         ValueBinding $ InfixDeclaration True associativity $ fromMaybe 9 precedence)
+                                         ValueBinding $ InfixDeclaration associativity (fromMaybe 9 precedence) Nothing)
                                         | name <- toList names])
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ TypeClass $ Di.syn atts)
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
-               = UnionWith (Map.singleton name $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
+               = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
             export (AST.DataDeclaration _context lhs _kind _constructors _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
@@ -156,6 +170,7 @@ instance {-# OVERLAPS #-}
             getOperatorName (AST.VariableLHS name) = [name]
             getOperatorName _ = []
             getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
+            getTypeName (ExtAST.SimpleTypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
             bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
             bequeath _ = Di.inh atts
             synthesis = foldMap export node
@@ -353,28 +368,28 @@ preludeBindings = UnionWith (Map.mapKeysMonotonic (Abstract.qualifiedName Nothin
 unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
                                Abstract.Associativity l ~ AST.Associativity l) => Map.Map (Abstract.Name l) (Binding l)
 unqualifiedPreludeBindings = Map.fromList $ map (ValueBinding <$>) $
-   [(Abstract.name "!!", InfixDeclaration True Abstract.leftAssociative 9),
-    (Abstract.name ".", InfixDeclaration True Abstract.rightAssociative 9)]
+   [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9 $ Just DefinedValue),
+    (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9 $ Just DefinedValue)]
    ++
-   [(Abstract.name op, InfixDeclaration True Abstract.rightAssociative 8)
+   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 8 $ Just DefinedValue)
     | op <- ["^", "^^", "**"]]
    ++
-   [(Abstract.name op, InfixDeclaration True Abstract.leftAssociative 7)
+   [(Abstract.name op, InfixDeclaration Abstract.leftAssociative 7 $ Just DefinedValue)
     | op <- ["*", "/", "`div`", "`mod`", "`rem`", "`quot`"]]
    ++
-   [(Abstract.name "+", InfixDeclaration True Abstract.leftAssociative 6),
-    (Abstract.name "-", InfixDeclaration True Abstract.leftAssociative 6)]
+   [(Abstract.name "+", InfixDeclaration Abstract.leftAssociative 6 $ Just DefinedValue),
+    (Abstract.name "-", InfixDeclaration Abstract.leftAssociative 6 $ Just DefinedValue)]
    ++
-   [(Abstract.name ":", InfixDeclaration True Abstract.rightAssociative 5),
-    (Abstract.name "++", InfixDeclaration True Abstract.rightAssociative 5)]
+   [(Abstract.name ":", InfixDeclaration Abstract.rightAssociative 5 $ Just DefinedValue),
+    (Abstract.name "++", InfixDeclaration Abstract.rightAssociative 5 $ Just DefinedValue)]
    ++
-   [(Abstract.name op, InfixDeclaration True Abstract.nonAssociative 4)
+   [(Abstract.name op, InfixDeclaration Abstract.nonAssociative 4 $ Just DefinedValue)
     | op <- ["==", "/=", "<", "<=", ">", ">=", "`elem`", "`notElem`"]]
    ++
-   [(Abstract.name "&&", InfixDeclaration True Abstract.rightAssociative 3),
-    (Abstract.name "||", InfixDeclaration True Abstract.rightAssociative 2),
-    (Abstract.name ">>", InfixDeclaration True Abstract.leftAssociative 1),
-    (Abstract.name ">>=", InfixDeclaration True Abstract.leftAssociative 1)]
+   [(Abstract.name "&&", InfixDeclaration Abstract.rightAssociative 3 $ Just DefinedValue),
+    (Abstract.name "||", InfixDeclaration Abstract.rightAssociative 2 $ Just DefinedValue),
+    (Abstract.name ">>", InfixDeclaration Abstract.leftAssociative 1 $ Just DefinedValue),
+    (Abstract.name ">>=", InfixDeclaration Abstract.leftAssociative 1 $ Just DefinedValue)]
    ++
-   [(Abstract.name op, InfixDeclaration True Abstract.rightAssociative 0)
+   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 0 $ Just DefinedValue)
     | op <- ["$", "$!", "`seq`"]]

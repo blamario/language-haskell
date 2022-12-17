@@ -73,8 +73,8 @@ instance {-# overlaps #-} forall l pos s f.
                  rOp
                  right@((_, _, rEnd), _))
              | not (parenthesized leftBranch),
-               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve lOp,
-               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve rOp,
+               Just (Binder.InfixDeclaration associativity precedence _) <- resolve lOp,
+               Just (Binder.InfixDeclaration associativity' precedence' _) <- resolve rOp,
                precedence < precedence' || precedence == precedence' && associativity /= ExtAST.LeftAssociative
              = if precedence == precedence'
                   && (associativity /= associativity' || associativity == ExtAST.NonAssociative)
@@ -87,8 +87,8 @@ instance {-# overlaps #-} forall l pos s f.
               ExtAST.InfixExpression left@((lStart, _, _), _) lOp
                  (rightBranch, ExtAST.InfixExpression middle@((_, _, rlEnd), _) rOp right))
              | not (parenthesized rightBranch),
-               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve rOp,
-               Just (Binder.InfixDeclaration _ associativity' precedence') <- resolve lOp,
+               Just (Binder.InfixDeclaration associativity precedence _) <- resolve rOp,
+               Just (Binder.InfixDeclaration associativity' precedence' _) <- resolve lOp,
                precedence < precedence' || precedence == precedence' && associativity /= ExtAST.RightAssociative
              = if precedence == precedence'
                   && (associativity /= associativity' || associativity == ExtAST.NonAssociative)
@@ -102,7 +102,7 @@ instance {-# overlaps #-} forall l pos s f.
                  neg@((negStart, _, _), ExtAST.Negate{})
                  (arg, ExtAST.InfixExpression left@((_, _, middleEnd), _) op right))
              | not (parenthesized arg),
-               Just (Binder.InfixDeclaration _ associativity precedence) <- resolve op,
+               Just (Binder.InfixDeclaration associativity precedence _) <- resolve op,
                precedence < prefixMinusPrecedence
                || precedence == prefixMinusPrecedence && associativity /= ExtAST.RightAssociative
              = if precedence == prefixMinusPrecedence && associativity /= ExtAST.LeftAssociative
@@ -117,16 +117,16 @@ instance {-# overlaps #-} forall l pos s f.
 --defaultInfixDeclaration :: ExtAST.QualifiedName l -> Maybe (Binder.Binding l)
 defaultInfixDeclaration (Reserializer.Trailing lexemes)
    | any (== Token{lexemeType= Delimiter, lexemeText= "`"}) lexemes =
-     Just (Binder.InfixDeclaration False AST.LeftAssociative 9)
+     Just (Binder.InfixDeclaration AST.LeftAssociative 9 Nothing)
    | otherwise = Nothing
 
 verifyInfixApplication :: (Maybe (AST.Associativity λ) -> Int -> e -> a -> a)
                        -> e -> e -> Binder.ValueBinding l -> a -> a
-verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.LeftAssociative precedence) =
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration AST.LeftAssociative precedence _) =
    verifyArg (Just AST.LeftAssociative) precedence left . verifyArg Nothing precedence right
-verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.RightAssociative precedence) =
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration AST.RightAssociative precedence _) =
    verifyArg (Just AST.RightAssociative) precedence right . verifyArg Nothing precedence left
-verifyInfixApplication verifyArg left right (Binder.InfixDeclaration _ AST.NonAssociative precedence) =
+verifyInfixApplication verifyArg left right (Binder.InfixDeclaration AST.NonAssociative precedence _) =
    verifyArg Nothing precedence left . verifyArg Nothing precedence right
 
 modifying, parenthesized :: (Eq s, IsString s) => (pos, Reserializer.ParsedLexemes s, pos) -> Bool
