@@ -51,14 +51,14 @@ data Binding l = ErroneousBinding String
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
                deriving Typeable
 
-data TypeBinding l = TypeClass (LocalEnvironment l)
-                   | DataType
+data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
+                   | DataType (LocalEnvironment l)  -- constructors
 
 data ValueBinding l = InfixDeclaration Bool (AST.Associativity l) Int
                     | DataConstructor
-                    | RecordConstructor
+                    | RecordConstructor (LocalEnvironment l) -- fields
                     | RecordField
-                    deriving (Typeable, Data, Eq, Show)
+                    deriving Typeable
 
 lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
            => AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
@@ -83,6 +83,11 @@ deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstr
                    Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (TypeBinding l)
 deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (TypeBinding l)
 deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (TypeBinding l)
+
+deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
+                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (ValueBinding l)
+deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (ValueBinding l)
+deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (ValueBinding l)
 
 deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
@@ -144,7 +149,7 @@ instance {-# OVERLAPS #-}
                = UnionWith (Map.singleton name $ ValueBinding $ InfixDeclaration False AST.LeftAssociative 9)
             export (AST.DataDeclaration _context lhs _kind _constructors _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
-               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding DataType)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
@@ -246,7 +251,8 @@ instance {-# OVERLAPS #-}
    attribution _ node atts = atts{Di.syn= synthesis, Di.inh= Di.inh atts}
       where export :: AST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
-            export (AST.RecordConstructor name _flds) = UnionWith (Map.singleton name $ ValueBinding RecordConstructor)
+            export (AST.RecordConstructor name _flds) =
+               UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
             synthesis = foldMap export node <>  Di.syn atts
 
 instance {-# OVERLAPS #-}
@@ -267,7 +273,7 @@ instance {-# OVERLAPS #-}
       where export :: ExtAST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
-               UnionWith (Map.singleton name $ ValueBinding RecordConstructor)
+               UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
             export ExtAST.ExistentialConstructor{} = mempty
             synthesis = foldMap export node <>  Di.syn atts
 
