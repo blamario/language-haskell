@@ -21,6 +21,7 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
+import qualified Data.Set as Set
 
 import qualified Rank2
 import Transformation (Transformation)
@@ -49,6 +50,7 @@ data Binding l = ErroneousBinding String
                | TypeBinding (TypeBinding l)
                | ValueBinding (ValueBinding l)
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
+               | PatternBinding
                deriving Typeable
 
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
@@ -191,7 +193,8 @@ instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Abstract.Module l l ~ AST.Module l l, Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Export l l ~ AST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
-          Abstract.ImportSpecification l l ~ AST.ImportSpecification l l, Abstract.ImportItem l l ~ AST.ImportItem l l,
+          Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
+          Abstract.ImportItem l l ~ AST.ImportItem l l,
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
          Di.Attribution
@@ -208,25 +211,30 @@ instance {-# OVERLAPS #-}
             moduleAttribution (AST.AnonymousModule modImports body) =
                Di.Atts{
                   Di.inh= moduleGlobalScope,
-                  Di.syn= onMap
-                                  (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . (== mainName)))
-                                  moduleGlobalScope}
+                  Di.syn= filterEnv (== mainName) moduleGlobalScope}
                where moduleGlobalScope = importedScope modImports <> unqualified (Di.syn atts)
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
                atts{Di.syn= exportedScope, Di.inh= moduleGlobalScope}
                where exportedScope :: LocalEnvironment l
                      moduleGlobalScope :: Environment l
-                     exported :: AST.QualifiedName l -> Bool
-                     exportedScope = UnionWith $ Map.mapKeysMonotonic baseName $ Map.filterWithKey (const . exported)
-                                     $ getUnionWith moduleGlobalScope
-                     exported qn@(AST.QualifiedName modName name) =
-                        maybe True (any $ any exportedBy . ($ mempty) . getCompose) exports
-                        where exportedBy (AST.ReExportModule modName') = modName == Just modName'
-                                                                         || modName == Nothing && modName' == moduleName
-                              exportedBy (AST.ExportVar qn') = qn == qn'
-                              exportedBy (AST.ExportClassOrType parent members) =
-                                 qn == parent || any (hasMember name) members
+                     exportedScope = maybe (reexportModule moduleName) (foldMapWrapped itemExports) exports
+                     reexportModule modName = filterEnv (fromModule modName) moduleGlobalScope
+                     fromModule modName (AST.QualifiedName modName' _) = modName' == Just modName
+                     itemExports (AST.ReExportModule modName) = reexportModule modName
+                     itemExports (AST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
+                     itemExports (AST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
+                     itemExports (AST.ExportClassOrType parent (Just members)) =
+                        case Map.lookup parent (getUnionWith moduleGlobalScope)
+                        of Just b@(TypeBinding (TypeClass env)) ->
+                              onMap (Map.insert (baseName parent) b) (filterMembers members env)
+                           Just (TypeAndValueBinding b@(TypeClass env) _) ->
+                              onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
+                           Just b@(TypeBinding (DataType env)) ->
+                              onMap (Map.insert (baseName parent) b) (filterMembers members env)
+                           Just (TypeAndValueBinding b@(DataType env) _) ->
+                              onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
+                           _ -> filterEnv (== parent) moduleGlobalScope
                      moduleGlobalScope = importedScope modImports
                                          <> qualifiedWith moduleName (Di.syn atts)
                                          <> unqualified (Di.syn atts)
@@ -238,7 +246,7 @@ instance {-# OVERLAPS #-}
                      importsFrom moduleName moduleExports
                         | null matchingImports && moduleName == preludeName = unqualified moduleExports
                         | otherwise = foldMap (importsFromModule moduleExports) matchingImports
-                        where matchingImports = foldMap (foldMap matchingImport . ($ mempty) . getCompose) modImports
+                        where matchingImports = foldMapWrapped matchingImport modImports
                               matchingImport i@(ExtAST.Import _ _ _ name _ _)
                                  | name == moduleName = [i]
                                  | otherwise = []
@@ -252,10 +260,28 @@ instance {-# OVERLAPS #-}
                               specImports (AST.ImportSpecification False items) =
                                  UnionWith (getUnionWith allImports `Map.difference` getUnionWith (itemsImports items))
                               allImports = moduleExports
-                              itemsImports = foldMap (foldMap itemImports . ($ mempty) . getCompose)
-                              itemImports (AST.ImportClassOrType name members) =
-                                 nameImport name allImports <> foldMap (memberImports name) members
+                              itemsImports = foldMapWrapped itemImports
+                              itemImports (AST.ImportClassOrType name Nothing) = nameImport name allImports
+                              itemImports (AST.ImportClassOrType parent (Just members)) =
+                                 case Map.lookup parent (getUnionWith allImports)
+                                 of Just b@(TypeBinding (TypeClass env)) ->
+                                       onMap (Map.insert parent b) (filterMembers members env)
+                                    Just (TypeAndValueBinding b@(TypeClass env) _) ->
+                                       onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                                    Just b@(TypeBinding (DataType env)) ->
+                                       onMap (Map.insert parent b) (filterMembers members env)
+                                    Just (TypeAndValueBinding b@(DataType env) _) ->
+                                       onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                                    _ -> nameImport parent allImports
                               itemImports (AST.ImportVar name) = nameImport name allImports
+            filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> LocalEnvironment l
+            filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
+            foldMapWrapped :: forall a g m. (Foldable g, Monoid m)
+                           => (a -> m)
+                           -> g (Compose ((->) (Environment l)) (WithEnvironment l f) a)
+                           -> m
+            foldMapWrapped f = foldMap (foldMap f . ($ mempty) . getCompose)
+
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -340,28 +366,23 @@ instance {-# OVERLAPS #-}
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
 
 class Abstract.Haskell l => BindingMembers l where
-   memberImports :: Abstract.Name l -> Abstract.Members l -> UnionWith (Map (Abstract.Name l)) (Binding l)
-   allMemberImports :: Abstract.Name l -> UnionWith (Map (Abstract.Name l)) (Binding l)
-   hasMember :: Abstract.Name l -> Abstract.Members l -> Bool
+   filterMembers :: Abstract.Members l -> LocalEnvironment l -> LocalEnvironment l
 
 instance BindingMembers AST.Language where
-  memberImports name AST.AllMembers = allMemberImports name
-  memberImports name (AST.MemberList members) = foldMap (`nameImport` allMemberImports name) members
-  allMemberImports name = mempty
-  hasMember _ AST.AllMembers = error "What does this refer to !?"
-  hasMember name (AST.MemberList names) = elem name names
+  filterMembers AST.AllMembers env = env
+  filterMembers (AST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
 
 instance BindingMembers ExtAST.Language where
-  memberImports name ExtAST.AllMembers = allMemberImports name
-  memberImports name (ExtAST.MemberList members) = foldMap (`nameImport` allMemberImports name) members
-  memberImports name (ExtAST.ExplicitlyNamespacedMemberList members) =
-     foldMap (`memberImport` allMemberImports name) members
-     where memberImport (ExtAST.DefaultMember name) imports = nameImport name imports
-           memberImport (ExtAST.PatternMember name) imports = nameImport name imports
-           memberImport (ExtAST.TypeMember name) imports = nameImport name imports
-  allMemberImports name = mempty
-  hasMember _ ExtAST.AllMembers = error "What does this refer to !?"
-  hasMember name (ExtAST.MemberList names) = elem name names
+  filterMembers ExtAST.AllMembers env = env
+  filterMembers (ExtAST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
+  filterMembers (ExtAST.ExplicitlyNamespacedMemberList members) env = foldMap memberImport members
+     where memberImport (ExtAST.DefaultMember name) = onMap (`Map.restrictKeys` Set.singleton name) env
+           memberImport (ExtAST.PatternMember name) = onMap (Map.filterWithKey namedPattern) env
+              where namedPattern name' PatternBinding{} = name == name'
+                    namedPattern _ _ = False
+           memberImport (ExtAST.TypeMember name) = onMap (Map.filterWithKey namedType) env
+              where namedType name' TypeBinding{} = name == name'
+                    namedType _ _ = False
 
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
 
