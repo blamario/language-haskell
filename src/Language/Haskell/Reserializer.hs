@@ -9,14 +9,16 @@ module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(.
                                       mergeLexemes, mapWrappings,
                                       PositionAdjustment, Serialization) where
 
-import Control.Arrow (first)
-import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, runState, state)
+import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, state)
+import Data.Bifunctor (first)
 import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
-import Data.Monoid (Ap(Ap, getAp), Sum(Sum, getSum))
+import Data.Monoid (Sum(Sum, getSum))
 import Data.Semigroup.Factorial (Factorial)
 import qualified Data.Semigroup.Factorial as Factorial
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
 import Text.Parser.Input.Position (Position(distance, move))
 
 import qualified Rank2
@@ -57,12 +59,13 @@ reserialize = foldMap lexemeText . lexemes
 -- | Serializes the tree into the lexemes it was parsed from.
 lexemes :: (Factorial s, Position pos, Deep.Foldable (Serialization pos s) g)
         => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> [Lexeme s]
-lexemes root@((startPos, _, _), _) = finalize $ (`runState` (startPos, [])) $ getAp $ Full.foldMap Serialization root
-   where finalize (s, (_pos, rest)) = s <> rest
+lexemes root = finalize $ Full.foldMap Serialization root
+   where finalize (PositionedLexemes ranges) = foldMap lexemeList ranges
+         lexemeList (_, Trailing ls, _) = ls
 
 -- | The length of the source code parsed into the argument node
 sourceLength :: forall g s pos. (Factorial s, Rank2.Foldable (g (Const (Sum Int))),
-                            Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g)
+                                 Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g)
              => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> Int
 sourceLength root@((_, Trailing rootLexemes, _), node) = getSum (nodeLength root
                                                                  <> Transformation.Rank2.foldMap nodeLength node)
@@ -97,31 +100,44 @@ mapWrappings f g x = mapWrapping ((mapWrapping Transformation.Rank2.<$>) <$> x)
 
 instance Transformation.Transformation (Serialization pos s) where
     type Domain (Serialization pos s) = Wrapped pos s
-    type Codomain (Serialization pos s) = Const (Ap (State (pos, [Lexeme s])) [Lexeme s])
+    type Codomain (Serialization pos s) = Const (PositionedLexemes pos s)
 
 instance Transformation.Transformation (PositionAdjustment pos s) where
     type Domain (PositionAdjustment pos s) = Wrapped pos s
     type Codomain (PositionAdjustment pos s) = Compose (State Int) (Wrapped pos s)
 
-instance forall g s pos. (Factorial s, Position pos) =>
-         Serialization pos s `Transformation.At` g (Wrapped pos s) (Wrapped pos s) where
-   Serialization $ ((nodePos, Trailing nodeLexemes, _), _) = Const (Ap $ state f)
-      where f :: (pos, [Lexeme s]) -> ([Lexeme s], (pos, [Lexeme s]))
-            f (pos, parentLexemes)
-               | nodePos > pos, l:ls <- parentLexemes = first (l:) (f (move (Factorial.length $ lexemeText l) pos, ls))
-               | otherwise = (mempty, (pos, nodeLexemes <> parentLexemes))
+newtype PositionedLexemes pos s = PositionedLexemes (Seq (pos, ParsedLexemes s, pos))
+
+instance (Factorial s, Position pos) => Semigroup (PositionedLexemes pos s) where
+   PositionedLexemes ranges1 <> PositionedLexemes ranges2 = combine (Seq.viewr ranges1) (Seq.viewl ranges2)
+
+combine :: (Factorial s, Position pos)
+        => Seq.ViewR (pos, ParsedLexemes s, pos) -> Seq.ViewL (pos, ParsedLexemes s, pos) -> PositionedLexemes pos s
+combine (ranges1 Seq.:> range1@(start1, ls1, end1)) (range2@(start2, ls2, end2) Seq.:< ranges2)
+   | end1 == start2 = PositionedLexemes $ ranges1 <> pure (start1, ls1 <> ls2, end2) <> ranges2
+   | end1 < start2 = PositionedLexemes $ ranges1 <> pure range1 <> pure range2 <> ranges2
+   | (ls1p, ls1s) <- splitUntil start1 ls1 start2 =
+        PositionedLexemes ranges1
+        <> (PositionedLexemes (pure (start1, ls1p <> ls2 <> ls1s, end1)) <> PositionedLexemes ranges2)
+combine (ranges Seq.:> range) Seq.EmptyL = PositionedLexemes (ranges Seq.|> range)
+combine Seq.EmptyR (range Seq.:< ranges) = PositionedLexemes (range Seq.<| ranges)
+combine Seq.EmptyR Seq.EmptyL = PositionedLexemes mempty
+
+splitUntil start lexemes end
+   | start < end, Trailing (l:ls) <- lexemes =
+        first (Trailing [l] <>) (splitUntil (move (Factorial.length (lexemeText l)) start) (Trailing ls) end)
+   | otherwise = (mempty, lexemes)
+
+instance (Factorial s, Position pos) => Monoid (PositionedLexemes pos s) where
+  mempty = PositionedLexemes mempty
+
+instance forall pos s a. (Factorial s, Position pos) => Serialization pos s `Transformation.At` a where
+   Serialization $ (range, _) = Const (PositionedLexemes $ pure range)
 
 instance forall g s pos. (Factorial s, Position pos,
-                      Rank2.Foldable (g (Wrapped pos s)), Deep.Foldable (Serialization pos s) g) =>
+                          Rank2.Foldable (g (Wrapped pos s)), Deep.Foldable (Serialization pos s) g) =>
          Full.Foldable (Serialization pos s) g where
-   foldMap trans ((nodeStart, Trailing nodeLexemes, _), node) = Ap (state f)
-      where f :: (pos, [Lexeme s]) -> ([Lexeme s], (pos, [Lexeme s]))
-            f (pos, parentLexemes)
-               | nodeStart > pos, l:ls <- parentLexemes =
-                    first (l:) (f (move (Factorial.length $ lexemeText l) pos, ls))
-               | let (ls, (pos', lexemes')) = runState (getAp $ Deep.foldMap trans node) (pos, nodeLexemes) =
-                     (ls <> lexemes',
-                      (move (getSum $ foldMap (Sum . Factorial.length . lexemeText) lexemes') pos', parentLexemes))
+   foldMap = Full.foldMapDownDefault
 
 instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
           Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g) =>
