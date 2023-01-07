@@ -6,6 +6,7 @@ module Language.Haskell.Template where
 import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
+import Data.Functor.Compose (Compose (getCompose))
 import Data.List ((\\), nub)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
@@ -16,7 +17,7 @@ import GHC.Exts (TYPE)
 import qualified GHC.Types
 import Text.PrettyPrint (render)
 
-import Language.Haskell (Placed)
+import Language.Haskell (Bound, Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
@@ -53,6 +54,10 @@ class Functor f => TemplateWrapper f where
    extract :: f a -> a
    isParenthesized :: f a -> Bool
 
+instance TemplateWrapper Bound where
+   extract = snd . snd . getCompose
+   isParenthesized = isParenthesized . snd . getCompose
+
 instance TemplateWrapper Placed where
    extract = snd
    isParenthesized ((_, Trailing (lexeme:_), _), _) = "(" `Text.isPrefixOf` lexemeText lexeme
@@ -60,6 +65,9 @@ instance TemplateWrapper Placed where
 
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
+
+instance (Foldable f, PrettyViaTH a) => PrettyViaTH (Compose f ((,) x) a) where
+   prettyViaTH = foldr ((<+>) . prettyViaTH) Ppr.empty . getCompose
 
 instance TemplateWrapper f => PrettyViaTH (Module Language Language f f) where
    prettyViaTH (AnonymousModule imports declarations) =

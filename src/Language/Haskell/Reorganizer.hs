@@ -1,11 +1,13 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
-             ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
+             ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
+             UndecidableInstances #-}
 
 -- | An AST traversal for adjusting the infix operator applications
 
-module Language.Haskell.Reorganizer (Reorganization (Reorganization), reorganizeModules) where
+module Language.Haskell.Reorganizer (Reorganization (Reorganization), reorganizeModules, NestedAdjustment) where
 
 import Control.Applicative ((<|>))
+import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, runState, state)
 import Data.Either (partitionEithers)
 import Data.Either.Validation (Validation(..), validationToEither)
 import Data.Functor.Compose (Compose(..))
@@ -37,41 +39,46 @@ import Prelude hiding (mod, span)
 
 data Reorganization l pos s = Reorganization
 
+type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
+
 type Reorganized l f = Validation (NonEmpty (Error l f))
+
+type NestedAdjustment l pos s = Reserializer.NestedPositionAdjustment (WithAtts l) pos s
+
+type WithAtts l = (,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l))
 
 prefixMinusPrecedence :: Int
 prefixMinusPrecedence = 6
 
 instance Transformation.Transformation (Reorganization l pos s) where
-    type Domain (Reorganization l pos s) = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
-    type Codomain (Reorganization l pos s) = Compose (Reorganized l (Reserializer.Wrapped pos s)) (Reserializer.Wrapped pos s)
+    type Domain (Reorganization l pos s) = Wrap l pos s
+    type Codomain (Reorganization l pos s) = Compose (Reorganized l (Wrap l pos s)) (Wrap l pos s)
 
 instance {-# overlappable #-} Reorganization l pos s
-         `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-  Reorganization $ Compose (_, x) = Compose (Success x)
+         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+  Reorganization $ x = Compose (Success x)
 
 instance {-# overlaps #-} forall l pos s f.
-         (Eq s, Factorial s, IsString s, Eq pos, Position pos, f ~ Reserializer.Wrapped pos s,
+         (Eq s, Factorial s, IsString s, Eq pos, Position pos, f ~ Wrap l pos s,
           Show pos, Show s, Show (ExtAST.Expression l l f f),
-          Abstract.DeeplyFoldable (Transformation.Rank2.Fold (Reserializer.Wrapped pos s) (Sum Int)) l,
-          Abstract.DeeplyTraversable (Reserializer.PositionAdjustment pos s) l,
+          Full.Traversable (NestedAdjustment l pos s) (ExtAST.Expression l l),
           Abstract.Rank2lyFoldable l (Const (Sum Int)),
-          Eq (ExtAST.Expression l l f f),
           Abstract.Expression l ~ ExtAST.Expression l,
           Abstract.ModuleName l ~ ExtAST.ModuleName l,
           Abstract.QualifiedName l ~ ExtAST.QualifiedName l,
           Abstract.Name l ~ ExtAST.Name l) =>
          Reorganization l pos s
-         `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-  _res $ Compose (Di.Atts{Di.inh= bindings}, expression) =
-      let reorganizeExpression :: f (ExtAST.Expression l l f f)
+         `Transformation.At` ExtAST.Expression l l (Wrap l pos s) (Wrap l pos s) where
+  _res $ Compose (atts@Di.Atts{Di.inh= bindings}, expression) =
+      let reorganizeExpression :: Reserializer.Wrapped pos s (ExtAST.Expression l l f f)
                                -> Validation (NonEmpty (Error l f)) (f (ExtAST.Expression l l f f))
           reorganizeExpression
              (root,
               ExtAST.InfixExpression
-                 (leftBranch, ExtAST.InfixExpression left lOp middle@((lrStart, _, _), _))
+                 (Compose (env', (leftBranch,
+                                  ExtAST.InfixExpression left lOp middle@(Compose (_, ((lrStart, _, _), _))))))
                  rOp
-                 right@((_, _, rEnd), _))
+                 right@(Compose (_, ((_, _, rEnd), _))))
              | not (parenthesized leftBranch),
                Just (Binder.InfixDeclaration associativity precedence _) <- resolve lOp,
                Just (Binder.InfixDeclaration associativity' precedence' _) <- resolve rOp,
@@ -81,11 +88,14 @@ instance {-# overlaps #-} forall l pos s f.
                then Failure (pure ContradictoryAssociativity)
                else reorganizeExpression ((lrStart, mempty, rEnd), ExtAST.InfixExpression middle rOp right)
                     >>= reorganizeExpression . (,) root . ExtAST.InfixExpression left lOp
-                    >>= pure . Reserializer.adjustPositions
+                    >>= pure . adjustPositions
           reorganizeExpression
              (root,
-              ExtAST.InfixExpression left@((lStart, _, _), _) lOp
-                 (rightBranch, ExtAST.InfixExpression middle@((_, _, rlEnd), _) rOp right))
+              ExtAST.InfixExpression
+                 left@(Compose (_, ((lStart, _, _), _)))
+                 lOp
+                 (Compose (_,
+                           (rightBranch, ExtAST.InfixExpression middle@(Compose (_, ((_, _, rlEnd), _))) rOp right))))
              | not (parenthesized rightBranch),
                Just (Binder.InfixDeclaration associativity precedence _) <- resolve rOp,
                Just (Binder.InfixDeclaration associativity' precedence' _) <- resolve lOp,
@@ -95,12 +105,12 @@ instance {-# overlaps #-} forall l pos s f.
                then Failure (pure ContradictoryAssociativity)
                else reorganizeExpression ((lStart, mempty, rlEnd), ExtAST.InfixExpression left lOp middle)
                     >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l rOp right)
-                    >>= pure . Reserializer.adjustPositions
+                    >>= pure . adjustPositions
           reorganizeExpression
              (root,
               ExtAST.ApplyExpression
-                 neg@((negStart, _, _), ExtAST.Negate{})
-                 (arg, ExtAST.InfixExpression left@((_, _, middleEnd), _) op right))
+                 neg@(Compose (_, ((negStart, _, _), ExtAST.Negate{})))
+                 (Compose (_, (arg, ExtAST.InfixExpression left@(Compose (_, ((_, _, middleEnd), _))) op right))))
              | not (parenthesized arg),
                Just (Binder.InfixDeclaration associativity precedence _) <- resolve op,
                precedence < prefixMinusPrecedence
@@ -109,10 +119,13 @@ instance {-# overlaps #-} forall l pos s f.
                then Failure (pure ContradictoryAssociativity)
                else reorganizeExpression ((negStart, mempty, middleEnd), ExtAST.ApplyExpression neg left)
                     >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l op right)
-          reorganizeExpression e = Success e
-          resolve ((_, lexemes, _), ExtAST.ReferenceExpression name) =
-            Binder.lookupValue name bindings <|> defaultInfixDeclaration lexemes
+          reorganizeExpression e = Success (Compose (atts, e))
+          adjustPositions :: f (ExtAST.Expression l l f f) -> f (ExtAST.Expression l l f f)
+          adjustPositions node = evalState (Full.traverse Reserializer.NestedPositionAdjustment node) 0
+          resolve (Compose (_, ((_, lexemes, _), ExtAST.ReferenceExpression name))) =
+             Binder.lookupValue name bindings <|> defaultInfixDeclaration lexemes
       in Compose (reorganizeExpression expression)
+
 
 --defaultInfixDeclaration :: ExtAST.QualifiedName l -> Maybe (Binder.Binding l)
 defaultInfixDeclaration (Reserializer.Trailing lexemes)
@@ -130,7 +143,6 @@ verifyInfixApplication verifyArg left right (Binder.InfixDeclaration AST.NonAsso
    verifyArg Nothing precedence left . verifyArg Nothing precedence right
 
 modifying, parenthesized :: (Eq s, IsString s) => (pos, Reserializer.ParsedLexemes s, pos) -> Bool
-modifying (_, Reserializer.Trailing [Reserializer.Token{Reserializer.lexemeType= Reserializer.Modifier}], _) = True
 modifying _ = False
 parenthesized (_, Reserializer.Trailing (paren:_), _) = Reserializer.lexemeText paren == "("
 parenthesized (_, Reserializer.Trailing [], _) = False
@@ -150,7 +162,7 @@ instance Monad (Validation (NonEmpty (Error l f))) where
 
 -- | Reorganize ambiguities in the given collection of modules, a 'Map' keyed by module name. Note that all class
 -- constraints in the function's type signature are satisfied by the Haskell 'AST.Language'.
-reorganizeModules :: forall l pos s f. (f ~ Reserializer.Wrapped pos s,
+reorganizeModules :: forall l pos s f. (f ~ Wrap l pos s,
                                 Abstract.Haskell l,
                                 Abstract.Module l l ~ AST.Module l l,
                                 Abstract.ModuleName l ~ AST.ModuleName l,
@@ -165,11 +177,7 @@ reorganizeModules :: forall l pos s f. (f ~ Reserializer.Wrapped pos s,
                                 Deep.Traversable (Reorganization l pos s) (Abstract.Declaration l l),
                                 Full.Traversable (Reorganization l pos s) (Abstract.Module l l),
                                 Full.Traversable (Reorganization l pos s) (Abstract.Declaration l l)) =>
-                  Map.Map (Abstract.ModuleName l)
-                          (Binder.WithEnvironment l (Reserializer.Wrapped pos s)
-                                                  (AST.Module l l
-                                                              (Binder.WithEnvironment l (Reserializer.Wrapped pos s))
-                                                              (Binder.WithEnvironment l (Reserializer.Wrapped pos s))))
+                  Map.Map (Abstract.ModuleName l) (f (AST.Module l l f f))
                -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty (Error l f)))
                              (Map.Map (Abstract.ModuleName l) (f (AST.Module l l f f)))
 reorganizeModules modules = Map.traverseWithKey extractErrors reorganizedModules
@@ -178,8 +186,6 @@ reorganizeModules modules = Map.traverseWithKey extractErrors reorganizedModules
          extractErrors _         (Success mod) = Success mod
 
 instance (Deep.Traversable (Reorganization l pos s) g,
-          Transformation.At (Reorganization l pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
+          Transformation.At (Reorganization l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Traversable (Reorganization l pos s) g where
    traverse = Full.traverseUpDefault
-
-

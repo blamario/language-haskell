@@ -49,6 +49,6 @@ exampleTree ancestry path =
 
 prettyFile :: FilePath -> Text -> IO (Text, Text)
 prettyFile path src = case parseModule (Map.fromSet (const True) Extensions.includedByDefault) False src of
-   Right [tree] -> return (Reserializer.reserialize tree, pack $ Template.pprint tree)
+   Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
    Right trees -> error (show (length trees) ++ " ambiguous parses.")
    Left err -> error (unpack $ failureDescription src (extract <$> err) 4)

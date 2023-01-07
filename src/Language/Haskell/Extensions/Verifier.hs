@@ -28,6 +28,7 @@ import qualified Transformation.AG.Monomorphic as AG.Mono
 import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Haskell.AST as AST
+import qualified Language.Haskell.Binder as Binder
 import Language.Haskell.Grammar (isSymbol)
 import Language.Haskell.Extensions (Extension, ExtensionSwitch, partitionContradictory, withImplications)
 import qualified Language.Haskell.Extensions as Extensions
@@ -36,10 +37,10 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
-data Accounting pos s = Accounting
-data LabelAccounting pos s = LabelAccounting
-data UnicodeSyntaxAccounting pos s = UnicodeSyntaxAccounting
-data Verification pos s = Verification
+data Accounting l pos s = Accounting
+data LabelAccounting l pos s = LabelAccounting
+data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
+data Verification l pos s = Verification
 
 type Accounted pos = Const (Map Extension [(pos, pos)])
 type Verified pos = Const (Map Extension Bool -> [Error pos])
@@ -49,27 +50,29 @@ data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
                | UnusedExtension Extension
                  deriving (Show)
 
-instance Transformation.Transformation (Accounting pos s) where
-    type Domain (Accounting pos s) = Reserializer.Wrapped pos s
-    type Codomain (Accounting pos s) = Accounted pos
+type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 
-instance Transformation.Transformation (LabelAccounting pos s) where
-    type Domain (LabelAccounting pos s) = Reserializer.Wrapped pos s
-    type Codomain (LabelAccounting pos s) = Accounted pos
+instance Transformation.Transformation (Accounting l pos s) where
+    type Domain (Accounting l pos s) = Wrap l pos s
+    type Codomain (Accounting l pos s) = Accounted pos
 
-instance Transformation.Transformation (UnicodeSyntaxAccounting pos s) where
-    type Domain (UnicodeSyntaxAccounting pos s) = Reserializer.Wrapped pos s
-    type Codomain (UnicodeSyntaxAccounting pos s) = Accounted pos
+instance Transformation.Transformation (LabelAccounting l pos s) where
+    type Domain (LabelAccounting l pos s) = Wrap l pos s
+    type Codomain (LabelAccounting l pos s) = Accounted pos
 
-instance Transformation.Transformation (Verification pos s) where
-    type Domain (Verification pos s) = Reserializer.Wrapped pos s
-    type Codomain (Verification pos s) = Verified pos
+instance Transformation.Transformation (UnicodeSyntaxAccounting l pos s) where
+    type Domain (UnicodeSyntaxAccounting l pos s) = Wrap l pos s
+    type Codomain (UnicodeSyntaxAccounting l pos s) = Accounted pos
 
-verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting pos s) l,
-                                 Abstract.DeeplyFoldable (LabelAccounting pos s) l,
+instance Transformation.Transformation (Verification l pos s) where
+    type Domain (Verification l pos s) = Wrap l pos s
+    type Codomain (Verification l pos s) = Verified pos
+
+verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
+                                 Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
                                  Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
                 Map Extension Bool
-             -> AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s)
+             -> AST.Module l l (Wrap l pos s) (Wrap l pos s)
              -> [Error pos]
 verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
@@ -78,7 +81,7 @@ verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
                    Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
-         usedExtensions = Full.foldMap (Accounting :: Accounting pos s) m
+         usedExtensions = Full.foldMap (Accounting :: Accounting l pos s) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
@@ -86,82 +89,84 @@ verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
          extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
-   <$> Map.toList (Deep.foldMap (Accounting :: Accounting pos s) m Map.\\ declaredExtensions)
+   <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
 
-instance {-# overlappable #-} Accounting pos s
-         `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
+instance {-# overlappable #-} Accounting l pos s
+         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    Accounting $ _ = mempty
 
-instance {-# overlappable #-} Deep.Foldable (Accounting pos s) g =>
-         Verification pos s
-         `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Verification $ (_, m) = Const $ \extensions->
+instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
+         Verification l pos s
+         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+   Verification $ Compose (_, (_, m)) = Const $ \extensions->
       uncurry UndeclaredExtensionUse
-      <$> Map.toList (Deep.foldMap (Accounting :: Accounting pos s) m Map.\\ withImplications extensions)
+      <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
 
-instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting pos s) l,
-          Abstract.DeeplyFoldable (LabelAccounting pos s) l,
+instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
+          Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
-         Verification pos s
-         `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Verification $ (_, m) = Const $ flip verifyModule m
+         Verification l pos s
+         `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
+   Verification $ Compose (_, (_, m)) = Const $ flip verifyModule m
 
-instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting pos s) l) =>
-         Accounting pos s
-         `Transformation.At` AST.Module l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ (_, m) = Const (Deep.foldMap LabelAccounting m)
+instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting l pos s) l) =>
+         Accounting l pos s
+         `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, (_, m)) = Const (Deep.foldMap LabelAccounting m)
 
 instance (Eq s, IsString s, Show s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.Import l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec) = Const $
-      (if safe then Map.singleton Extensions.SafeImports [(start, end)] else mempty)
-      <>
-      (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
-      <>
-      (if null qualifiedAndAfter || all isAnyKeyword beforeQualified then mempty
-       else Map.singleton Extensions.ImportQualifiedPost [(start, end)])
+         Accounting l pos s
+         `Transformation.At` ExtAST.Import l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec)) =
+      Const $
+         (if safe then Map.singleton Extensions.SafeImports [(start, end)] else mempty)
+         <>
+         (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
+         <>
+         (if null qualifiedAndAfter || all isAnyKeyword beforeQualified then mempty
+          else Map.singleton Extensions.ImportQualifiedPost [(start, end)])
       where x@(beforeQualified, qualifiedAndAfter) = break (isKeyword "qualified") (filter isAnyToken lexemes)
 
 instance (Eq s, IsString s) =>
-         Accounting pos s
-         `Transformation.At` AST.ImportItem l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), AST.ImportClassOrType{}) = Const $
+         Accounting l pos s
+         `Transformation.At` AST.ImportItem l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), AST.ImportClassOrType{})) = Const $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
    Accounting $ _ = mempty
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
-          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting pos s) l) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.Declaration l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ d@((start, _, end), ExtAST.DataDeclaration context _lhs _kind constructors _derivings) = Const $
-      (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
-      <>
-      (case snd context
-       of ExtAST.NoContext -> mempty
-          _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
-      <>
-      (Full.foldMap UnicodeSyntaxAccounting d)
-   Accounting $ d@((start, _, end), ExtAST.GADTDeclaration context _lhs constructors _derivings) = Const $
+          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l) =>
+         Accounting l pos s
+         `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ d@(Compose (_, ((start, _, end), ExtAST.DataDeclaration context _lhs _kind constructors _derivings))) =
+      Const $
+         (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
+         <>
+         (case snd . snd . getCompose $ context
+          of ExtAST.NoContext -> mempty
+             _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
+         <>
+         (Full.foldMap UnicodeSyntaxAccounting d)
+   Accounting $ Compose (_, ((start, _, end), ExtAST.GADTDeclaration context _lhs constructors _derivings)) = Const $
      Map.singleton Extensions.GADTSyntax [(start, end)]
    Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
 
-instance Accounting pos s
-         `Transformation.At` ExtAST.DataConstructor l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), ExtAST.ExistentialConstructor{}) =
+instance Accounting l pos s
+         `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), ExtAST.ExistentialConstructor{})) =
      Const (Map.singleton Extensions.ExistentialQuantification [(start, end)])
-   Accounting $ ((start, _, end), ExtAST.RecordConstructor{}) =
+   Accounting $ Compose (_, ((start, _, end), ExtAST.RecordConstructor{})) =
       Const (Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
    Accounting $ _ = mempty
 
 instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.Expression l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), e) = Const . ($ [(start, end)]) $
+         Accounting l pos s
+         `Transformation.At` ExtAST.Expression l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), e)) = Const . ($ [(start, end)]) $
       (case e
-       of ExtAST.ApplyExpression _ ((_, Trailing (lexeme1 : _), _), r)
+       of ExtAST.ApplyExpression _ (Compose (_, ((_, Trailing (lexeme1 : _), _), r)))
              | isBlock r && not (isToken "(" lexeme1) -> Map.singleton Extensions.BlockArguments
           ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
@@ -177,17 +182,17 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
             isBlock ExtAST.LetExpression{} = True
             isBlock _ = False
 
-instance Accounting pos s
-         `Transformation.At` ExtAST.Statement l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), e) = Const $
+instance Accounting l pos s
+         `Transformation.At` ExtAST.Statement l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), e)) = Const $
       (case e
        of ExtAST.RecursiveStatement{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
           _ -> mempty)
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.Value l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), literal) = Const $
+         Accounting l pos s
+         `Transformation.At` ExtAST.Value l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), literal)) = Const $
       (if any ((isPrefixOf "0b" ||| isPrefixOf "0B") . lexemeText) lexemes
       then Map.singleton Extensions.BinaryLiterals [(start, end)]
        else mempty)
@@ -218,36 +223,36 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
             hashless l = l
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.ClassInstanceLHS l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+         Accounting l pos s
+         `Transformation.At` ExtAST.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
       case t
       of ExtAST.TypeClassInstanceLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
          _ -> Map.singleton Extensions.TypeOperators [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.TypeLHS l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, Trailing lexemes, end), t) = Const $
+         Accounting l pos s
+         `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
       case t
       of ExtAST.SimpleTypeLHS op _ | any (Textual.any isSymbol . lexemeText) lexemes
             -> Map.singleton Extensions.TypeOperators [(start, end)]
          _ -> mempty
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.FieldBinding l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), t) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+         Accounting l pos s
+         `Transformation.At` ExtAST.FieldBinding l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.FieldPattern l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), t) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+         Accounting l pos s
+         `Transformation.At` ExtAST.FieldPattern l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
-         Accounting pos s
-         `Transformation.At` ExtAST.Type l l (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   Accounting $ ((start, _, end), t) = Const $
+         Accounting l pos s
+         `Transformation.At` ExtAST.Type l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
@@ -257,8 +262,8 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 (|||) = liftA2 (||)
 
 instance TextualMonoid s =>
-         LabelAccounting pos s `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   LabelAccounting $ ((start, Trailing lexemes, end), _)
+         LabelAccounting l pos s `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+   LabelAccounting $ Compose (_, ((start, Trailing lexemes, end), _))
       | any isLabel lexemes = Const (Map.singleton Extensions.OverloadedLabels [(start, end)])
       | otherwise = mempty
       where isLabel Token{lexemeType= Other, lexemeText= t}
@@ -266,28 +271,28 @@ instance TextualMonoid s =>
             isLabel _ = False
 
 instance (Eq s, IsString s) =>
-         UnicodeSyntaxAccounting pos s
-         `Transformation.At` g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s) where
-   UnicodeSyntaxAccounting $ ((start, Trailing lexemes, end), _)
+         UnicodeSyntaxAccounting l pos s
+         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+   UnicodeSyntaxAccounting $ Compose (_, ((start, Trailing lexemes, end), _))
       | any (`elem` unicodeDelimiters) lexemes = Const (Map.singleton Extensions.UnicodeSyntax [(start, end)])
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]
 
-instance (Deep.Foldable (Accounting pos s) g,
-          Transformation.At (Accounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
-         Full.Foldable (Accounting pos s) g where
+instance (Deep.Foldable (Accounting l pos s) g,
+          Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (Accounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
-instance (Deep.Foldable (LabelAccounting pos s) g,
-          Transformation.At (LabelAccounting pos s) (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
-         Full.Foldable (LabelAccounting pos s) g where
+instance (Deep.Foldable (LabelAccounting l pos s) g,
+          Transformation.At (LabelAccounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (LabelAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
-instance (Deep.Foldable (UnicodeSyntaxAccounting pos s) g,
-          Transformation.At (UnicodeSyntaxAccounting pos s)
-                            (g (Reserializer.Wrapped pos s) (Reserializer.Wrapped pos s))) =>
-         Full.Foldable (UnicodeSyntaxAccounting pos s) g where
+instance (Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
+          Transformation.At (UnicodeSyntaxAccounting l pos s)
+                            (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (UnicodeSyntaxAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
 isAnyToken :: Lexeme s -> Bool
