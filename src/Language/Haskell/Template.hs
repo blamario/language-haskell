@@ -61,24 +61,24 @@ instance TemplateWrapper Placed where
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
 
-instance PrettyViaTH (Module Language Language Placed Placed) where
+instance TemplateWrapper f => PrettyViaTH (Module Language Language f f) where
    prettyViaTH (AnonymousModule imports declarations) =
-      Ppr.vcat ((prettyViaTH <$> imports) ++ (prettyViaTH <$> declarations))
+      Ppr.vcat ((prettyViaTH . extract <$> imports) ++ (prettyViaTH . extract <$> declarations))
    prettyViaTH (NamedModule name exports imports declarations) =
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
-      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language Placed Placed)
-      where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH <$> xs))
+      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language f f)
+      where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH . extract <$> xs))
    prettyViaTH (ExtendedModule extensions body) =
       Ppr.vcat [Ppr.text "{-# LANGUAGE" <+> Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> extensions)
                 <+> Ppr.text "#-}",
-                prettyViaTH body]
+                prettyViaTH $ extract body]
 
 instance PrettyViaTH ExtensionSwitch where
    prettyViaTH (ExtensionSwitch (Extensions.EmptyDataDeclarations, True)) = Ppr.text "EmptyDataDecls"
    prettyViaTH (ExtensionSwitch (x, True)) = Ppr.text (show x)
    prettyViaTH (ExtensionSwitch (x, False)) = Ppr.text "No" Ppr.<> prettyViaTH (ExtensionSwitch (x, True))
 
-instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
+instance PrettyViaTH (Export Language Language f f) where
    prettyViaTH (ExportClassOrType name@(AST.QualifiedName _ (AST.Name local)) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
@@ -90,21 +90,21 @@ instance PrettyViaTH (Export Language Language ((,) x) ((,) x)) where
       | otherwise = prettyViaTH name
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
-instance PrettyViaTH (Import Language Language ((,) x) ((,) x)) where
+instance TemplateWrapper f => PrettyViaTH (Import Language Language f f) where
    prettyViaTH (Import safe qualified package name alias imports) =
       Ppr.text "import" <+> (if safe then Ppr.text "safe" else Ppr.empty)
       <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
       <+> maybe Ppr.empty (Ppr.doubleQuotes . Ppr.text . unpack) package
       <+> prettyViaTH name
       <+> maybe Ppr.empty ((Ppr.text "as" <+>) . prettyViaTH) alias
-      <+> maybe Ppr.empty prettyViaTH imports
+      <+> maybe Ppr.empty (prettyViaTH . extract) imports
 
-instance PrettyViaTH (ImportSpecification Language Language ((,) x) ((,) x)) where
+instance TemplateWrapper f => PrettyViaTH (ImportSpecification Language Language f f) where
    prettyViaTH (ImportSpecification inclusive items) =
       (if inclusive then id else (Ppr.text "hiding" <+>))
-      $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH <$> items)
+      $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH . extract <$> items)
 
-instance PrettyViaTH (ImportItem Language Language ((,) x) ((,) x)) where
+instance PrettyViaTH (ImportItem Language Language f f) where
    prettyViaTH (ImportClassOrType name@(AST.Name local) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
@@ -128,10 +128,10 @@ prettyIdentifier name@(AST.Name local)
    | Just (c, _) <- Text.uncons local, Char.isLetter c || c == '_' = prettyViaTH name
    | otherwise = Ppr.parens (prettyViaTH name)
 
-instance PrettyViaTH (Declaration Language Language Placed Placed) where
+instance TemplateWrapper f => PrettyViaTH (Declaration Language Language f f) where
    prettyViaTH x = Ppr.vcat (Ppr.ppr <$> declarationTemplates x)
 
-instance PrettyViaTH (Expression Language Language Placed Placed) where
+instance TemplateWrapper f => PrettyViaTH (Expression Language Language f f) where
    prettyViaTH x = Ppr.ppr (expressionTemplate x)
 
 instance PrettyViaTH (ModuleName Language) where
