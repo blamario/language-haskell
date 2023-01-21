@@ -7,6 +7,7 @@
 module Language.Haskell.Binder (
    Binder,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
+   BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField, Unbound),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
    Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue,
@@ -46,12 +47,17 @@ type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (LocalEnvironment
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
-data Binding l = ErroneousBinding String
+data Binding l = ErroneousBinding (BindingError l)
                | TypeBinding (TypeBinding l)
                | ValueBinding (ValueBinding l)
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
                | PatternBinding
                deriving Typeable
+
+data BindingError l = ClashingBindings (Binding l) (Binding l)
+                    | DuplicateInfixDeclaration (ValueBinding l) (ValueBinding l)
+                    | DuplicateRecordField
+                    | Unbound
 
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
@@ -84,6 +90,11 @@ deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (Bi
 deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Binding l)
 
 deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
+                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (BindingError l)
+deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (BindingError l)
+deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (BindingError l)
+
+deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
                    Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (TypeBinding l)
 deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (TypeBinding l)
 deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (TypeBinding l)
@@ -97,14 +108,13 @@ deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
 deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 
-instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
-          Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Semigroup (Binding l) where
+instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Semigroup (Binding l) where
    ValueBinding v <> TypeBinding t = TypeAndValueBinding t v
    TypeBinding t <> ValueBinding v = TypeAndValueBinding t v
    b@ErroneousBinding{} <> _ = b
    _ <> b@ErroneousBinding{} = b
-   a@(ValueBinding InfixDeclaration{}) <> b@(ValueBinding InfixDeclaration{}) =
-      ErroneousBinding ("Clashing infix declarations: " ++ show (a, b))
+   ValueBinding a@InfixDeclaration{} <> ValueBinding b@InfixDeclaration{} =
+      ErroneousBinding (DuplicateInfixDeclaration a b)
    ValueBinding (InfixDeclaration assoc fixity Nothing) <> ValueBinding b =
       ValueBinding (InfixDeclaration assoc fixity $ Just b)
    ValueBinding (InfixDeclaration assoc fixity (Just b1)) <> ValueBinding b2 =
@@ -113,15 +123,15 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
       ValueBinding (InfixDeclaration assoc fixity $ Just b)
    ValueBinding b1 <> ValueBinding (InfixDeclaration assoc fixity (Just b2)) =
       (ValueBinding b1 <> ValueBinding b2) <> ValueBinding (InfixDeclaration assoc fixity Nothing)
+   ValueBinding RecordField <> ValueBinding RecordField = ErroneousBinding DuplicateRecordField
    ValueBinding RecordField <> ValueBinding DefinedValue = ValueBinding RecordFieldAndValue
    ValueBinding DefinedValue <> ValueBinding RecordField = ValueBinding RecordFieldAndValue
    a <> b
       | a == b = a
-      | otherwise = ErroneousBinding ("Clashing: " ++ show (a, b))
+      | otherwise = ErroneousBinding (ClashingBindings a b)
 
-instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
-          Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Monoid (Binding l) where
-   mempty = ErroneousBinding "nothing here"
+instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Monoid (Binding l) where
+   mempty = ErroneousBinding Unbound
 
 withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l))) p)
              => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
