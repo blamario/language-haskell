@@ -43,7 +43,7 @@ parseModule :: Map Extension Bool -> Bool -> Text
             -> ParseResults (LinePositioned Text) [Bound (AST.Module AST.Language AST.Language Bound Bound)]
 parseModule extensions verify source =
   ((resolvePositions source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text))
-  >>= (if verify then traverse (traverse $ checkRestrictions extensions) else pure)
+  >>= (if verify then traverse (checkRestrictions extensions) else pure)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
@@ -67,8 +67,8 @@ resolvePositions src = (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
 
 -- | Check if the given module conforms to and depends on the given extensions.
 checkRestrictions :: Map Extension Bool
-                  -> AST.Module AST.Language AST.Language Bound Bound
-                  -> ParseResults (LinePositioned Text) (AST.Module AST.Language AST.Language Bound Bound)
+                  -> Bound (AST.Module AST.Language AST.Language Bound Bound)
+                  -> ParseResults (LinePositioned Text) (Bound (AST.Module AST.Language AST.Language Bound Bound))
 checkRestrictions extensions m = case Verifier.verifyModule extensions m of
    [] -> pure m
    errors -> Left mempty{errorAlternatives= show <$> errors}

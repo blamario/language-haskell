@@ -15,6 +15,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Any(Any, getAny))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
 import Data.Semigroup.Factorial (Factorial)
+import Data.Semigroup.Union (UnionWith(UnionWith, getUnionWith))
 import qualified Data.Semigroup.Factorial as Factorial
 import Data.Set (Set)
 import qualified Data.Map.Lazy as Map
@@ -24,7 +25,7 @@ import Data.String (IsString)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
-import qualified Transformation.AG.Monomorphic as AG.Mono
+import qualified Transformation.AG.Dimorphic as AG.Di
 import Text.Grampa (Ambiguous(..))
 
 import qualified Language.Haskell.AST as AST
@@ -70,11 +71,12 @@ instance Transformation.Transformation (Verification l pos s) where
 
 verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
                                  Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
-                                 Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
+                                 Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
+                                 Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
                 Map Extension Bool
-             -> AST.Module l l (Wrap l pos s) (Wrap l pos s)
+             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
              -> [Error pos]
-verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
+verifyModule extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitches m)))) =
    (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
    <> (UnusedExtension
        <$> toList (Map.keysSet (Map.filter id localExtensions)
@@ -89,7 +91,7 @@ verifyModule extensions (AST.ExtendedModule localExtensionSwitches m) =
          extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
-   <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
+   <$> Map.toList (Full.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
 
@@ -106,14 +108,23 @@ instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
 
 instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
           Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
-          Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l) =>
+          Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Verification l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
-   Verification $ Compose (_, (_, m)) = Const $ flip verifyModule m
+   Verification $ m = Const $ flip verifyModule m
 
-instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting l pos s) l) =>
+instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting l pos s) l, Abstract.Module l l ~ AST.Module l l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Accounting l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ d@(Compose (_, (_, AST.AnonymousModule _ declarations)))
+      | Just clashingFieldLocations <- checkDuplicateRecordFields declarations
+      = Const $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
+   Accounting $ d@(Compose (_, (_, AST.NamedModule _ _ _ declarations)))
+      | Just clashingFieldLocations <- checkDuplicateRecordFields declarations
+      = Const $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
+   Accounting $ d@(Compose (_, (_, AST.ExtendedModule _ m))) = Accounting Transformation.$ m
    Accounting $ Compose (_, (_, m)) = Const (Deep.foldMap LabelAccounting m)
 
 instance (Eq s, IsString s, Show s) =>
@@ -294,6 +305,19 @@ instance (Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
                             (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (UnicodeSyntaxAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
+
+checkDuplicateRecordFields :: forall l pos s node. (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
+                           => [Wrap l pos s node] -> Maybe [(pos, pos)]
+checkDuplicateRecordFields declarations
+  | Map.null duplicateBindings = Nothing
+  | otherwise = Just (map location $ filter isDuplicate declarations)
+  where duplicateBindings = Map.filter duplicateRecordField allDeclarationBindings
+        UnionWith allDeclarationBindings = foldMap declarationBindings declarations
+        declarationBindings (Compose (bindings, _)) = AG.Di.syn bindings
+        duplicateRecordField b = b == Binder.ErroneousBinding Binder.DuplicateRecordField
+        isDuplicate :: Wrap l pos s node -> Bool
+        isDuplicate = not . Map.disjoint duplicateBindings . getUnionWith . declarationBindings
+        location (Compose (_, ((start, _, end), _))) = (start, end)
 
 isAnyToken :: Lexeme s -> Bool
 isAnyToken Token{} = True
