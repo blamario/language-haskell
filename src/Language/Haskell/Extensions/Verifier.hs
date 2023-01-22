@@ -267,6 +267,10 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+         ExtAST.ForallType{} -> Map.singleton Extensions.ExplicitForAll [(start, end)]
+         ExtAST.ForallKind{} -> Map.singleton Extensions.ExplicitForAll [(start, end)]
+         ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
+                                                        (Extensions.PolyKinds, [(start, end)])]
          _ -> mempty
 
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
