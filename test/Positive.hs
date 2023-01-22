@@ -1,10 +1,5 @@
 module Main where
 
-import Control.Monad (unless)
-import Data.Either.Validation (Validation(..))
-import Data.Functor.Identity (Identity(Identity))
-import Data.List (isSuffixOf)
-import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Monoid.Instances.Positioned (extract)
 import qualified Data.Map as Map
 import Data.Text (Text, pack, unpack)

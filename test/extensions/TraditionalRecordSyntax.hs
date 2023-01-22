@@ -1,4 +1,5 @@
-{-# LANGUAGE GADTSyntax, NoTraditionalRecordSyntax #-}
+{-# LANGUAGE TraditionalRecordSyntax #-}
+{-# LANGUAGE GADTSyntax #-}
 
 data Foo = Foo {unFoo :: Int}
 
