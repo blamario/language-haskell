@@ -2,20 +2,21 @@
              OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
--- | Monomorphic attribute grammar for establishing the static identifier bindings
+-- | Dimorphic attribute grammar for establishing the static identifier bindings
 
 module Language.Haskell.Binder (
    Binder,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
-   BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField, Unbound),
+   BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
    Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
-   lookupType, lookupValue,
+   lookupType, lookupValue, unboundNames,
    predefinedModuleBindings, preludeBindings, withBindings) where
 
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Const (Const(Const))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
@@ -57,7 +58,7 @@ data Binding l = ErroneousBinding (BindingError l)
 data BindingError l = ClashingBindings (Binding l) (Binding l)
                     | DuplicateInfixDeclaration (ValueBinding l) (ValueBinding l)
                     | DuplicateRecordField
-                    | Unbound
+                    | NoBindings
 
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
@@ -69,6 +70,26 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     | DefinedValue
                     | RecordFieldAndValue
                     deriving Typeable
+
+data Unbound l = Unbound {types :: [AST.QualifiedName l],
+                          values :: [AST.QualifiedName l],
+                          constructors :: [AST.QualifiedName l]}
+
+deriving instance (Eq (Abstract.ModuleName l), Eq (Abstract.Name l)) => Eq (Unbound l)
+deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Unbound l)
+
+instance Semigroup (Unbound l) where
+  a <> b = Unbound{types= types a <> types b,
+                   values= values a <> values b,
+                   constructors= constructors a <> constructors b}
+
+instance Monoid (Unbound l) where
+  mempty = Unbound mempty mempty mempty
+
+-- | Find all the names that have not been bound
+unboundNames :: Full.Foldable (BindingVerifier l p) g
+             => WithEnvironment l p (g (WithEnvironment l p) (WithEnvironment l p)) -> Unbound l
+unboundNames = Full.foldMap BindingVerifier
 
 lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
            => AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
@@ -131,9 +152,10 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Semigroup (Bind
       | otherwise = ErroneousBinding (ClashingBindings a b)
 
 instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Monoid (Binding l) where
-   mempty = ErroneousBinding Unbound
+   mempty = ErroneousBinding NoBindings
 
-withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l))) p)
+-- | Add the inherited and synthesized bindings to every node in the argument AST.
+withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ WithEnvironment l p)
              => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings modEnv = flip (Full.traverse (Di.Keep $ Binder modEnv))
 
@@ -142,9 +164,15 @@ onMap f (UnionWith x) = UnionWith (f x)
 
 data Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
 
+data BindingVerifier l (f :: Type -> Type) = BindingVerifier
+
 instance Transformation (Di.Keep (Binder l f)) where
    type Domain (Di.Keep (Binder l f)) = f
    type Codomain (Di.Keep (Binder l f)) = FromEnvironment l f
+
+instance Transformation (BindingVerifier l f) where
+   type Domain (BindingVerifier l f) = WithEnvironment l f
+   type Codomain (BindingVerifier l f) = Const (Unbound l)
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
@@ -374,6 +402,132 @@ instance {-# OVERLAPS #-}
       where export :: AST.FieldDeclaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
+
+instance {-# OVERLAPPABLE #-} BindingVerifier l f `Transformation.At` g where
+   _ $ _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Export l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.ExportClassOrType q _) = verifyTypeName q env
+            verify (AST.ExportVar q) = verifyValueName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Declaration l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.TypeRoleDeclaration q _) = verifyTypeName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.ClassInstanceLHS l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.TypeClassInstanceLHS q _) = verifyTypeName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.ClassInstanceLHS l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.TypeClassInstanceLHS q _) = verifyTypeName q env
+            verify (ExtAST.ClassReferenceInstanceLHS q) = verifyTypeName q env
+            verify (ExtAST.InfixTypeClassInstanceLHS _ q _) = verifyTypeName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Context l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.SimpleConstraint q _) = verifyTypeName q env
+            verify (AST.ClassConstraint q _) = verifyTypeName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.Context l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.SimpleConstraint q _) = verifyTypeName q env
+            verify (ExtAST.ClassConstraint q _) = verifyTypeName q env
+            verify (ExtAST.InfixConstraint _ q _) = verifyTypeName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.Type l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.InfixTypeApplication _ q _) = verifyTypeName q env
+            verify (ExtAST.InfixKindApplication _ q _) = verifyTypeName q env
+            verify (ExtAST.PromotedInfixTypeApplication _ q _) = verifyTypeName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.DerivingClause l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.SimpleDerive q) = verifyTypeName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.FieldBinding l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.FieldBinding q _) = verifyValueName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.FieldBinding l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.FieldBinding q _) = verifyValueName q env
+            verify (ExtAST.PunnedFieldBinding q) = verifyValueName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.FieldPattern l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.FieldPattern q _) = verifyValueName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.FieldPattern l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.FieldPattern q _) = verifyValueName q env
+            verify (ExtAST.PunnedFieldPattern q) = verifyValueName q env
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Expression l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.ReferenceExpression q) = verifyValueName q env
+            verify (AST.LeftSectionExpression _ q) = verifyValueName q env
+            verify (AST.RightSectionExpression q _) = verifyValueName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Pattern l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.InfixPattern _ q _) = verifyValueName q env
+            verify (AST.RecordPattern q _) = verifyConstructorName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` AST.Constructor l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (AST.ConstructorReference q) = verifyConstructorName q env
+            verify _ = mempty
+
+verifyConstructorName q env = case lookupValue q env of
+   Nothing -> Const Unbound{types= [], constructors= [q], values= []}
+   _ -> mempty
+
+verifyTypeName q env = case lookupValue q env of
+   Nothing -> Const Unbound{types= [q], constructors= [], values= []}
+   _ -> mempty
+
+verifyValueName q env = case lookupValue q env of
+   Nothing -> Const Unbound{types= [], constructors= [], values= [q]}
+   _ -> mempty
 
 class Abstract.Haskell l => BindingMembers l where
    filterMembers :: Abstract.Members l -> LocalEnvironment l -> LocalEnvironment l
