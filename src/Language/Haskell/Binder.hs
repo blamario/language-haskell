@@ -5,7 +5,7 @@
 -- | Dimorphic attribute grammar for establishing the static identifier bindings
 
 module Language.Haskell.Binder (
-   Binder,
+   Binder, BindingVerifier,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
@@ -13,8 +13,10 @@ module Language.Haskell.Binder (
    lookupType, lookupValue, unboundNames,
    predefinedModuleBindings, preludeBindings, withBindings) where
 
+import Control.Applicative ((<|>))
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
+import Data.Functor (($>))
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(Const))
 import Data.Kind (Type)
@@ -517,11 +519,16 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
       where verify (AST.ConstructorReference q) = verifyConstructorName q env
             verify _ = mempty
 
-verifyConstructorName q env = case lookupValue q env of
+instance (Foldable f, Deep.Foldable (BindingVerifier l f) g,
+          Transformation.At (BindingVerifier l f) (g (WithEnvironment l f) (WithEnvironment l f))) =>
+         Full.Foldable (BindingVerifier l f) g where
+   foldMap = Full.foldMapDownDefault
+
+verifyConstructorName q env = case lookupType q env $> () <|> lookupValue q env $> () of
    Nothing -> Const Unbound{types= [], constructors= [q], values= []}
    _ -> mempty
 
-verifyTypeName q env = case lookupValue q env of
+verifyTypeName q env = case lookupType q env of
    Nothing -> Const Unbound{types= [q], constructors= [], values= []}
    _ -> mempty
 

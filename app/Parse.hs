@@ -110,6 +110,7 @@ main' Opts{..} = case optsFile
              Data (g Language Language e e), Data (g Language Language w w),
              Show (g Language Language e e), Show (g Language Language w w),
              Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
+             Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
              Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
              Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
@@ -120,6 +121,7 @@ main' Opts{..} = case optsFile
                    ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                    (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
                 (g l l),
+             Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
              Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
              Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
              Deep.Foldable
@@ -140,6 +142,7 @@ main' Opts{..} = case optsFile
                  Data (g Language Language e e), Data (g Language Language w w),
                  Show (g Language Language e e), Show (g Language Language w w),
                  Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
+                 Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                  Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
                  Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
@@ -150,6 +153,7 @@ main' Opts{..} = case optsFile
                        ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                        (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
                     (g l l),
+                 Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                  Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
                  Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
                  Deep.Foldable
@@ -178,7 +182,9 @@ main' Opts{..} = case optsFile
             Verified -> verifyBefore (putStrLn . reprTreeString)
          where verifyBefore :: (a -> IO ()) -> IO ()
                verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
-                  [] -> action resolved
+                  [] -> let unbounds = Binder.unboundNames resolved
+                        in if unbounds == mempty then action resolved
+                           else print unbounds
                   errors -> mapM_ (putStrLn . show) errors
                t :: Verifier.Verification l Int Text
                t = Verifier.Verification

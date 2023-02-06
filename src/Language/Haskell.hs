@@ -22,6 +22,7 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG.Dimorphic as Di
 
+import Control.Monad ((>=>))
 import Data.Either.Validation (validationToEither)
 import Data.Map (Map)
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
@@ -43,7 +44,7 @@ parseModule :: Map Extension Bool -> Bool -> Text
             -> ParseResults (LinePositioned Text) [Bound (AST.Module AST.Language AST.Language Bound Bound)]
 parseModule extensions verify source =
   ((resolvePositions source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text))
-  >>= (if verify then traverse (checkRestrictions extensions) else pure)
+  >>= (if verify then traverse (checkAllBound >=> checkRestrictions extensions) else pure)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
 resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
@@ -64,6 +65,12 @@ resolvePositions src = (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
                             (Binder.preludeBindings :: Binder.Environment AST.Language)
    where rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
          rewrap = Reserializer.mapWrapping (offset src) extract
+
+checkAllBound :: Bound (AST.Module AST.Language AST.Language Bound Bound)
+              -> ParseResults (LinePositioned Text) (Bound (AST.Module AST.Language AST.Language Bound Bound))
+checkAllBound m = if unbounds == mempty then pure m
+                  else Left mempty{errorAlternatives= [show unbounds]}
+   where unbounds = Binder.unboundNames m
 
 -- | Check if the given module conforms to and depends on the given extensions.
 checkRestrictions :: Map Extension Bool
