@@ -189,7 +189,7 @@ main' Opts{..} = case optsFile
                t :: Verifier.Verification l Int Text
                t = Verifier.Verification
                resolved :: Bound (g l l Bound Bound)
-               resolved = resolvePositions contents parsed
+               resolved = resolvePositions Binder.preludeBindings contents parsed
                bound = Binder.withBindings
                           Binder.predefinedModuleBindings
                           (Binder.preludeBindings :: Binder.Environment l)

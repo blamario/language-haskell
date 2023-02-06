@@ -16,6 +16,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 
 import Language.Haskell (parseModule, Placed)
 import Language.Haskell.AST (Language, Module)
+import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Template as Template
 
@@ -43,7 +44,8 @@ exampleTree ancestry path =
                  assertEqual "original=pretty" originalModule'' prettyModule''
 
 prettyFile :: FilePath -> Text -> IO (Text, Text)
-prettyFile path src = case parseModule (Map.fromSet (const True) Extensions.includedByDefault) False src of
-   Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
-   Right trees -> error (show (length trees) ++ " ambiguous parses.")
-   Left err -> error (unpack $ failureDescription src (extract <$> err) 4)
+prettyFile path src =
+   case parseModule (Map.fromSet (const True) Extensions.includedByDefault) Binder.preludeBindings False src of
+      Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
+      Right trees -> error (show (length trees) ++ " ambiguous parses.")
+      Left err -> error (unpack $ failureDescription src (extract <$> err) 4)
