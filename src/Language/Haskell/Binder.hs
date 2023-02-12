@@ -573,20 +573,18 @@ unqualifiedName = Abstract.qualifiedName Nothing
 preludeName :: Abstract.Haskell l => Abstract.ModuleName l
 preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])
 
-predefinedModuleBindings :: (Abstract.Haskell l, Ord (Abstract.QualifiedName l),
-                             Abstract.ModuleName l ~ AST.ModuleName l,
-                             Abstract.Name l ~ AST.Name l,
-                             Abstract.Associativity l ~ AST.Associativity l) => ModuleEnvironment l
-predefinedModuleBindings = UnionWith (Map.fromList [(preludeName, UnionWith unqualifiedPreludeBindings)])
+predefinedModuleBindings :: (Abstract.Haskell l, Abstract.ModuleName l ~ AST.ModuleName l, Abstract.Name l ~ AST.Name l,
+                             Abstract.Associativity l ~ AST.Associativity l) => IO (ModuleEnvironment l)
+predefinedModuleBindings = UnionWith . Map.fromList . pure . (,) preludeName <$> unqualifiedPreludeBindings
 
-preludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
+preludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
                     Abstract.QualifiedName l ~ AST.QualifiedName l,
-                    Abstract.Associativity l ~ AST.Associativity l) => Environment l
-preludeBindings = UnionWith (Map.mapKeysMonotonic (Abstract.qualifiedName Nothing) unqualifiedPreludeBindings)
+                    Abstract.Associativity l ~ AST.Associativity l) => IO (Environment l)
+preludeBindings = onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing) <$> unqualifiedPreludeBindings
 
-unqualifiedPreludeBindings :: (Abstract.Haskell l, Ord (Abstract.Name l),
-                               Abstract.Associativity l ~ AST.Associativity l) => Map.Map (Abstract.Name l) (Binding l)
-unqualifiedPreludeBindings = Map.fromList $ map (ValueBinding <$>) $
+unqualifiedPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                               Abstract.Associativity l ~ AST.Associativity l) => IO (LocalEnvironment l)
+unqualifiedPreludeBindings = pure $ UnionWith $ Map.fromList $ map (ValueBinding <$>) $
    [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9 $ Just DefinedValue),
     (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9 $ Just DefinedValue)]
    ++

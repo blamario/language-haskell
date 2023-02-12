@@ -87,116 +87,116 @@ main = execParser opts >>= main'
        <|> ExpressionMode      <$ switch (long "expression")
 
 main' :: Opts -> IO ()
-main' Opts{..} = case optsFile
-                 of Just file -> (if file == "-" then getContents else readFile file)
-                                 >>= go parseModule file
-                    Nothing ->
-                        forever $
-                        getLine >>=
-                        case optsMode of
-                            ModuleMode     -> go parseModule "<stdin>"
-                            ExpressionMode -> go parseExpression "<stdin>"
+main' Opts{..} = do
+   (preludeBindings :: Binder.Environment Language) <- Binder.preludeBindings
+   (predefinedModuleBindings :: Binder.ModuleEnvironment Language) <- Binder.predefinedModuleBindings
+   let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+              a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+              e ~ Binder.WithEnvironment Language w,
+              Abstract.QualifiedName l ~ AST.QualifiedName l,
+              Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
+              Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
+              Data (g Language Language e e), Data (g Language Language w w),
+              Show (g Language Language e e), Show (g Language Language w w),
+              Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
+              Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
+              Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
+              Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
+              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
+              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+                                      (Reserializer.Wrapped (Down Int) Text)) (g l l),
+              Deep.Functor
+                 (Transformation.Mapped
+                    ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                    (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
+                 (g l l),
+              Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
+              Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+              Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
+              Deep.Foldable
+                 (Transformation.Folded
+                    ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                    (Reserializer.Serialization Int Text))
+                 (g l l))
+          => (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
+          -> String -> Text -> IO ()
+       go parser _filename contents = report contents (parser $ pure contents)
+       report :: forall g l a e w.
+                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+                  a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+                  e ~ Binder.WithEnvironment Language w,
+                  Abstract.QualifiedName l ~ AST.QualifiedName l,
+                  Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
+                  Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
+                  Data (g Language Language e e), Data (g Language Language w w),
+                  Show (g Language Language e e), Show (g Language Language w w),
+                  Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
+                  Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
+                  Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
+                  Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
+                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
+                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+                                          (Reserializer.Wrapped (Down Int) Text)) (g l l),
+                  Deep.Functor
+                     (Transformation.Mapped
+                        ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                        (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
+                     (g l l),
+                  Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
+                  Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+                  Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
+                  Deep.Foldable
+                     (Transformation.Folded
+                        ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                        (Reserializer.Serialization Int Text))
+                     (g l l))
+              => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
+       report contents (Right [parsed]) = case optsOutput of
+          Original -> case optsStage of
+             Parsed -> Text.putStr (extract $ Reserializer.reserialize parsed)
+             Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
+             Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
+          Plain -> case optsStage of
+             Parsed -> print parsed
+             Bound -> print bound
+             Resolved -> print resolved
+             Verified -> verifyBefore print
+          Pretty -> case optsStage of
+            Resolved -> putStrLn $ Template.pprint resolved
+            Verified -> verifyBefore (putStrLn . Template.pprint)
+          Tree -> case optsStage of
+             Parsed -> putStrLn $ reprTreeString parsed
+             Bound -> putStrLn $ reprTreeString bound
+             Resolved -> putStrLn $ reprTreeString resolved
+             Verified -> verifyBefore (putStrLn . reprTreeString)
+          where verifyBefore :: (a -> IO ()) -> IO ()
+                verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
+                   [] -> let unbounds = Binder.unboundNames resolved
+                         in if unbounds == mempty then action resolved
+                            else print unbounds
+                   errors -> mapM_ (putStrLn . show) errors
+                t :: Verifier.Verification l Int Text
+                t = Verifier.Verification
+                resolved :: Bound (g l l Bound Bound)
+                resolved = resolvePositions predefinedModuleBindings preludeBindings contents parsed
+                bound = Binder.withBindings predefinedModuleBindings preludeBindings parsed
+       report contents (Right l) =
+          putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
+          >> report contents (Right [l !! optsIndex])
+       report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
+   case optsFile of
+      Just file -> (if file == "-" then getContents else readFile file)
+                   >>= go parseModule file
+      Nothing ->
+         forever $
+         getLine >>=
+         case optsMode of
+            ModuleMode     -> go parseModule "<stdin>"
+            ExpressionMode -> go parseExpression "<stdin>"
    where
       parseModule = Grammar.parseModule (Map.fromSet (const True) Extensions.includedByDefault)
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression . Grammar.report
                                                 $ parseComplete (Grammar.extendedGrammar Extensions.allExtensions) t)
-      go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-             a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
-             e ~ Binder.WithEnvironment Language w,
-             Abstract.QualifiedName l ~ AST.QualifiedName l,
-             Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-             Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-             Data (g Language Language e e), Data (g Language Language w w),
-             Show (g Language Language e e), Show (g Language Language w w),
-             Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
-             Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-             Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
-             Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
-             Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
-             Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
-                                     (Reserializer.Wrapped (Down Int) Text)) (g l l),
-             Deep.Functor
-                (Transformation.Mapped
-                   ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                   (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
-                (g l l),
-             Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
-             Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-             Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
-             Deep.Foldable
-                (Transformation.Folded
-                   ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                   (Reserializer.Serialization Int Text))
-                (g l l))
-         => (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
-         -> String -> Text -> IO ()
-      go parser _filename contents = report contents (parser $ pure contents)
-      report :: forall g l a e w.
-                (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-                 a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
-                 e ~ Binder.WithEnvironment Language w,
-                 Abstract.QualifiedName l ~ AST.QualifiedName l,
-                 Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-                 Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-                 Data (g Language Language e e), Data (g Language Language w w),
-                 Show (g Language Language e e), Show (g Language Language w w),
-                 Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
-                 Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-                 Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
-                 Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
-                 Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
-                 Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
-                                         (Reserializer.Wrapped (Down Int) Text)) (g l l),
-                 Deep.Functor
-                    (Transformation.Mapped
-                       ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                       (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
-                    (g l l),
-                 Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
-                 Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-                 Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
-                 Deep.Foldable
-                    (Transformation.Folded
-                       ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                       (Reserializer.Serialization Int Text))
-                    (g l l))
-             => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
-      report contents (Right [parsed]) = case optsOutput of
-         Original -> case optsStage of
-            Parsed -> Text.putStr (extract $ Reserializer.reserialize parsed)
-            Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
-            Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
-         Plain -> case optsStage of
-            Parsed -> print parsed
-            Bound -> print bound
-            Resolved -> print resolved
-            Verified -> verifyBefore print
-         Pretty -> case optsStage of
-           Resolved -> putStrLn $ Template.pprint resolved
-           Verified -> verifyBefore (putStrLn . Template.pprint)
-         Tree -> case optsStage of
-            Parsed -> putStrLn $ reprTreeString parsed
-            Bound -> putStrLn $ reprTreeString bound
-            Resolved -> putStrLn $ reprTreeString resolved
-            Verified -> verifyBefore (putStrLn . reprTreeString)
-         where verifyBefore :: (a -> IO ()) -> IO ()
-               verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
-                  [] -> let unbounds = Binder.unboundNames resolved
-                        in if unbounds == mempty then action resolved
-                           else print unbounds
-                  errors -> mapM_ (putStrLn . show) errors
-               t :: Verifier.Verification l Int Text
-               t = Verifier.Verification
-               resolved :: Bound (g l l Bound Bound)
-               resolved = resolvePositions Binder.preludeBindings contents parsed
-               bound = Binder.withBindings
-                          Binder.predefinedModuleBindings
-                          (Binder.preludeBindings :: Binder.Environment l)
-                          parsed
-      report contents (Right l) =
-         putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-         >> report contents (Right [l !! optsIndex])
-      report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
 
 type NodeWrap = ((,) Int)

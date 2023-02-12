@@ -13,6 +13,8 @@ maintainer:          blamario@protonmail.com
 -- category:
 build-type:          Simple
 extra-source-files:  README.md, CHANGELOG.md
+data-dir:            data/
+data-files:          data/report/*.hs
 
 library
   exposed-modules:     Language.Haskell, Language.Haskell.Abstract, Language.Haskell.AST,

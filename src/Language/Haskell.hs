@@ -40,10 +40,14 @@ type Placed = Reserializer.Wrapped Int Text
 type Bound = Binder.WithEnvironment AST.Language Placed
 
 -- | Parse the given text of a single module.
-parseModule :: Map Extension Bool -> Binder.Environment AST.Language -> Bool -> Text
+parseModule :: Map Extension Bool
+            -> Binder.ModuleEnvironment AST.Language
+            -> Binder.Environment AST.Language
+            -> Bool
+            -> Text
             -> ParseResults (LinePositioned Text) [Bound (AST.Module AST.Language AST.Language Bound Bound)]
-parseModule extensions env verify source =
-  ((resolvePositions env source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text))
+parseModule extensions modEnv env verify source =
+  ((resolvePositions modEnv env source <$>) <$> Grammar.parseModule extensions (pure source :: LinePositioned Text))
   >>= (if verify then traverse (checkAllBound >=> checkRestrictions extensions) else pure)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
@@ -56,11 +60,15 @@ resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
                             ((,) (Di.Atts (Binder.Environment AST.Language) (Binder.LocalEnvironment AST.Language)))
                             (Rank2.Map q Placed))
                         g)
-                 => Binder.Environment AST.Language -> Text -> p (g p p) -> r (g r r)
-resolvePositions env src = (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
-                           . either (error . show) id . validationToEither
-                           . Full.traverse Reorganizer.Reorganization
-                           . Binder.withBindings Binder.predefinedModuleBindings env
+                 => Binder.ModuleEnvironment AST.Language
+                 -> Binder.Environment AST.Language
+                 -> Text
+                 -> p (g p p)
+                 -> r (g r r)
+resolvePositions modEnv env src = (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
+                                  . either (error . show) id . validationToEither
+                                  . Full.traverse Reorganizer.Reorganization
+                                  . Binder.withBindings modEnv env
    where rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
          rewrap = Reserializer.mapWrapping (offset src) extract
 

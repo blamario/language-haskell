@@ -16,36 +16,46 @@ import qualified Transformation.Rank2 as Rank2
 import qualified Language.Haskell.Reserializer as Reserializer
 
 import Language.Haskell (parseModule, Placed)
-import Language.Haskell.AST (Language, Module)
+import Language.Haskell.Extensions.AST (Language, Module)
+import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Template as Template
 
 import Prelude hiding (readFile)
 
-main = testDir "test" "extensions" >>= defaultMain . testGroup "extensions"
+main = do
+   predefinedModules <- Binder.predefinedModuleBindings
+   preludeBindings <- Binder.preludeBindings
+   testDir predefinedModules preludeBindings "test" "extensions" >>= defaultMain . testGroup "extensions"
 
-testDir :: FilePath -> FilePath -> IO [TestTree]
-testDir ancestry path =
-   do let fullPath = combine ancestry path
-      isDir <- doesDirectoryExist fullPath
-      if isDir
-         then (:[]) . testGroup path . concat <$> (listDirectory fullPath >>= mapM (testDir fullPath))
-         else return . (:[]) . testCase path $ testModule fullPath
+testDir :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> FilePath -> FilePath -> IO [TestTree]
+testDir predefinedModules preludeBindings ancestry path = do
+   let fullPath = combine ancestry path
+   isDir <- doesDirectoryExist fullPath
+   if isDir
+      then (:[]) . testGroup path . concat
+           <$> (listDirectory fullPath >>= mapM (testDir predefinedModules preludeBindings fullPath))
+      else return . (:[]) . testCase path $ testModule predefinedModules preludeBindings fullPath
 
-testModule :: FilePath -> Assertion
-testModule path = do moduleSource <- readFile path
-                     let (extensions, rest) = Text.unlines <$> splitAt 1 (Text.lines moduleSource)
-                     assertCompiles moduleSource
-                     assertFails rest
+testModule :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> FilePath -> Assertion
+testModule predefinedModules preludeBindings path = do
+   moduleSource <- readFile path
+   let (extensions, rest) = Text.unlines <$> splitAt 1 (Text.lines moduleSource)
+   assertCompiles predefinedModules preludeBindings moduleSource
+   assertFails predefinedModules preludeBindings rest
 
-assertCompiles :: Text -> Assertion
-assertCompiles src = case parseModule (Map.fromSet (const True) Extensions.includedByDefault) True src of
-   Right [tree] -> pure ()
-   Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
-   Left err -> assertFailure (Text.unpack $ failureDescription src (extract <$> err) 4)
+assertCompiles :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
+assertCompiles predefinedModules preludeBindings src =
+   case parseModule extensions predefinedModules preludeBindings True src of
+      Right [tree] -> pure ()
+      Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
+      Left err -> assertFailure (Text.unpack $ failureDescription src (extract <$> err) 4)
 
-assertFails :: Text -> Assertion
-assertFails src = case parseModule (Map.fromSet (const True) Extensions.includedByDefault) True src of
-   Right [tree] -> assertFailure "False positive, the module verifies."
-   Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
-   Left err -> pure ()
+assertFails :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
+assertFails predefinedModules preludeBindings src =
+   case parseModule extensions predefinedModules preludeBindings True src of
+      Right [tree] -> assertFailure "False positive, the module verifies."
+      Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
+      Left err -> pure ()
+
+extensions = Map.fromSet (const True) Extensions.includedByDefault

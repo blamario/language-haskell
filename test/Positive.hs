@@ -44,8 +44,11 @@ exampleTree ancestry path =
                  assertEqual "original=pretty" originalModule'' prettyModule''
 
 prettyFile :: FilePath -> Text -> IO (Text, Text)
-prettyFile path src =
-   case parseModule (Map.fromSet (const True) Extensions.includedByDefault) Binder.preludeBindings False src of
+prettyFile path src = do
+   let extensions = Map.fromSet (const True) Extensions.includedByDefault
+   predefinedModuleBindings <- Binder.predefinedModuleBindings
+   preludeBindings <- Binder.preludeBindings
+   case parseModule extensions predefinedModuleBindings preludeBindings False src of
       Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
       Right trees -> error (show (length trees) ++ " ambiguous parses.")
       Left err -> error (unpack $ failureDescription src (extract <$> err) 4)
