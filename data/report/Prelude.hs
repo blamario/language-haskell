@@ -327,7 +327,7 @@ f =<< x          =  x >>= f
 
 -- Trivial type
 
-data  ()  =  ()  deriving (Eq, Ord, Enum, Bounded)
+-- data  ()  =  ()  deriving (Eq, Ord, Enum, Bounded)
 	-- Not legal Haskell; for illustration only
 
 -- Function type
@@ -349,7 +349,7 @@ flip             :: (a -> b -> c) -> b -> a -> c
 flip f x y       =  f y x
 
 seq :: a -> b -> b
-seq = ...       -- Primitive
+seq = undefined       -- Primitive
 
 -- right-associating infix application operators 
 -- (useful in continuation-passing style)
@@ -380,7 +380,7 @@ otherwise        =  True
 
 -- Character type
 
-data Char = ... 'a' | 'b' ... -- Unicode values
+data Char -- = ... 'a' | 'b' ... -- Unicode values
 
 instance  Eq Char  where
     c == c'          =  fromEnum c == fromEnum c'
@@ -432,7 +432,7 @@ either f g (Right y) =  g y
 
 -- IO type
 
-data IO a = ... 	-- abstract
+data IO a {- = ... 	-- abstract
 
 instance  Functor IO where
    fmap f x           =  x >>= (return . f)
@@ -441,6 +441,7 @@ instance Monad IO where
    (>>=)  = ...
    return = ...
    fail s = ioError (userError s)
+-}
 
 -- Ordering type
 
@@ -452,7 +453,7 @@ data  Ordering  =  LT | EQ | GT
 -- be expressed directly in Haskell since the constructor lists would be
 -- far too large.
 
-data  Int  =  minBound ... -1 | 0 | 1 ... maxBound
+data  Int {-  =  minBound ... -1 | 0 | 1 ... maxBound
 instance  Eq       Int  where ...
 instance  Ord      Int  where ...
 instance  Num      Int  where ...
@@ -488,6 +489,7 @@ instance  Fractional Double  where ...
 instance  Floating   Double  where ...
 instance  RealFrac   Double  where ...
 instance  RealFloat  Double  where ...
+-}
 
 -- The Enum instances for Floats and Doubles are slightly unusual.
 -- The `toEnum' function truncates numbers to Int.  The definitions
@@ -530,7 +532,7 @@ numericEnumFromThenTo n n' m = takeWhile p (numericEnumFromThen n n')
 
 -- Lists
 
-data  [a]  =  [] | a : [a]  deriving (Eq, Ord)
+-- data  [a]  =  [] | a : [a]  deriving (Eq, Ord)
 	-- Not legal Haskell; for illustration only
 
 instance Functor [] where
@@ -543,8 +545,8 @@ instance  Monad []  where
 
 -- Tuples
 
-data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
-data  (a,b,c) =  (a,b,c)  deriving (Eq, Ord, Bounded)
+-- data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
+-- data  (a,b,c) =  (a,b,c)  deriving (Eq, Ord, Bounded)
 	-- Not legal Haskell; for illustration only
 
 -- component projections for pairs:
