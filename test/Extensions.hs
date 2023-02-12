@@ -15,7 +15,7 @@ import qualified Transformation.Rank2 as Rank2
 
 import qualified Language.Haskell.Reserializer as Reserializer
 
-import Language.Haskell (parseModule, Placed)
+import qualified Language.Haskell as Haskell
 import Language.Haskell.Extensions.AST (Language, Module)
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions as Extensions
@@ -24,8 +24,8 @@ import qualified Language.Haskell.Template as Template
 import Prelude hiding (readFile)
 
 main = do
-   predefinedModules <- Binder.predefinedModuleBindings
-   preludeBindings <- Binder.preludeBindings
+   predefinedModules <- Haskell.predefinedModuleBindings
+   preludeBindings <- Haskell.preludeBindings
    testDir predefinedModules preludeBindings "test" "extensions" >>= defaultMain . testGroup "extensions"
 
 testDir :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> FilePath -> FilePath -> IO [TestTree]
@@ -46,14 +46,14 @@ testModule predefinedModules preludeBindings path = do
 
 assertCompiles :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
 assertCompiles predefinedModules preludeBindings src =
-   case parseModule extensions predefinedModules preludeBindings True src of
+   case Haskell.parseModule extensions predefinedModules preludeBindings True src of
       Right [tree] -> pure ()
       Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
       Left err -> assertFailure (Text.unpack $ failureDescription src (extract <$> err) 4)
 
 assertFails :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
 assertFails predefinedModules preludeBindings src =
-   case parseModule extensions predefinedModules preludeBindings True src of
+   case Haskell.parseModule extensions predefinedModules preludeBindings True src of
       Right [tree] -> assertFailure "False positive, the module verifies."
       Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
       Left err -> pure ()

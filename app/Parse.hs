@@ -3,7 +3,8 @@
 
 module Main where
 
-import Language.Haskell (Bound, Placed, resolvePositions)
+import Language.Haskell (Bound, Placed)
+import qualified Language.Haskell as Haskell
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST (Language)
 import qualified Language.Haskell.Abstract as Abstract
@@ -88,8 +89,8 @@ main = execParser opts >>= main'
 
 main' :: Opts -> IO ()
 main' Opts{..} = do
-   (preludeBindings :: Binder.Environment Language) <- Binder.preludeBindings
-   (predefinedModuleBindings :: Binder.ModuleEnvironment Language) <- Binder.predefinedModuleBindings
+   (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
+   (predefinedModuleBindings :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
    let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
               e ~ Binder.WithEnvironment Language w,
@@ -178,7 +179,7 @@ main' Opts{..} = do
                 t :: Verifier.Verification l Int Text
                 t = Verifier.Verification
                 resolved :: Bound (g l l Bound Bound)
-                resolved = resolvePositions predefinedModuleBindings preludeBindings contents parsed
+                resolved = Haskell.resolvePositions predefinedModuleBindings preludeBindings contents parsed
                 bound = Binder.withBindings predefinedModuleBindings preludeBindings parsed
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")

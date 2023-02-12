@@ -14,7 +14,7 @@ import qualified Transformation.Rank2 as Rank2
 
 import qualified Language.Haskell.Reserializer as Reserializer
 
-import Language.Haskell (parseModule, Placed)
+import qualified Language.Haskell as Haskell
 import Language.Haskell.AST (Language, Module)
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions as Extensions
@@ -46,9 +46,9 @@ exampleTree ancestry path =
 prettyFile :: FilePath -> Text -> IO (Text, Text)
 prettyFile path src = do
    let extensions = Map.fromSet (const True) Extensions.includedByDefault
-   predefinedModuleBindings <- Binder.predefinedModuleBindings
-   preludeBindings <- Binder.preludeBindings
-   case parseModule extensions predefinedModuleBindings preludeBindings False src of
+   predefinedModuleBindings <- Haskell.predefinedModuleBindings
+   preludeBindings <- Haskell.preludeBindings
+   case Haskell.parseModule extensions predefinedModuleBindings preludeBindings False src of
       Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
       Right trees -> error (show (length trees) ++ " ambiguous parses.")
       Left err -> error (unpack $ failureDescription src (extract <$> err) 4)

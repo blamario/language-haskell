@@ -11,7 +11,7 @@ module Language.Haskell.Binder (
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
    Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
-   predefinedModuleBindings, preludeBindings, withBindings) where
+   onMap, preludeName, withBindings) where
 
 import Control.Applicative ((<|>))
 import Data.Data (Data, Typeable)
@@ -572,41 +572,3 @@ unqualifiedName = Abstract.qualifiedName Nothing
 
 preludeName :: Abstract.Haskell l => Abstract.ModuleName l
 preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])
-
-predefinedModuleBindings :: (Abstract.Haskell l, Abstract.ModuleName l ~ AST.ModuleName l, Abstract.Name l ~ AST.Name l,
-                             Abstract.Associativity l ~ AST.Associativity l) => IO (ModuleEnvironment l)
-predefinedModuleBindings = UnionWith . Map.fromList . pure . (,) preludeName <$> unqualifiedPreludeBindings
-
-preludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
-                    Abstract.QualifiedName l ~ AST.QualifiedName l,
-                    Abstract.Associativity l ~ AST.Associativity l) => IO (Environment l)
-preludeBindings = onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing) <$> unqualifiedPreludeBindings
-
-unqualifiedPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
-                               Abstract.Associativity l ~ AST.Associativity l) => IO (LocalEnvironment l)
-unqualifiedPreludeBindings = pure $ UnionWith $ Map.fromList $ map (ValueBinding <$>) $
-   [(Abstract.name "!!", InfixDeclaration Abstract.leftAssociative 9 $ Just DefinedValue),
-    (Abstract.name ".", InfixDeclaration Abstract.rightAssociative 9 $ Just DefinedValue)]
-   ++
-   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 8 $ Just DefinedValue)
-    | op <- ["^", "^^", "**"]]
-   ++
-   [(Abstract.name op, InfixDeclaration Abstract.leftAssociative 7 $ Just DefinedValue)
-    | op <- ["*", "/", "`div`", "`mod`", "`rem`", "`quot`"]]
-   ++
-   [(Abstract.name "+", InfixDeclaration Abstract.leftAssociative 6 $ Just DefinedValue),
-    (Abstract.name "-", InfixDeclaration Abstract.leftAssociative 6 $ Just DefinedValue)]
-   ++
-   [(Abstract.name ":", InfixDeclaration Abstract.rightAssociative 5 $ Just DefinedValue),
-    (Abstract.name "++", InfixDeclaration Abstract.rightAssociative 5 $ Just DefinedValue)]
-   ++
-   [(Abstract.name op, InfixDeclaration Abstract.nonAssociative 4 $ Just DefinedValue)
-    | op <- ["==", "/=", "<", "<=", ">", ">=", "`elem`", "`notElem`"]]
-   ++
-   [(Abstract.name "&&", InfixDeclaration Abstract.rightAssociative 3 $ Just DefinedValue),
-    (Abstract.name "||", InfixDeclaration Abstract.rightAssociative 2 $ Just DefinedValue),
-    (Abstract.name ">>", InfixDeclaration Abstract.leftAssociative 1 $ Just DefinedValue),
-    (Abstract.name ">>=", InfixDeclaration Abstract.leftAssociative 1 $ Just DefinedValue)]
-   ++
-   [(Abstract.name op, InfixDeclaration Abstract.rightAssociative 0 $ Just DefinedValue)
-    | op <- ["$", "$!", "`seq`"]]

@@ -4,7 +4,7 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, resolvePositions, Bound, Placed) where
+module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions, Bound, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
@@ -24,12 +24,23 @@ import qualified Transformation.AG.Dimorphic as Di
 
 import Control.Monad ((>=>))
 import Data.Either.Validation (validationToEither)
+import Data.Functor.Compose (Compose(..))
+import qualified Data.List as List
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Ord (Down)
+import Data.Semigroup.Union (UnionWith(..))
 import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text.IO
+import System.Directory (listDirectory)
+import System.FilePath.Posix (combine)
+import System.IO.Unsafe (unsafeInterleaveIO)
 import Text.Grampa (ParseResults, ParseFailure (errorAlternatives))
 import Text.Parser.Input.Position (offset)
+
+import Paths_language_haskell (getDataDir)
 
 import Prelude hiding (readFile)
 
@@ -97,3 +108,20 @@ instance Deep.Functor
                 (Rank2.Map q Placed))
             g where
    (<$>) = Full.mapDownDefault
+
+predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
+predefinedModuleBindings = UnionWith . Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
+
+preludeBindings :: IO (Binder.Environment AST.Language)
+preludeBindings = Binder.onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing) <$> unqualifiedPreludeBindings
+
+unqualifiedPreludeBindings :: IO (Binder.LocalEnvironment AST.Language)
+unqualifiedPreludeBindings = do
+   preludeModuleDir <- flip combine "report" <$> getDataDir
+   moduleFileNames <- filter (List.isSuffixOf ".hs") <$> listDirectory preludeModuleDir
+   moduleTexts <- mapM (unsafeInterleaveIO . Text.IO.readFile . combine preludeModuleDir) moduleFileNames
+   let Just moduleNames = traverse (Text.stripSuffix ".hs" . Text.pack) moduleFileNames
+       Right parsedModules = traverse (parseModule mempty moduleEnv mempty False) moduleTexts
+       moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> concat parsedModules)
+       Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
+   pure prelude
