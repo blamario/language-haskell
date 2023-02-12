@@ -472,7 +472,11 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                <|> Abstract.letStatement <$ keyword "let" <*> declarations
                <|> Abstract.expressionStatement <$> expression,
-   alternatives = filter (not . null) (blockOf alternative) <?> "non-empty case alternatives",
+   alternatives = let blockOfAlternatives = blockWith oneExtendedLine alternativeTerminatorKeyword alternative
+                      alternativeTerminatorKeyword = (string "else" <|> string "in" <|> string "of")
+                                                     *> notSatisfyChar isNameTailChar
+                  in filter (not . null) blockOfAlternatives
+                  <?> "non-empty case alternatives",
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
                            <|> Abstract.guardedRHS . NonEmpty.fromList
@@ -905,13 +909,15 @@ verifyStatements stats = Abstract.guardedExpression
 
 blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockOf = blockWith oneExtendedLine
+blockOf = blockWith oneExtendedLine blockTerminatorKeyword
 
 blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
           => (Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool)
+          -> Parser g t ()
           -> Parser g t (node (NodeWrap t) (NodeWrap t))
           -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockWith lineFilter p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
+blockWith lineFilter terminatorKeyword p =
+   braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
             do rest <- getInput
                maybeItem <- opt (filter (lineFilter indent rest) $ wrap p)
@@ -921,8 +927,7 @@ blockWith lineFilter p = braces (wrap p `startSepEndBy` semi) <|> (inputColumn >
                      -- don't stop at a higher indent unless there's a terminator
                      void (filter (indent >=) inputColumn)
                         <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))
-                                        <|> (string "else" <|> string "in"
-                                             <|> string "of" <|> string "where") *> notSatisfyChar isNameTailChar
+                                        <|> terminatorKeyword
                                         <|> eof)
                      indent' <- inputColumn
                      let cont' = cont . (item :)
@@ -947,6 +952,10 @@ instance OutlineMonoid (LinePositioned Text) where
 
 inputColumn :: (Rank2.Apply g, Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
+
+blockTerminatorKeyword :: (Rank2.Apply g, Ord t, OutlineMonoid t, Show t) => Parser g t ()
+blockTerminatorKeyword = (string "else" <|> string "in" <|> string "of" <|> string "where")
+                         *> notSatisfyChar isNameTailChar
 
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                     Deep.Foldable (Serialization (Down Int) t) node)

@@ -1653,7 +1653,8 @@ nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, Lexi
 nondecreasingIndentationMixin self super =
    super{
       report = (report super){
-         statements = Report.blockWith nonDecreasingIndentLine (self & report & statement) >>= Report.verifyStatements}}
+         statements = Report.blockWith nonDecreasingIndentLine Report.blockTerminatorKeyword (self & report & statement)
+                      >>= Report.verifyStatements}}
 
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
