@@ -264,8 +264,11 @@ instance {-# OVERLAPS #-}
                where exportedScope :: LocalEnvironment l
                      moduleGlobalScope :: Environment l
                      exportedScope = maybe (reexportModule moduleName) (foldMapWrapped itemExports) exports
-                     reexportModule modName = filterEnv (fromModule modName) moduleGlobalScope
+                     reexportModule modName
+                       | modName == moduleName = Di.syn atts
+                       | otherwise = onMap (Map.mapKeys baseName) $ importsFrom modImports modName (fold $ Map.lookup modName $ getUnionWith modEnv)
                      fromModule modName (AST.QualifiedName modName' _) = modName' == Just modName
+                     itemExports :: AST.Export l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
                      itemExports (AST.ReExportModule modName) = reexportModule modName
                      itemExports (AST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
                      itemExports (AST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
@@ -285,40 +288,44 @@ instance {-# OVERLAPS #-}
                                          <> unqualified (Di.syn atts)
             importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
                           -> Environment l
-            importedScope modImports = fold (Map.mapWithKey importsFrom $ getUnionWith modEnv)
-               where importsFromModule :: UnionWith (Map (AST.Name l)) (Binding l)
-                                       -> ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
-                     importsFrom moduleName moduleExports
-                        | null matchingImports && moduleName == preludeName = unqualified moduleExports
-                        | otherwise = foldMap (importsFromModule moduleExports) matchingImports
-                        where matchingImports = foldMapWrapped matchingImport modImports
-                              matchingImport i@(ExtAST.Import _ _ _ name _ _)
-                                 | name == moduleName = [i]
-                                 | otherwise = []
-                     importsFromModule moduleExports (ExtAST.Import _ qualified _ name alias spec)
-                        | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
-                        | otherwise = unqualified (imports spec)
-                                      <> maybe mempty (`qualifiedWith` imports spec) alias
-                        where imports (Just spec) = foldMap specImports (getCompose spec mempty)
-                              imports Nothing = allImports
-                              specImports (AST.ImportSpecification True items) = itemsImports items
-                              specImports (AST.ImportSpecification False items) =
-                                 UnionWith (getUnionWith allImports `Map.difference` getUnionWith (itemsImports items))
-                              allImports = moduleExports
-                              itemsImports = foldMapWrapped itemImports
-                              itemImports (AST.ImportClassOrType name Nothing) = nameImport name allImports
-                              itemImports (AST.ImportClassOrType parent (Just members)) =
-                                 case Map.lookup parent (getUnionWith allImports)
-                                 of Just b@(TypeBinding (TypeClass env)) ->
-                                       onMap (Map.insert parent b) (filterMembers members env)
-                                    Just (TypeAndValueBinding b@(TypeClass env) _) ->
-                                       onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                                    Just b@(TypeBinding (DataType env)) ->
-                                       onMap (Map.insert parent b) (filterMembers members env)
-                                    Just (TypeAndValueBinding b@(DataType env) _) ->
-                                       onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                                    _ -> nameImport parent allImports
-                              itemImports (AST.ImportVar name) = nameImport name allImports
+            importedScope modImports = fold (Map.mapWithKey (importsFrom modImports) $ getUnionWith modEnv)
+            importsFrom :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
+                        -> Abstract.ModuleName l
+                        -> UnionWith (Map (AST.Name l)) (Binding l)
+                        -> Environment l
+            importsFrom modImports moduleName moduleExports
+               | null matchingImports && moduleName == preludeName = unqualified moduleExports
+               | otherwise = foldMap (importsFromModule moduleExports) matchingImports
+               where matchingImports = foldMapWrapped matchingImport modImports
+                     matchingImport i@(ExtAST.Import _ _ _ name _ _)
+                        | name == moduleName = [i]
+                        | otherwise = []
+            importsFromModule :: UnionWith (Map (AST.Name l)) (Binding l)
+                              -> ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
+            importsFromModule moduleExports (ExtAST.Import _ qualified _ name alias spec)
+               | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
+               | otherwise = unqualified (imports spec)
+                             <> maybe mempty (`qualifiedWith` imports spec) alias
+               where imports (Just spec) = foldMap specImports (getCompose spec mempty)
+                     imports Nothing = allImports
+                     specImports (AST.ImportSpecification True items) = itemsImports items
+                     specImports (AST.ImportSpecification False items) =
+                        UnionWith (getUnionWith allImports `Map.difference` getUnionWith (itemsImports items))
+                     allImports = moduleExports
+                     itemsImports = foldMapWrapped itemImports
+                     itemImports (AST.ImportClassOrType name Nothing) = nameImport name allImports
+                     itemImports (AST.ImportClassOrType parent (Just members)) =
+                        case Map.lookup parent (getUnionWith allImports)
+                        of Just b@(TypeBinding (TypeClass env)) ->
+                              onMap (Map.insert parent b) (filterMembers members env)
+                           Just (TypeAndValueBinding b@(TypeClass env) _) ->
+                              onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                           Just b@(TypeBinding (DataType env)) ->
+                              onMap (Map.insert parent b) (filterMembers members env)
+                           Just (TypeAndValueBinding b@(DataType env) _) ->
+                              onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                           _ -> nameImport parent allImports
+                     itemImports (AST.ImportVar name) = nameImport name allImports
             filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> LocalEnvironment l
             filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
             foldMapWrapped :: forall a g m. (Foldable g, Monoid m)
