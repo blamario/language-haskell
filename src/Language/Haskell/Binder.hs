@@ -64,6 +64,7 @@ data BindingError l = ClashingBindings (Binding l) (Binding l)
 
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
+                   | UnknownType
 
 data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBinding l))
                     | DataConstructor
@@ -215,6 +216,10 @@ instance {-# OVERLAPS #-}
             export (AST.GADTNewtypeDeclaration lhs _kind _constructor _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.TypeSignature names _context _type)
+               = Di.syn atts <> UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
+            export (AST.KindSignature name _context _type)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding UnknownType)
             export _ = mempty
             getOperatorName (AST.InfixLHS _ name _) = [name]
             getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
@@ -405,6 +410,44 @@ instance {-# OVERLAPS #-}
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
 
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (AST.Pattern l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+      where export :: AST.Pattern l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (AST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
+            export _ = mempty
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (ExtAST.Pattern l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+      where export :: ExtAST.Pattern l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (ExtAST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
+            export _ = mempty
+
 instance {-# OVERLAPPABLE #-} BindingVerifier l f `Transformation.At` g where
    _ $ _ = mempty
 
@@ -502,6 +545,15 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
       where verify (AST.ReferenceExpression q) = verifyValueName q env
             verify (AST.LeftSectionExpression _ q) = verifyValueName q env
             verify (AST.RightSectionExpression q _) = verifyValueName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.Expression l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.ReferenceExpression q) = verifyValueName q env
+            verify (ExtAST.LeftSectionExpression _ q) = verifyValueName q env
+            verify (ExtAST.RightSectionExpression q _) = verifyValueName q env
             verify _ = mempty
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
