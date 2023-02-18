@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import Data.Monoid.Instances.Positioned (extract)
+import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -40,9 +43,13 @@ testDir predefinedModules preludeBindings ancestry path = do
 testModule :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> FilePath -> Assertion
 testModule predefinedModules preludeBindings path = do
    moduleSource <- readFile path
-   let (extensions, rest) = Text.unlines <$> splitAt 1 (Text.lines moduleSource)
+   let Just (extensions, rest) = (Text.unlines <$>) <$> List.uncons (Text.lines moduleSource)
+       inverse w
+          | w `elem` ["{-#", "LANGUAGE", "#-}"] = w
+          | Just rest <- Text.stripPrefix "No" w = rest
+          | otherwise = "No" <> w
    assertCompiles predefinedModules preludeBindings moduleSource
-   assertFails predefinedModules preludeBindings rest
+   assertFails predefinedModules preludeBindings (Text.unwords (inverse <$> Text.words extensions) <> rest)
 
 assertCompiles :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
 assertCompiles predefinedModules preludeBindings src =
