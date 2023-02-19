@@ -39,7 +39,6 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
 data Accounting l pos s = Accounting
-data LabelAccounting l pos s = LabelAccounting
 data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
 data Verification l pos s = Verification
 
@@ -57,10 +56,6 @@ instance Transformation.Transformation (Accounting l pos s) where
     type Domain (Accounting l pos s) = Wrap l pos s
     type Codomain (Accounting l pos s) = Accounted pos
 
-instance Transformation.Transformation (LabelAccounting l pos s) where
-    type Domain (LabelAccounting l pos s) = Wrap l pos s
-    type Codomain (LabelAccounting l pos s) = Accounted pos
-
 instance Transformation.Transformation (UnicodeSyntaxAccounting l pos s) where
     type Domain (UnicodeSyntaxAccounting l pos s) = Wrap l pos s
     type Codomain (UnicodeSyntaxAccounting l pos s) = Accounted pos
@@ -70,7 +65,6 @@ instance Transformation.Transformation (Verification l pos s) where
     type Codomain (Verification l pos s) = Verified pos
 
 verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
-                                 Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
                                  Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
                                  Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
                 Map Extension Bool
@@ -107,15 +101,13 @@ instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
       <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
 
 instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
-          Abstract.DeeplyFoldable (LabelAccounting l pos s) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Verification l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
    Verification $ m = Const $ flip verifyModule m
 
-instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting l pos s) l, Abstract.Module l l ~ AST.Module l l,
-          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+instance (TextualMonoid s, Abstract.Module l l ~ AST.Module l l, Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Accounting l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ d@(Compose (_, (_, AST.AnonymousModule _ declarations)))
@@ -124,8 +116,7 @@ instance (TextualMonoid s, Abstract.DeeplyFoldable (LabelAccounting l pos s) l, 
    Accounting $ d@(Compose (_, (_, AST.NamedModule _ _ _ declarations)))
       | Just clashingFieldLocations <- checkDuplicateRecordFields declarations
       = Const $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
-   Accounting $ d@(Compose (_, (_, AST.ExtendedModule _ m))) = Accounting Transformation.$ m
-   Accounting $ Compose (_, (_, m)) = Const (Deep.foldMap LabelAccounting m)
+   Accounting $ Compose (_, (_, m)) = mempty
 
 instance (Eq s, IsString s, Show s) =>
          Accounting l pos s
@@ -185,6 +176,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
           ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
           ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
+          ExtAST.OverloadedLabel{} -> Map.singleton Extensions.OverloadedLabels
           _ -> mempty)
       where isBlock ExtAST.CaseExpression{} = True
             isBlock ExtAST.ConditionalExpression{} = True
@@ -276,15 +268,6 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
 
-instance TextualMonoid s =>
-         LabelAccounting l pos s `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
-   LabelAccounting $ Compose (_, ((start, Trailing lexemes, end), _))
-      | any isLabel lexemes = Const (Map.singleton Extensions.OverloadedLabels [(start, end)])
-      | otherwise = mempty
-      where isLabel Token{lexemeType= Other, lexemeText= t}
-               | Just t' <- stripPrefix "#" t, Just c <- characterPrefix t' = Char.isLower c || c == '_'
-            isLabel _ = False
-
 instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
@@ -297,11 +280,6 @@ instance (Eq s, IsString s) =>
 instance (Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (Accounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Deep.Foldable (LabelAccounting l pos s) g,
-          Transformation.At (LabelAccounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (LabelAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
 instance (Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,

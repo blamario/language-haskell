@@ -26,6 +26,7 @@ class Haskell λ => ExtendedHaskell λ where
    tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s
    lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s
    multiWayIfExpression :: [s (GuardedExpression l l d d)] -> Expression λ l d s
+   overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s
    fieldProjection :: NonEmpty (Name λ) -> Expression λ l d s
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s

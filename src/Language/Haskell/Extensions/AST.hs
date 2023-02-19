@@ -127,6 +127,7 @@ instance Abstract.ExtendedHaskell Language where
 
    punnedFieldBinding = PunnedFieldBinding
    punnedFieldPattern = PunnedFieldPattern
+   overloadedLabel = OverloadedLabel
    getField = GetField
    fieldProjection = FieldProjection
 
@@ -465,6 +466,7 @@ data Expression λ l d s =
    | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+   | OverloadedLabel Text
    | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
    | FieldProjection (NonEmpty (Abstract.Name λ))
 

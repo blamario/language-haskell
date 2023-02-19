@@ -356,14 +356,14 @@ identifierSyntaxMixin self super = super{
       variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
       constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}}
 
-overloadedLabelsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                                    g ~ ExtendedGrammar l t (NodeWrap t))
+overloadedLabelsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                        Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 overloadedLabelsMixin self super = super{
    report= (report super){
-      variableIdentifier = (super & report & variableIdentifier)
-         <|> token (Abstract.name . Text.pack . toString mempty <$> (string "#" <> variableLexeme)),
-      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> (super & report & variableSymbol)}}
+      bareExpression = (super & report & bareExpression)
+                       <|> Abstract.overloadedLabel . Text.pack . toString mempty
+                           <$> token (string "#" *> variableLexeme)}}
 
 unicodeSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                  Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))

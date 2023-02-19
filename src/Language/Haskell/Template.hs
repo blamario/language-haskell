@@ -204,6 +204,7 @@ expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . 
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
+expressionTemplate (OverloadedLabel l) = LabelE (Text.unpack l)
 expressionTemplate (FieldProjection fields) = ProjectionE (Text.unpack . getName <$> fields)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
