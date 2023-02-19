@@ -121,7 +121,8 @@ unqualifiedPreludeBindings = do
    moduleFileNames <- filter (List.isSuffixOf ".hs") <$> listDirectory preludeModuleDir
    moduleTexts <- mapM (unsafeInterleaveIO . Text.IO.readFile . combine preludeModuleDir) moduleFileNames
    let Just moduleNames = traverse (Text.stripSuffix ".hs" . Text.pack) moduleFileNames
-       Right parsedModules = traverse (parseModule mempty moduleEnv mempty False) moduleTexts
-       moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> concat parsedModules)
+       parsedModules = assertSuccess . parseModule mempty moduleEnv mempty False <$> moduleTexts
+       assertSuccess ~(Right ~[parsed]) = parsed
+       moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
        Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
    pure prelude

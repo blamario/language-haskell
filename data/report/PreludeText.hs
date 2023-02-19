@@ -9,11 +9,15 @@ module PreludeText (
 --      Bool, Maybe, Either, Ordering
 -- are done via "deriving" clauses in Prelude.hs
 
+import Prelude ()
+
+{-
 import Data.Char(isSpace, isAlpha, isDigit, isAlphaNum,
                  showLitChar, readLitChar, lexLitChar)
 
 import Numeric(showSigned, showInt, readSigned, readDec, showFloat,
                readFloat, lexDigits)
+-}
 
 type  ReadS a  = String -> [(a,String)]
 type  ShowS    = String -> String

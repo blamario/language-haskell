@@ -5,6 +5,7 @@ module PreludeIO (
     readFile, writeFile, appendFile, readIO, readLn
   ) where
 
+import Prelude ()
 import PreludeBuiltin
 
 

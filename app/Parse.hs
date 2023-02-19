@@ -34,6 +34,7 @@ import qualified Data.Text.IO as Text
 import Data.Typeable (Typeable)
 import Options.Applicative
 import Text.Grampa (ParseResults, parseComplete, failureDescription)
+import Text.Parser.Input.Position (offset)
 import ReprTree
 
 import Prelude hiding (getLine, getContents, readFile)
@@ -155,6 +156,7 @@ main' Opts{..} = do
        report contents (Right [parsed]) = case optsOutput of
           Original -> case optsStage of
              Parsed -> Text.putStr (extract $ Reserializer.reserialize parsed)
+             Bound -> Text.putStr $ Reserializer.reserializeNested $ Transformation.Mapped (Rank2.Map rewrap) Full.<$> bound
              Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
              Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
           Plain -> case optsStage of
@@ -165,6 +167,7 @@ main' Opts{..} = do
           Pretty -> case optsStage of
             Resolved -> putStrLn $ Template.pprint resolved
             Verified -> verifyBefore (putStrLn . Template.pprint)
+            _ -> error "Can't pretty-print an unresolved parse tree."
           Tree -> case optsStage of
              Parsed -> putStrLn $ reprTreeString parsed
              Bound -> putStrLn $ reprTreeString bound
@@ -181,6 +184,8 @@ main' Opts{..} = do
                 resolved :: Bound (g l l Bound Bound)
                 resolved = Haskell.resolvePositions predefinedModuleBindings preludeBindings contents parsed
                 bound = Binder.withBindings predefinedModuleBindings preludeBindings parsed
+                rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
+                rewrap = Reserializer.mapWrapping (offset contents) extract
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])

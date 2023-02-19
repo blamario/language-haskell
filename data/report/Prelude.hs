@@ -41,13 +41,18 @@ module Prelude (
     seq, ($!)
   ) where
 
+import Prelude ()
+
+{-
 import PreludeBuiltin                      -- Contains all `prim' values
 import UnicodePrims( primUnicodeMaxChar )  -- Unicode primitives
 import PreludeList
+-}
 import PreludeText
 import PreludeIO
+{-
 import Data.Ratio( Rational )
-
+-}
 infixr 9  .
 infixr 8  ^, ^^, **
 infixl 7  *, /, `quot`, `rem`, `div`, `mod`

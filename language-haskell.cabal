@@ -45,7 +45,8 @@ executable haskell-parser
   -- other-extensions:
   build-depends:       base >=4.14 && <5, containers < 1.0, text, repr-tree-syb < 0.2, filepath < 1.5,
                        monoid-subclasses, optparse-applicative >= 0.12 && < 0.16,
-                       rank2classes >= 1.3 && < 1.5, grammatical-parsers, deep-transformations,
+                       input-parsers >= 0.2.2 && < 0.4, grammatical-parsers,
+                       rank2classes >= 1.3 && < 1.5, deep-transformations,
                        language-haskell
   hs-source-dirs:      app/
   default-language:    Haskell2010
