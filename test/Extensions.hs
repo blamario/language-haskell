@@ -49,7 +49,7 @@ testModule predefinedModules preludeBindings path = do
           | Just rest <- Text.stripPrefix "No" w = rest
           | otherwise = "No" <> w
    assertCompiles predefinedModules preludeBindings moduleSource
-   assertFails predefinedModules preludeBindings (Text.unwords (inverse <$> Text.words extensions) <> rest)
+   assertFails predefinedModules preludeBindings moduleSource (Text.unwords (inverse <$> Text.words extensions) <> rest)
 
 assertCompiles :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
 assertCompiles predefinedModules preludeBindings src =
@@ -58,10 +58,13 @@ assertCompiles predefinedModules preludeBindings src =
       Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
       Left err -> assertFailure (Text.unpack $ failureDescription src (extract <$> err) 4)
 
-assertFails :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Assertion
-assertFails predefinedModules preludeBindings src =
-   case Haskell.parseModule extensions predefinedModules preludeBindings True src of
-      Right [tree] -> assertFailure "False positive, the module verifies."
+assertFails :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Text -> Assertion
+assertFails predefinedModules preludeBindings ext noExt =
+   case Haskell.parseModule extensions predefinedModules preludeBindings True noExt of
+      Right [tree]
+        | let Right [extTree] = Haskell.parseModule extensions predefinedModules preludeBindings True ext,
+          Template.pprint tree == Template.pprint extTree -> assertFailure "False positive, the module verifies."
+        | otherwise -> pure ()
       Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
       Left err -> pure ()
 
