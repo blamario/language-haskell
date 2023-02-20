@@ -183,7 +183,7 @@ expressionTemplate (ParallelListComprehension element guards1 guards2 guardses) 
    where branch statements = statementTemplate <$> (extract <$> toList statements)
 expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> items)
 expressionTemplate (LiteralExpression value) = LitE (literalTemplate $ extract value)
-expressionTemplate Negate = VarE (mkName "-")
+expressionTemplate Negate = VarE (mkName "Prelude.negate")
 expressionTemplate (RecordExpression record fields) =
    (case extract record
     of ConstructorExpression con | ConstructorReference name <- extract con -> RecConE (qnameTemplate name)
