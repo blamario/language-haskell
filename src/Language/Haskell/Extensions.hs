@@ -202,6 +202,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (DataKinds, [(MultiParameterConstraints, True)]),
   (DeriveTraversable, [(DeriveFoldable, True), (DeriveFunctor, True)]),
   (DerivingVia, [(DerivingStrategies, True)]),
+  (DuplicateRecordFields, [(DisambiguateRecordFields, True)]),
   (ExistentialQuantification, [(ExplicitForAll, True)]),
   (FlexibleInstances, [(TypeSynonymInstances, True)]),
   (FunctionalDependencies, [(MultiParamTypeClasses, True)]),
