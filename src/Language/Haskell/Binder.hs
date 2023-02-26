@@ -8,7 +8,7 @@ module Language.Haskell.Binder (
    Binder, BindingVerifier,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
-   TypeBinding(TypeClass), ValueBinding(InfixDeclaration),
+   TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordField),
    Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
    onMap, preludeName, withBindings) where

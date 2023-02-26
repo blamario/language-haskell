@@ -163,10 +163,11 @@ instance Accounting l pos s
       Const (Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
    Accounting $ _ = mempty
 
-instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
+instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.QualifiedName l), Eq s, IsString s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Expression l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), e)) = Const . ($ [(start, end)]) $
+   Accounting $ Compose (bindings, ((start, _, end), e)) = Const . ($ [(start, end)]) $
       (case e
        of ExtAST.ApplyExpression _ (Compose (_, ((_, Trailing (lexeme1 : _), _), r)))
              | isBlock r && not (isToken "(" lexeme1) -> Map.singleton Extensions.BlockArguments
@@ -177,6 +178,9 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Eq s, IsString s) =>
           ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
           ExtAST.OverloadedLabel{} -> Map.singleton Extensions.OverloadedLabels
+          ExtAST.ReferenceExpression q
+             | Just (Binder.ValueBinding Binder.RecordField) <- Map.lookup q (getUnionWith $ AG.Di.inh bindings)
+               -> Map.singleton Extensions.FieldSelectors
           _ -> mempty)
       where isBlock ExtAST.CaseExpression{} = True
             isBlock ExtAST.ConditionalExpression{} = True
