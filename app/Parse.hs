@@ -91,7 +91,7 @@ main = execParser opts >>= main'
 main' :: Opts -> IO ()
 main' Opts{..} = do
    (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
-   (predefinedModuleBindings :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
+   (predefinedModules :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
    let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
               e ~ Binder.WithEnvironment Language w,
@@ -182,8 +182,8 @@ main' Opts{..} = do
                 t :: Verifier.Verification l Int Text
                 t = Verifier.Verification
                 resolved :: Bound (g l l Bound Bound)
-                resolved = Haskell.resolvePositions predefinedModuleBindings preludeBindings contents parsed
-                bound = Binder.withBindings predefinedModuleBindings preludeBindings parsed
+                resolved = Haskell.resolvePositions defaultExtensions predefinedModules preludeBindings contents parsed
+                bound = Binder.withBindings defaultExtensions predefinedModules preludeBindings parsed
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
                 rewrap = Reserializer.mapWrapping (offset contents) extract
        report contents (Right l) =
@@ -200,9 +200,10 @@ main' Opts{..} = do
             ModuleMode     -> go parseModule "<stdin>"
             ExpressionMode -> go parseExpression "<stdin>"
    where
-      parseModule = Grammar.parseModule (Map.fromSet (const True) Extensions.includedByDefault)
+      parseModule = Grammar.parseModule defaultExtensions
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression . Grammar.report
                                                 $ parseComplete (Grammar.extendedGrammar Extensions.allExtensions) t)
+      defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
 
 type NodeWrap = ((,) Int)

@@ -14,6 +14,7 @@ module Language.Haskell.Binder (
    onMap, preludeName, withBindings) where
 
 import Control.Applicative ((<|>))
+import Control.Exception (assert)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
 import Data.Functor (($>))
@@ -37,6 +38,7 @@ import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST hiding (Declaration(..))
+import Language.Haskell.Extensions (Extension, partitionContradictory, withImplications)
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
@@ -159,13 +161,15 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Monoid (Binding
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
 withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ WithEnvironment l p)
-             => ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
-withBindings modEnv = flip (Full.traverse (Di.Keep $ Binder modEnv))
+             => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
+withBindings extensions modEnv = flip (Full.traverse (Di.Keep $ Binder extensions modEnv))
 
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
 onMap f (UnionWith x) = UnionWith (f x)
 
-data Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
+data Binder l (f :: Type -> Type) = Binder {
+   extensions :: Map Extension Bool,
+   modules :: ModuleEnvironment l}
 
 data BindingVerifier l (f :: Type -> Type) = BindingVerifier
 
@@ -249,7 +253,7 @@ instance {-# OVERLAPS #-}
             (AST.Module l l)
             (FromEnvironment l f) f
          where
-   attribution (Di.Keep (Binder modEnv)) node atts = foldMap moduleAttribution node
+   attribution (Di.Keep (Binder exts modEnv)) node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
                               -> Di.Atts (Environment l) (LocalEnvironment l)
             moduleAttribution (AST.ExtendedModule extensions body) = atts
