@@ -249,12 +249,18 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.FieldBinding l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+      Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+      <> case t of ExtAST.PunnedFieldBinding {} -> Map.singleton Extensions.NamedFieldPuns [(start, end)]
+                   _ -> mempty
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.FieldPattern l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+      Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
+      <> case t of ExtAST.PunnedFieldPattern {} -> Map.singleton Extensions.NamedFieldPuns [(start, end)]
+                   _ -> mempty
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
