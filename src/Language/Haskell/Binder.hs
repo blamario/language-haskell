@@ -38,7 +38,8 @@ import qualified Transformation.Rank2
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST hiding (Declaration(..))
-import Language.Haskell.Extensions (Extension, partitionContradictory, withImplications)
+import qualified Language.Haskell.Extensions as Extensions
+import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
@@ -256,7 +257,16 @@ instance {-# OVERLAPS #-}
    attribution (Di.Keep (Binder exts modEnv)) node atts = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
                               -> Di.Atts (Environment l) (LocalEnvironment l)
-            moduleAttribution (AST.ExtendedModule extensions body) = atts
+            moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts''
+               where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
+                     exts' = Extensions.withImplications (extensionMap <> exts)
+                     atts' = Di.attribution (Di.Keep $ Binder exts' modEnv) body atts
+                     atts'' = case Map.lookup Extensions.FieldSelectors exts' of
+                        Just False -> atts'{Di.syn = onMap (Map.mapMaybe noFieldSelector) (Di.syn atts')}
+                        _ -> atts'
+                     noFieldSelector (ValueBinding RecordField) = Nothing
+                     noFieldSelector (ValueBinding RecordFieldAndValue) = Just (ValueBinding DefinedValue)
+                     noFieldSelector x = Just x
             moduleAttribution (AST.AnonymousModule modImports body) =
                Di.Atts{
                   Di.inh= moduleGlobalScope,
