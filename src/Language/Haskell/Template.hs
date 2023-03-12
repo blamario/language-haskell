@@ -189,6 +189,7 @@ expressionTemplate (RecordExpression record fields) =
     of ConstructorExpression con | ConstructorReference name <- extract con -> RecConE (qnameTemplate name)
        e -> RecUpdE $ expressionTemplate e)
    (fieldBindingTemplate . extract <$> fields)
+expressionTemplate WildcardRecordExpression{} = error "TH doesn't support record wildcards"
 expressionTemplate (ReferenceExpression name) = VarE (qnameTemplate name)
 expressionTemplate (RightSectionExpression op right) =
    InfixE Nothing (nameReferenceTemplate op) (Just $ wrappedExpressionTemplate right)
@@ -474,6 +475,7 @@ patternTemplate (RecordPattern constructor fields) =
    where
      fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
      fieldPatternTemplate (PunnedFieldPattern q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
+patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate WildcardPattern = WildP

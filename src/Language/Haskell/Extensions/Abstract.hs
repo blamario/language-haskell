@@ -29,6 +29,7 @@ class Haskell λ => ExtendedHaskell λ where
    overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s
    fieldProjection :: NonEmpty (Name λ) -> Expression λ l d s
+   wildcardRecordExpression :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s
    safeImportDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ)
                          -> Maybe (s (ImportSpecification l l d d))
@@ -143,6 +144,7 @@ class Haskell λ => ExtendedHaskell λ where
    visibleKindKindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
    constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
                                           -> Pattern λ l d s
+   wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
    classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),

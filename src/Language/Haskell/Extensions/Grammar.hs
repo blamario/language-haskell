@@ -1626,6 +1626,21 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
+recordWildCardsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+                                       g ~ ExtendedGrammar l t (NodeWrap t),
+                                       Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+recordWildCardsMixin self super =
+   super{
+      report = (report super){
+         bareExpression = (super & report & bareExpression)
+            <|> Abstract.wildcardRecordExpression <$> (super & report & qualifiedConstructor)
+                <*> braces (wrap (self & report & fieldBinding) `sepBy` comma <* comma <* delimiter ".."),
+         aPattern = (super & report & aPattern)
+            <|> Abstract.wildcardRecordPattern <$> (super & report & qualifiedConstructor)
+                <*> braces (wrap (self & report & fieldPattern) `sepBy` comma <* comma <* delimiter "..")}}
+
 overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
                                            Ord t, Show t, OutlineMonoid t, TextualMonoid t,

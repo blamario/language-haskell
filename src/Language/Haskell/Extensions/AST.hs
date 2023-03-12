@@ -124,12 +124,14 @@ instance Abstract.ExtendedHaskell Language where
    visibleKindApplication = VisibleKindApplication
    visibleKindKindApplication = VisibleKindKindApplication
    constructorPatternWithTypeApplications = ConstructorPattern
+   wildcardRecordPattern = WildcardRecordPattern
 
    punnedFieldBinding = PunnedFieldBinding
    punnedFieldPattern = PunnedFieldPattern
    overloadedLabel = OverloadedLabel
    getField = GetField
    fieldProjection = FieldProjection
+   wildcardRecordExpression = WildcardRecordExpression
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
@@ -469,6 +471,7 @@ data Expression λ l d s =
    | OverloadedLabel Text
    | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
    | FieldProjection (NonEmpty (Abstract.Name λ))
+   | WildcardRecordExpression (Abstract.QualifiedName λ) [s (Abstract.FieldBinding l l d d)]
 
 data FieldBinding λ l d s =
   FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -482,6 +485,7 @@ data Pattern λ l d s =
    | ListPattern [s (Abstract.Pattern l l d d)]
    | LiteralPattern (s (Abstract.Value l l d d))
    | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | WildcardRecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
