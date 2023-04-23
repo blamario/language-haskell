@@ -1,14 +1,34 @@
-{-# Language ConstraintKinds, FlexibleContexts, KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
+{-# Language ConstraintKinds, DataKinds, FlexibleContexts, KindSignatures, MultiParamTypeClasses,
+             TypeFamilies, TypeFamilyDependencies #-}
 module Language.Haskell.Extensions.Abstract (ExtendedHaskell(..),
+                                             Construct,
+                                             HaskellExtendedWith (build),
+                                             RecordWildCardConstruction (..),
                                              DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
                                              module Language.Haskell.Abstract) where
 
+import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import qualified Transformation.Deep as Deep
 
 import Language.Haskell.Abstract hiding (DeeplyFunctor, DeeplyFoldable, DeeplyTraversable)
 import qualified Language.Haskell.Abstract as Report
+import Language.Haskell.Extensions (Extension)
+import qualified Language.Haskell.Extensions as Extensions
+
+
+type Branch = * -> (* -> *) -> (* -> *) -> *
+
+type family Construct (e :: Extension) = (x :: * -> Branch) | x -> e where
+   Construct 'Extensions.RecordWildCards = RecordWildCardConstruction
+   
+class Haskell λ => HaskellExtendedWith (e :: Extension) λ where
+   build :: Construct e λ l d s
+
+data RecordWildCardConstruction λ l d s = RecordWildCardConstruction {
+   wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
+   wildcardRecordPattern' :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
 class Haskell λ => ExtendedHaskell λ where
    type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ

@@ -1,4 +1,5 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
+{-# Language DataKinds, DeriveDataTypeable, FlexibleContexts, FlexibleInstances,
+             MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
@@ -13,6 +14,7 @@ import Data.List.NonEmpty (NonEmpty, toList)
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
+import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
@@ -26,6 +28,11 @@ import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
+
+instance Abstract.HaskellExtendedWith 'Extensions.RecordWildCards Language where
+   build = Abstract.RecordWildCardConstruction {
+      Abstract.wildcardRecordExpression' = WildcardRecordExpression,
+      Abstract.wildcardRecordPattern' = WildcardRecordPattern}
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language

@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, NamedFieldPuns, OverloadedStrings,
+{-# Language DataKinds, FlexibleContexts, FlexibleInstances, NamedFieldPuns, OverloadedStrings,
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances #-}
 
@@ -1626,7 +1626,8 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
-recordWildCardsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
+recordWildCardsMixin :: forall l g t. (Abstract.HaskellExtendedWith 'RecordWildCards l,
+                                       LexicalParsing (Parser g t),
                                        g ~ ExtendedGrammar l t (NodeWrap t),
                                        Ord t, Show t, OutlineMonoid t, TextualMonoid t,
                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
@@ -1635,10 +1636,10 @@ recordWildCardsMixin self super =
    super{
       report = (report super){
          bareExpression = (super & report & bareExpression)
-            <|> Abstract.wildcardRecordExpression <$> (super & report & qualifiedConstructor)
+            <|> Abstract.wildcardRecordExpression' Abstract.build <$> (super & report & qualifiedConstructor)
                 <*> braces (wrap (self & report & fieldBinding) `sepBy` comma <* comma <* delimiter ".."),
          aPattern = (super & report & aPattern)
-            <|> Abstract.wildcardRecordPattern <$> (super & report & qualifiedConstructor)
+            <|> Abstract.wildcardRecordPattern' Abstract.build <$> (super & report & qualifiedConstructor)
                 <*> braces (wrap (self & report & fieldPattern) `sepBy` comma <* comma <* delimiter "..")}}
 
 overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
