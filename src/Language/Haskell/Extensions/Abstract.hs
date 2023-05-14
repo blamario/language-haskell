@@ -1,9 +1,8 @@
 {-# Language ConstraintKinds, DataKinds, FlexibleContexts, KindSignatures, MultiParamTypeClasses,
-             TypeFamilies, TypeFamilyDependencies #-}
+             RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators, UndecidableInstances #-}
 module Language.Haskell.Extensions.Abstract (ExtendedHaskell(..),
-                                             Construct,
-                                             HaskellExtendedWith (build),
-                                             RecordWildCardConstruction (..),
+                                             ExtendedWith (build),
+                                             Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern'),
                                              DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
                                              module Language.Haskell.Abstract) where
 
@@ -20,20 +19,29 @@ import qualified Language.Haskell.Extensions as Extensions
 
 type Branch = * -> (* -> *) -> (* -> *) -> *
 
-type family Construct (e :: Extension) = (x :: * -> Branch) | x -> e where
-   Construct 'Extensions.RecordWildCards = RecordWildCardConstruction
-   
-class Haskell λ => HaskellExtendedWith (e :: Extension) λ where
+data family Construct (e :: Extension) :: * -> Branch
+
+class ExtendedWith (e :: Extension) λ where
    build :: Construct e λ l d s
 
-data RecordWildCardConstruction λ l d s = RecordWildCardConstruction {
+-- * 'Construct' instances for language extensions
+
+data instance Construct 'Extensions.RecordWildCards λ l d s = RecordWildCardConstruction {
    wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
    wildcardRecordPattern' :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
+data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
+   hashLiteral' :: Value λ l d s -> Value λ l d s}
+
+data instance Construct 'Extensions.RecursiveDo λ l d s = RecursiveDoConstruction {
+   mdoExpression' :: s (GuardedExpression l l d d) -> Expression λ l d s,
+   recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s
+   }
+
 class Haskell λ => ExtendedHaskell λ where
-   type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type TypeVarBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type GADTConstructor λ = (x :: Branch) | x -> λ
+   type Kind λ = (x :: Branch) | x -> λ
+   type TypeVarBinding λ = (x :: Branch) | x -> λ
    type ModuleMember λ = x | x -> λ
    type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s

@@ -1626,7 +1626,7 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
-recordWildCardsMixin :: forall l g t. (Abstract.HaskellExtendedWith 'RecordWildCards l,
+recordWildCardsMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecordWildCards l,
                                        LexicalParsing (Parser g t),
                                        g ~ ExtendedGrammar l t (NodeWrap t),
                                        Ord t, Show t, OutlineMonoid t, TextualMonoid t,

@@ -29,7 +29,7 @@ import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
 
-instance Abstract.HaskellExtendedWith 'Extensions.RecordWildCards Language where
+instance Abstract.ExtendedWith 'Extensions.RecordWildCards Language where
    build = Abstract.RecordWildCardConstruction {
       Abstract.wildcardRecordExpression' = WildcardRecordExpression,
       Abstract.wildcardRecordPattern' = WildcardRecordPattern}
