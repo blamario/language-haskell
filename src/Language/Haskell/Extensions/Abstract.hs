@@ -1,10 +1,16 @@
 {-# Language ConstraintKinds, DataKinds, FlexibleContexts, KindSignatures, MultiParamTypeClasses,
-             RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Extensions.Abstract (ExtendedHaskell(..),
-                                             ExtendedWith (build),
-                                             Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern'),
-                                             DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
-                                             module Language.Haskell.Abstract) where
+             RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators,
+             UndecidableInstances, UndecidableSuperClasses #-}
+module Language.Haskell.Extensions.Abstract (
+   ExtendedHaskell(..),
+   ExtendedWith (build),
+   Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
+              MagicHashConstruction, hashLiteral',
+              RecursiveDoConstruction, mdoExpression', recursiveStatement',
+              ParallelListComprehensionConstruction, parallelListComprehension',
+              TupleSectionConstruction, tupleSectionExpression'),
+   DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+   module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
@@ -24,6 +30,24 @@ data family Construct (e :: Extension) :: * -> Branch
 class ExtendedWith (e :: Extension) λ where
    build :: Construct e λ l d s
 
+type family ExtendedWithAllOf (es :: [Extension]) λ :: Kind.Constraint where
+   ExtendedWithAllOf '[] _ = ()
+   ExtendedWithAllOf (e ': es) λ = (ExtendedWith e λ, ExtendedWithAllOf es λ)
+
+type family Without (e :: Extension) (es :: [Extension]) where
+   Without _ '[] = '[]
+   Without e (e ': es) = Without e es
+   Without e1 (e2 ': es) = e2 ': Without e1 es
+
+type family Difference (xs :: [Extension]) (ys :: [Extension]) where
+   Difference xs '[] = xs
+   Difference xs (y ': ys) = Difference (Without y xs) ys
+
+type Transpiler λ1 λ2 d s = Module λ1 λ1 d s -> Module λ2 λ2 d s
+
+type Reformulator xs ys λ d s = ExtendedWithAllOf xs λ =>
+  forall l. (Haskell l, ExtendedWithAllOf (Difference ys xs) l) => Transpiler λ l d s
+
 -- * 'Construct' instances for language extensions
 
 data instance Construct 'Extensions.RecordWildCards λ l d s = RecordWildCardConstruction {
@@ -35,30 +59,49 @@ data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
 
 data instance Construct 'Extensions.RecursiveDo λ l d s = RecursiveDoConstruction {
    mdoExpression' :: s (GuardedExpression l l d d) -> Expression λ l d s,
-   recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s
-   }
+   recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s}
 
-class Haskell λ => ExtendedHaskell λ where
+data instance Construct 'Extensions.ParallelListComprehensions λ l d s = ParallelListComprehensionConstruction {
+   parallelListComprehension' :: s (Expression l l d d)
+                              -> NonEmpty (s (Statement l l d d))
+                              -> NonEmpty (s (Statement l l d d))
+                              -> [NonEmpty (s (Statement l l d d))]
+                              -> Expression λ l d s}
+
+data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstruction {
+   tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
+
+class (Haskell λ,
+       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions,
+                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections] λ) =>
+      ExtendedHaskell λ where
    type GADTConstructor λ = (x :: Branch) | x -> λ
    type Kind λ = (x :: Branch) | x -> λ
    type TypeVarBinding λ = (x :: Branch) | x -> λ
    type ModuleMember λ = x | x -> λ
    type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
+   hashLiteral = hashLiteral' build
    mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
+   mdoExpression = mdoExpression' build
    parallelListComprehension :: s (Expression l l d d)
                              -> NonEmpty (s (Statement l l d d))
                              -> NonEmpty (s (Statement l l d d))
                              -> [NonEmpty (s (Statement l l d d))]
                              -> Expression λ l d s
+   parallelListComprehension = parallelListComprehension' build
    tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s
+   tupleSectionExpression = tupleSectionExpression' build
+
    lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s
    multiWayIfExpression :: [s (GuardedExpression l l d d)] -> Expression λ l d s
    overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s
    fieldProjection :: NonEmpty (Name λ) -> Expression λ l d s
    wildcardRecordExpression :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s
+   wildcardRecordExpression = wildcardRecordExpression' build
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s
+   recursiveStatement = recursiveStatement' build
    safeImportDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ)
                          -> Maybe (s (ImportSpecification l l d d))
                          -> Import λ l d s
@@ -173,6 +216,7 @@ class Haskell λ => ExtendedHaskell λ where
    constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
                                           -> Pattern λ l d s
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
+   wildcardRecordPattern = wildcardRecordPattern' build
    classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),

@@ -85,9 +85,11 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
-extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                              Ord t, Show t, OutlineMonoid t, Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                              g ~ ExtendedGrammar l t (NodeWrap t))
+extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l,
+                                  LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
+                                  Ord t, Show t, OutlineMonoid t,
+                                  Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                                  g ~ ExtendedGrammar l t (NodeWrap t))
                 => Map (Set Extension) [(Int, GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t))]
 extensionMixins =
   Map.fromList [
@@ -427,17 +429,18 @@ magicHashMixin self super =
                    <|> Abstract.hashLiteral . Abstract.hashLiteral
                        <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
 
-recursiveDoMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+recursiveDoMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecursiveDo l,
+                                   LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                                g ~ ExtendedGrammar l t (NodeWrap t))
                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 recursiveDoMixin self super = super{
    report= (report super){
       closedBlockExpresion = (super & report & closedBlockExpresion)
-         <|> Abstract.mdoExpression <$ keyword "mdo" <*> wrap (self & report & statements),
+         <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap (self & report & statements),
       statement = (super & report & statement)
                   <|> Deep.InL
-                      <$> wrap (Abstract.recursiveStatement
+                      <$> wrap (Abstract.recursiveStatement' Abstract.build
                                 . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
                                 <$ keyword "rec"
                                 <*> blockOf (self & report & statement)),

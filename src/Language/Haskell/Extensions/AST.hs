@@ -29,10 +29,27 @@ import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
 
+instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
+   build = Abstract.MagicHashConstruction {
+      Abstract.hashLiteral' = HashLiteral}
+
+instance Abstract.ExtendedWith 'Extensions.ParallelListComprehensions Language where
+   build = Abstract.ParallelListComprehensionConstruction {
+      Abstract.parallelListComprehension' = ParallelListComprehension}
+
 instance Abstract.ExtendedWith 'Extensions.RecordWildCards Language where
    build = Abstract.RecordWildCardConstruction {
       Abstract.wildcardRecordExpression' = WildcardRecordExpression,
       Abstract.wildcardRecordPattern' = WildcardRecordPattern}
+
+instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
+   build = Abstract.RecursiveDoConstruction {
+      Abstract.mdoExpression' = MDoExpression,
+      Abstract.recursiveStatement' = RecursiveStatement}
+
+instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
+   build = Abstract.TupleSectionConstruction {
+      Abstract.tupleSectionExpression' = TupleSectionExpression}
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
@@ -40,13 +57,8 @@ instance Abstract.ExtendedHaskell Language where
    type TypeVarBinding Language = TypeVarBinding Language
    type ModuleMember Language = ModuleMember Language
    type TypeRole Language = TypeRole Language
-   hashLiteral = HashLiteral
-   mdoExpression = MDoExpression
-   parallelListComprehension = ParallelListComprehension
-   tupleSectionExpression = TupleSectionExpression
    lambdaCaseExpression = LambdaCaseExpression
    multiWayIfExpression = MultiWayIfExpression
-   recursiveStatement = RecursiveStatement
    safeImportDeclaration q = Import True q Nothing 
    packageQualifiedImportDeclaration q p = Import False q (Just p)
    safePackageQualifiedImportDeclaration q p = Import True q (Just p)
@@ -131,14 +143,12 @@ instance Abstract.ExtendedHaskell Language where
    visibleKindApplication = VisibleKindApplication
    visibleKindKindApplication = VisibleKindKindApplication
    constructorPatternWithTypeApplications = ConstructorPattern
-   wildcardRecordPattern = WildcardRecordPattern
 
    punnedFieldBinding = PunnedFieldBinding
    punnedFieldPattern = PunnedFieldPattern
    overloadedLabel = OverloadedLabel
    getField = GetField
    fieldProjection = FieldProjection
-   wildcardRecordExpression = WildcardRecordExpression
 
 instance Abstract.Haskell Language where
    type Module Language = Module Language
