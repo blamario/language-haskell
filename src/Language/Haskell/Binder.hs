@@ -8,10 +8,11 @@ module Language.Haskell.Binder (
    Binder, BindingVerifier,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
-   TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordField),
+   TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
    Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
-   onMap, preludeName, withBindings) where
+   onMap, withBindings,
+   preludeName, baseName) where
 
 import Control.Applicative ((<|>))
 import Control.Exception (assert)
