@@ -22,7 +22,8 @@ library
                        Language.Haskell.Grammar, Language.Haskell.Reorganizer, Language.Haskell.Template,
                        Language.Haskell.Extensions,
                        Language.Haskell.Extensions.Abstract, Language.Haskell.Extensions.AST,
-                       Language.Haskell.Extensions.Grammar, Language.Haskell.Extensions.Verifier
+                       Language.Haskell.Extensions.Grammar, Language.Haskell.Extensions.Reformulator,
+                       Language.Haskell.Extensions.Verifier
   other-modules:       Paths_language_haskell
   build-depends:       base >=4.7 && <5, ghc-prim < 0.10,
                        bytestring < 0.12, text < 3, containers >= 0.5.8 && < 1.0,

@@ -4,6 +4,7 @@
 module Language.Haskell.Extensions.Abstract (
    ExtendedHaskell(..),
    ExtendedWith (build),
+   ExtendedWithAllOf,
    Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
               MagicHashConstruction, hashLiteral',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
@@ -33,20 +34,6 @@ class ExtendedWith (e :: Extension) λ where
 type family ExtendedWithAllOf (es :: [Extension]) λ :: Kind.Constraint where
    ExtendedWithAllOf '[] _ = ()
    ExtendedWithAllOf (e ': es) λ = (ExtendedWith e λ, ExtendedWithAllOf es λ)
-
-type family Without (e :: Extension) (es :: [Extension]) where
-   Without _ '[] = '[]
-   Without e (e ': es) = Without e es
-   Without e1 (e2 ': es) = e2 ': Without e1 es
-
-type family Difference (xs :: [Extension]) (ys :: [Extension]) where
-   Difference xs '[] = xs
-   Difference xs (y ': ys) = Difference (Without y xs) ys
-
-type Transpiler λ1 λ2 d s = Module λ1 λ1 d s -> Module λ2 λ2 d s
-
-type Reformulator xs ys λ d s = ExtendedWithAllOf xs λ =>
-  forall l. (Haskell l, ExtendedWithAllOf (Difference ys xs) l) => Transpiler λ l d s
 
 -- * 'Construct' instances for language extensions
 
