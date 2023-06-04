@@ -108,6 +108,25 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
 
 
 instance (Deep.Functor (ReformulationOf e es λ l pos s) g,
-          Transformation.At (ReformulationOf e es λ l pos s) (g (Wrap λ pos s) (Wrap λ pos s))) =>
+          Transformation.At (ReformulationOf e es λ l pos s) (g (Compose (Wrap l pos s) (AbstractIn l)) (Compose (Wrap l pos s) (AbstractIn l)))) =>
          Full.Functor (ReformulationOf e es λ l pos s) g where
-   (<$>) = Full.mapDownDefault
+   (<$>) = Full.mapUpDefault
+
+
+mapImport :: (Abstract.ExtendedHaskell λ2,
+              Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
+              Abstract.Name λ1 ~ AST.Name λ1) => AST.Import λ1 l d s -> Abstract.Import λ2 l d s
+mapImport (AST.Import False qualified Nothing modName alias detail) =
+   Abstract.importDeclaration qualified (mapModuleName modName) (mapModuleName <$> alias) detail
+mapImport (AST.Import True qualified Nothing modName alias detail) =
+   Abstract.safeImportDeclaration qualified (mapModuleName modName) (mapModuleName <$> alias) detail
+mapImport (AST.Import False qualified (Just package) modName alias detail) =
+   Abstract.packageQualifiedImportDeclaration qualified package (mapModuleName modName) (mapModuleName <$> alias) detail
+mapImport (AST.Import True qualified (Just package) modName alias detail) =
+   Abstract.safePackageQualifiedImportDeclaration qualified package (mapModuleName modName) (mapModuleName <$> alias) detail
+
+mapModuleName :: (Abstract.Haskell λ2, Abstract.Name λ1 ~ AST.Name λ1) => AST.ModuleName λ1 -> Abstract.ModuleName λ2
+mapModuleName (AST.ModuleName parts) = Abstract.moduleName (mapName <$> parts)
+
+mapName :: Abstract.Haskell λ2 => AST.Name λ1 -> Abstract.Name λ2
+mapName (AST.Name name) = Abstract.name name
