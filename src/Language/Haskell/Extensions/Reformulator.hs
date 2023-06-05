@@ -108,7 +108,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
 
 
 instance (Deep.Functor (ReformulationOf e es λ l pos s) g,
-          Transformation.At (ReformulationOf e es λ l pos s) (g (Compose (Wrap l pos s) (AbstractIn l)) (Compose (Wrap l pos s) (AbstractIn l)))) =>
+          Transformation.At (ReformulationOf e es λ l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Functor (ReformulationOf e es λ l pos s) g where
    (<$>) = Full.mapUpDefault
 

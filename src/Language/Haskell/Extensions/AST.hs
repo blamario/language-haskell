@@ -29,6 +29,13 @@ import qualified Transformation.Shallow.TH
 
 data Language = Language deriving (Data, Eq, Show)
 
+type instance Abstract.ExtensionsSupportedBy Language = '[
+   'Extensions.MagicHash,
+   'Extensions.ParallelListComprehensions,
+   'Extensions.RecordWildCards,
+   'Extensions.RecursiveDo,
+   'Extensions.TupleSections]
+
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
       Abstract.hashLiteral' = HashLiteral}

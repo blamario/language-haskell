@@ -1,5 +1,5 @@
 {-# Language ConstraintKinds, DataKinds, FlexibleContexts, KindSignatures, MultiParamTypeClasses,
-             RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators,
+             PolyKinds, RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators,
              UndecidableInstances, UndecidableSuperClasses #-}
 module Language.Haskell.Extensions.Abstract (
    ExtendedHaskell(..),
@@ -10,12 +10,17 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression'),
+   ExtensionsSupportedBy, HavingExtension,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
+import Data.Type.Bool (If)
+import Data.Void (Void)
+import GHC.TypeError (ErrorMessage ((:<>:)))
+import qualified GHC.TypeError as TypeError
 import qualified Transformation.Deep as Deep
 
 import Language.Haskell.Abstract hiding (DeeplyFunctor, DeeplyFoldable, DeeplyTraversable)
@@ -28,12 +33,25 @@ type Branch = * -> (* -> *) -> (* -> *) -> *
 
 data family Construct (e :: Extension) :: * -> Branch
 
-class ExtendedWith (e :: Extension) λ where
+type family ExtensionsSupportedBy λ :: [Extension]
+
+class If (Elem e (ExtensionsSupportedBy λ))
+         (() :: Kind.Constraint)
+         (TypeError.TypeError (TypeError.Text "Missing extension " :<>: TypeError.ShowType e)) =>
+      ExtendedWith (e :: Extension) λ where
    build :: Construct e λ l d s
 
 type family ExtendedWithAllOf (es :: [Extension]) λ :: Kind.Constraint where
    ExtendedWithAllOf '[] _ = ()
    ExtendedWithAllOf (e ': es) λ = (ExtendedWith e λ, ExtendedWithAllOf es λ)
+
+type family HavingExtension (e :: Extension) λ t where
+   HavingExtension e λ t = If (Elem e (ExtensionsSupportedBy λ)) t Void
+
+type family Elem (t :: k) (ts :: [k]) :: Bool where
+   Elem t (t ': _) = True
+   Elem t (_ ': ts) = Elem t ts
+   Elem _ '[] = 'False
 
 -- * 'Construct' instances for language extensions
 
