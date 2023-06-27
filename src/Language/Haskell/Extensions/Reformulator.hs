@@ -1,5 +1,5 @@
 {-# Language ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Language.Haskell.Extensions.Reformulator where
 
@@ -101,6 +101,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
                Nothing -> error ("Environment lacks record constructor " ++ show con)
+            explicitFieldNames :: [AST.Name l]
             explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) fields
             explicitFieldName (AST.FieldBinding name _) = Binder.baseName name
             explicitFieldName (AST.PunnedFieldBinding name) = Binder.baseName name
@@ -126,6 +127,21 @@ mapImport (AST.Import False qualified (Just package) modName alias detail) =
    Abstract.packageQualifiedImportDeclaration qualified package (mapModuleName modName) (mapModuleName <$> alias) detail
 mapImport (AST.Import True qualified (Just package) modName alias detail) =
    Abstract.safePackageQualifiedImportDeclaration qualified package (mapModuleName modName) (mapModuleName <$> alias) detail
+
+mapFieldBinding :: (Abstract.Haskell λ2,
+                    Abstract.ExtendedWith 'Extensions.NamedFieldPuns λ2,
+                    Abstract.QualifiedName λ1 ~ AST.QualifiedName λ1,
+                    Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
+                    Abstract.Name λ1 ~ AST.Name λ1) => AST.FieldBinding λ1 l d s -> Abstract.FieldBinding λ2 l d s
+mapFieldBinding (AST.FieldBinding name value) = Abstract.fieldBinding (mapQualifiedName name) value
+mapFieldBinding (AST.PunnedFieldBinding name) = Abstract.punnedFieldBinding' Abstract.build (mapQualifiedName name)
+
+mapQualifiedName :: (Abstract.Haskell λ2,
+                     Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
+                     Abstract.Name λ1 ~ AST.Name λ1)
+                 => AST.QualifiedName λ1 -> Abstract.QualifiedName λ2
+mapQualifiedName (AST.QualifiedName modName localName) =
+   Abstract.qualifiedName (mapModuleName <$> modName) (mapName localName)
 
 mapModuleName :: (Abstract.Haskell λ2, Abstract.Name λ1 ~ AST.Name λ1) => AST.ModuleName λ1 -> Abstract.ModuleName λ2
 mapModuleName (AST.ModuleName parts) = Abstract.moduleName (mapName <$> parts)

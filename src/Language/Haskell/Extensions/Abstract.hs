@@ -7,6 +7,7 @@ module Language.Haskell.Extensions.Abstract (
    ExtendedWithAllOf,
    Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
               MagicHashConstruction, hashLiteral',
+              NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression'),
@@ -62,6 +63,10 @@ data instance Construct 'Extensions.RecordWildCards λ l d s = RecordWildCardCon
    wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
    wildcardRecordPattern' :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
+data instance Construct 'Extensions.NamedFieldPuns λ l d s = NamedFieldPunsConstruction {
+   punnedFieldBinding' :: QualifiedName λ -> FieldBinding λ l d s,
+   punnedFieldPattern' :: QualifiedName λ -> FieldPattern λ l d s}
+
 data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
    hashLiteral' :: Value λ l d s -> Value λ l d s}
 
@@ -80,7 +85,7 @@ data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstru
    tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
 class (Haskell λ,
-       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions,
+       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: Branch) | x -> λ
@@ -166,6 +171,8 @@ class (Haskell λ,
 
    punnedFieldBinding :: QualifiedName λ -> FieldBinding λ l d s
    punnedFieldPattern :: QualifiedName λ -> FieldPattern λ l d s
+   punnedFieldBinding = punnedFieldBinding' build
+   punnedFieldPattern = punnedFieldPattern' build
 
    dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s

@@ -31,6 +31,7 @@ data Language = Language deriving (Data, Eq, Show)
 
 type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.MagicHash,
+   'Extensions.NamedFieldPuns,
    'Extensions.ParallelListComprehensions,
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
@@ -39,6 +40,11 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
       Abstract.hashLiteral' = HashLiteral ()}
+
+instance Abstract.ExtendedWith 'Extensions.NamedFieldPuns Language where
+   build = Abstract.NamedFieldPunsConstruction {
+      Abstract.punnedFieldBinding' = PunnedFieldBinding,
+      Abstract.punnedFieldPattern' = PunnedFieldPattern}
 
 instance Abstract.ExtendedWith 'Extensions.ParallelListComprehensions Language where
    build = Abstract.ParallelListComprehensionConstruction {
@@ -151,8 +157,6 @@ instance Abstract.ExtendedHaskell Language where
    visibleKindKindApplication = VisibleKindKindApplication
    constructorPatternWithTypeApplications = ConstructorPattern
 
-   punnedFieldBinding = PunnedFieldBinding
-   punnedFieldPattern = PunnedFieldPattern
    overloadedLabel = OverloadedLabel
    getField = GetField
    fieldProjection = FieldProjection
