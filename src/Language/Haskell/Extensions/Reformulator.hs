@@ -58,6 +58,7 @@ instance {-# overlappable #-} SameWrap e es pos s λ l =>
 
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
+          Abstract.Supports 'Extensions.RecordWildCards λ,
           Abstract.FieldPattern l ~ AST.FieldPattern l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,
@@ -66,7 +67,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
    `Transformation.At` AST.Pattern λ l (Wrap λ pos s) (Wrap λ pos s)
   where
    Reformulation $ Compose (env@(Di.Atts inherited _),
-                            (s, AST.WildcardRecordPattern con@(AST.QualifiedName modName _) fields)) =
+                            (s, AST.WildcardRecordPattern () con@(AST.QualifiedName modName _) fields)) =
       Compose (env, (s, AST.RecordPattern con $ fields ++ implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->
@@ -82,6 +83,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
 
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
+          Abstract.Supports 'Extensions.RecordWildCards λ,
           Abstract.Haskell l,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -91,7 +93,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
    `Transformation.At` AST.Expression λ l (Wrap λ pos s) (Wrap λ pos s)
   where
    Reformulation $ Compose (env@(Di.Atts inherited _),
-                            (s, AST.WildcardRecordExpression con@(AST.QualifiedName modName _) fields)) =
+                            (s, AST.WildcardRecordExpression () con@(AST.QualifiedName modName _) fields)) =
       Compose (env, (s, AST.RecordExpression conExp $ fields ++ implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->

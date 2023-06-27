@@ -46,8 +46,8 @@ instance Abstract.ExtendedWith 'Extensions.ParallelListComprehensions Language w
 
 instance Abstract.ExtendedWith 'Extensions.RecordWildCards Language where
    build = Abstract.RecordWildCardConstruction {
-      Abstract.wildcardRecordExpression' = WildcardRecordExpression,
-      Abstract.wildcardRecordPattern' = WildcardRecordPattern}
+      Abstract.wildcardRecordExpression' = WildcardRecordExpression (),
+      Abstract.wildcardRecordPattern' = WildcardRecordPattern ()}
 
 instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
    build = Abstract.RecursiveDoConstruction {
@@ -495,7 +495,9 @@ data Expression λ l d s =
    | OverloadedLabel Text
    | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
    | FieldProjection (NonEmpty (Abstract.Name λ))
-   | WildcardRecordExpression (Abstract.QualifiedName λ) [s (Abstract.FieldBinding l l d d)]
+   | WildcardRecordExpression !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
+                               (Abstract.QualifiedName λ)
+                               [s (Abstract.FieldBinding l l d d)]
 
 data FieldBinding λ l d s =
   FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -509,7 +511,9 @@ data Pattern λ l d s =
    | ListPattern [s (Abstract.Pattern l l d d)]
    | LiteralPattern (s (Abstract.Value l l d d))
    | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
-   | WildcardRecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | WildcardRecordPattern !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
+                            (Abstract.QualifiedName λ)
+                            [s (Abstract.FieldPattern l l d d)]
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
@@ -645,20 +649,23 @@ deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Context λ l d s)
 
 deriving instance Typeable (Expression λ l d s)
-deriving instance (Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
-deriving instance (Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
+deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Expression λ l d s)
-deriving instance (Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
@@ -674,16 +681,19 @@ deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedN
                   Eq (FieldBinding λ l d s)
 
 deriving instance Typeable (Pattern λ l d s)
-deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (s (Abstract.Type l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
-deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.FieldPattern l l d d)),
+deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.FieldPattern l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (s (Abstract.Type l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
-deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.FieldPattern l l d d)),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.FieldPattern l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Pattern λ l d s)
 
