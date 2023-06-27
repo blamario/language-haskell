@@ -38,7 +38,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
-      Abstract.hashLiteral' = HashLiteral}
+      Abstract.hashLiteral' = HashLiteral ()}
 
 instance Abstract.ExtendedWith 'Extensions.ParallelListComprehensions Language where
    build = Abstract.ParallelListComprehensionConstruction {
@@ -529,8 +529,7 @@ data Value λ l (d :: * -> *) (s :: * -> *) =
    | FloatingLiteral Rational
    | IntegerLiteral Integer
    | StringLiteral Text
-   | HashLiteral (Value λ l d s)
-   deriving (Data, Eq, Show)
+   | HashLiteral !(Abstract.SupportFor 'Extensions.MagicHash λ) (Value λ l d s)
 
 deriving instance Typeable (Import λ l d s)
 deriving instance (Data (s (Abstract.ImportSpecification l l d d)), Data (Abstract.ModuleName λ),
@@ -703,6 +702,13 @@ deriving instance (Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.Ex
                    => Show (Statement λ l d s)
 deriving instance (Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.Expression l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d))) => Eq (Statement λ l d s)
+
+deriving instance Typeable (Value λ l d s)
+deriving instance (Data (Abstract.SupportFor 'Extensions.MagicHash λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Value λ l d s)
+deriving instance Show (Abstract.SupportFor 'Extensions.MagicHash λ) => Show (Value λ l d s)
+deriving instance Eq (Abstract.SupportFor 'Extensions.MagicHash λ) => Eq (Value λ l d s)
+
 
 $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,

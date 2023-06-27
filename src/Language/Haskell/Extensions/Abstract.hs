@@ -10,7 +10,7 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression'),
-   ExtensionsSupportedBy, HavingExtension,
+   ExtensionsSupportedBy, SupportFor, Supports, SupportsNo,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    module Language.Haskell.Abstract) where
 
@@ -45,13 +45,16 @@ type family ExtendedWithAllOf (es :: [Extension]) λ :: Kind.Constraint where
    ExtendedWithAllOf '[] _ = ()
    ExtendedWithAllOf (e ': es) λ = (ExtendedWith e λ, ExtendedWithAllOf es λ)
 
-type family HavingExtension (e :: Extension) λ t where
-   HavingExtension e λ t = If (Elem e (ExtensionsSupportedBy λ)) t Void
-
 type family Elem (t :: k) (ts :: [k]) :: Bool where
    Elem t (t ': _) = True
    Elem t (_ ': ts) = Elem t ts
    Elem _ '[] = 'False
+
+type SupportFor (e :: Extension) (l :: Kind.Type) = If (Elem e (ExtensionsSupportedBy l)) () Void
+
+type Supports e l = SupportFor e l ~ ()
+
+type SupportsNo e l = SupportFor e l ~ Void
 
 -- * 'Construct' instances for language extensions
 
