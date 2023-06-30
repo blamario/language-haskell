@@ -245,7 +245,12 @@ declarationTemplates (GADTDeclaration lhs kind constructors derivings)
      [DataD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
             (gadtConstructorTemplate . extract <$> constructors)
             (derivingsTemplate $ extract <$> derivings)]
-declarationTemplates DefaultDeclaration{} = error "Template Haskell can't represent a default declaration"
+declarationTemplates (DefaultDeclaration types) =
+#if MIN_VERSION_template_haskell(2,19,0)
+   [DefaultD (typeTemplate . extract <$> types)]
+#else
+   error "Template Haskell <2.19 can't represent a default declaration"
+#endif
 declarationTemplates (EquationDeclaration lhs rhs wheres)
    | VariableLHS name <- extract lhs = [ValD (VarP $ nameTemplate name) rhs' declarations]
    | PatternLHS pat <- extract lhs = [ValD (patternTemplate $ extract pat) rhs' declarations]
