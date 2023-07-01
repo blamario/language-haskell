@@ -20,6 +20,7 @@ import Data.Semigroup.Factorial (Factorial)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
 
+import qualified Rank2
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -185,7 +186,7 @@ reorganizeModules modules = Map.traverseWithKey extractErrors reorganizedModules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
 
-instance (Deep.Traversable (Reorganization l pos s) g,
+instance (Rank2.Traversable (g (Wrap l pos s)), Deep.Traversable (Reorganization l pos s) g,
           Transformation.At (Reorganization l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Traversable (Reorganization l pos s) g where
    traverse = Full.traverseUpDefault

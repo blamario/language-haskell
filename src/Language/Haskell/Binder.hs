@@ -9,7 +9,7 @@ module Language.Haskell.Binder (
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordField),
-   Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
+   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
    onMap, preludeName, withBindings) where
 
@@ -49,7 +49,9 @@ type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
 type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
-type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l)))
+type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
+
+type WithEnvironment l = Compose ((,) (Attributes l))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
@@ -231,8 +233,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f) f
          where
    attribution (Di.Keep (Binder exts modEnv)) node atts = foldMap moduleAttribution node
-      where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
-                              -> Di.Atts (Environment l) (LocalEnvironment l)
+      where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f) -> Attributes l
             moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts''
                where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
                      exts' = Extensions.withImplications (extensionMap <> exts)
@@ -568,7 +569,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
       where verify (AST.ConstructorReference q) = verifyConstructorName q env
             verify _ = mempty
 
-instance (Foldable f, Deep.Foldable (BindingVerifier l f) g,
+instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (BindingVerifier l f) g,
           Transformation.At (BindingVerifier l f) (g (WithEnvironment l f) (WithEnvironment l f))) =>
          Full.Foldable (BindingVerifier l f) g where
    foldMap = Full.foldMapDownDefault
