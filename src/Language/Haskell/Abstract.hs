@@ -11,8 +11,9 @@ import qualified Transformation.Deep as Deep
 import Language.Haskell.Extensions (ExtensionSwitch)
 
 type Language = Kind.Type
+type NodeWrap = Kind.Type -> Kind.Type
 type TreeNodeKind = Language -> TreeNodeSubKind
-type TreeNodeSubKind = Language -> (Kind.Type -> Kind.Type) -> (Kind.Type -> Kind.Type) -> Kind.Type
+type TreeNodeSubKind = Language -> NodeWrap -> NodeWrap -> Kind.Type
 
 class Haskell λ where
    type Module λ = (x :: TreeNodeSubKind) | x -> λ
