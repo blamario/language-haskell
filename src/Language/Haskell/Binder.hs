@@ -9,7 +9,7 @@ module Language.Haskell.Binder (
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
-   Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
+   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
    onMap, withBindings,
    preludeName, baseName) where
@@ -50,7 +50,9 @@ type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
 type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
-type WithEnvironment l = Compose ((,) (Di.Atts (Environment l) (LocalEnvironment l)))
+type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
+
+type WithEnvironment l = Compose ((,) (Attributes l))
 
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
@@ -59,16 +61,18 @@ data Binding l = ErroneousBinding (BindingError l)
                | ValueBinding (ValueBinding l)
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
                | PatternBinding
-               deriving Typeable
+               deriving (Typeable, Data, Eq, Show)
 
 data BindingError l = ClashingBindings (Binding l) (Binding l)
                     | DuplicateInfixDeclaration (ValueBinding l) (ValueBinding l)
                     | DuplicateRecordField
                     | NoBindings
+                    deriving (Typeable, Data, Eq, Show)
 
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
                    | UnknownType
+                   deriving (Typeable, Data, Eq, Show)
 
 data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBinding l))
                     | DataConstructor
@@ -76,14 +80,12 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     | RecordField
                     | DefinedValue
                     | RecordFieldAndValue
-                    deriving Typeable
+                    deriving (Typeable, Data, Eq, Show)
 
 data Unbound l = Unbound {types :: [AST.QualifiedName l],
                           values :: [AST.QualifiedName l],
                           constructors :: [AST.QualifiedName l]}
-
-deriving instance (Eq (Abstract.ModuleName l), Eq (Abstract.Name l)) => Eq (Unbound l)
-deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Unbound l)
+                 deriving (Eq, Show)
 
 instance Semigroup (Unbound l) where
   a <> b = Unbound{types= types a <> types b,
@@ -98,45 +100,23 @@ unboundNames :: Full.Foldable (BindingVerifier l p) g
              => WithEnvironment l p (g (WithEnvironment l p) (WithEnvironment l p)) -> Unbound l
 unboundNames = Full.foldMap BindingVerifier
 
-lookupType :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
-           => AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
+lookupType :: AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
 lookupType name (UnionWith env) = Map.lookup name env >>= \case
   TypeBinding t -> Just t
   TypeAndValueBinding t _ -> Just t
   _ -> Nothing
 
-lookupValue :: (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
-            => AST.QualifiedName l -> Environment l -> Maybe (ValueBinding l)
+lookupValue :: AST.QualifiedName l -> Environment l -> Maybe (ValueBinding l)
 lookupValue name (UnionWith env) = Map.lookup name env >>= \case
   ValueBinding v -> Just v
   TypeAndValueBinding _ v -> Just v
   _ -> Nothing
 
-deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
-                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (Binding l)
-deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (Binding l)
-deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (Binding l)
-
-deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
-                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (BindingError l)
-deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (BindingError l)
-deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (BindingError l)
-
-deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
-                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (TypeBinding l)
-deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (TypeBinding l)
-deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (TypeBinding l)
-
-deriving instance (Data l, Typeable l, Data (Abstract.ModuleName l), Data (Abstract.Name l),
-                   Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Data (ValueBinding l)
-deriving instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Eq (ValueBinding l)
-deriving instance (Show (Abstract.ModuleName l), Show (Abstract.Name l)) => Show (ValueBinding l)
-
 deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
 deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 
-instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Semigroup (Binding l) where
+instance Semigroup (Binding l) where
    ValueBinding v <> TypeBinding t = TypeAndValueBinding t v
    TypeBinding t <> ValueBinding v = TypeAndValueBinding t v
    b@ErroneousBinding{} <> _ = b
@@ -158,7 +138,7 @@ instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Semigroup (Bind
       | a == b = a
       | otherwise = ErroneousBinding (ClashingBindings a b)
 
-instance (Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) => Monoid (Binding l) where
+instance Monoid (Binding l) where
    mempty = ErroneousBinding NoBindings
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
@@ -186,8 +166,6 @@ instance Transformation (BindingVerifier l f) where
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
-          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
-          Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
@@ -256,8 +234,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment l f) f
          where
    attribution (Di.Keep (Binder exts modEnv)) node atts = foldMap moduleAttribution node
-      where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f)
-                              -> Di.Atts (Environment l) (LocalEnvironment l)
+      where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f) -> Attributes l
             moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts''
                where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
                      exts' = Extensions.withImplications (extensionMap <> exts)
@@ -593,7 +570,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
       where verify (AST.ConstructorReference q) = verifyConstructorName q env
             verify _ = mempty
 
-instance (Foldable f, Deep.Foldable (BindingVerifier l f) g,
+instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (BindingVerifier l f) g,
           Transformation.At (BindingVerifier l f) (g (WithEnvironment l f) (WithEnvironment l f))) =>
          Full.Foldable (BindingVerifier l f) g where
    foldMap = Full.foldMapDownDefault
@@ -631,14 +608,13 @@ instance BindingMembers ExtAST.Language where
 
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
 
-qualifiedWith :: Abstract.Haskell l
-              => Abstract.ModuleName l -> UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
+qualifiedWith :: AST.ModuleName l -> UnionWith (Map (AST.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
 qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
 
 unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
 unqualified = onMap (Map.mapKeysMonotonic unqualifiedName)
 
-baseName :: AST.QualifiedName l -> Abstract.Name l
+baseName :: AST.QualifiedName l -> AST.Name l
 baseName (AST.QualifiedName _ name) = name
 
 unqualifiedName :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l

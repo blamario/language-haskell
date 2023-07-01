@@ -12,6 +12,7 @@ module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(
 import Control.Monad (forM)
 import Data.List.NonEmpty (NonEmpty, toList)
 import Data.Data (Data, Typeable)
+import qualified Data.Kind as Kind
 import Data.Text (Text)
 
 import qualified Language.Haskell.Extensions as Extensions
@@ -532,7 +533,7 @@ data Statement λ l d s =
    | LetStatement [s (Abstract.Declaration l l d d)]
    | RecursiveStatement [s (Abstract.Statement l l d d)]
 
-data Value λ l (d :: * -> *) (s :: * -> *) =
+data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    CharLiteral Char
    | FloatingLiteral Rational
    | IntegerLiteral Integer

@@ -22,6 +22,7 @@ import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
 import Data.String (IsString)
 
+import qualified Rank2
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -287,12 +288,12 @@ instance (Eq s, IsString s) =>
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]
 
-instance (Deep.Foldable (Accounting l pos s) g,
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (Accounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
-instance (Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
           Transformation.At (UnicodeSyntaxAccounting l pos s)
                             (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (UnicodeSyntaxAccounting l pos s) g where

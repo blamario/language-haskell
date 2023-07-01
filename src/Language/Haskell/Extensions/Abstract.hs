@@ -30,9 +30,7 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
 
 
-type Branch = * -> (* -> *) -> (* -> *) -> *
-
-data family Construct (e :: Extension) :: * -> Branch
+data family Construct (e :: Extension) :: TreeNodeKind
 
 type family ExtensionsSupportedBy λ :: [Extension]
 
@@ -88,9 +86,9 @@ class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections] λ) =>
       ExtendedHaskell λ where
-   type GADTConstructor λ = (x :: Branch) | x -> λ
-   type Kind λ = (x :: Branch) | x -> λ
-   type TypeVarBinding λ = (x :: Branch) | x -> λ
+   type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
+   type Kind λ = (x :: TreeNodeSubKind) | x -> λ
+   type TypeVarBinding λ = (x :: TreeNodeSubKind) | x -> λ
    type ModuleMember λ = x | x -> λ
    type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s

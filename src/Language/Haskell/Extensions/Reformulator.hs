@@ -7,6 +7,7 @@ import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup.Union (UnionWith(..))
 
+import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
 import qualified Transformation.AG.Dimorphic as Di
@@ -110,7 +111,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
    Reformulation $ Compose (env, (s, p)) = Compose (env, (s, p))
 
 
-instance (Deep.Functor (ReformulationOf e es λ l pos s) g,
+instance (Rank2.Functor (g (Wrap λ pos s)), Deep.Functor (ReformulationOf e es λ l pos s) g,
           Transformation.At (ReformulationOf e es λ l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Functor (ReformulationOf e es λ l pos s) g where
    (<$>) = Full.mapUpDefault

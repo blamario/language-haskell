@@ -12,10 +12,10 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Extensions.Verifier as Verifier
-
 import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
 
+import qualified Rank2
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -100,16 +100,9 @@ checkRestrictions extensions m = case Verifier.verifyModule extensions m of
    [] -> pure m
    errors -> Left mempty{errorAlternatives= show <$> errors}
 
-instance Deep.Functor
-            (Transformation.Mapped
-                ((,) (Di.Atts (Binder.Environment AST.Language) (Binder.LocalEnvironment AST.Language)))
-                (Rank2.Map q Placed))
-            g =>
-         Full.Functor
-            (Transformation.Mapped
-                ((,) (Di.Atts (Binder.Environment AST.Language) (Binder.LocalEnvironment AST.Language)))
-                (Rank2.Map q Placed))
-            g where
+instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
+          Deep.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g) =>
+         Full.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g where
    (<$>) = Full.mapDownDefault
 
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
