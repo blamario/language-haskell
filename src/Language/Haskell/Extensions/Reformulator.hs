@@ -31,6 +31,34 @@ type family Difference (xs :: [Extension]) (ys :: [Extension]) where
    Difference xs '[] = xs
    Difference xs (y ': ys) = Difference (Without y xs) ys
 
+newtype TranspiledTo target pos s node = Transpiled {getTranspiled :: Wrap target pos s (TranspiledTF target node)}
+
+type family TranspiledTF target node where
+   TranspiledTF target (AST.Module source l d s)              = Abstract.Module target l d s
+   TranspiledTF target (AST.Declaration source l d s)         = Abstract.Declaration target l d s
+   TranspiledTF target (AST.Expression source l d s)          = Abstract.Expression target l d s
+   TranspiledTF target (AST.Type source l d s)                = Abstract.Type target l d s
+   TranspiledTF target (AST.EquationLHS source l d s)         = Abstract.EquationLHS target l d s
+   TranspiledTF target (AST.EquationRHS source l d s)         = Abstract.EquationRHS target l d s
+   TranspiledTF target (AST.GuardedExpression source l d s)   = Abstract.GuardedExpression target l d s
+   TranspiledTF target (AST.Pattern source l d s)             = Abstract.Pattern target l d s
+   TranspiledTF target (AST.Statement source l d s)           = Abstract.Statement target l d s
+   TranspiledTF target (AST.ClassInstanceLHS source l d s)    = Abstract.ClassInstanceLHS target l d s
+   TranspiledTF target (AST.TypeLHS source l d s)             = Abstract.TypeLHS target l d s
+   TranspiledTF target (AST.Import source l d s)              = Abstract.Import target l d s
+   TranspiledTF target (AST.ImportSpecification source l d s) = Abstract.ImportSpecification target l d s
+   TranspiledTF target (AST.ImportItem source l d s)          = Abstract.ImportItem target l d s
+   TranspiledTF target (AST.Export source l d s)              = Abstract.Export target l d s
+   TranspiledTF target (AST.Context source l d s)             = Abstract.Context target l d s
+   TranspiledTF target (AST.DataConstructor source l d s)     = Abstract.DataConstructor target l d s
+   TranspiledTF target (AST.DerivingClause source l d s)      = Abstract.DerivingClause target l d s
+   TranspiledTF target (AST.FieldDeclaration source l d s)    = Abstract.FieldDeclaration target l d s
+   TranspiledTF target (AST.FieldBinding source l d s)        = Abstract.FieldBinding target l d s
+   TranspiledTF target (AST.FieldPattern source l d s)        = Abstract.FieldPattern target l d s
+   TranspiledTF target (AST.CaseAlternative source l d s)     = Abstract.CaseAlternative target l d s
+   TranspiledTF target (AST.Constructor source l d s)         = Abstract.Constructor target l d s
+   TranspiledTF target (AST.Value source l d s)               = Abstract.Value target l d s
+
 type Transpiler λ1 λ2 f = Abstract.Module λ1 λ1 f f -> Abstract.Module λ2 λ2 f f
 
 type Reformulator xs ys λ c f = ExtendedWithAllOf xs λ =>
