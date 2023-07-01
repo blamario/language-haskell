@@ -4,6 +4,7 @@
 module Language.Haskell.AST where
 
 import Control.Monad (forM)
+import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
@@ -274,7 +275,7 @@ data Statement λ l d s =
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
 
-data TypeLHS λ l (d :: * -> *) (s :: * -> *) =
+data TypeLHS λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
 
 data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
@@ -282,11 +283,11 @@ data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.Mod
 
 data ImportSpecification λ l d s = ImportSpecification Bool [s (Abstract.ImportItem l l d d)]
 
-data ImportItem λ l (d :: * -> *) (s :: * -> *) =
+data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
    | ImportVar (Abstract.Name λ)
 
-data Export λ l (d :: * -> *) (s :: * -> *) =
+data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ExportClassOrType (Abstract.QualifiedName λ) (Maybe (Abstract.Members λ))
    | ExportVar (Abstract.QualifiedName λ)
    | ReExportModule (Abstract.ModuleName λ)
@@ -301,7 +302,7 @@ data DataConstructor λ l d s =
    Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
 
-data DerivingClause λ l (d :: * -> *) (s :: * -> *) = SimpleDerive (Abstract.QualifiedName λ)
+data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) = SimpleDerive (Abstract.QualifiedName λ)
 
 data FieldDeclaration λ l d s = ConstructorFields (NonEmpty (Abstract.Name λ)) (s (Abstract.Type l l d d))
 data FieldBinding λ l d s = FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -310,13 +311,13 @@ data FieldPattern λ l d s = FieldPattern (Abstract.QualifiedName λ) (s (Abstra
 data CaseAlternative λ l d s =
    CaseAlternative (s (Abstract.Pattern l l d d)) (s (Abstract.EquationRHS l l d d)) [s (Abstract.Declaration l l d d)]
 
-data Constructor λ l (d :: * -> *) (s :: * -> *) =
+data Constructor λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ConstructorReference (Abstract.QualifiedName λ)
    | EmptyListConstructor
    | TupleConstructor Int
    | UnitConstructor
 
-data Value λ l (d :: * -> *) (s :: * -> *) =
+data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    CharLiteral Char
    | FloatingLiteral Rational
    | IntegerLiteral Integer

@@ -2,6 +2,7 @@
 
 module Language.Haskell.Abstract where
 
+import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import qualified Rank2
@@ -9,35 +10,39 @@ import qualified Transformation.Deep as Deep
 
 import Language.Haskell.Extensions (ExtensionSwitch)
 
+type Language = Kind.Type
+type TreeNodeKind = Language -> TreeNodeSubKind
+type TreeNodeSubKind = Language -> (Kind.Type -> Kind.Type) -> (Kind.Type -> Kind.Type) -> Kind.Type
+
 class Haskell λ where
-   type Module λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Declaration λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Expression λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Type λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type Module λ = (x :: TreeNodeSubKind) | x -> λ
+   type Declaration λ = (x :: TreeNodeSubKind) | x -> λ
+   type Expression λ = (x :: TreeNodeSubKind) | x -> λ
+   type Type λ = (x :: TreeNodeSubKind) | x -> λ
 
-   type EquationLHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type EquationRHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type GuardedExpression λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Pattern λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Statement λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type ClassInstanceLHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type TypeLHS λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type EquationLHS λ = (x :: TreeNodeSubKind) | x -> λ
+   type EquationRHS λ = (x :: TreeNodeSubKind) | x -> λ
+   type GuardedExpression λ = (x :: TreeNodeSubKind) | x -> λ
+   type Pattern λ = (x :: TreeNodeSubKind) | x -> λ
+   type Statement λ = (x :: TreeNodeSubKind) | x -> λ
+   type ClassInstanceLHS λ = (x :: TreeNodeSubKind) | x -> λ
+   type TypeLHS λ = (x :: TreeNodeSubKind) | x -> λ
 
-   type Import λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type ImportSpecification λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type ImportItem λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Export λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type Import λ = (x :: TreeNodeSubKind) | x -> λ
+   type ImportSpecification λ = (x :: TreeNodeSubKind) | x -> λ
+   type ImportItem λ = (x :: TreeNodeSubKind) | x -> λ
+   type Export λ = (x :: TreeNodeSubKind) | x -> λ
 
-   type Context λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type DataConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type DerivingClause λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type FieldDeclaration λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type FieldBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type FieldPattern λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type CaseAlternative λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type Context λ = (x :: TreeNodeSubKind) | x -> λ
+   type DataConstructor λ = (x :: TreeNodeSubKind) | x -> λ
+   type DerivingClause λ = (x :: TreeNodeSubKind) | x -> λ
+   type FieldDeclaration λ = (x :: TreeNodeSubKind) | x -> λ
+   type FieldBinding λ = (x :: TreeNodeSubKind) | x -> λ
+   type FieldPattern λ = (x :: TreeNodeSubKind) | x -> λ
+   type CaseAlternative λ = (x :: TreeNodeSubKind) | x -> λ
 
-   type Constructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Value λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type Constructor λ = (x :: TreeNodeSubKind) | x -> λ
+   type Value λ = (x :: TreeNodeSubKind) | x -> λ
 
    type CallingConvention λ = x | x -> λ
    type CallSafety λ = x | x -> λ

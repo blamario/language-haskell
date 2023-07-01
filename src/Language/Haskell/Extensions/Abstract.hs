@@ -11,9 +11,9 @@ import Language.Haskell.Abstract hiding (DeeplyFunctor, DeeplyFoldable, DeeplyTr
 import qualified Language.Haskell.Abstract as Report
 
 class Haskell λ => ExtendedHaskell λ where
-   type GADTConstructor λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type Kind λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
-   type TypeVarBinding λ = (x :: * -> (* -> *) -> (* -> *) -> *) | x -> λ
+   type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
+   type Kind λ = (x :: TreeNodeSubKind) | x -> λ
+   type TypeVarBinding λ = (x :: TreeNodeSubKind) | x -> λ
    type ModuleMember λ = x | x -> λ
    type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
