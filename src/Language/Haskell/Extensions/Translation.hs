@@ -32,17 +32,27 @@ class NameTranslation t where
    translateModuleName = const coerce
    translateQualifiedName = const coerce
 
-class NameTranslation t => Translation t (node :: Abstract.TreeNodeKind) where
+
+class WrapTranslation t where
+   type Wrap t :: Abstract.NodeWrap
+
+class (NameTranslation t, WrapTranslation t) => Translation t (node :: Abstract.TreeNodeKind) where
    translate :: t -> node (Origin t) l d s -> node (Target t) l d s
+   translateWrapped :: t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
+   default translate :: (Wrap t ~ (,) a, Monoid a) => t -> node (Origin t) l d s -> node (Target t) l d s
+   default translateWrapped :: Functor (Wrap t) => t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
+   translate t = snd . translateWrapped t . pure
+   translateWrapped = fmap . translate
 
-class DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
-   translateDeeply :: Functor d => t -> node (Origin t) (Origin t) d d -> node (Origin t) (Target t) d d
+class WrapTranslation t => DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
+   translateDeeply :: Functor (Wrap t)
+                   => t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Origin t) (Target t) (Wrap t) (Wrap t)
 
-type FullyTranslatable t node = (Translation t node, DeeplyTranslatable t node)
+type FullyTranslatable t node = (WrapTranslation t, Translation t node, DeeplyTranslatable t node)
 
-translateFully :: (FullyTranslatable t node, Functor d) =>
+translateFully :: (FullyTranslatable t node, Wrap t ~ d, Functor d) =>
                   t -> d (node (Origin t) (Origin t) d d) -> d (node (Target t) (Target t) d d)
-translateFully t = (translate t . translateDeeply t <$>)
+translateFully t = translateWrapped t . (translateDeeply t <$>)
 
 -- DeeplyTranslatable instances
 
@@ -140,7 +150,7 @@ instance (Translation t AST.Expression,
    translateDeeply t (AST.WildcardRecordExpression sup con fields) =
       AST.WildcardRecordExpression sup con (translateFully t <$> fields)
 
-instance DeeplyTranslatable t AST.Value where
+instance WrapTranslation t => DeeplyTranslatable t AST.Value where
    translateDeeply _ (AST.CharLiteral l)     = AST.CharLiteral l
    translateDeeply _ (AST.FloatingLiteral l) = AST.FloatingLiteral l
    translateDeeply _ (AST.IntegerLiteral l)  = AST.IntegerLiteral l
@@ -149,18 +159,18 @@ instance DeeplyTranslatable t AST.Value where
 
 -- Default overlappable Translation instances
 
-instance {-# overlappable #-} NameTranslation t => Translation t AST.Module where
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) => Translation t AST.Module where
    translate t (AST.NamedModule modName exports imports declarations) =
       AST.NamedModule (translateModuleName t modName) exports imports declarations
    translate _ (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
    translate _ (AST.ExtendedModule extensions m) = AST.ExtendedModule extensions m
 
-instance {-# overlappable #-} NameTranslation t => Translation t AST.Import where
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) => Translation t AST.Import where
    translate t (AST.Import safe qualified package name alias detail) =
       AST.Import safe qualified package (translateModuleName t name) (translateModuleName t <$> alias) detail
 
 instance {-# overlappable #-}
-   (NameTranslation t,
+   (NameTranslation t, WrapTranslation t, Functor (Wrap t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t)) =>
    Translation t AST.Expression where
@@ -196,7 +206,7 @@ instance {-# overlappable #-}
       AST.WildcardRecordExpression sup (translateQualifiedName t con) fields
 
 instance {-# overlappable #-}
-   (NameTranslation t,
+   (NameTranslation t, WrapTranslation t, Functor (Wrap t),
     Abstract.SupportFor 'Extensions.MagicHash (Origin t) ~ Abstract.SupportFor 'Extensions.MagicHash (Target t)) =>
    Translation t AST.Value where
    translate _ (AST.CharLiteral l)     = AST.CharLiteral l
