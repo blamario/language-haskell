@@ -6,6 +6,8 @@
 module Language.Haskell.Extensions.Translation where
 
 import Data.Coerce (coerce)
+import Data.Foldable1 (Foldable1)
+import qualified Data.Foldable1 as Foldable1
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions as Extensions
@@ -39,9 +41,9 @@ class WrapTranslation t where
 class (NameTranslation t, WrapTranslation t) => Translation t (node :: Abstract.TreeNodeKind) where
    translate :: t -> node (Origin t) l d s -> node (Target t) l d s
    translateWrapped :: t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
-   default translate :: (Wrap t ~ (,) a, Monoid a) => t -> node (Origin t) l d s -> node (Target t) l d s
+   default translate :: (Applicative (Wrap t), Foldable1 (Wrap t)) => t -> node (Origin t) l d s -> node (Target t) l d s
    default translateWrapped :: Functor (Wrap t) => t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
-   translate t = snd . translateWrapped t . pure
+   translate t = Foldable1.head . translateWrapped t . pure
    translateWrapped = fmap . translate
 
 class WrapTranslation t => DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
