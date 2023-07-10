@@ -60,7 +60,7 @@ instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Name l ~ AST.Name l) =>
   WrapTranslation (ReformulationOf e es λ l pos s) where
-   type Wrap (ReformulationOf e es λ l pos s) = Wrap l pos s
+   type Wrap (ReformulationOf e es λ l pos s) = Wrap λ pos s
 
 type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
                                   Abstract.ModuleName l1 ~ AST.ModuleName l1,
@@ -80,15 +80,14 @@ type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName 
 dropRecordWildCards :: Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
 dropRecordWildCards = Translation.translateDeeply Reformulation
 
-
-instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
+instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
-          Abstract.FieldPattern l ~ AST.FieldPattern l,
-          Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Abstract.ModuleName l ~ AST.ModuleName l,
-          Abstract.Name l ~ AST.Name l) =>
+          Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
+          Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+          Abstract.ModuleName l2 ~ AST.ModuleName l2,
+          Abstract.Name l2 ~ AST.Name l2) =>
    Translation
-      (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l pos s)
+      (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
       AST.Pattern
   where
    translateWrapped

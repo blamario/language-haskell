@@ -39,22 +39,22 @@ class WrapTranslation t where
    type Wrap t :: Abstract.NodeWrap
 
 class (NameTranslation t, WrapTranslation t) => Translation t (node :: Abstract.TreeNodeKind) where
-   translate :: t -> node (Origin t) l d s -> node (Target t) l d s
-   translateWrapped :: t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
-   default translate :: (Applicative (Wrap t), Foldable1 (Wrap t)) => t -> node (Origin t) l d s -> node (Target t) l d s
-   default translateWrapped :: Functor (Wrap t) => t -> Wrap t (node (Origin t) l d s) -> Wrap t (node (Target t) l d s)
+   translate :: t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Target t) (Origin t) (Wrap t) (Wrap t)
+   translateWrapped :: t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
+   default translate :: (Applicative (Wrap t), Foldable1 (Wrap t)) => t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Target t) (Origin t) (Wrap t) (Wrap t)
+   default translateWrapped :: Functor (Wrap t) => t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
    translate t = Foldable1.head . translateWrapped t . pure
    translateWrapped = fmap . translate
 
 class WrapTranslation t => DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
    translateDeeply :: Functor (Wrap t)
-                   => t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Origin t) (Target t) (Wrap t) (Wrap t)
+                   => t -> node l (Origin t) (Wrap t) (Wrap t) -> node l (Target t) (Wrap t) (Wrap t)
+
+translateFully :: (FullyTranslatable t node, Functor (Wrap t)) =>
+                  t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Target t) (Wrap t) (Wrap t))
+translateFully t = (translateDeeply t <$>) . translateWrapped t
 
 type FullyTranslatable t node = (WrapTranslation t, Translation t node, DeeplyTranslatable t node)
-
-translateFully :: (FullyTranslatable t node, Wrap t ~ d, Functor d) =>
-                  t -> d (node (Origin t) (Origin t) d d) -> d (node (Target t) (Target t) d d)
-translateFully t = translateWrapped t . (translateDeeply t <$>)
 
 -- DeeplyTranslatable instances
 
