@@ -5,7 +5,7 @@
 
 module Language.Haskell.Extensions.Translation where
 
-import Data.Coerce (coerce)
+import Data.Coerce (Coercible, coerce)
 import Data.Foldable1 (Foldable1)
 import qualified Data.Foldable1 as Foldable1
 import qualified Language.Haskell.Extensions.Abstract as Abstract
@@ -161,13 +161,22 @@ instance WrapTranslation t => DeeplyTranslatable t AST.Value where
 
 -- Default overlappable Translation instances
 
-instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) => Translation t AST.Module where
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+                               Coercible
+                                  (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+                                  (node (Target t) (Origin t) (Wrap t) (Wrap t))) =>
+                              Translation t node where
+   translate = const coerce
+
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) =>
+                              Translation t AST.Module where
    translate t (AST.NamedModule modName exports imports declarations) =
       AST.NamedModule (translateModuleName t modName) exports imports declarations
    translate _ (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
    translate _ (AST.ExtendedModule extensions m) = AST.ExtendedModule extensions m
 
-instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) => Translation t AST.Import where
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t)) =>
+                              Translation t AST.Import where
    translate t (AST.Import safe qualified package name alias detail) =
       AST.Import safe qualified package (translateModuleName t name) (translateModuleName t <$> alias) detail
 
