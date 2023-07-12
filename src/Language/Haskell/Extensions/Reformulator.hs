@@ -69,9 +69,10 @@ type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName 
                                   Abstract.ModuleName l2 ~ AST.ModuleName l2,
                                   Abstract.Name l2 ~ AST.Name l2,
                                   Abstract.Module l1 ~ AST.Module l1,
+                                  Abstract.Export l1 ~ AST.Export l1,
                                   Abstract.Import l1 ~ AST.Import l1,
                                   Abstract.ImportSpecification l1 ~ AST.ImportSpecification l1,
-                                  Abstract.Export l1 ~ AST.Export l1,
+                                  Abstract.ImportItem l1 ~ AST.ImportItem l1,
                                   Abstract.Declaration l1 ~ AST.Declaration l1,
                                   Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2,
                                   DeeplyFunctor (ReformulationOf e es l1 l2 pos s) l2, Monoid pos)

@@ -75,13 +75,33 @@ instance (Translation t AST.Module,
    translateDeeply t (AST.ExtendedModule extensions m) = AST.ExtendedModule extensions (translateFully t m)
 
 instance (FullyTranslatable t AST.ImportSpecification,
-          Abstract.Import (Target t) ~ AST.Import (Target t),
+          Abstract.ModuleName (Origin t) ~ AST.ModuleName (Origin t),
+          Abstract.QualifiedName (Origin t) ~ AST.QualifiedName (Origin t)) =>
+         DeeplyTranslatable t AST.Export where
+   translateDeeply _ (AST.ExportClassOrType name members) = AST.ExportClassOrType name members
+   translateDeeply _ (AST.ExportVar name) = AST.ExportVar name
+   translateDeeply _ (AST.ReExportModule name) = AST.ReExportModule name
+
+instance (FullyTranslatable t AST.ImportSpecification,
           Abstract.ModuleName (Origin t) ~ AST.ModuleName (Origin t),
           Abstract.ImportSpecification (Origin t) ~ AST.ImportSpecification (Origin t),
           Abstract.ImportSpecification (Target t) ~ AST.ImportSpecification (Target t)) =>
          DeeplyTranslatable t AST.Import where
    translateDeeply t (AST.Import safe qualified package name alias detail) =
       AST.Import safe qualified package name alias (translateFully t <$> detail)
+
+instance (FullyTranslatable t AST.ImportItem,
+          Abstract.ImportItem (Origin t) ~ AST.ImportItem (Origin t),
+          Abstract.ImportItem (Target t) ~ AST.ImportItem (Target t)) =>
+         DeeplyTranslatable t AST.ImportSpecification where
+   translateDeeply t (AST.ImportSpecification hiding items) =
+      AST.ImportSpecification hiding (translateFully t <$> items)
+
+instance (FullyTranslatable t AST.ImportSpecification,
+          Abstract.QualifiedName (Origin t) ~ AST.QualifiedName (Origin t)) =>
+         DeeplyTranslatable t AST.ImportItem where
+   translateDeeply _ (AST.ImportClassOrType name members) = AST.ImportClassOrType name members
+   translateDeeply _ (AST.ImportVar name) = AST.ImportVar name
 
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
