@@ -74,6 +74,17 @@ type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName 
                                   Abstract.ImportSpecification l1 ~ AST.ImportSpecification l1,
                                   Abstract.ImportItem l1 ~ AST.ImportItem l1,
                                   Abstract.Declaration l1 ~ AST.Declaration l1,
+                                  Abstract.EquationLHS l1 ~ AST.EquationLHS l1,
+                                  Abstract.EquationRHS l1 ~ AST.EquationRHS l1,
+                                  Abstract.ClassInstanceLHS l1 ~ AST.ClassInstanceLHS l1,
+                                  Abstract.Context l1 ~ AST.Context l1,
+                                  Abstract.TypeLHS l1 ~ AST.TypeLHS l1,
+                                  Abstract.Type l1 ~ AST.Type l1,
+                                  Abstract.Kind l1 ~ AST.Type l1,
+                                  Abstract.TypeVarBinding l1 ~ AST.TypeVarBinding l1,
+                                  Abstract.DataConstructor l1 ~ AST.DataConstructor l1,
+                                  Abstract.GADTConstructor l1 ~ AST.GADTConstructor l1,
+                                  Abstract.DerivingClause l1 ~ AST.DerivingClause l1,
                                   Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2,
                                   DeeplyFunctor (ReformulationOf e es l1 l2 pos s) l2, Monoid pos)
   

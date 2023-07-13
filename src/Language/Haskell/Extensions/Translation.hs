@@ -103,6 +103,97 @@ instance (FullyTranslatable t AST.ImportSpecification,
    translateDeeply _ (AST.ImportClassOrType name members) = AST.ImportClassOrType name members
    translateDeeply _ (AST.ImportVar name) = AST.ImportVar name
 
+instance (Translation t AST.Declaration,
+          FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,
+          FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
+          FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
+          FullyTranslatable t AST.DerivingClause,
+          FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS,
+          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
+          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
+          Abstract.Context (Origin t) ~ AST.Context (Origin t),
+          Abstract.Context (Target t) ~ AST.Context (Target t),
+          Abstract.ClassInstanceLHS (Origin t) ~ AST.ClassInstanceLHS (Origin t),
+          Abstract.ClassInstanceLHS (Target t) ~ AST.ClassInstanceLHS (Target t),
+          Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
+          Abstract.TypeLHS (Target t) ~ AST.TypeLHS (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.Kind (Origin t) ~ AST.Type (Origin t),
+          Abstract.Kind (Target t) ~ AST.Type (Target t),
+          Abstract.TypeVarBinding (Origin t) ~ AST.TypeVarBinding (Origin t),
+          Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t),
+          Abstract.DataConstructor (Origin t) ~ AST.DataConstructor (Origin t),
+          Abstract.DataConstructor (Target t) ~ AST.DataConstructor (Target t),
+          Abstract.GADTConstructor (Origin t) ~ AST.GADTConstructor (Origin t),
+          Abstract.GADTConstructor (Target t) ~ AST.GADTConstructor (Target t),
+          Abstract.DerivingClause (Origin t) ~ AST.DerivingClause (Origin t),
+          Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t),
+          Abstract.EquationLHS (Origin t) ~ AST.EquationLHS (Origin t),
+          Abstract.EquationLHS (Target t) ~ AST.EquationLHS (Target t),
+          Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t)) =>
+         DeeplyTranslatable t AST.Declaration where
+   translateDeeply t (AST.ClassDeclaration context lhs methods) =
+      AST.ClassDeclaration (translateFully t context) (translateFully t lhs) (translateFully t <$> methods)
+   translateDeeply t (AST.DataDeclaration context lhs kind constructors derivings) =
+      AST.DataDeclaration (translateFully t context) (translateFully t lhs) (translateFully t <$> kind)
+                          (translateFully t <$> constructors) (translateFully t <$> derivings)
+   translateDeeply t (AST.GADTDeclaration lhs kind constructors derivings) =
+      AST.GADTDeclaration (translateFully t lhs) (translateFully t <$> kind)
+                          (translateFully t <$> constructors) (translateFully t <$> derivings)
+   translateDeeply t (AST.DefaultDeclaration types) = AST.DefaultDeclaration (translateFully t <$> types)
+   translateDeeply t (AST.EquationDeclaration lhs rhs wheres) =
+      AST.EquationDeclaration (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
+   translateDeeply _ (AST.FixityDeclaration assoc prec names) = AST.FixityDeclaration assoc prec names
+   translateDeeply t (AST.ForeignExport convention extName varName ty) =
+      AST.ForeignExport convention extName varName (translateFully t ty)
+   translateDeeply t (AST.ForeignImport convention safety extName varName ty) =
+      AST.ForeignImport convention safety extName varName (translateFully t ty)
+   translateDeeply t (AST.InstanceDeclaration vars context lhs methods) =
+      AST.InstanceDeclaration (translateDeeply t <$> vars) (translateFully t context)
+                              (translateFully t lhs) (translateFully t <$> methods)
+   translateDeeply t (AST.NewtypeDeclaration context lhs kind constructor derivings) =
+      AST.NewtypeDeclaration (translateFully t context) (translateFully t lhs) (translateFully t <$> kind)
+                             (translateFully t constructor) (translateFully t <$> derivings)
+   translateDeeply t (AST.GADTNewtypeDeclaration lhs kind constructor derivings) =
+      AST.GADTNewtypeDeclaration (translateFully t lhs) (translateFully t <$> kind)
+                                 (translateFully t constructor) (translateFully t <$> derivings)
+   translateDeeply t (AST.TypeSynonymDeclaration lhs ty) =
+      AST.TypeSynonymDeclaration (translateFully t lhs) (translateFully t ty)
+   translateDeeply t (AST.TypeSignature names context ty) =
+      AST.TypeSignature names (translateFully t context) (translateFully t ty)
+   translateDeeply t (AST.DataFamilyDeclaration lhs kind) =
+      AST.DataFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind)
+   translateDeeply t (AST.OpenTypeFamilyDeclaration lhs kind) =
+      AST.OpenTypeFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind)
+   translateDeeply t (AST.ClosedTypeFamilyDeclaration lhs kind eqs) =
+      AST.ClosedTypeFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind) (translateFully t <$> eqs)
+   translateDeeply t (AST.InjectiveOpenTypeFamilyDeclaration lhs var deps) =
+      AST.InjectiveOpenTypeFamilyDeclaration (translateFully t lhs) (translateDeeply t var) deps
+   translateDeeply t (AST.InjectiveClosedTypeFamilyDeclaration lhs var deps eqs) =
+      AST.InjectiveClosedTypeFamilyDeclaration (translateFully t lhs) (translateDeeply t var)
+                                               deps (translateFully t <$> eqs)
+   translateDeeply t (AST.DataFamilyInstance vars context lhs kind constructors derivings) =
+      AST.DataFamilyInstance (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
+                             (translateFully t <$> kind) (translateFully t <$> constructors)
+                             (translateFully t <$> derivings)
+   translateDeeply t (AST.NewtypeFamilyInstance vars context lhs kind constructor derivings) =
+      AST.NewtypeFamilyInstance (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
+                                (translateFully t <$> kind) (translateFully t constructor)
+                                (translateFully t <$> derivings)
+   translateDeeply t (AST.GADTDataFamilyInstance vars lhs kind constructors derivings) =
+      AST.GADTDataFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t <$> kind)
+                                 (translateFully t <$> constructors) (translateFully t <$> derivings)
+   translateDeeply t (AST.GADTNewtypeFamilyInstance vars lhs kind constructor derivings) =
+      AST.GADTNewtypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t <$> kind)
+                                    (translateFully t constructor) (translateFully t <$> derivings)
+   translateDeeply t (AST.TypeFamilyInstance vars lhs rhs) =
+      AST.TypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t rhs)
+   translateDeeply t (AST.KindSignature name context kind) =
+      AST.KindSignature name (translateFully t context) (translateFully t kind)
+   translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
+
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,

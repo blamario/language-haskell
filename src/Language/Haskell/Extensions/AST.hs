@@ -361,7 +361,7 @@ data Declaration λ l d s =
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
-   | InstanceDeclaration [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+   | InstanceDeclaration [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                          (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.Declaration l l d d)]
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
@@ -374,37 +374,37 @@ data Declaration λ l d s =
    | OpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
    | ClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                                  [s (Abstract.Declaration l l d d)]
-   | InjectiveOpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
+   | InjectiveOpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
                                         (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
-   | InjectiveClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
+   | InjectiveClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
                                           (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
                                           [s (Abstract.Declaration l l d d)]
-   | DataFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+   | DataFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                         (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                         [s (Abstract.DataConstructor l l d d)]
                         [s (Abstract.DerivingClause l l d d)]
-   | NewtypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+   | NewtypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                            (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                            (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
-   | GADTDataFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | GADTDataFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                             (Maybe (s (Abstract.Kind l l d d)))
                             [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
-   | GADTNewtypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | GADTNewtypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                                (Maybe (s (Abstract.Kind l l d d)))
                                (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
-   | TypeFamilyInstance [Abstract.TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | TypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
 
 data GADTConstructor λ l d s =
-   GADTConstructors (NonEmpty (Abstract.Name λ)) [Abstract.TypeVarBinding λ l d s]
+   GADTConstructors (NonEmpty (Abstract.Name λ)) [TypeVarBinding λ l d s]
                     (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
 data DataConstructor λ l d s =
    Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
-   | ExistentialConstructor [Abstract.TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
+   | ExistentialConstructor [TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
@@ -427,13 +427,13 @@ data Type λ l d s =
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
-   | ForallType [Abstract.TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
-   | ForallKind [Abstract.TypeVarBinding λ l d s] (s (Abstract.Kind l l d d))
+   | ForallType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
+   | ForallKind [TypeVarBinding λ l d s] (s (Abstract.Kind l l d d))
    | ConstrainedType (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | TypeWildcard
    | TypeKind (s (Abstract.Type l l d d))
-   | VisibleDependentType [Abstract.TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
+   | VisibleDependentType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
    | GroundTypeKind
    | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
    | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
@@ -457,8 +457,8 @@ data TypeVarBinding λ l d s =
    | ImplicitlyKindedTypeVariable Bool (Abstract.Name λ)
 
 data TypeLHS λ l d s =
-   SimpleTypeLHS (Abstract.Name λ) [Abstract.TypeVarBinding λ l d s]
-   | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (Abstract.TypeVarBinding λ l d s)
+   SimpleTypeLHS (Abstract.Name λ) [TypeVarBinding λ l d s]
+   | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
 
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
@@ -554,7 +554,7 @@ deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
-                   Data (Abstract.TypeVarBinding λ l d s), Data (s (Abstract.ClassInstanceLHS l l d d)),
+                   Data (s (Abstract.Kind l l d d)), Data (s (Abstract.ClassInstanceLHS l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ), Data (Abstract.TypeRole λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
@@ -562,59 +562,54 @@ deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
-                   Show (Abstract.TypeVarBinding λ l d s), Show (s (Abstract.ClassInstanceLHS l l d d)),
+                   Show (s (Abstract.Kind l l d d)), Show (s (Abstract.ClassInstanceLHS l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
-                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
-                   Eq (Abstract.TypeVarBinding λ l d s), Eq (s (Abstract.ClassInstanceLHS l l d d)),
+                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
+                   Eq (s (Abstract.ClassInstanceLHS l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ),
                    Eq (Abstract.TypeRole λ)) => Eq (Declaration λ l d s)
 
 deriving instance Typeable (DataConstructor λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)), Data (s (Abstract.Type l l d d)),
-                   Data (Abstract.TypeVarBinding λ l d s), Data (Abstract.Name λ),
+                   Data (s (Abstract.Kind l l d d)), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (DataConstructor λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.DataConstructor l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)), Show (s (Abstract.Type l l d d)),
-                   Show (Abstract.TypeVarBinding λ l d s),
-                   Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (DataConstructor λ l d s)
+                   Show (s (Abstract.Kind l l d d)), Show (Abstract.Name λ)) => Show (DataConstructor λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.DataConstructor l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)), Eq (s (Abstract.Type l l d d)),
-                   Eq (Abstract.TypeVarBinding λ l d s),
-                   Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (DataConstructor λ l d s)
+                   Eq (s (Abstract.Kind l l d d)), Eq (Abstract.Name λ)) => Eq (DataConstructor λ l d s)
 
 deriving instance Typeable (GADTConstructor λ l d s)
-deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)), Data (Abstract.Name λ),
-                   Data (Abstract.TypeVarBinding λ l d s),
+deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),
+                   Data (s (Abstract.Kind l l d d)), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (GADTConstructor λ l d s)
 deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
-                   Show (Abstract.TypeVarBinding λ l d s),
+                   Show (s (Abstract.Kind l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.Name λ)) => Show (GADTConstructor λ l d s)
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
-                   Eq (Abstract.TypeVarBinding λ l d s),
+                   Eq (s (Abstract.Kind l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (GADTConstructor λ l d s)
 
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)),
-                   Data (Abstract.TypeVarBinding λ l d s),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
 deriving instance (Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)),
-                   Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
 deriving instance (Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
                    Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)),
-                   Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) => Eq (Type λ l d s)
 
 deriving instance Typeable (TypeVarBinding λ l d s)
@@ -624,15 +619,14 @@ deriving instance (Show (s (Abstract.Kind l l d d)), Show (Abstract.Name λ)) =>
 deriving instance (Eq (s (Abstract.Kind l l d d)), Eq (Abstract.Name λ)) => Eq (TypeVarBinding λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
-deriving instance (Data (Abstract.TypeVarBinding λ l d s),
-                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+deriving instance (Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+                   Data (s (Abstract.Kind l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
-deriving instance (Show (Abstract.TypeVarBinding λ l d s),
-                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+deriving instance (Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+                   Show (s (Abstract.Kind l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
-deriving instance (Eq (Abstract.TypeVarBinding λ l d s),
-                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)),
+deriving instance (Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
 deriving instance Typeable (ClassInstanceLHS λ l d s)
