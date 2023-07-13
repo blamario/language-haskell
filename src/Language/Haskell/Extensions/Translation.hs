@@ -194,6 +194,53 @@ instance (Translation t AST.Declaration,
       AST.KindSignature name (translateFully t context) (translateFully t kind)
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
 
+instance (Translation t AST.Context,
+          FullyTranslatable t AST.Context, FullyTranslatable t AST.Type,
+          Abstract.Context (Origin t) ~ AST.Context (Origin t),
+          Abstract.Context (Target t) ~ AST.Context (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t)) =>
+         DeeplyTranslatable t AST.Context where
+   translateDeeply _ (AST.SimpleConstraint className var) = AST.SimpleConstraint className var
+   translateDeeply t (AST.ClassConstraint className types) =
+      AST.ClassConstraint className (translateFully t <$> types)
+   translateDeeply t (AST.Constraints constraints) = AST.Constraints (translateFully t <$> constraints)
+   translateDeeply t (AST.InfixConstraint left op right) =
+      AST.InfixConstraint (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.TypeEqualityConstraint left right) =
+      AST.TypeEqualityConstraint (translateFully t left) (translateFully t right)
+   translateDeeply _ AST.NoContext = AST.NoContext
+
+instance (Translation t AST.DataConstructor,
+          FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, FullyTranslatable t AST.FieldDeclaration,
+          DeeplyTranslatable t AST.TypeVarBinding,
+          Abstract.DataConstructor (Origin t) ~ AST.DataConstructor (Origin t),
+          Abstract.DataConstructor (Target t) ~ AST.DataConstructor (Target t),
+          Abstract.Context (Origin t) ~ AST.Context (Origin t),
+          Abstract.Context (Target t) ~ AST.Context (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.TypeVarBinding (Origin t) ~ AST.TypeVarBinding (Origin t),
+          Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t),
+          Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),
+          Abstract.FieldDeclaration (Target t) ~ AST.FieldDeclaration (Target t)) =>
+         DeeplyTranslatable t AST.DataConstructor where
+   translateDeeply t (AST.Constructor name params) = AST.Constructor name (translateFully t <$> params)
+   translateDeeply t (AST.RecordConstructor name fields) = AST.RecordConstructor name (translateFully t <$> fields)
+   translateDeeply t (AST.ExistentialConstructor vars context body) =
+      AST.ExistentialConstructor (translateDeeply t <$> vars) (translateFully t context) (translateFully t body)
+
+instance (FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
+          Abstract.Context (Origin t) ~ AST.Context (Origin t),
+          Abstract.Context (Target t) ~ AST.Context (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.TypeVarBinding (Origin t) ~ AST.TypeVarBinding (Origin t),
+          Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t)) =>
+         DeeplyTranslatable t AST.GADTConstructor where
+   translateDeeply t (AST.GADTConstructors names vars context ty) =
+      AST.GADTConstructors names (translateDeeply t <$> vars) (translateFully t context) (translateFully t ty)
+
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,
