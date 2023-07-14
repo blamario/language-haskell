@@ -241,6 +241,74 @@ instance (FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, DeeplyT
    translateDeeply t (AST.GADTConstructors names vars context ty) =
       AST.GADTConstructors names (translateDeeply t <$> vars) (translateFully t context) (translateFully t ty)
 
+instance (Translation t AST.Type,
+          FullyTranslatable t AST.Constructor, FullyTranslatable t AST.Context,
+          FullyTranslatable t AST.FieldDeclaration, FullyTranslatable t AST.Type,
+          DeeplyTranslatable t AST.TypeVarBinding,
+          Abstract.Constructor (Origin t) ~ AST.Constructor (Origin t),
+          Abstract.Constructor (Target t) ~ AST.Constructor (Target t),
+          Abstract.Context (Origin t) ~ AST.Context (Origin t),
+          Abstract.Context (Target t) ~ AST.Context (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.Kind (Origin t) ~ AST.Type (Origin t),
+          Abstract.Kind (Target t) ~ AST.Type (Target t),
+          Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),
+          Abstract.FieldDeclaration (Target t) ~ AST.FieldDeclaration (Target t),
+          Abstract.TypeVarBinding (Origin t) ~ AST.TypeVarBinding (Origin t),
+          Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t)) =>
+         DeeplyTranslatable t AST.Type where
+   translateDeeply t (AST.ConstructorType con) = AST.ConstructorType (translateFully t con)
+   translateDeeply _ AST.FunctionConstructorType = AST.FunctionConstructorType
+   translateDeeply t (AST.FunctionType domain codomain) =
+      AST.FunctionType (translateFully t domain) (translateFully t codomain)
+   translateDeeply t (AST.LinearFunctionType domain codomain) =
+      AST.LinearFunctionType (translateFully t domain) (translateFully t codomain)
+   translateDeeply t (AST.MultiplicityFunctionType domain multiplicity codomain) =
+      AST.MultiplicityFunctionType (translateFully t domain) (translateFully t multiplicity) (translateFully t codomain)
+   translateDeeply t (AST.RecordFunctionType domain codomain) =
+      AST.RecordFunctionType (translateFully t <$> domain) (translateFully t codomain)
+   translateDeeply t (AST.ListType item) = AST.ListType (translateFully t item)
+   translateDeeply t (AST.StrictType body) = AST.StrictType (translateFully t body)
+   translateDeeply t (AST.TupleType items) = AST.TupleType (translateFully t <$> items)
+   translateDeeply t (AST.TypeApplication left right) =
+      AST.TypeApplication (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.InfixTypeApplication left op right) =
+      AST.InfixTypeApplication (translateFully t left) op (translateFully t right)
+   translateDeeply _ (AST.TypeVariable name) = AST.TypeVariable name
+   translateDeeply t (AST.ForallType vars body) = AST.ForallType (translateDeeply t <$> vars) (translateFully t body)
+   translateDeeply t (AST.ForallKind vars body) = AST.ForallKind (translateDeeply t <$> vars) (translateFully t body)
+   translateDeeply t (AST.ConstrainedType context body) =
+      AST.ConstrainedType (translateFully t context) (translateFully t body)
+   translateDeeply t (AST.KindedType body kind) = AST.KindedType (translateFully t body) (translateFully t kind)
+   translateDeeply _ AST.TypeWildcard = AST.TypeWildcard
+   translateDeeply t (AST.TypeKind body) = AST.TypeKind (translateFully t body)
+   translateDeeply t (AST.VisibleDependentType vars body) =
+      AST.VisibleDependentType (translateDeeply t <$> vars) (translateFully t body)
+   translateDeeply _ AST.GroundTypeKind = AST.GroundTypeKind
+   translateDeeply t (AST.FunctionKind domain codomain) =
+      AST.FunctionKind (translateFully t domain) (translateFully t codomain)
+   translateDeeply t (AST.KindApplication left right) =
+      AST.KindApplication (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.InfixKindApplication left op right) =
+      AST.InfixKindApplication (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.PromotedConstructorType con) = AST.PromotedConstructorType (translateFully t con)
+   translateDeeply t (AST.PromotedTupleType items) = AST.PromotedTupleType (translateFully t <$> items)
+   translateDeeply t (AST.PromotedListType items) = AST.PromotedListType (translateFully t <$> items)
+   translateDeeply _ (AST.PromotedIntegerLiteral n) = AST.PromotedIntegerLiteral n
+   translateDeeply _ (AST.PromotedCharLiteral c) = AST.PromotedCharLiteral c
+   translateDeeply _ (AST.PromotedStringLiteral t) = AST.PromotedStringLiteral t
+   translateDeeply t (AST.PromotedInfixTypeApplication left op right) =
+      AST.PromotedInfixTypeApplication (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.TupleKind items) = AST.TupleKind (translateFully t <$> items)
+   translateDeeply t (AST.ListKind item) = AST.ListKind (translateFully t item)
+   translateDeeply t (AST.TypeRepresentationKind rep) = AST.TypeRepresentationKind (translateFully t rep)
+   translateDeeply t (AST.ConstraintType context) = AST.ConstraintType (translateFully t context)
+   translateDeeply t (AST.VisibleKindApplication ty kind) =
+      AST.VisibleKindApplication (translateFully t ty) (translateFully t kind)
+   translateDeeply t (AST.VisibleKindKindApplication left right) =
+      AST.VisibleKindKindApplication (translateFully t left) (translateFully t right)
+
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,
