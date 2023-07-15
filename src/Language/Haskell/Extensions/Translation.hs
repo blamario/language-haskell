@@ -281,6 +281,37 @@ instance (FullyTranslatable t AST.Pattern,
    translateDeeply t (AST.FieldPattern name pat) = AST.FieldPattern name (translateFully t pat)
    translateDeeply _ (AST.PunnedFieldPattern name) = AST.PunnedFieldPattern name
 
+instance (WrapTranslation t, Translation t AST.TypeLHS, DeeplyTranslatable t AST.TypeVarBinding,
+          Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
+          Abstract.TypeLHS (Target t) ~ AST.TypeLHS (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.TypeVarBinding (Origin t) ~ AST.TypeVarBinding (Origin t),
+          Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t)) =>
+         DeeplyTranslatable t AST.TypeLHS where
+   translateDeeply t (AST.SimpleTypeLHS name vars) = AST.SimpleTypeLHS name (translateDeeply t <$> vars)
+   translateDeeply t (AST.SimpleTypeLHSApplication left var) =
+      AST.SimpleTypeLHSApplication (translateFully t left) (translateDeeply t var)
+
+instance (Translation t AST.ClassInstanceLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
+          Abstract.ClassInstanceLHS (Origin t) ~ AST.ClassInstanceLHS (Origin t),
+          Abstract.ClassInstanceLHS (Target t) ~ AST.ClassInstanceLHS (Target t),
+          Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
+          Abstract.TypeLHS (Target t) ~ AST.TypeLHS (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.Kind (Origin t) ~ AST.Type (Origin t),
+          Abstract.Kind (Target t) ~ AST.Type (Target t)) =>
+         DeeplyTranslatable t AST.ClassInstanceLHS where
+   translateDeeply t (AST.TypeClassInstanceLHS name ty) = AST.TypeClassInstanceLHS name (translateFully t ty)
+   translateDeeply _ (AST.ClassReferenceInstanceLHS name) = AST.ClassReferenceInstanceLHS name
+   translateDeeply t (AST.InfixTypeClassInstanceLHS left op right) =
+      AST.InfixTypeClassInstanceLHS (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.ClassInstanceLHSApplication left right) =
+      AST.ClassInstanceLHSApplication (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.ClassInstanceLHSKindApplication left right) =
+      AST.ClassInstanceLHSKindApplication (translateFully t left) (translateFully t right)
+
 instance (Translation t AST.Type,
           FullyTranslatable t AST.Constructor, FullyTranslatable t AST.Context,
           FullyTranslatable t AST.FieldDeclaration, FullyTranslatable t AST.Type,
@@ -357,6 +388,57 @@ instance (FullyTranslatable t AST.Type,
       AST.ExplicitlyKindedTypeVariable inferred name (translateFully t kind)
    translateDeeply _ (AST.ImplicitlyKindedTypeVariable inferred name) = AST.ImplicitlyKindedTypeVariable inferred name
 
+instance (Translation t AST.EquationLHS, FullyTranslatable t AST.Pattern,
+          Abstract.EquationLHS (Origin t) ~ AST.EquationLHS (Origin t),
+          Abstract.EquationLHS (Target t) ~ AST.EquationLHS (Target t),
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t)) =>
+         DeeplyTranslatable t AST.EquationLHS where
+   translateDeeply t (AST.PrefixLHS con args) = AST.PrefixLHS (translateFully t con) (translateFully t <$> args)
+   translateDeeply t (AST.InfixLHS left op right) = AST.InfixLHS (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.PatternLHS pat) = AST.PatternLHS (translateFully t pat)
+   translateDeeply _ (AST.VariableLHS name) = AST.VariableLHS name
+
+instance (Translation t AST.EquationRHS, FullyTranslatable t AST.Expression, FullyTranslatable t AST.GuardedExpression,
+          Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t),
+          Abstract.GuardedExpression (Origin t) ~ AST.GuardedExpression (Origin t),
+          Abstract.GuardedExpression (Target t) ~ AST.GuardedExpression (Target t)) =>
+         DeeplyTranslatable t AST.EquationRHS where
+   translateDeeply t (AST.GuardedRHS choices) = AST.GuardedRHS (translateFully t <$> choices)
+   translateDeeply t (AST.NormalRHS body) = AST.NormalRHS (translateFully t body)
+
+instance (Translation t AST.Pattern,
+          FullyTranslatable t AST.Constructor, FullyTranslatable t AST.FieldPattern,
+          FullyTranslatable t AST.Type, FullyTranslatable t AST.Value,
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
+          Abstract.Constructor (Origin t) ~ AST.Constructor (Origin t),
+          Abstract.Constructor (Target t) ~ AST.Constructor (Target t),
+          Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
+          Abstract.FieldPattern (Target t) ~ AST.FieldPattern (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.Value (Origin t) ~ AST.Value (Origin t),
+          Abstract.Value (Target t) ~ AST.Value (Target t)) =>
+         DeeplyTranslatable t AST.Pattern where
+   translateDeeply t (AST.AsPattern name body) = AST.AsPattern name (translateFully t body)
+   translateDeeply t (AST.ConstructorPattern con types args) =
+      AST.ConstructorPattern (translateFully t con) (translateFully t <$> types) (translateFully t <$> args)
+   translateDeeply t (AST.InfixPattern left con right) =
+      AST.InfixPattern (translateFully t left) con (translateFully t right)
+   translateDeeply t (AST.IrrefutablePattern body) = AST.IrrefutablePattern (translateFully t body)
+   translateDeeply t (AST.ListPattern items) = AST.ListPattern (translateFully t <$> items)
+   translateDeeply t (AST.LiteralPattern value) = AST.LiteralPattern (translateFully t value)
+   translateDeeply t (AST.RecordPattern con fields) = AST.RecordPattern con (translateFully t <$> fields)
+   translateDeeply t (AST.WildcardRecordPattern support con fields) =
+      AST.WildcardRecordPattern support con (translateFully t <$> fields)
+   translateDeeply t (AST.TuplePattern items) = AST.TuplePattern (translateFully t <$> items)
+   translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
+   translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
+
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,
@@ -425,6 +507,46 @@ instance (Translation t AST.Expression,
    translateDeeply _ (AST.FieldProjection fields) = AST.FieldProjection fields
    translateDeeply t (AST.WildcardRecordExpression sup con fields) =
       AST.WildcardRecordExpression sup con (translateFully t <$> fields)
+
+instance (FullyTranslatable t AST.Expression, FullyTranslatable t AST.Statement,
+          Abstract.GuardedExpression (Origin t) ~ AST.GuardedExpression (Origin t),
+          Abstract.GuardedExpression (Target t) ~ AST.GuardedExpression (Target t),
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t),
+          Abstract.Statement (Origin t) ~ AST.Statement (Origin t),
+          Abstract.Statement (Target t) ~ AST.Statement (Target t)) =>
+         DeeplyTranslatable t AST.GuardedExpression where
+   translateDeeply t (AST.GuardedExpression guards result) =
+      AST.GuardedExpression (translateFully t <$> guards) (translateFully t result)
+
+instance (Translation t AST.Statement,
+          FullyTranslatable t AST.Declaration, FullyTranslatable t AST.Expression, FullyTranslatable t AST.Pattern,
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t),
+          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
+          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
+          Abstract.Statement (Origin t) ~ AST.Statement (Origin t),
+          Abstract.Statement (Target t) ~ AST.Statement (Target t)) =>
+         DeeplyTranslatable t AST.Statement where
+   translateDeeply t (AST.BindStatement pat value) = AST.BindStatement (translateFully t pat) (translateFully t value)
+   translateDeeply t (AST.ExpressionStatement body) = AST.ExpressionStatement (translateFully t body)
+   translateDeeply t (AST.LetStatement bindings) = AST.LetStatement (translateFully t <$> bindings)
+   translateDeeply t (AST.RecursiveStatement statements) = AST.RecursiveStatement (translateFully t <$> statements)
+
+instance (FullyTranslatable t AST.Declaration, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Pattern,
+          Abstract.CaseAlternative (Origin t) ~ AST.CaseAlternative (Origin t),
+          Abstract.CaseAlternative (Target t) ~ AST.CaseAlternative (Target t),
+          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
+          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
+          Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t)) =>
+         DeeplyTranslatable t AST.CaseAlternative where
+   translateDeeply t (AST.CaseAlternative lhs rhs wheres) =
+      AST.CaseAlternative (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
 
 instance WrapTranslation t => DeeplyTranslatable t AST.Value where
    translateDeeply _ (AST.CharLiteral l)     = AST.CharLiteral l

@@ -82,15 +82,26 @@ type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName 
                                   Abstract.Type l1 ~ AST.Type l1,
                                   Abstract.Kind l1 ~ AST.Type l1,
                                   Abstract.TypeVarBinding l1 ~ AST.TypeVarBinding l1,
+                                  Abstract.Constructor l1 ~ AST.Constructor l1,
                                   Abstract.DataConstructor l1 ~ AST.DataConstructor l1,
                                   Abstract.GADTConstructor l1 ~ AST.GADTConstructor l1,
                                   Abstract.DerivingClause l1 ~ AST.DerivingClause l1,
+                                  Abstract.FieldDeclaration l1 ~ AST.FieldDeclaration l1,
+                                  Abstract.FieldBinding l1 ~ AST.FieldBinding l1,
+                                  Abstract.FieldPattern l1 ~ AST.FieldPattern l1,
+                                  Abstract.Pattern l1 ~ AST.Pattern l1,
+                                  Abstract.GuardedExpression l1 ~ AST.GuardedExpression l1,
+                                  Abstract.Expression l1 ~ AST.Expression l1,
+                                  Abstract.Statement l1 ~ AST.Statement l1,
+                                  Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
+                                  Abstract.Value l1 ~ AST.Value l1,
                                   Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2,
                                   DeeplyFunctor (ReformulationOf e es l1 l2 pos s) l2, Monoid pos)
   
 
-dropRecordWildCards :: Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
-dropRecordWildCards = Translation.translateDeeply Reformulation
+dropRecordWildCards :: Abstract.Supports 'Extensions.RecordWildCards λ
+                    => Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
+dropRecordWildCards = Translation.translateDeeply (Reformulation :: ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
