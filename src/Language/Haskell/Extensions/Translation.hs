@@ -211,6 +211,14 @@ instance (Translation t AST.Context,
       AST.TypeEqualityConstraint (translateFully t left) (translateFully t right)
    translateDeeply _ AST.NoContext = AST.NoContext
 
+instance (WrapTranslation t,
+          Abstract.Constructor (Origin t) ~ AST.Constructor (Origin t),
+          Abstract.Constructor (Target t) ~ AST.Constructor (Target t)) => DeeplyTranslatable t AST.Constructor where
+   translateDeeply _ (AST.ConstructorReference name) = AST.ConstructorReference name
+   translateDeeply _ AST.EmptyListConstructor = AST.EmptyListConstructor
+   translateDeeply _ (AST.TupleConstructor size) = AST.TupleConstructor size
+   translateDeeply _ AST.UnitConstructor = AST.UnitConstructor
+
 instance (Translation t AST.DataConstructor,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, FullyTranslatable t AST.FieldDeclaration,
           DeeplyTranslatable t AST.TypeVarBinding,
@@ -240,6 +248,38 @@ instance (FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, DeeplyT
          DeeplyTranslatable t AST.GADTConstructor where
    translateDeeply t (AST.GADTConstructors names vars context ty) =
       AST.GADTConstructors names (translateDeeply t <$> vars) (translateFully t context) (translateFully t ty)
+
+instance (WrapTranslation t,
+          Abstract.DerivingClause (Origin t) ~ AST.DerivingClause (Origin t),
+          Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t)) =>
+         DeeplyTranslatable t AST.DerivingClause where
+   translateDeeply _ (AST.SimpleDerive name) = AST.SimpleDerive name
+
+instance (FullyTranslatable t AST.Type,
+          Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),
+          Abstract.FieldDeclaration (Target t) ~ AST.FieldDeclaration (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t)) =>
+         DeeplyTranslatable t AST.FieldDeclaration where
+   translateDeeply t (AST.ConstructorFields name ty) = AST.ConstructorFields name (translateFully t ty)
+
+instance (FullyTranslatable t AST.Expression,
+          Abstract.FieldBinding (Origin t) ~ AST.FieldBinding (Origin t),
+          Abstract.FieldBinding (Target t) ~ AST.FieldBinding (Target t),
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t)) =>
+         DeeplyTranslatable t AST.FieldBinding where
+   translateDeeply t (AST.FieldBinding name value) = AST.FieldBinding name (translateFully t value)
+   translateDeeply _ (AST.PunnedFieldBinding name) = AST.PunnedFieldBinding name
+
+instance (FullyTranslatable t AST.Pattern,
+          Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
+          Abstract.FieldPattern (Target t) ~ AST.FieldPattern (Target t),
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t)) =>
+         DeeplyTranslatable t AST.FieldPattern where
+   translateDeeply t (AST.FieldPattern name pat) = AST.FieldPattern name (translateFully t pat)
+   translateDeeply _ (AST.PunnedFieldPattern name) = AST.PunnedFieldPattern name
 
 instance (Translation t AST.Type,
           FullyTranslatable t AST.Constructor, FullyTranslatable t AST.Context,
@@ -308,6 +348,14 @@ instance (Translation t AST.Type,
       AST.VisibleKindApplication (translateFully t ty) (translateFully t kind)
    translateDeeply t (AST.VisibleKindKindApplication left right) =
       AST.VisibleKindKindApplication (translateFully t left) (translateFully t right)
+
+instance (FullyTranslatable t AST.Type,
+          Abstract.Kind (Origin t) ~ AST.Type (Origin t),
+          Abstract.Kind (Target t) ~ AST.Type (Target t)) =>
+         DeeplyTranslatable t AST.TypeVarBinding where
+   translateDeeply t (AST.ExplicitlyKindedTypeVariable inferred name kind) =
+      AST.ExplicitlyKindedTypeVariable inferred name (translateFully t kind)
+   translateDeeply _ (AST.ImplicitlyKindedTypeVariable inferred name) = AST.ImplicitlyKindedTypeVariable inferred name
 
 instance (Translation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
