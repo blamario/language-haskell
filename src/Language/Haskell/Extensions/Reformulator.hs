@@ -99,8 +99,7 @@ type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName 
                                   DeeplyFunctor (ReformulationOf e es l1 l2 pos s) l2, Monoid pos)
   
 
-dropRecordWildCards :: Abstract.Supports 'Extensions.RecordWildCards λ
-                    => Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
+dropRecordWildCards :: Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
 dropRecordWildCards = Translation.translateDeeply (Reformulation :: ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,

@@ -11,7 +11,7 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression'),
-   ExtensionsSupportedBy, SupportFor, Supports, SupportsNo,
+   ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    module Language.Haskell.Abstract) where
 
@@ -34,16 +34,6 @@ data family Construct (e :: Extension) :: TreeNodeKind
 
 type family ExtensionsSupportedBy λ :: [Extension]
 
-class If (Elem e (ExtensionsSupportedBy λ))
-         (() :: Kind.Constraint)
-         (TypeError.TypeError (TypeError.Text "Missing extension " :<>: TypeError.ShowType e)) =>
-      ExtendedWith (e :: Extension) λ where
-   build :: Construct e λ l d s
-
-type family ExtendedWithAllOf (es :: [Extension]) λ :: Kind.Constraint where
-   ExtendedWithAllOf '[] _ = ()
-   ExtendedWithAllOf (e ': es) λ = (ExtendedWith e λ, ExtendedWithAllOf es λ)
-
 type family Elem (t :: k) (ts :: [k]) :: Bool where
    Elem t (t ': _) = True
    Elem t (_ ': ts) = Elem t ts
@@ -54,6 +44,17 @@ type SupportFor (e :: Extension) (l :: Kind.Type) = If (Elem e (ExtensionsSuppor
 type Supports e l = SupportFor e l ~ ()
 
 type SupportsNo e l = SupportFor e l ~ Void
+
+type family SupportsAllOf (es :: [Extension]) l :: Kind.Constraint where
+   SupportsAllOf '[] _ = ()
+   SupportsAllOf (e ': es) l = (Supports e l, SupportsAllOf es l)
+
+class Supports e λ => ExtendedWith e λ where
+   build :: Construct e λ l d s
+
+type family ExtendedWithAllOf (es :: [Extension]) l :: Kind.Constraint where
+   ExtendedWithAllOf '[] _ = ()
+   ExtendedWithAllOf (e ': es) l = (ExtendedWith e l, ExtendedWithAllOf es l)
 
 -- * 'Construct' instances for language extensions
 
