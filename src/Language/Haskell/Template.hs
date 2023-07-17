@@ -22,6 +22,8 @@ import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST as ExtAST
+import qualified Language.Haskell.Extensions.Reformulator as Reformulator
+import Language.Haskell.Extensions.Translation (DeeplyTranslatable)
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit,
                                                kindedTV, plainTV, kindedTVInferred, plainTVInferred,
@@ -35,8 +37,9 @@ import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
-pprint :: PrettyViaTH a => a -> String
-pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
+pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
+           DeeplyTranslatable (Reformulator.ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] Language Language pos s) node) => a -> String
+pprint = render . Ppr.to_HPJ_Doc . prettyViaTH . fmap Reformulator.dropRecordWildCards
 
 doE, mdoE :: [Stmt] -> Exp
 #if MIN_VERSION_template_haskell(2,17,0)
