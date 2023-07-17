@@ -11,15 +11,13 @@ import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
 import qualified Transformation.AG.Dimorphic as Di
-import qualified Transformation.Deep as Deep
-import qualified Transformation.Full as Full
 
 import Language.Haskell.Extensions.Abstract (DeeplyFunctor, ExtendedWithAllOf)
 import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
-import Language.Haskell.Extensions.Translation (NameTranslation, WrapTranslation, Translation, DeeplyTranslatable)
+import Language.Haskell.Extensions.Translation (NameTranslation, WrapTranslation, WrappedTranslation, DeeplyTranslatable)
 import qualified Language.Haskell.Extensions.Translation as Translation
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Reserializer as Reserializer
@@ -62,45 +60,49 @@ instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
   WrapTranslation (ReformulationOf e es λ l pos s) where
    type Wrap (ReformulationOf e es λ l pos s) = Wrap λ pos s
 
-type SameWrap e es pos s l1 l2 = (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
-                                  Abstract.ModuleName l1 ~ AST.ModuleName l1,
-                                  Abstract.Name l1 ~ AST.Name l1,
-                                  Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
-                                  Abstract.ModuleName l2 ~ AST.ModuleName l2,
-                                  Abstract.Name l2 ~ AST.Name l2,
-                                  Abstract.Module l1 ~ AST.Module l1,
-                                  Abstract.Export l1 ~ AST.Export l1,
-                                  Abstract.Import l1 ~ AST.Import l1,
-                                  Abstract.ImportSpecification l1 ~ AST.ImportSpecification l1,
-                                  Abstract.ImportItem l1 ~ AST.ImportItem l1,
-                                  Abstract.Declaration l1 ~ AST.Declaration l1,
-                                  Abstract.EquationLHS l1 ~ AST.EquationLHS l1,
-                                  Abstract.EquationRHS l1 ~ AST.EquationRHS l1,
-                                  Abstract.ClassInstanceLHS l1 ~ AST.ClassInstanceLHS l1,
-                                  Abstract.Context l1 ~ AST.Context l1,
-                                  Abstract.TypeLHS l1 ~ AST.TypeLHS l1,
-                                  Abstract.Type l1 ~ AST.Type l1,
-                                  Abstract.Kind l1 ~ AST.Type l1,
-                                  Abstract.TypeVarBinding l1 ~ AST.TypeVarBinding l1,
-                                  Abstract.Constructor l1 ~ AST.Constructor l1,
-                                  Abstract.DataConstructor l1 ~ AST.DataConstructor l1,
-                                  Abstract.GADTConstructor l1 ~ AST.GADTConstructor l1,
-                                  Abstract.DerivingClause l1 ~ AST.DerivingClause l1,
-                                  Abstract.FieldDeclaration l1 ~ AST.FieldDeclaration l1,
-                                  Abstract.FieldBinding l1 ~ AST.FieldBinding l1,
-                                  Abstract.FieldPattern l1 ~ AST.FieldPattern l1,
-                                  Abstract.Pattern l1 ~ AST.Pattern l1,
-                                  Abstract.GuardedExpression l1 ~ AST.GuardedExpression l1,
-                                  Abstract.Expression l1 ~ AST.Expression l1,
-                                  Abstract.Statement l1 ~ AST.Statement l1,
-                                  Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
-                                  Abstract.Value l1 ~ AST.Value l1,
-                                  Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2,
-                                  DeeplyFunctor (ReformulationOf e es l1 l2 pos s) l2, Monoid pos)
+type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
+   Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
+   Abstract.ModuleName l1 ~ AST.ModuleName l1,
+   Abstract.Name l1 ~ AST.Name l1,
+   Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+   Abstract.ModuleName l2 ~ AST.ModuleName l2,
+   Abstract.Name l2 ~ AST.Name l2,
+   Abstract.Module l1 ~ AST.Module l1,
+   Abstract.Export l1 ~ AST.Export l1,
+   Abstract.Import l1 ~ AST.Import l1,
+   Abstract.ImportSpecification l1 ~ AST.ImportSpecification l1,
+   Abstract.ImportItem l1 ~ AST.ImportItem l1,
+   Abstract.Declaration l1 ~ AST.Declaration l1,
+   Abstract.EquationLHS l1 ~ AST.EquationLHS l1,
+   Abstract.EquationRHS l1 ~ AST.EquationRHS l1,
+   Abstract.ClassInstanceLHS l1 ~ AST.ClassInstanceLHS l1,
+   Abstract.Context l1 ~ AST.Context l1,
+   Abstract.TypeLHS l1 ~ AST.TypeLHS l1,
+   Abstract.Type l1 ~ AST.Type l1,
+   Abstract.Kind l1 ~ AST.Type l1,
+   Abstract.TypeVarBinding l1 ~ AST.TypeVarBinding l1,
+   Abstract.Constructor l1 ~ AST.Constructor l1,
+   Abstract.DataConstructor l1 ~ AST.DataConstructor l1,
+   Abstract.GADTConstructor l1 ~ AST.GADTConstructor l1,
+   Abstract.DerivingClause l1 ~ AST.DerivingClause l1,
+   Abstract.FieldDeclaration l1 ~ AST.FieldDeclaration l1,
+   Abstract.FieldBinding l1 ~ AST.FieldBinding l1,
+   Abstract.FieldPattern l1 ~ AST.FieldPattern l1,
+   Abstract.Pattern l1 ~ AST.Pattern l1,
+   Abstract.GuardedExpression l1 ~ AST.GuardedExpression l1,
+   Abstract.Expression l1 ~ AST.Expression l1,
+   Abstract.Statement l1 ~ AST.Statement l1,
+   Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
+   Abstract.Value l1 ~ AST.Value l1,
+   Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2)
   
 
-dropRecordWildCards :: Reformulator '[Extensions.RecordWildCards] '[ 'Extensions.NamedFieldPuns ] λ (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s) (Wrap λ pos s)
-dropRecordWildCards = Translation.translateDeeply (Reformulation :: ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
+dropRecordWildCards :: forall l1 l2 node pos s.
+                       (Abstract.Haskell l2, Abstract.ExtendedWith 'Extensions.NamedFieldPuns l2,
+                        SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
+                        DeeplyTranslatable (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s) node)
+                    => node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s) -> node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s)
+dropRecordWildCards = Translation.translateDeeply (Reformulation :: ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
@@ -108,7 +110,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
           Abstract.Name l2 ~ AST.Name l2) =>
-   Translation
+   WrappedTranslation
       (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
       AST.Pattern
   where
@@ -137,7 +139,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Name l ~ AST.Name l) =>
    ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l pos s
-   `Translation` AST.Expression
+   `WrappedTranslation` AST.Expression
   where
    _ `translateWrapped` Compose (env@(Di.Atts inherited _),
                                  (s, AST.WildcardRecordExpression () con@(AST.QualifiedName modName _) fields)) =

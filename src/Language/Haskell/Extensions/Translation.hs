@@ -6,8 +6,6 @@
 module Language.Haskell.Extensions.Translation where
 
 import Data.Coerce (Coercible, coerce)
-import Data.Foldable1 (Foldable1)
-import qualified Data.Foldable1 as Foldable1
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions as Extensions
@@ -38,13 +36,15 @@ class NameTranslation t where
 class WrapTranslation t where
    type Wrap t :: Abstract.NodeWrap
 
+class (NameTranslation t, WrapTranslation t) => WrappedTranslation t (node :: Abstract.TreeNodeKind) where
+   translateWrapped :: t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
+   default translateWrapped :: (Functor (Wrap t), Translation t node)
+                            => t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+                            -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
+   translateWrapped = fmap . translate
+
 class (NameTranslation t, WrapTranslation t) => Translation t (node :: Abstract.TreeNodeKind) where
    translate :: t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Target t) (Origin t) (Wrap t) (Wrap t)
-   translateWrapped :: t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
-   default translate :: (Applicative (Wrap t), Foldable1 (Wrap t)) => t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Target t) (Origin t) (Wrap t) (Wrap t)
-   default translateWrapped :: Functor (Wrap t) => t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
-   translate t = Foldable1.head . translateWrapped t . pure
-   translateWrapped = fmap . translate
 
 class WrapTranslation t => DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
    translateDeeply :: Functor (Wrap t)
@@ -54,11 +54,11 @@ translateFully :: (FullyTranslatable t node, Functor (Wrap t)) =>
                   t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Target t) (Wrap t) (Wrap t))
 translateFully t = (translateDeeply t <$>) . translateWrapped t
 
-type FullyTranslatable t node = (WrapTranslation t, Translation t node, DeeplyTranslatable t node)
+type FullyTranslatable t node = (WrappedTranslation t node, DeeplyTranslatable t node)
 
 -- DeeplyTranslatable instances
 
-instance (Translation t AST.Module,
+instance (WrapTranslation t, WrappedTranslation t AST.Module,
           FullyTranslatable t AST.Export, FullyTranslatable t AST.Import, FullyTranslatable t AST.Declaration,
           Abstract.Module (Origin t) ~ AST.Module (Origin t), Abstract.Module (Target t) ~ AST.Module (Target t),
           Abstract.Export (Origin t) ~ AST.Export (Origin t), Abstract.Export (Target t) ~ AST.Export (Target t),
@@ -74,7 +74,7 @@ instance (Translation t AST.Module,
       AST.AnonymousModule (translateFully t <$> imports) (translateFully t <$> declarations)
    translateDeeply t (AST.ExtendedModule extensions m) = AST.ExtendedModule extensions (translateFully t m)
 
-instance (FullyTranslatable t AST.ImportSpecification,
+instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
           Abstract.ModuleName (Origin t) ~ AST.ModuleName (Origin t),
           Abstract.QualifiedName (Origin t) ~ AST.QualifiedName (Origin t)) =>
          DeeplyTranslatable t AST.Export where
@@ -82,7 +82,7 @@ instance (FullyTranslatable t AST.ImportSpecification,
    translateDeeply _ (AST.ExportVar name) = AST.ExportVar name
    translateDeeply _ (AST.ReExportModule name) = AST.ReExportModule name
 
-instance (FullyTranslatable t AST.ImportSpecification,
+instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
           Abstract.ModuleName (Origin t) ~ AST.ModuleName (Origin t),
           Abstract.ImportSpecification (Origin t) ~ AST.ImportSpecification (Origin t),
           Abstract.ImportSpecification (Target t) ~ AST.ImportSpecification (Target t)) =>
@@ -90,20 +90,20 @@ instance (FullyTranslatable t AST.ImportSpecification,
    translateDeeply t (AST.Import safe qualified package name alias detail) =
       AST.Import safe qualified package name alias (translateFully t <$> detail)
 
-instance (FullyTranslatable t AST.ImportItem,
+instance (WrapTranslation t, FullyTranslatable t AST.ImportItem,
           Abstract.ImportItem (Origin t) ~ AST.ImportItem (Origin t),
           Abstract.ImportItem (Target t) ~ AST.ImportItem (Target t)) =>
          DeeplyTranslatable t AST.ImportSpecification where
    translateDeeply t (AST.ImportSpecification hiding items) =
       AST.ImportSpecification hiding (translateFully t <$> items)
 
-instance (FullyTranslatable t AST.ImportSpecification,
+instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
           Abstract.QualifiedName (Origin t) ~ AST.QualifiedName (Origin t)) =>
          DeeplyTranslatable t AST.ImportItem where
    translateDeeply _ (AST.ImportClassOrType name members) = AST.ImportClassOrType name members
    translateDeeply _ (AST.ImportVar name) = AST.ImportVar name
 
-instance (Translation t AST.Declaration,
+instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,
           FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
@@ -194,7 +194,7 @@ instance (Translation t AST.Declaration,
       AST.KindSignature name (translateFully t context) (translateFully t kind)
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
 
-instance (Translation t AST.Context,
+instance (WrapTranslation t, WrappedTranslation t AST.Context,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type,
           Abstract.Context (Origin t) ~ AST.Context (Origin t),
           Abstract.Context (Target t) ~ AST.Context (Target t),
@@ -219,7 +219,7 @@ instance (WrapTranslation t,
    translateDeeply _ (AST.TupleConstructor size) = AST.TupleConstructor size
    translateDeeply _ AST.UnitConstructor = AST.UnitConstructor
 
-instance (Translation t AST.DataConstructor,
+instance (WrapTranslation t, WrappedTranslation t AST.DataConstructor,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, FullyTranslatable t AST.FieldDeclaration,
           DeeplyTranslatable t AST.TypeVarBinding,
           Abstract.DataConstructor (Origin t) ~ AST.DataConstructor (Origin t),
@@ -238,7 +238,8 @@ instance (Translation t AST.DataConstructor,
    translateDeeply t (AST.ExistentialConstructor vars context body) =
       AST.ExistentialConstructor (translateDeeply t <$> vars) (translateFully t context) (translateFully t body)
 
-instance (FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
+instance (WrapTranslation t,
+          FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           Abstract.Context (Origin t) ~ AST.Context (Origin t),
           Abstract.Context (Target t) ~ AST.Context (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
@@ -255,7 +256,7 @@ instance (WrapTranslation t,
          DeeplyTranslatable t AST.DerivingClause where
    translateDeeply _ (AST.SimpleDerive name) = AST.SimpleDerive name
 
-instance (FullyTranslatable t AST.Type,
+instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),
           Abstract.FieldDeclaration (Target t) ~ AST.FieldDeclaration (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
@@ -263,7 +264,7 @@ instance (FullyTranslatable t AST.Type,
          DeeplyTranslatable t AST.FieldDeclaration where
    translateDeeply t (AST.ConstructorFields name ty) = AST.ConstructorFields name (translateFully t ty)
 
-instance (FullyTranslatable t AST.Expression,
+instance (WrapTranslation t, FullyTranslatable t AST.Expression,
           Abstract.FieldBinding (Origin t) ~ AST.FieldBinding (Origin t),
           Abstract.FieldBinding (Target t) ~ AST.FieldBinding (Target t),
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
@@ -272,7 +273,7 @@ instance (FullyTranslatable t AST.Expression,
    translateDeeply t (AST.FieldBinding name value) = AST.FieldBinding name (translateFully t value)
    translateDeeply _ (AST.PunnedFieldBinding name) = AST.PunnedFieldBinding name
 
-instance (FullyTranslatable t AST.Pattern,
+instance (WrapTranslation t, FullyTranslatable t AST.Pattern,
           Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
           Abstract.FieldPattern (Target t) ~ AST.FieldPattern (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
@@ -281,7 +282,7 @@ instance (FullyTranslatable t AST.Pattern,
    translateDeeply t (AST.FieldPattern name pat) = AST.FieldPattern name (translateFully t pat)
    translateDeeply _ (AST.PunnedFieldPattern name) = AST.PunnedFieldPattern name
 
-instance (WrapTranslation t, Translation t AST.TypeLHS, DeeplyTranslatable t AST.TypeVarBinding,
+instance (WrapTranslation t, WrappedTranslation t AST.TypeLHS, DeeplyTranslatable t AST.TypeVarBinding,
           Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
           Abstract.TypeLHS (Target t) ~ AST.TypeLHS (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
@@ -293,7 +294,8 @@ instance (WrapTranslation t, Translation t AST.TypeLHS, DeeplyTranslatable t AST
    translateDeeply t (AST.SimpleTypeLHSApplication left var) =
       AST.SimpleTypeLHSApplication (translateFully t left) (translateDeeply t var)
 
-instance (Translation t AST.ClassInstanceLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
+instance (WrapTranslation t, WrappedTranslation t AST.ClassInstanceLHS,
+          FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           Abstract.ClassInstanceLHS (Origin t) ~ AST.ClassInstanceLHS (Origin t),
           Abstract.ClassInstanceLHS (Target t) ~ AST.ClassInstanceLHS (Target t),
           Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
@@ -312,7 +314,7 @@ instance (Translation t AST.ClassInstanceLHS, FullyTranslatable t AST.Type, Deep
    translateDeeply t (AST.ClassInstanceLHSKindApplication left right) =
       AST.ClassInstanceLHSKindApplication (translateFully t left) (translateFully t right)
 
-instance (Translation t AST.Type,
+instance (WrapTranslation t, WrappedTranslation t AST.Type,
           FullyTranslatable t AST.Constructor, FullyTranslatable t AST.Context,
           FullyTranslatable t AST.FieldDeclaration, FullyTranslatable t AST.Type,
           DeeplyTranslatable t AST.TypeVarBinding,
@@ -380,7 +382,7 @@ instance (Translation t AST.Type,
    translateDeeply t (AST.VisibleKindKindApplication left right) =
       AST.VisibleKindKindApplication (translateFully t left) (translateFully t right)
 
-instance (FullyTranslatable t AST.Type,
+instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.Kind (Origin t) ~ AST.Type (Origin t),
           Abstract.Kind (Target t) ~ AST.Type (Target t)) =>
          DeeplyTranslatable t AST.TypeVarBinding where
@@ -388,7 +390,7 @@ instance (FullyTranslatable t AST.Type,
       AST.ExplicitlyKindedTypeVariable inferred name (translateFully t kind)
    translateDeeply _ (AST.ImplicitlyKindedTypeVariable inferred name) = AST.ImplicitlyKindedTypeVariable inferred name
 
-instance (Translation t AST.EquationLHS, FullyTranslatable t AST.Pattern,
+instance (WrapTranslation t, WrappedTranslation t AST.EquationLHS, FullyTranslatable t AST.Pattern,
           Abstract.EquationLHS (Origin t) ~ AST.EquationLHS (Origin t),
           Abstract.EquationLHS (Target t) ~ AST.EquationLHS (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
@@ -399,7 +401,8 @@ instance (Translation t AST.EquationLHS, FullyTranslatable t AST.Pattern,
    translateDeeply t (AST.PatternLHS pat) = AST.PatternLHS (translateFully t pat)
    translateDeeply _ (AST.VariableLHS name) = AST.VariableLHS name
 
-instance (Translation t AST.EquationRHS, FullyTranslatable t AST.Expression, FullyTranslatable t AST.GuardedExpression,
+instance (WrapTranslation t, WrappedTranslation t AST.EquationRHS,
+          FullyTranslatable t AST.Expression, FullyTranslatable t AST.GuardedExpression,
           Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
           Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
@@ -410,7 +413,7 @@ instance (Translation t AST.EquationRHS, FullyTranslatable t AST.Expression, Ful
    translateDeeply t (AST.GuardedRHS choices) = AST.GuardedRHS (translateFully t <$> choices)
    translateDeeply t (AST.NormalRHS body) = AST.NormalRHS (translateFully t body)
 
-instance (Translation t AST.Pattern,
+instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
           FullyTranslatable t AST.Constructor, FullyTranslatable t AST.FieldPattern,
           FullyTranslatable t AST.Type, FullyTranslatable t AST.Value,
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
@@ -439,7 +442,7 @@ instance (Translation t AST.Pattern,
    translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
    translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
 
-instance (Translation t AST.Expression,
+instance (WrapTranslation t, WrappedTranslation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.Constructor,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,
           FullyTranslatable t AST.GuardedExpression, FullyTranslatable t AST.Pattern,
@@ -508,7 +511,8 @@ instance (Translation t AST.Expression,
    translateDeeply t (AST.WildcardRecordExpression sup con fields) =
       AST.WildcardRecordExpression sup con (translateFully t <$> fields)
 
-instance (FullyTranslatable t AST.Expression, FullyTranslatable t AST.Statement,
+instance (WrapTranslation t,
+          FullyTranslatable t AST.Expression, FullyTranslatable t AST.Statement,
           Abstract.GuardedExpression (Origin t) ~ AST.GuardedExpression (Origin t),
           Abstract.GuardedExpression (Target t) ~ AST.GuardedExpression (Target t),
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
@@ -519,7 +523,7 @@ instance (FullyTranslatable t AST.Expression, FullyTranslatable t AST.Statement,
    translateDeeply t (AST.GuardedExpression guards result) =
       AST.GuardedExpression (translateFully t <$> guards) (translateFully t result)
 
-instance (Translation t AST.Statement,
+instance (WrapTranslation t, WrappedTranslation t AST.Statement,
           FullyTranslatable t AST.Declaration, FullyTranslatable t AST.Expression, FullyTranslatable t AST.Pattern,
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
           Abstract.Expression (Target t) ~ AST.Expression (Target t),
@@ -535,7 +539,8 @@ instance (Translation t AST.Statement,
    translateDeeply t (AST.LetStatement bindings) = AST.LetStatement (translateFully t <$> bindings)
    translateDeeply t (AST.RecursiveStatement statements) = AST.RecursiveStatement (translateFully t <$> statements)
 
-instance (FullyTranslatable t AST.Declaration, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Pattern,
+instance (WrapTranslation t,
+          FullyTranslatable t AST.Declaration, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Pattern,
           Abstract.CaseAlternative (Origin t) ~ AST.CaseAlternative (Origin t),
           Abstract.CaseAlternative (Target t) ~ AST.CaseAlternative (Target t),
           Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
@@ -556,6 +561,13 @@ instance WrapTranslation t => DeeplyTranslatable t AST.Value where
    translateDeeply t (AST.HashLiteral sup l) = AST.HashLiteral sup (translateDeeply t l)
 
 -- Default overlappable Translation instances
+
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+                               Coercible
+                                  (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+                                (node (Target t) (Origin t) (Wrap t) (Wrap t))) =>
+                              WrappedTranslation t node where
+   translateWrapped = const (fmap coerce)
 
 instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t),
                                Coercible
