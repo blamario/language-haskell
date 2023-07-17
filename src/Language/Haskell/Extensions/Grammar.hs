@@ -37,7 +37,7 @@ import qualified Numeric
 import qualified Rank2
 import qualified Rank2.TH
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty)
+import Text.Parser.Combinators (eof, endBy, sepBy, sepBy1, sepByNonEmpty, sepEndBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.Combinators (someNonEmpty)
@@ -144,6 +144,7 @@ extensionMixins =
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
+     (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
@@ -609,7 +610,7 @@ explicitNamespacesMixin self super = super{
                 <*> optional (self & report & moduleLevel & members),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
-                               <$> (namespacedMember self `sepBy` comma) <* optional comma)}}}
+                               <$> namespacedMember self `sepEndBy` comma)}}}
 
 blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                   Ord t, Show t, OutlineMonoid t,
@@ -1639,11 +1640,11 @@ recordWildCardsMixin self super =
    super{
       report = (report super){
          bareExpression = (super & report & bareExpression)
-            <|> Abstract.wildcardRecordExpression' Abstract.build <$> (super & report & qualifiedConstructor)
-                <*> braces (wrap (self & report & fieldBinding) `sepBy` comma <* comma <* delimiter ".."),
+            <|> Abstract.wildcardRecordExpression' Abstract.build <$> (self & report & qualifiedConstructor)
+                <*> braces (wrap (self & report & fieldBinding) `endBy` comma <* delimiter ".."),
          aPattern = (super & report & aPattern)
-            <|> Abstract.wildcardRecordPattern' Abstract.build <$> (super & report & qualifiedConstructor)
-                <*> braces (wrap (self & report & fieldPattern) `sepBy` comma <* comma <* delimiter "..")}}
+            <|> Abstract.wildcardRecordPattern' Abstract.build <$> (self & report & qualifiedConstructor)
+                <*> braces (wrap (self & report & fieldPattern) `endBy` comma <* delimiter "..")}}
 
 overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
