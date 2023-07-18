@@ -3,6 +3,7 @@
 
 module Language.Haskell.Extensions.Reformulator where
 
+import qualified Data.Foldable1 as Foldable1
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup.Union (UnionWith(..))
@@ -17,7 +18,8 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
-import Language.Haskell.Extensions.Translation (NameTranslation, WrapTranslation, WrappedTranslation, DeeplyTranslatable)
+import Language.Haskell.Extensions.Translation (
+   NameTranslation, Translation, WrapTranslation, WrappedTranslation, FullyTranslatable)
 import qualified Language.Haskell.Extensions.Translation as Translation
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Reserializer as Reserializer
@@ -36,10 +38,9 @@ type Transpiler λ1 λ2 f = Abstract.Module λ1 λ1 f f -> Abstract.Module λ2 �
 type Reformulator xs ys λ c f = ExtendedWithAllOf xs λ =>
    forall l. (Abstract.Haskell l, ExtendedWithAllOf (Difference ys xs) l, c λ l) => Transpiler λ l f
 
-
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 
-data ReformulationOf (e :: Extension) (es :: [Extension]) λ l pos s = Reformulation
+data ReformulationOf (e :: Extension) (es :: [Extension]) λ l pos s = Reformulation Extension -- e
 
 instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.ModuleName λ ~ AST.ModuleName λ,
@@ -100,9 +101,29 @@ type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
 dropRecordWildCards :: forall l1 l2 node pos s.
                        (Abstract.Haskell l2, Abstract.ExtendedWith 'Extensions.NamedFieldPuns l2,
                         SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
-                        DeeplyTranslatable (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s) node)
-                    => node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s) -> node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s)
-dropRecordWildCards = Translation.translateDeeply (Reformulation :: ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
+                        FullyTranslatable (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s) node)
+                    => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                    -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropRecordWildCards =
+   Translation.translateFully (Reformulation Extensions.RecordWildCards
+                               ::
+                                 ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
+
+instance (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
+          Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+          Abstract.ModuleName l1 ~ AST.ModuleName l1,
+          Abstract.ModuleName l2 ~ AST.ModuleName l2,
+          Abstract.Name l1 ~ AST.Name l1,
+          Abstract.Name l2 ~ AST.Name l2,
+          Abstract.Module l1 ~ AST.Module l1,
+          Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
+  where
+   translate t@(Reformulation e) (AST.ExtendedModule es m) = case filter (/= Extensions.on e) es of
+      [] -> Translation.translate t (Foldable1.head m)
+      es' -> AST.ExtendedModule es' m
+   translate t (AST.NamedModule name exports imports declarations) =
+      AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
+   translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
@@ -115,7 +136,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
       AST.Pattern
   where
    translateWrapped
-      Reformulation
+      Reformulation{}
       (Compose (env@(Di.Atts inherited _),
                (s, AST.WildcardRecordPattern () con@(AST.QualifiedName modName _) fields))) =
       Compose (env, (s, AST.RecordPattern con $ fields ++ implicitFields))
@@ -129,7 +150,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
             explicitFieldName (AST.FieldPattern name _) = Binder.baseName name
             explicitFieldName (AST.PunnedFieldPattern name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
-   translateWrapped Reformulation (Compose (env, (s, p))) = Compose (env, (s, p))
+   translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
           Abstract.Supports 'Extensions.RecordWildCards λ,

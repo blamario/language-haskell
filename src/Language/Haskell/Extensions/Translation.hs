@@ -562,12 +562,9 @@ instance WrapTranslation t => DeeplyTranslatable t AST.Value where
 
 -- Default overlappable Translation instances
 
-instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t),
-                               Coercible
-                                  (node (Origin t) (Origin t) (Wrap t) (Wrap t))
-                                (node (Target t) (Origin t) (Wrap t) (Wrap t))) =>
+instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t), Translation t node) =>
                               WrappedTranslation t node where
-   translateWrapped = const (fmap coerce)
+   translateWrapped = fmap . translate
 
 instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wrap t),
                                Coercible

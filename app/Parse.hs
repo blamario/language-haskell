@@ -12,7 +12,7 @@ import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import Language.Haskell.Extensions.Reformulator (ReformulationOf)
-import Language.Haskell.Extensions.Translation (DeeplyTranslatable)
+import Language.Haskell.Extensions.Translation (FullyTranslatable)
 import qualified Language.Haskell.Extensions.Verifier as Verifier
 import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
@@ -106,7 +106,7 @@ main' Opts{..} = do
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
               Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
-              DeeplyTranslatable
+              FullyTranslatable
                  (ReformulationOf
                      'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
                  g,
@@ -142,7 +142,7 @@ main' Opts{..} = do
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
-                  DeeplyTranslatable
+                  FullyTranslatable
                      (ReformulationOf
                          'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
                      g,
