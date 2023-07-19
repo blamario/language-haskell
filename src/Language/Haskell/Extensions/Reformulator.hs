@@ -5,6 +5,7 @@ module Language.Haskell.Extensions.Reformulator where
 
 import qualified Data.Foldable1 as Foldable1
 import Data.Functor.Compose (Compose (Compose, getCompose))
+import qualified Data.List as List
 import qualified Data.Map.Lazy as Map
 import Data.Semigroup.Union (UnionWith(..))
 
@@ -40,7 +41,7 @@ type Reformulator xs ys λ c f = ExtendedWithAllOf xs λ =>
 
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 
-data ReformulationOf (e :: Extension) (es :: [Extension]) λ l pos s = Reformulation Extension -- e
+data ReformulationOf (e :: Extension) (es :: [Extension]) λ l pos s = Reformulation Extension [Extension] -- e es
 
 instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.ModuleName λ ~ AST.ModuleName λ,
@@ -105,7 +106,7 @@ dropRecordWildCards :: forall l1 l2 node pos s.
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropRecordWildCards =
-   Translation.translateFully (Reformulation Extensions.RecordWildCards
+   Translation.translateFully (Reformulation Extensions.RecordWildCards [Extensions.NamedFieldPuns]
                                ::
                                  ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
@@ -118,9 +119,10 @@ instance (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
           Abstract.Module l1 ~ AST.Module l1,
           Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
   where
-   translate t@(Reformulation e) (AST.ExtendedModule es m) = case filter (/= Extensions.on e) es of
+   translate t@(Reformulation e es) (AST.ExtendedModule oldExts m) =
+      case List.union (Extensions.on <$> es) $ List.delete (Extensions.on e) oldExts of
       [] -> Translation.translate t (Foldable1.head m)
-      es' -> AST.ExtendedModule es' m
+      newExts -> AST.ExtendedModule newExts m
    translate t (AST.NamedModule name exports imports declarations) =
       AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
    translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
