@@ -428,6 +428,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
           Abstract.Value (Target t) ~ AST.Value (Target t)) =>
          DeeplyTranslatable t AST.Pattern where
    translateDeeply t (AST.AsPattern name body) = AST.AsPattern name (translateFully t body)
+   translateDeeply t (AST.BangPattern support body) = AST.BangPattern support (translateFully t body)
    translateDeeply t (AST.ConstructorPattern con types args) =
       AST.ConstructorPattern (translateFully t con) (translateFully t <$> types) (translateFully t <$> args)
    translateDeeply t (AST.InfixPattern left con right) =

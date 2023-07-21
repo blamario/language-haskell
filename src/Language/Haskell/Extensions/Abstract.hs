@@ -10,7 +10,8 @@ module Language.Haskell.Extensions.Abstract (
               NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
-              TupleSectionConstruction, tupleSectionExpression'),
+              TupleSectionConstruction, tupleSectionExpression',
+              BangPatternConstruction, bangPattern),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    module Language.Haskell.Abstract) where
@@ -83,9 +84,13 @@ data instance Construct 'Extensions.ParallelListComprehensions λ l d s = Parall
 data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstruction {
    tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
+data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
+   bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
+
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
-                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections] λ) =>
+                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
+                          'Extensions.BangPatterns] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ

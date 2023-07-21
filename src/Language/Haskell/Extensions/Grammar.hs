@@ -146,6 +146,7 @@ extensionMixins =
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
+     (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -1664,6 +1665,20 @@ overloadedRecordDotMixin self super =
                            <* lookAhead (satisfyCharInput varStart)
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
+
+bangPatternsMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'BangPatterns l,
+                                    LexicalParsing (Parser g t),
+                                    g ~ ExtendedGrammar l t (NodeWrap t),
+                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+bangPatternsMixin self super =
+   super{
+      report = (report super){
+         aPattern = (super & report & aPattern)
+            <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap (self & report & aPattern),
+      variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
+   where bang = string "!" <* notSatisfyChar Char.isSpace <* lift ([[Token Delimiter "!"]], ())
 
 nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 g ~ ExtendedGrammar l t (NodeWrap t),

@@ -36,7 +36,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.ParallelListComprehensions,
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
-   'Extensions.TupleSections]
+   'Extensions.TupleSections,
+   'Extensions.BangPatterns]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -64,6 +65,10 @@ instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
 instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
    build = Abstract.TupleSectionConstruction {
       Abstract.tupleSectionExpression' = TupleSectionExpression}
+
+instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
+   build = Abstract.BangPatternConstruction {
+      Abstract.bangPattern = BangPattern ()}
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
@@ -519,6 +524,7 @@ data Pattern λ l d s =
    | WildcardRecordPattern !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
                             (Abstract.QualifiedName λ)
                             [s (Abstract.FieldPattern l l d d)]
+   | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
@@ -681,17 +687,20 @@ deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedN
 
 deriving instance Typeable (Pattern λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.FieldPattern l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (s (Abstract.Type l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.FieldPattern l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (s (Abstract.Type l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.FieldPattern l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Pattern λ l d s)

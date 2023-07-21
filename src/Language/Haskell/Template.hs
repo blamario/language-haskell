@@ -476,6 +476,7 @@ patternTemplate (ConstructorPattern con typeApps args) = case (extract con) of
 patternTemplate (InfixPattern left op right) =
    InfixP (patternTemplate $ extract left) (qnameTemplate op) (patternTemplate $ extract right)
 patternTemplate (IrrefutablePattern pat) = TildeP (patternTemplate $ extract pat)
+patternTemplate (BangPattern () pat) = BangP (patternTemplate $ extract pat)
 patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> items)
 patternTemplate (LiteralPattern value) = LitP (literalTemplate $ extract value)
 patternTemplate (RecordPattern constructor fields) =
