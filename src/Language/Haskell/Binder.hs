@@ -185,6 +185,15 @@ instance {-# OVERLAPS #-}
             export (ExtAST.ClassDeclaration _ lhs decls)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ TypeClass $ Di.syn atts)
+            export (ExtAST.InstanceDeclaration _vars _context lhs decls) =
+               onMap (Map.mapMaybe constructorOrField) (Di.syn atts)
+               where constructorOrField b@(ValueBinding DataConstructor{}) = Just b
+                     constructorOrField b@(ValueBinding RecordConstructor{}) = Just b
+                     constructorOrField b@(ValueBinding RecordField{}) = Just b
+                     constructorOrField b@(ValueBinding RecordFieldAndValue{}) =
+                        Just (ValueBinding RecordFieldAndValue)
+                     constructorOrField (TypeAndValueBinding _ v) = constructorOrField (ValueBinding v)
+                     constructorOrField _ = Nothing
             export (AST.EquationDeclaration lhs _ _)
                | [name] <- foldMap getOperatorName (getCompose lhs mempty)
                = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
@@ -200,6 +209,10 @@ instance {-# OVERLAPS #-}
             export (AST.GADTNewtypeDeclaration lhs _kind _constructor _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.DataFamilyInstance _vars context lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.NewtypeFamilyInstance _vars context lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.GADTDataFamilyInstance _vars lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.GADTNewtypeFamilyInstance _vars lhs _kind _constructors _derivings) = Di.syn atts
             export (AST.TypeSignature names _context _type)
                = Di.syn atts <> UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
             export (AST.KindSignature name _context _type)
