@@ -268,7 +268,8 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Pattern l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, _, end), t)) = Const $
-      case t of ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
+      case t of ExtAST.BangPattern {} -> Map.singleton Extensions.BangPatterns [(start, end)]
+                ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
