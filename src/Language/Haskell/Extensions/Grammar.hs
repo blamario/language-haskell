@@ -1680,6 +1680,24 @@ bangPatternsMixin self super =
       variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
    where bang = string "!" <* notSatisfyChar Char.isSpace <* lift ([[Token Delimiter "!"]], ())
 
+standaloneDerivingMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'StandaloneDeriving l,
+                                          LexicalParsing (Parser g t),
+                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t,
+                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneDerivingMixin self@ExtendedGrammar{
+                           report= HaskellGrammar{
+                              declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
+                        super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
+   super{
+      report = report{
+         declarationLevel= declarationLevel{
+            topLevelDeclaration = (declarationLevel & topLevelDeclaration)
+               <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
+                   <*> wrap optionalContext
+                   <*> wrap instanceDesignator}}}
+
 nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 g ~ ExtendedGrammar l t (NodeWrap t),
                                                 Ord t, Show t, OutlineMonoid t, TextualMonoid t,

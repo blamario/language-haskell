@@ -11,7 +11,8 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
-              BangPatternConstruction, bangPattern),
+              BangPatternConstruction, bangPattern,
+              StandaloneDerivingConstruction, standaloneDerivingDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    module Language.Haskell.Abstract) where
@@ -86,6 +87,9 @@ data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstru
 
 data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
+
+data instance Construct 'Extensions.StandaloneDeriving λ l d s = StandaloneDerivingConstruction {
+   standaloneDerivingDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> Declaration λ l d s}
 
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,

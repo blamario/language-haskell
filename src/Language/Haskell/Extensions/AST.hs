@@ -37,7 +37,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
    'Extensions.TupleSections,
-   'Extensions.BangPatterns]
+   'Extensions.BangPatterns,
+   'Extensions.StandaloneDeriving]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -69,6 +70,10 @@ instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
 instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
    build = Abstract.BangPatternConstruction {
       Abstract.bangPattern = BangPattern ()}
+
+instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
+   build = Abstract.StandaloneDerivingConstruction {
+      Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration ()}
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
@@ -368,6 +373,8 @@ data Declaration λ l d s =
                    (s (Abstract.Type l l d d))
    | InstanceDeclaration [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                          (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.Declaration l l d d)]
+   | StandaloneDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
+                                   (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
                         [s (Abstract.DerivingClause l l d d)]
@@ -555,7 +562,8 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
                   Eq (Import λ l d s)
 
 deriving instance Typeable (Declaration λ l d s)
-deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
@@ -563,7 +571,8 @@ deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.ClassInstanceLHS l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ), Data (Abstract.TypeRole λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
-deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
+deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
@@ -571,7 +580,8 @@ deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.ClassInstanceLHS l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
-deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),

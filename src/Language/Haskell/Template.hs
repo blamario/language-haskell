@@ -356,6 +356,8 @@ declarationTemplates (TypeRoleDeclaration name roles) =
          roleTemplate RepresentationalRole = RepresentationalR
          roleTemplate PhantomRole = PhantomR
          roleTemplate InferredRole = InferR
+declarationTemplates (StandaloneDerivingDeclaration () context lhs) =
+   [StandaloneDerivD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)]
 
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)
