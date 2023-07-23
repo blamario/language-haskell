@@ -147,6 +147,7 @@ extensionMixins =
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
+     (Set.fromList [StandaloneDeriving],             [(9, standaloneDerivingMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),

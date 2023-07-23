@@ -143,18 +143,22 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ d@(Compose (_, ((start, _, end), ExtAST.DataDeclaration context _lhs _kind constructors _derivings))) =
-      Const $
-         (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
-         <>
-         (case snd . snd . getCompose $ context
-          of ExtAST.NoContext -> mempty
-             _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
-         <>
-         (Full.foldMap UnicodeSyntaxAccounting d)
-   Accounting $ Compose (_, ((start, _, end), ExtAST.GADTDeclaration context _lhs constructors _derivings)) = Const $
-     Map.singleton Extensions.GADTSyntax [(start, end)]
-   Accounting $ d = Const (Full.foldMap UnicodeSyntaxAccounting d)
+   Accounting $ d@(Compose (_, ((start, _, end), dec))) =
+      case dec
+      of ExtAST.DataDeclaration context _lhs _kind constructors _derivings ->
+            Const $
+               (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
+               <>
+               (case snd . snd . getCompose $ context
+                of ExtAST.NoContext -> mempty
+                   _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
+               <>
+               (Full.foldMap UnicodeSyntaxAccounting d)
+         ExtAST.GADTDeclaration context _lhs constructors _derivings ->
+            Const $ Map.singleton Extensions.GADTSyntax [(start, end)]
+         ExtAST.StandaloneDerivingDeclaration{} ->
+            Const $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
+         _ -> Const (Full.foldMap UnicodeSyntaxAccounting d)
 
 instance Accounting l pos s
          `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
