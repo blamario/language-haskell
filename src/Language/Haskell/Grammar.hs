@@ -930,9 +930,12 @@ blockWith lineFilter terminatorKeyword p =
                                         <|> eof)
                      indent' <- inputColumn
                      let cont' = cont . (item :)
+                         restOfBlock = alignedBlock takeOptional cont' indent
                      if indent == indent'
-                        then many semi *> alignedBlock takeOptional cont' indent
-                        else some semi *> alignedBlock takeOptional cont' indent <<|> cont' []
+                        then many semi *> restOfBlock
+                        else if indent < indent'
+                             then some semi *> restOfBlock <<|> cont' []
+                             else cont' []
          terminators :: [Char]
          terminators = ",;)]}"
 
