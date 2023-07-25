@@ -15,40 +15,47 @@ import qualified Transformation.Rank2 as Rank2
 import qualified Language.Haskell.Reserializer as Reserializer
 
 import qualified Language.Haskell as Haskell
-import Language.Haskell.AST (Language, Module)
+import Language.Haskell.Extensions.AST (Language)
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Template as Template
 
 import Prelude hiding (readFile)
 
-main = exampleTree "" "test/" >>= defaultMain . testGroup "positive"
+main = do
+   predefinedModuleBindings <- Haskell.predefinedModuleBindings
+   preludeBindings <- Haskell.preludeBindings
+   exampleTree predefinedModuleBindings preludeBindings "" "test/" >>= defaultMain . testGroup "positive"
 
 width = 80
 contextLines = 3
 
-exampleTree :: FilePath -> FilePath -> IO [TestTree]
-exampleTree ancestry path =
+exampleTree :: Binder.ModuleEnvironment Language
+            -> Binder.Environment Language
+            -> FilePath -> FilePath -> IO [TestTree]
+exampleTree moduleBindings preludeBindings ancestry path =
    do let fullPath = combine ancestry path
+          treeLeaf = prettyFile moduleBindings preludeBindings fullPath
       isDir <- doesDirectoryExist fullPath
       if isDir
-         then (:[]) . testGroup path . concat <$> (listDirectory fullPath >>= mapM (exampleTree fullPath))
+         then (:[]) . testGroup path . concat
+              <$> (listDirectory fullPath >>= mapM (exampleTree moduleBindings preludeBindings fullPath))
          else return . (:[]) . testCase path $
               do moduleSource <- readFile fullPath
-                 (originalModule, prettyModule) <- prettyFile fullPath moduleSource
-                 (originalModule', prettyModule') <- prettyFile fullPath originalModule
-                 (originalModule'', prettyModule'') <- prettyFile fullPath prettyModule
+                 (originalModule, prettyModule) <- treeLeaf moduleSource
+                 (originalModule', prettyModule') <- treeLeaf originalModule
+                 (originalModule'', prettyModule'') <- treeLeaf prettyModule
                  assertEqual "original=original" originalModule originalModule'
                  assertEqual "pretty=pretty" prettyModule prettyModule'
                  assertEqual "pretty=pretty'" prettyModule prettyModule''
                  assertEqual "original=pretty" originalModule'' prettyModule''
 
-prettyFile :: FilePath -> Text -> IO (Text, Text)
-prettyFile path src = do
+prettyFile :: Binder.ModuleEnvironment Language
+           -> Binder.Environment Language
+           -> FilePath -> Text -> IO (Text, Text)
+prettyFile moduleBindings preludeBindings path src = do
    let extensions = Map.fromSet (const True) Extensions.includedByDefault
-   predefinedModuleBindings <- Haskell.predefinedModuleBindings
-   preludeBindings <- Haskell.preludeBindings
-   case Haskell.parseModule extensions predefinedModuleBindings preludeBindings False src of
+   case Haskell.parseModule extensions moduleBindings preludeBindings False src of
       Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
       Right trees -> error (show (length trees) ++ " ambiguous parses.")
       Left err -> error (unpack $ failureDescription src (extract <$> err) 4)
