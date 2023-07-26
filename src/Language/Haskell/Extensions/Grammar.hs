@@ -406,7 +406,7 @@ magicHashMixin self super =
       floatHash2 = token ((negate <$ string "-" <|> pure id) <*> (self & report & floatLexeme) <* string "##")
       charHashLiteral = token ((self & report & charLexeme) <* string "#")
       stringHashLiteral = token ((self & report & stringLexeme) <* string "#")
-      prefixMinus = void (token $ string "-" <* notFollowedBy (takeCharsWhile1 isNumChar *> string "#")) <?> "prefix -"
+      prefixMinusFollow = takeCharsWhile1 isNumChar *> string "#"
       isNumChar c = Char.isDigit c || c `elem` ("eE.oOxXbB" :: String)
   in super{report= (report super){
         variableIdentifier =
@@ -436,27 +436,8 @@ magicHashMixin self super =
                             <|> Abstract.charLiteral <$> charHashLiteral
                             <|> Abstract.stringLiteral <$> stringHashLiteral)
                    <|> Abstract.hashLiteral . Abstract.hashLiteral
-                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2),
-         qualifiedVariableSymbol =
-            notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> (super & report & qualifiedVariableSymbol),
-         infixExpression =
-            wrap (Abstract.infixExpression
-                     <$> (self & report & dExpression)
-                     <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
-                     <*> (self & report & infixExpression)
-                  <|> Abstract.applyExpression
-                         <$> wrap (Abstract.negate <$ prefixMinus)
-                         <*> (self & report & infixExpression))
-            <|> (self & report & lExpression),
-         leftInfixExpression =
-            wrap (Abstract.infixExpression
-                     <$> (self & report & dExpression)
-                     <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
-                     <*> (self & report & leftInfixExpression)
-                  <|> Abstract.applyExpression
-                         <$> wrap (Abstract.negate <$ prefixMinus)
-                         <*> (self & report & leftInfixExpression))
-            <|> (self & report & dExpression)}}
+                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
+     & negationConstraintMixin prefixMinusFollow self
 
 recursiveDoMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecursiveDo l,
                                    LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -685,29 +666,12 @@ lexicalNegationMixin self super = super{
 negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                                     Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
-negativeLiteralsMixin self@ExtendedGrammar
-                      {report= HaskellGrammar{dExpression, infixExpression, leftInfixExpression, qualifiedOperator}}
-                      super = super{
-   report= (report super){
-      qualifiedVariableSymbol =
-         notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> (super & report & qualifiedVariableSymbol),
-      infixExpression =
-         wrap (Abstract.infixExpression
-                  <$> dExpression
-                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> infixExpression
-               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
-         <|> (self & report & lExpression),
-      leftInfixExpression =
-         wrap (Abstract.infixExpression
-                  <$> dExpression
-                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> leftInfixExpression
-               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
-         <|> dExpression,
-      integerLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & integerLexeme),
-      floatLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & floatLexeme)}}
-   where prefixMinus = void (token $ string "-" <* notSatisfyChar Char.isDigit) <?> "prefix -"
+negativeLiteralsMixin self super =
+   super{
+      report= (report super){
+         integerLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & integerLexeme),
+         floatLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & floatLexeme)}}
+   & negationConstraintMixin (satisfyCharInput Char.isDigit) self
 
 binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
                                   g ~ ExtendedGrammar l t (NodeWrap t))
@@ -1724,6 +1688,34 @@ standaloneDerivingMixin self@ExtendedGrammar{
                <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator}}}
+
+-- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
+negationConstraintMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
+                                          Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
+                        => Parser g t t -> GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+negationConstraintMixin prefixMinusFollow
+                        self@ExtendedGrammar{
+                           report= HaskellGrammar{
+                              dExpression, infixExpression, leftInfixExpression, qualifiedOperator}}
+                      super = super{
+   report= (report super){
+      qualifiedVariableSymbol =
+         notFollowedBy (string "-" *> prefixMinusFollow) *> (super & report & qualifiedVariableSymbol),
+      infixExpression =
+         wrap (Abstract.infixExpression
+                  <$> dExpression
+                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                  <*> infixExpression
+               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
+         <|> (self & report & lExpression),
+      leftInfixExpression =
+         wrap (Abstract.infixExpression
+                  <$> dExpression
+                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
+                  <*> leftInfixExpression
+               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
+         <|> dExpression}}
+   where prefixMinus = token (string "-" <* notFollowedBy prefixMinusFollow)
 
 nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 g ~ ExtendedGrammar l t (NodeWrap t),
