@@ -396,12 +396,18 @@ magicHashMixin self super =
       charLiteral' = token ((self & report & charLexeme) <* notFollowedBy (string "#"))
       stringLiteral' = token ((self & report & stringLexeme) <* notFollowedBy (string "#")) <?> "string literal"
 
-      integerHash = token ((self & report & integerLexeme) <* string "#" <* notFollowedBy (string "#"))
-      floatHash = token ((self & report & floatLexeme) <* string "#" <* notFollowedBy (string "#"))
-      integerHash2 = token ((self & report & integerLexeme) <* string "##")
-      floatHash2 = token ((self & report & floatLexeme) <* string "##")
+      integerHash = token ((negate <$ string "-" <|> pure id)
+                           <*> (self & report & integerLexeme)
+                           <* string "#" <* notFollowedBy (string "#"))
+      floatHash = token ((negate <$ string "-" <|> pure id)
+                         <*> (self & report & floatLexeme)
+                         <* string "#" <* notFollowedBy (string "#"))
+      integerHash2 = token ((negate <$ string "-" <|> pure id) <*> (self & report & integerLexeme) <* string "##")
+      floatHash2 = token ((negate <$ string "-" <|> pure id) <*> (self & report & floatLexeme) <* string "##")
       charHashLiteral = token ((self & report & charLexeme) <* string "#")
       stringHashLiteral = token ((self & report & stringLexeme) <* string "#")
+      prefixMinus = void (token $ string "-" <* notFollowedBy (takeCharsWhile1 isNumChar *> string "#")) <?> "prefix -"
+      isNumChar c = Char.isDigit c || c `elem` ("eE.oOxXbB" :: String)
   in super{report= (report super){
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
@@ -430,7 +436,27 @@ magicHashMixin self super =
                             <|> Abstract.charLiteral <$> charHashLiteral
                             <|> Abstract.stringLiteral <$> stringHashLiteral)
                    <|> Abstract.hashLiteral . Abstract.hashLiteral
-                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
+                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2),
+         qualifiedVariableSymbol =
+            notFollowedBy (string "-" *> satisfyCharInput Char.isDigit) *> (super & report & qualifiedVariableSymbol),
+         infixExpression =
+            wrap (Abstract.infixExpression
+                     <$> (self & report & dExpression)
+                     <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
+                     <*> (self & report & infixExpression)
+                  <|> Abstract.applyExpression
+                         <$> wrap (Abstract.negate <$ prefixMinus)
+                         <*> (self & report & infixExpression))
+            <|> (self & report & lExpression),
+         leftInfixExpression =
+            wrap (Abstract.infixExpression
+                     <$> (self & report & dExpression)
+                     <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
+                     <*> (self & report & leftInfixExpression)
+                  <|> Abstract.applyExpression
+                         <$> wrap (Abstract.negate <$ prefixMinus)
+                         <*> (self & report & leftInfixExpression))
+            <|> (self & report & dExpression)}}
 
 recursiveDoMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecursiveDo l,
                                    LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
