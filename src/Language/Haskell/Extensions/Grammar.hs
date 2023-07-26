@@ -17,7 +17,7 @@ import qualified Data.Char as Char
 import Data.Foldable (fold, toList)
 import Data.Function ((&))
 import Data.Functor.Compose (Compose(getCompose))
-import Data.List (foldl', null, sortOn)
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Maybe (isJust, isNothing)
@@ -56,7 +56,7 @@ import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), Dec
                                  oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap, whiteSpace)
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..), lexemes)
 
-import Prelude hiding (exponent, filter, null)
+import Prelude hiding (exponent, filter)
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
@@ -195,7 +195,7 @@ parseModule extensions source = case moduleExtensions of
    Right [extensions']
       | let (contradictions, extensionMap) = partitionContradictory (Set.fromList extensions') ->
         if Set.null contradictions then
-           (if null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
+           (if List.null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
            $ parseResults $ Report.haskellModule $ report
            $ parseComplete (extendedGrammar $ positiveKeys $ withImplications $ extensionMap <> extensions) source
         else Left mempty{errorAlternatives= ["Contradictory extension switches " <> show (toList contradictions)]}
@@ -214,7 +214,7 @@ extendedGrammar extensions = memoize extendWith mixinKeys
    where mixinKeys :: [Set Extension]
          mixinKeys =  filter (all (`Set.member` extensions)) $ toList $ Map.keysSet $ extensionMixins @l @_ @t
          extendWith :: [Set Extension] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-         extendWith = overlay reportGrammar . map snd . reverse . sortOn fst . fold . map (extensionMixins Map.!)
+         extendWith = overlay reportGrammar . map snd . reverse . List.sortOn fst . fold . map (extensionMixins Map.!)
 
 reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                 LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -716,7 +716,7 @@ binaryLiteralsMixin self super = super{
    report= (report super){
       integerLexeme =
          (string "0b" <|> string "0B")
-         *> (foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
+         *> (List.foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
          <<|> (super & report & integerLexeme)}}
    where binary n '0' = 2*n
          binary n '1' = 2*n + 1
@@ -761,7 +761,7 @@ binaryUnderscoresMixin self super = super{
    report= (report super){
       integerLexeme =
          (string "0b" <|> string "0B")
-         *> (foldl' binary 0 . toString mempty
+         *> (List.foldl' binary 0 . toString mempty
              <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
          <<|> (super & report & integerLexeme)}}
    where binary n '0' = 2*n
