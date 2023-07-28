@@ -307,6 +307,7 @@ byName = Map.fromList [
   ("GADTSyntax", GADTSyntax),
   ("GADTs", GADTs),
   ("GHCForeignImportPrim", GHCForeignImportPrim),
+  ("GeneralisedNewtypeDeriving", GeneralizedNewtypeDeriving),
   ("GeneralizedNewtypeDeriving", GeneralizedNewtypeDeriving),
   ("Haskell2010", Haskell2010),
   ("Haskell98", Haskell98),
