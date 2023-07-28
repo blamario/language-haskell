@@ -1,5 +1,6 @@
 module Main where
 
+import Data.List (sort)
 import Data.Monoid.Instances.Positioned (extract)
 import qualified Data.Map as Map
 import Data.Text (Text, pack, unpack)
@@ -39,7 +40,7 @@ exampleTree moduleBindings preludeBindings ancestry path =
       isDir <- doesDirectoryExist fullPath
       if isDir
          then (:[]) . testGroup path . concat
-              <$> (listDirectory fullPath >>= mapM (exampleTree moduleBindings preludeBindings fullPath))
+              <$> (listDirectory fullPath >>= mapM (exampleTree moduleBindings preludeBindings fullPath) . sort)
          else return . (:[]) . testCase path $
               do moduleSource <- readFile fullPath
                  (originalModule, prettyModule) <- treeLeaf moduleSource
