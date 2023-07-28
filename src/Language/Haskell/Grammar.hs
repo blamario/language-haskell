@@ -56,6 +56,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
    lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
    bareExpression, openBlockExpression, closedBlockExpresion :: p (Abstract.Expression l l f f),
+   prefixNegation :: p (Abstract.Expression l l f f),
    alternatives :: p [f (Abstract.CaseAlternative l l f f)],
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
@@ -429,15 +430,16 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                               <$> dExpression
                               <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                               <*> infixExpression
-                           <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> lExpression)
+                           <|> Abstract.applyExpression <$> wrap prefixNegation <*> lExpression)
                      <|> lExpression,
    -- leftInfixExpression doesn't allow a conditional, let, or lambda expression on either side
    leftInfixExpression = wrap (Abstract.infixExpression
                                   <$> dExpression
                                   <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
                                   <*> leftInfixExpression
-                               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ delimiter "-") <*> dExpression)
+                               <|> Abstract.applyExpression <$> wrap prefixNegation <*> dExpression)
                          <|> dExpression,
+   prefixNegation = Abstract.negate <$ delimiter "-",
    lExpression = wrap openBlockExpression <|> dExpression,
    openBlockExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
                                                    <*> expression

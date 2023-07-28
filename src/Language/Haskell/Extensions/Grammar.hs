@@ -81,7 +81,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
-   return_type, base_return_type, arg_type :: p (Abstract.Type l l f f)}
+   return_type, base_return_type, arg_type :: p (Abstract.Type l l f f),
+   binary :: p t}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
@@ -348,7 +349,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
                       <*> wrap (nonTerminal arg_type)
                    <|> nonTerminal base_return_type,
      base_return_type = Abstract.constructorType <$> wrap (nonTerminal $ Report.generalConstructor . report),
-     arg_type = nonTerminal (Report.aType . report)}
+     arg_type = nonTerminal (Report.aType . report),
+     binary = empty}
    where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
 
 identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
@@ -396,18 +398,18 @@ magicHashMixin self super =
       charLiteral' = token ((self & report & charLexeme) <* notFollowedBy (string "#"))
       stringLiteral' = token ((self & report & stringLexeme) <* notFollowedBy (string "#")) <?> "string literal"
 
-      integerHash = token ((negate <$ string "-" <|> pure id)
-                           <*> (self & report & integerLexeme)
-                           <* string "#" <* notFollowedBy (string "#"))
-      floatHash = token ((negate <$ string "-" <|> pure id)
-                         <*> (self & report & floatLexeme)
-                         <* string "#" <* notFollowedBy (string "#"))
-      integerHash2 = token ((negate <$ string "-" <|> pure id) <*> (self & report & integerLexeme) <* string "##")
-      floatHash2 = token ((negate <$ string "-" <|> pure id) <*> (self & report & floatLexeme) <* string "##")
+      unsignedIntegerLexeme = notSatisfyChar (== '-') *> (self & report & integerLexeme)
+      unsignedFloatLexeme = notSatisfyChar (== '-') *> (self & report & floatLexeme)
+      signedIntegerLexeme = unsignedIntegerLexeme <|> negate <$ string "-" <*> unsignedIntegerLexeme
+      signedFloatLexeme = unsignedFloatLexeme <|> negate <$ string "-" <*> unsignedFloatLexeme
+      integerHash = token (signedIntegerLexeme <* string "#" <* notFollowedBy (string "#"))
+      floatHash = token (signedFloatLexeme <* string "#" <* notFollowedBy (string "#"))
+      integerHash2 = token (signedIntegerLexeme <* string "##")
+      floatHash2 = token (signedFloatLexeme <* string "##")
       charHashLiteral = token ((self & report & charLexeme) <* string "#")
       stringHashLiteral = token ((self & report & stringLexeme) <* string "#")
-      prefixMinusFollow = takeCharsWhile1 isNumChar *> string "#"
-      isNumChar c = Char.isDigit c || c `elem` ("eE.oOxXbB" :: String)
+      prefixMinusFollow = takeCharsWhile1 Char.isDigit *> takeCharsWhile isNumChar *> string "#"
+      isNumChar c = Char.isDigit c || c `elem` ("eE.bBoOxX_" :: String)
   in super{report= (report super){
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
@@ -415,17 +417,9 @@ magicHashMixin self super =
            token (Abstract.name . Text.pack . toString mempty <$> (constructorLexeme <> concatAll (string "#"))),
         lPattern = (self & report & aPattern)
                    <|> Abstract.literalPattern
-                       <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer'
-                                 <|> (Abstract.hashLiteral . Abstract.integerLiteral . negate)
-                                     <$ delimiter "-" <*> integerHash
-                                 <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.integerLiteral . negate)
-                                     <$ delimiter "-" <*> integerHash2)
+                       <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer')
                    <|> Abstract.literalPattern
-                       <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float'
-                                 <|> (Abstract.hashLiteral . Abstract.floatingLiteral . negate)
-                                     <$ delimiter "-" <*> floatHash
-                                 <|> (Abstract.hashLiteral . Abstract.hashLiteral . Abstract.floatingLiteral . negate)
-                                     <$ delimiter "-" <*> floatHash2)
+                       <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float')
                    <|> Abstract.constructorPattern
                        <$> wrap (self & report & generalConstructor)
                        <*> some (wrap $ self & report & aPattern),
@@ -642,17 +636,7 @@ lexicalNegationMixin self super = super{
       qualifiedVariableSymbol = notFollowedBy (string "-"
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
                                 *> token (nameQualifier <*> (self & report & variableSymbol)),
-      infixExpression = wrap (Abstract.infixExpression
-                                 <$> (self & report & dExpression)
-                                 <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
-                                 <*> (self & report & infixExpression))
-                        <|> (self & report & lExpression),
-      leftInfixExpression =
-         wrap (Abstract.infixExpression
-                  <$> (self & report & dExpression)
-                  <*> wrap (Abstract.referenceExpression <$> (self & report & qualifiedOperator))
-                  <*> (self & report & leftInfixExpression))
-         <|> (self & report & dExpression),
+      prefixNegation = empty,
       bareExpression = (super & report & bareExpression)
          <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> (self & report & aExpression)
          <|> parens (Abstract.rightSectionExpression
@@ -677,14 +661,13 @@ binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser
                                   g ~ ExtendedGrammar l t (NodeWrap t))
                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 binaryLiteralsMixin self super = super{
-   report= (report super){
-      integerLexeme =
-         (string "0b" <|> string "0B")
-         *> (List.foldl' binary 0 . toString mempty <$> takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")
-         <<|> (super & report & integerLexeme)}}
-   where binary n '0' = 2*n
-         binary n '1' = 2*n + 1
-         binary _ _ = error "non-binary"
+   binary = (string "0b" <|> string "0B") *> (takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number"),
+   report = (report super){
+      integerLexeme = List.foldl' addBinary 0 . toString mempty <$> (self & binary)
+                      <<|> (super & report & integerLexeme)}}
+   where addBinary n '0' = 2*n
+         addBinary n '1' = 2*n + 1
+         addBinary _ _ = error "non-binary"
 
 hexFloatLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
                                     g ~ ExtendedGrammar l t (NodeWrap t))
@@ -722,16 +705,8 @@ binaryUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Par
                                      g ~ ExtendedGrammar l t (NodeWrap t))
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 binaryUnderscoresMixin self super = super{
-   report= (report super){
-      integerLexeme =
-         (string "0b" <|> string "0B")
-         *> (List.foldl' binary 0 . toString mempty
-             <$> (binaryDigits <> concatAll (char '_' *> binaryDigits)) <?> "binary number")
-         <<|> (super & report & integerLexeme)}}
-   where binary n '0' = 2*n
-         binary n '1' = 2*n + 1
-         binary _ _ = error "non-binary"
-         binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
+   binary = (string "0b" <|> string "0B") *> (binaryDigits <> concatAll (char '_' *> binaryDigits) <?> "binary number")}
+   where binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
 typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
                                  LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
@@ -1697,25 +1672,12 @@ negationConstraintMixin prefixMinusFollow
                         self@ExtendedGrammar{
                            report= HaskellGrammar{
                               dExpression, infixExpression, leftInfixExpression, qualifiedOperator}}
-                      super = super{
+                        super = super{
    report= (report super){
-      qualifiedVariableSymbol =
-         notFollowedBy (string "-" *> prefixMinusFollow) *> (super & report & qualifiedVariableSymbol),
-      infixExpression =
-         wrap (Abstract.infixExpression
-                  <$> dExpression
-                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> infixExpression
-               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> infixExpression)
-         <|> (self & report & lExpression),
-      leftInfixExpression =
-         wrap (Abstract.infixExpression
-                  <$> dExpression
-                  <*> wrap (Abstract.referenceExpression <$> qualifiedOperator)
-                  <*> leftInfixExpression
-               <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> leftInfixExpression)
-         <|> dExpression}}
-   where prefixMinus = token (string "-" <* notFollowedBy prefixMinusFollow)
+      variableSymbol = negationGuard *> (super & report & variableSymbol),
+      qualifiedVariableSymbol = negationGuard *> (super & report & qualifiedVariableSymbol),
+      prefixNegation = negationGuard *> (super & report & prefixNegation)}}
+   where negationGuard = notFollowedBy (string "-" *> prefixMinusFollow)
 
 nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                                 g ~ ExtendedGrammar l t (NodeWrap t),
