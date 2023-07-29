@@ -72,6 +72,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindVar :: p (Abstract.Name l),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
+   derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
    namespacedMember :: p (Abstract.ModuleMember l),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
    familyInstanceDesignator, familyInstanceDesignatorApplications,
@@ -149,6 +150,9 @@ extensionMixins =
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [StandaloneDeriving],             [(9, standaloneDerivingMixin)]),
+     (Set.fromList [DerivingStrategies     ],        [(9, derivingStrategiesMixin)]),
+     (Set.fromList [StandaloneDeriving,
+                    DerivingStrategies],             [(9, standaloneDerivingStrategiesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -248,6 +252,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      bKindWithWildcards = empty,
      aKindWithWildcards = empty,
      groundTypeKind = empty,
+     derivingStrategy = empty,
      arrowType = nonTerminal cType
         <|> Abstract.functionType <$> wrap (nonTerminal cType)
                                   <* nonTerminal (Report.rightArrow . report)
@@ -1586,8 +1591,7 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
 
 namedFieldPunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                       g ~ ExtendedGrammar l t (NodeWrap t),
-                                      Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                      Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                                      Ord t, Show t, OutlineMonoid t, TextualMonoid t)
                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 namedFieldPunsMixin self super =
    super{
@@ -1615,8 +1619,7 @@ recordWildCardsMixin self super =
 
 overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
                                            g ~ ExtendedGrammar l t (NodeWrap t),
-                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t)
                          => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 overloadedRecordDotMixin self super =
    super{
@@ -1635,8 +1638,7 @@ overloadedRecordDotMixin self super =
 bangPatternsMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'BangPatterns l,
                                     LexicalParsing (Parser g t),
                                     g ~ ExtendedGrammar l t (NodeWrap t),
-                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t)
                   => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 bangPatternsMixin self super =
    super{
@@ -1649,8 +1651,7 @@ bangPatternsMixin self super =
 standaloneDerivingMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'StandaloneDeriving l,
                                           LexicalParsing (Parser g t),
                                           g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t)
                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
 standaloneDerivingMixin self@ExtendedGrammar{
                            report= HaskellGrammar{
@@ -1663,6 +1664,49 @@ standaloneDerivingMixin self@ExtendedGrammar{
                <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator}}}
+
+derivingStrategiesMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'DerivingStrategies l,
+                                          LexicalParsing (Parser g t),
+                                          g ~ ExtendedGrammar l t (NodeWrap t),
+                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t)
+                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+derivingStrategiesMixin self@ExtendedGrammar{
+                           report= HaskellGrammar{
+                              declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
+                        super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
+   super{
+      report = report{
+         declarationLevel= declarationLevel{
+            derivingClause = ((declarationLevel & derivingClause) <|>) . many . wrap $
+                                 Abstract.strategicDerive Abstract.build <$ keyword "deriving"
+                                    <*> wrap (self & derivingStrategy)
+                                    <*> (pure <$> qualifiedTypeClass
+                                         <|> parens (qualifiedTypeClass `sepBy` comma))}},
+     derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
+                        <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
+                        <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
+
+standaloneDerivingStrategiesMixin :: forall l g t. (Abstract.Haskell l,
+                                                    Abstract.ExtendedWith 'StandaloneDeriving l,
+                                                    Abstract.ExtendedWith 'DerivingStrategies l,
+                                                    LexicalParsing (Parser g t),
+                                                    g ~ ExtendedGrammar l t (NodeWrap t),
+                                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t)
+                                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneDerivingStrategiesMixin self@ExtendedGrammar{
+                                     report= HaskellGrammar{
+                                        declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
+                                  super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
+   super{
+      report = report{
+         declarationLevel= declarationLevel{
+            topLevelDeclaration = (declarationLevel & topLevelDeclaration)
+               <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
+                      <$ keyword "deriving"
+                      <*> wrap (self & derivingStrategy)
+                      <* keyword "instance"
+                      <*> wrap optionalContext
+                      <*> wrap instanceDesignator}}}
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),

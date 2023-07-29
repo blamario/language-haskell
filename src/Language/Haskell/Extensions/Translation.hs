@@ -107,7 +107,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,
           FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
-          FullyTranslatable t AST.DerivingClause,
+          FullyTranslatable t AST.DerivingClause, FullyTranslatable t AST.DerivingStrategy,
           FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS,
           Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
           Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
@@ -129,6 +129,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           Abstract.GADTConstructor (Target t) ~ AST.GADTConstructor (Target t),
           Abstract.DerivingClause (Origin t) ~ AST.DerivingClause (Origin t),
           Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t),
+          Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
+          Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t),
           Abstract.EquationLHS (Origin t) ~ AST.EquationLHS (Origin t),
           Abstract.EquationLHS (Target t) ~ AST.EquationLHS (Target t),
           Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
@@ -195,6 +197,9 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
    translateDeeply t (AST.StandaloneDerivingDeclaration support context lhs) =
       AST.StandaloneDerivingDeclaration support (translateFully t context) (translateFully t lhs)
+   translateDeeply t (AST.StandaloneStrategicDerivingDeclaration support1 support2 strategy context lhs) =
+      AST.StandaloneStrategicDerivingDeclaration support1 support2 (translateFully t strategy)
+                                                 (translateFully t context) (translateFully t lhs)
 
 instance (WrapTranslation t, WrappedTranslation t AST.Context,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type,
@@ -252,11 +257,23 @@ instance (WrapTranslation t,
    translateDeeply t (AST.GADTConstructors names vars context ty) =
       AST.GADTConstructors names (translateDeeply t <$> vars) (translateFully t context) (translateFully t ty)
 
-instance (WrapTranslation t,
+instance (WrapTranslation t, FullyTranslatable t AST.DerivingStrategy,
           Abstract.DerivingClause (Origin t) ~ AST.DerivingClause (Origin t),
-          Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t)) =>
+          Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t),
+          Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
+          Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t)) =>
          DeeplyTranslatable t AST.DerivingClause where
    translateDeeply _ (AST.SimpleDerive name) = AST.SimpleDerive name
+   translateDeeply t (AST.StrategicDerive support strategy names) =
+      AST.StrategicDerive support (translateFully t strategy) names
+
+instance (WrapTranslation t,
+          Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
+          Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t)) =>
+         DeeplyTranslatable t AST.DerivingStrategy where
+   translateDeeply _ AST.Stock = AST.Stock
+   translateDeeply _ AST.Newtype = AST.Newtype
+   translateDeeply _ AST.AnyClass = AST.AnyClass
 
 instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),

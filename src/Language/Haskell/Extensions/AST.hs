@@ -4,6 +4,7 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..), GADTConstructor(..),
+                                        DerivingClause(..), DerivingStrategy(..),
                                         Expression(..), Pattern(..), FieldBinding(..), FieldPattern(..), Statement(..),
                                         ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..), Value(..),
@@ -19,7 +20,7 @@ import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
-                             GuardedExpression(..), DerivingClause(..), Constructor(..),
+                             GuardedExpression(..), Constructor(..),
                              FieldDeclaration(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
@@ -38,7 +39,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecursiveDo,
    'Extensions.TupleSections,
    'Extensions.BangPatterns,
-   'Extensions.StandaloneDeriving]
+   'Extensions.StandaloneDeriving,
+   'Extensions.DerivingStrategies]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -74,6 +76,16 @@ instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
 instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
    build = Abstract.StandaloneDerivingConstruction {
       Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration ()}
+
+instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
+   build = Abstract.DerivingStrategiesConstruction {
+      Abstract.stockStrategy = Stock,
+      Abstract.newtypeStrategy = Newtype,
+      Abstract.anyClassStrategy = AnyClass,
+      Abstract.strategicDerive = StrategicDerive (),
+      Abstract.standaloneStrategicDerivingDeclaration = StandaloneStrategicDerivingDeclaration () ()}
+
+type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
@@ -375,6 +387,11 @@ data Declaration λ l d s =
                          (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.Declaration l l d d)]
    | StandaloneDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
                                    (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
+   | StandaloneStrategicDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
+                                            !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
+                                            (s (Abstract.DerivingStrategy l l d d))
+                                            (s (Abstract.Context l l d d))
+                                            (s (Abstract.ClassInstanceLHS l l d d))
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
                         [s (Abstract.DerivingClause l l d d)]
@@ -417,6 +434,13 @@ data DataConstructor λ l d s =
    Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
    | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
    | ExistentialConstructor [TypeVarBinding λ l d s] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
+
+data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   SimpleDerive (Abstract.QualifiedName λ)
+   | StrategicDerive (Abstract.SupportFor 'Extensions.DerivingStrategies λ)
+                     (s (Abstract.DerivingStrategy l l d d)) [Abstract.QualifiedName λ]
+
+data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) = Stock | AnyClass | Newtype
 
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
@@ -563,8 +587,10 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
 
 deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
+                   Data (s (Abstract.DerivingStrategy l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
@@ -572,8 +598,10 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ), Data (Abstract.TypeRole λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
+                   Show (s (Abstract.DerivingStrategy l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
@@ -581,8 +609,10 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+                   Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
+                   Eq (s (Abstract.DerivingStrategy l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
@@ -612,6 +642,22 @@ deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l
 deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.Kind l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.Name λ)) => Eq (GADTConstructor λ l d s)
+
+deriving instance Typeable (DerivingClause λ l d s)
+deriving instance (Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Data (Abstract.QualifiedName λ), Data (s (Abstract.DerivingStrategy l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (DerivingClause λ l d s)
+deriving instance (Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Show (Abstract.QualifiedName λ),
+                   Show (s (Abstract.DerivingStrategy l l d d))) => Show (DerivingClause λ l d s)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Eq (Abstract.QualifiedName λ),
+                   Eq (s (Abstract.DerivingStrategy l l d d))) => Eq (DerivingClause λ l d s)
+
+deriving instance Typeable (DerivingStrategy λ l d s)
+deriving instance (Data λ, Typeable l, Typeable d, Typeable s) => Data (DerivingStrategy λ l d s)
+deriving instance () => Show (DerivingStrategy λ l d s)
+deriving instance () => Eq (DerivingStrategy λ l d s)
 
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
@@ -742,6 +788,6 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''Type, ''TypeLHS, ''TypeVarBinding,
-              ''ClassInstanceLHS, ''Context, ''Expression, ''FieldBinding, ''Pattern, ''FieldPattern, ''Statement,
-              ''Value]))
+             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''DerivingClause, ''DerivingStrategy,
+              ''Type, ''TypeLHS, ''TypeVarBinding, ''ClassInstanceLHS, ''Context,
+              ''Expression, ''FieldBinding, ''Pattern, ''FieldPattern, ''Statement, ''Value]))

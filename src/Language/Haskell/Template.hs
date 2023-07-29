@@ -358,6 +358,9 @@ declarationTemplates (TypeRoleDeclaration name roles) =
          roleTemplate InferredRole = InferR
 declarationTemplates (StandaloneDerivingDeclaration () context lhs) =
    [StandaloneDerivD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)]
+declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy context lhs) =
+   [StandaloneDerivD (Just $ strategyTemplate $ extract strategy) (contextTemplate $ extract context)
+                     (lhsTypeTemplate $ extract lhs)]
 
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)
@@ -378,10 +381,18 @@ typeFamilyInstanceTemplate (TypeFamilyInstance vars lhs rhs) =
             (lhsTypeTemplate $ extract lhs)
             (typeTemplate $ extract rhs)
      
-derivingsTemplate :: [DerivingClause Language Language f f] -> [DerivClause]
-derivingsTemplate derivings =
-   if null derivings then [] else [DerivClause Nothing $ derived <$> derivings]
-   where derived (SimpleDerive name) = ConT (qnameTemplate name)
+derivingsTemplate :: TemplateWrapper f => [DerivingClause Language Language f f] -> [DerivClause]
+derivingsTemplate = foldr derived []
+   where derived (SimpleDerive name) (DerivClause Nothing ctx : rest) =
+            DerivClause Nothing (ConT (qnameTemplate name) : ctx) : rest
+         derived (SimpleDerive name) templates = DerivClause Nothing [ConT $ qnameTemplate name] : templates
+         derived (StrategicDerive () strategy names) templates =
+            DerivClause (Just $ strategyTemplate $ extract strategy) (ConT . qnameTemplate <$> names) :  templates
+
+strategyTemplate :: DerivingStrategy Language Language f f -> DerivStrategy
+strategyTemplate Stock = StockStrategy
+strategyTemplate Newtype = NewtypeStrategy
+strategyTemplate AnyClass = AnyclassStrategy
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]

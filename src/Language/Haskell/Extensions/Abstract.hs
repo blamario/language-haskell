@@ -12,9 +12,13 @@ module Language.Haskell.Extensions.Abstract (
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
               BangPatternConstruction, bangPattern,
-              StandaloneDerivingConstruction, standaloneDerivingDeclaration),
+              StandaloneDerivingConstruction, standaloneDerivingDeclaration,
+              DerivingStrategiesConstruction,
+              stockStrategy, newtypeStrategy, anyClassStrategy,
+              standaloneStrategicDerivingDeclaration, strategicDerive),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+   DerivingStrategy,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
@@ -91,10 +95,24 @@ data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruct
 data instance Construct 'Extensions.StandaloneDeriving λ l d s = StandaloneDerivingConstruction {
    standaloneDerivingDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> Declaration λ l d s}
 
+type family DerivingStrategy λ :: TreeNodeSubKind
+
+data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrategiesConstruction {
+   stockStrategy :: DerivingStrategy λ l d s,
+   newtypeStrategy :: DerivingStrategy λ l d s,
+   anyClassStrategy :: DerivingStrategy λ l d s,
+   strategicDerive :: s (DerivingStrategy l l d d) -> [QualifiedName λ] -> DerivingClause λ l d s,
+   standaloneStrategicDerivingDeclaration :: Supports 'Extensions.StandaloneDeriving λ
+                                          => s (DerivingStrategy l l d d)
+                                          -> s (Context l l d d)
+                                          -> s (ClassInstanceLHS l l d d)
+                                          -> Declaration λ l d s}
+
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
-                          'Extensions.BangPatterns, 'Extensions.StandaloneDeriving] λ) =>
+                          'Extensions.BangPatterns,
+                          'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ
@@ -243,8 +261,11 @@ class (Haskell λ,
    classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
-                          Deep.Functor t (TypeVarBinding l l), Report.DeeplyFunctor t l)
+                          Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
+                          Report.DeeplyFunctor t l)
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
-                           Deep.Foldable t (TypeVarBinding l l), Report.DeeplyFoldable t l)
+                           Deep.Foldable t (TypeVarBinding l l), Deep.Foldable t (DerivingStrategy l l),
+                           Report.DeeplyFoldable t l)
 type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
-                              Deep.Traversable t (TypeVarBinding l l), Report.DeeplyTraversable t l)
+                              Deep.Traversable t (TypeVarBinding l l), Deep.Traversable t (DerivingStrategy l l),
+                              Report.DeeplyTraversable t l)
