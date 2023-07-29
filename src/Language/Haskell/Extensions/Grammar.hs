@@ -1681,7 +1681,7 @@ derivingStrategiesMixin self@ExtendedGrammar{
                                  Abstract.strategicDerive Abstract.build <$ keyword "deriving"
                                     <*> wrap (self & derivingStrategy)
                                     <*> (pure <$> qualifiedTypeClass
-                                         <|> parens (qualifiedTypeClass `sepBy` comma))}},
+                                         <<|> parens (qualifiedTypeClass `sepBy` comma))}},
      derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
