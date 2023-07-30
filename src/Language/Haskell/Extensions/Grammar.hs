@@ -40,7 +40,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, endBy, sepBy, sepBy1, sepByNonEmpty, sepEndBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
-import Text.Grampa.Combinators (someNonEmpty)
+import Text.Grampa.Combinators (moptional, someNonEmpty)
 import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (autochain, ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter)
@@ -861,8 +861,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
          derivingClause = keyword "deriving"
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
-                                          $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))
-                          <|> pure []}},
+                                          $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))}},
    gadtConstructors = (super & gadtConstructors)
       <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
                                     <* (self & report & doubleColon)
@@ -968,7 +967,7 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap (familyInstanceDesignator self)
                 <*> optional (wrap $ kindSignature self)
                 <*> (delimiter "=" *> declaredConstructors <|> pure [])
-                <*> derivingClause
+                <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
@@ -976,21 +975,21 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> optional (wrap $ kindSignature self)
                 <* delimiter "="
                 <*> wrap newConstructor
-                <*> derivingClause
+                <*> moptional derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap (familyInstanceDesignator self)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> blockOf (gadtConstructors self)
-                <*> derivingClause
+                <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap (familyInstanceDesignator self)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> wrap (gadtNewConstructor self)
-                <*> derivingClause
+                <*> moptional derivingClause
             <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap (familyInstanceDesignator self)
@@ -1014,7 +1013,7 @@ typeFamiliesMixin self@ExtendedGrammar
            <*> optional (wrap $ kindSignature self)
            <* delimiter "="
            <*> declaredConstructors
-           <*> derivingClause
+           <*> moptional derivingClause
        <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
            <*> optionalForall self
            <*> wrap optionalContext
@@ -1022,21 +1021,21 @@ typeFamiliesMixin self@ExtendedGrammar
            <*> optional (wrap $ kindSignature self)
            <* delimiter "="
            <*> wrap newConstructor
-           <*> derivingClause
+           <*> moptional derivingClause
        <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
            <*> optionalForall self
            <*> wrap (familyInstanceDesignator self)
            <*> optional (wrap $ kindSignature self)
            <* keyword "where"
            <*> blockOf (gadtConstructors self)
-           <*> derivingClause
+           <*> moptional derivingClause
        <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
            <*> optionalForall self
            <*> wrap (familyInstanceDesignator self)
            <*> optional (wrap $ kindSignature self)
            <* keyword "where"
            <*> wrap (gadtNewConstructor self)
-           <*> derivingClause
+           <*> moptional derivingClause
        <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
            <*> optionalForall self
            <*> wrap (familyInstanceDesignator self)
@@ -1425,14 +1424,14 @@ kindSignaturesMixin
                       <*> wrap simpleType
                       <*> wrap (kindSignature self)
                       <*> (delimiter "=" *> declaredConstructors <|> pure [])
-                      <*> derivingClause
+                      <*> moptional derivingClause
                <|> Abstract.kindedNewtypeDeclaration <$ keyword "newtype"
                       <*> wrap optionalContext
                       <*> wrap simpleType
                       <*> wrap (kindSignature self)
                       <* delimiter "="
                       <*> wrap newConstructor
-                      <*> derivingClause
+                      <*> moptional derivingClause
                <|> Abstract.classDeclaration
                       <$ keyword "class"
                       <*> wrap optionalContext
@@ -1554,12 +1553,12 @@ gadtSyntaxMixin
                    <*> wrap simpleType
                    <*> optional (wrap $ kindSignature self) <* keyword "where"
                    <*> blockOf (gadtConstructors self)
-                   <*> derivingClause
+                   <*> moptional derivingClause
                <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
                    <*> wrap simpleType
                    <*> optional (wrap $ kindSignature self) <* keyword "where"
                    <*> wrap (gadtNewConstructor self)
-                   <*> derivingClause}},
+                   <*> moptional derivingClause}},
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
@@ -1677,11 +1676,12 @@ derivingStrategiesMixin self@ExtendedGrammar{
    super{
       report = report{
          declarationLevel= declarationLevel{
-            derivingClause = ((declarationLevel & derivingClause) <|>) . many . wrap $
-                                 Abstract.strategicDerive Abstract.build <$ keyword "deriving"
-                                    <*> wrap (self & derivingStrategy)
-                                    <*> (pure <$> qualifiedTypeClass
-                                         <<|> parens (qualifiedTypeClass `sepBy` comma))}},
+            derivingClause = concatSome ((declarationLevel & derivingClause)
+                                         <|> (takeSome . wrap $
+                                              Abstract.strategicDerive Abstract.build <$ keyword "deriving"
+                                                 <*> wrap (self & derivingStrategy)
+                                                 <*> (pure <$> qualifiedTypeClass
+                                                      <<|> parens (qualifiedTypeClass `sepBy` comma))))}},
      derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
