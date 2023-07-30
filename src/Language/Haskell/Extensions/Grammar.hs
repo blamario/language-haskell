@@ -150,9 +150,12 @@ extensionMixins =
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [StandaloneDeriving],             [(9, standaloneDerivingMixin)]),
-     (Set.fromList [DerivingStrategies     ],        [(9, derivingStrategiesMixin)]),
+     (Set.fromList [DerivingStrategies],             [(9, derivingStrategiesMixin)]),
+     (Set.fromList [DerivingVia],                    [(9, derivingViaMixin)]),
      (Set.fromList [StandaloneDeriving,
                     DerivingStrategies],             [(9, standaloneDerivingStrategiesMixin)]),
+     (Set.fromList [StandaloneDeriving,
+                    DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -1707,6 +1710,54 @@ standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                       <* keyword "instance"
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
+
+derivingViaMixin :: forall l g t. (Abstract.Haskell l,
+                                   Abstract.ExtendedWith 'DerivingStrategies l,
+                                   Abstract.ExtendedWith 'DerivingVia l,
+                                   LexicalParsing (Parser g t),
+                                   g ~ ExtendedGrammar l t (NodeWrap t),
+                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t)
+                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+derivingViaMixin self@ExtendedGrammar{
+                    report= HaskellGrammar{
+                       declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
+                 super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
+   super{
+      report = (report super){
+         declarationLevel= declarationLevel{
+            derivingClause = concatSome ((declarationLevel & derivingClause)
+                                         <|> (takeSome . wrap $
+                                              flip (Abstract.strategicDerive @l Abstract.build) <$ keyword "deriving"
+                                                 <*> (pure <$> qualifiedTypeClass
+                                                      <<|> parens (qualifiedTypeClass `sepBy` comma))
+                                                 <*> wrap derivingVia))}}}
+   where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
+                       <*> wrap (self & report & typeTerm)
+
+standaloneDerivingViaMixin :: forall l g t. (Abstract.Haskell l,
+                                             Abstract.ExtendedWith 'StandaloneDeriving l,
+                                             Abstract.ExtendedWith 'DerivingStrategies l,
+                                             Abstract.ExtendedWith 'DerivingVia l,
+                                             LexicalParsing (Parser g t),
+                                             g ~ ExtendedGrammar l t (NodeWrap t),
+                                             Ord t, Show t, OutlineMonoid t, TextualMonoid t)
+                           => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneDerivingViaMixin self@ExtendedGrammar{
+                              report= HaskellGrammar{
+                                 declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
+                           super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
+   super{
+      report = (report super){
+         declarationLevel= declarationLevel{
+            topLevelDeclaration = (declarationLevel & topLevelDeclaration)
+               <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
+                      <$ keyword "deriving"
+                      <*> wrap derivingVia
+                      <* keyword "instance"
+                      <*> wrap optionalContext
+                      <*> wrap instanceDesignator}}}
+   where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
+                       <*> wrap (self & report & typeTerm)
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),

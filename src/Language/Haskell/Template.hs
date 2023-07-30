@@ -394,10 +394,11 @@ derivingsTemplate = foldr derived []
          derived (StrategicDerive () strategy names) templates =
             DerivClause (Just $ strategyTemplate $ extract strategy) (ConT . qnameTemplate <$> names) :  templates
 
-strategyTemplate :: DerivingStrategy Language Language f f -> DerivStrategy
+strategyTemplate :: TemplateWrapper f => DerivingStrategy Language Language f f -> DerivStrategy
 strategyTemplate Stock = StockStrategy
 strategyTemplate Newtype = NewtypeStrategy
 strategyTemplate AnyClass = AnyclassStrategy
+strategyTemplate (Via () ty) = ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]

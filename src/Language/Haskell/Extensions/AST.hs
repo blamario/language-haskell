@@ -40,7 +40,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.TupleSections,
    'Extensions.BangPatterns,
    'Extensions.StandaloneDeriving,
-   'Extensions.DerivingStrategies]
+   'Extensions.DerivingStrategies,
+   'Extensions.DerivingVia]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -84,6 +85,10 @@ instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
       Abstract.anyClassStrategy = AnyClass,
       Abstract.strategicDerive = StrategicDerive (),
       Abstract.standaloneStrategicDerivingDeclaration = StandaloneStrategicDerivingDeclaration () ()}
+
+instance Abstract.ExtendedWith 'Extensions.DerivingVia Language where
+   build = Abstract.DerivingViaConstruction {
+      Abstract.derivingViaStrategy = Via ()}
 
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 
@@ -440,7 +445,8 @@ data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.T
    | StrategicDerive (Abstract.SupportFor 'Extensions.DerivingStrategies λ)
                      (s (Abstract.DerivingStrategy l l d d)) [Abstract.QualifiedName λ]
 
-data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) = Stock | AnyClass | Newtype
+data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   Stock | AnyClass | Newtype | Via (Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
 
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
@@ -655,9 +661,13 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (s (Abstract.DerivingStrategy l l d d))) => Eq (DerivingClause λ l d s)
 
 deriving instance Typeable (DerivingStrategy λ l d s)
-deriving instance (Data λ, Typeable l, Typeable d, Typeable s) => Data (DerivingStrategy λ l d s)
-deriving instance () => Show (DerivingStrategy λ l d s)
-deriving instance () => Eq (DerivingStrategy λ l d s)
+deriving instance (Data (Abstract.SupportFor 'Extensions.DerivingVia λ),
+                   Data λ, Typeable l, Typeable d, Typeable s, Data (s (Abstract.Type l l d d))) =>
+                  Data (DerivingStrategy λ l d s)
+deriving instance (Show (Abstract.SupportFor 'Extensions.DerivingVia λ),
+                   Show (s (Abstract.Type l l d d))) => Show (DerivingStrategy λ l d s)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.DerivingVia λ),
+                   Eq (s (Abstract.Type l l d d))) => Eq (DerivingStrategy λ l d s)
 
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),

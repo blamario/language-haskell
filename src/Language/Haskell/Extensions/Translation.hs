@@ -267,13 +267,16 @@ instance (WrapTranslation t, FullyTranslatable t AST.DerivingStrategy,
    translateDeeply t (AST.StrategicDerive support strategy names) =
       AST.StrategicDerive support (translateFully t strategy) names
 
-instance (WrapTranslation t,
+instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
-          Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t)) =>
+          Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t)) =>
          DeeplyTranslatable t AST.DerivingStrategy where
    translateDeeply _ AST.Stock = AST.Stock
    translateDeeply _ AST.Newtype = AST.Newtype
    translateDeeply _ AST.AnyClass = AST.AnyClass
+   translateDeeply t (AST.Via support ty) = AST.Via support (translateFully t ty)
 
 instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.FieldDeclaration (Origin t) ~ AST.FieldDeclaration (Origin t),
