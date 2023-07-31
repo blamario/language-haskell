@@ -7,12 +7,14 @@ import qualified Data.Foldable1 as Foldable1
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.List as List
 import qualified Data.Map.Lazy as Map
+import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup.Union (UnionWith(..))
 
 import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
 import qualified Transformation.AG.Dimorphic as Di
+import qualified Transformation.Full as Full
 
 import Language.Haskell.Extensions.Abstract (DeeplyFunctor, ExtendedWithAllOf)
 import Language.Haskell.Extensions (Extension)
@@ -22,6 +24,7 @@ import qualified Language.Haskell.Extensions.AST as AST
 import Language.Haskell.Extensions.Translation (
    NameTranslation, Translation, WrapTranslation, WrappedTranslation, FullyTranslatable)
 import qualified Language.Haskell.Extensions.Translation as Translation
+import Language.Haskell.Extensions.Verifier (Accounting (Accounting))
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Reserializer as Reserializer
 
@@ -110,7 +113,9 @@ dropRecordWildCards =
                                ::
                                  ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
-instance (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
+instance (TextualMonoid s,
+          Abstract.DeeplyFoldable (Accounting l1 pos s) l1,
+          Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l1 ~ AST.ModuleName l1,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
@@ -119,10 +124,11 @@ instance (Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
           Abstract.Module l1 ~ AST.Module l1,
           Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
   where
-   translate t@(Reformulation e es) (AST.ExtendedModule oldExts m) =
-      case List.union (Extensions.on <$> es) $ List.delete (Extensions.on e) oldExts of
-      [] -> Translation.translate t (Foldable1.head m)
-      newExts -> AST.ExtendedModule newExts m
+   translate t@(Reformulation e es) (AST.ExtendedModule oldExts m)
+      | Map.notMember e (Full.foldMap (Accounting :: Accounting l1 pos s) m) = AST.ExtendedModule oldExts m
+      | otherwise = case List.union (Extensions.on <$> es) $ List.delete (Extensions.on e) oldExts of
+         [] -> Translation.translate t (Foldable1.head m)
+         newExts -> AST.ExtendedModule newExts m
    translate t (AST.NamedModule name exports imports declarations) =
       AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
    translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
