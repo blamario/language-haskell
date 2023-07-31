@@ -180,7 +180,7 @@ instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
                             adjustment + distance nodeEnd nodeEnd')
                where nodeEnd' = move (sourceLength root) nodeStart
 
-instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
+instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Rank2.Traversable (g (Wrapped pos s)), Position pos,
           Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g,
           Deep.Traversable (PositionAdjustment pos s) g) => Full.Traversable (PositionAdjustment pos s) g where
    traverse PositionAdjustment root@((nodeStart, lexemes, nodeEnd), node) = state f
@@ -205,7 +205,8 @@ instance (Factorial s, Traversable f, Rank2.Foldable (g (Const (Sum Int))), Posi
                 adjustment + distance nodeEnd nodeEnd')
                where nodeEnd' = move (nestedSourceLength root) nodeStart
 
-instance (Factorial s, Traversable f, Rank2.Foldable (g (Const (Sum Int))), Position pos,
+instance (Factorial s, Position pos, Traversable f,
+          Rank2.Foldable (g (Const (Sum Int))), Rank2.Traversable (g (Compose f (Wrapped pos s))),
           Deep.Foldable (Transformation.Rank2.Fold (Compose f (Wrapped pos s)) (Sum Int)) g,
           Deep.Traversable (NestedPositionAdjustment f pos s) g) => Full.Traversable (NestedPositionAdjustment f pos s) g where
    traverse NestedPositionAdjustment root = Compose <$> traverse (state . advance) (getCompose root)
@@ -214,11 +215,12 @@ instance (Factorial s, Traversable f, Rank2.Foldable (g (Const (Sum Int))), Posi
                             adjustment + distance nodeEnd nodeEnd')
                where nodeEnd' = move (nestedSourceLength root) nodeStart
 
-instance (Traversable f, Rank2.Foldable (g (Wrapped pos s)),
+instance (Traversable f, Rank2.Foldable (g (Wrapped pos s)), Rank2.Foldable (g (Compose f (Wrapped pos s))),
           Deep.Foldable (Transformation.Rank2.Fold (Compose f (Wrapped pos s)) (Sum Int)) g) =>
          Full.Foldable (Transformation.Rank2.Fold (Compose f (Wrapped pos s)) (Sum Int)) g where
    foldMap = Full.foldMapDownDefault
 
-instance (Factorial s, Position pos, Foldable f, Deep.Foldable (Transformation.Folded f (Serialization pos s)) g) =>
+instance (Factorial s, Position pos, Foldable f, Rank2.Foldable (g (Compose f (Wrapped pos s))),
+          Deep.Foldable (Transformation.Folded f (Serialization pos s)) g) =>
          Full.Foldable (Transformation.Folded f (Serialization pos s)) g where
    foldMap = Full.foldMapDownDefault
