@@ -22,7 +22,7 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
 import Data.Maybe (isJust, isNothing)
 import Data.Function.Memoize (memoize)
-import Data.Monoid (Dual(..), Endo(..))
+import Data.Monoid (Endo(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
@@ -156,6 +156,7 @@ extensionMixins =
                     DerivingStrategies],             [(9, standaloneDerivingStrategiesMixin)]),
      (Set.fromList [StandaloneDeriving,
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
+     (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -1758,6 +1759,35 @@ standaloneDerivingViaMixin self@ExtendedGrammar{
                       <*> wrap instanceDesignator}}}
    where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
                        <*> wrap (self & report & typeTerm)
+
+mptcsMixin :: forall l g t. (Abstract.ExtendedHaskell l,
+                             LexicalParsing (Parser g t),
+                             g ~ ExtendedGrammar l t (NodeWrap t),
+                             Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+           => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+mptcsMixin
+   self@ExtendedGrammar{
+     typeVarBinder,
+     report= HaskellGrammar{
+        declarationLevel= DeclarationGrammar{optionalContext, typeClass, inClassDeclaration}}}
+   super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+               <|> Abstract.classDeclaration
+                       <$ keyword "class"
+                       <*> wrap optionalContext
+                       <*> mptc
+                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
+   where mptc = wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
+                <**> addParam <**> (appEndo . foldMap Endo . reverse <$> some addParam)
+         addParam :: Parser g t (NodeWrap t (Abstract.TypeLHS l l (NodeWrap t) (NodeWrap t)) ->
+                                 NodeWrap t (Abstract.TypeLHS l l (NodeWrap t) (NodeWrap t)))
+         addParam = (combineWraps .) <$> ((,) <$> wrap typeVarBinder)
+         combineWraps (((_, ls, end), param), lhs@((start, _, _), _)) =
+            ((start, ls, end), Abstract.simpleTypeLHSApplication lhs param)
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
