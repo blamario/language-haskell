@@ -87,12 +87,15 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
+type ExtensionOverlay l g t = (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+                               g ~ ExtendedGrammar l t (NodeWrap t)) => GrammarOverlay g (Parser g t)
+
 extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l,
                                   LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                                   Ord t, Show t, OutlineMonoid t,
                                   Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                                   g ~ ExtendedGrammar l t (NodeWrap t))
-                => Map (Set Extension) [(Int, GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t))]
+                => Map (Set Extension) [(Int, GrammarOverlay g (Parser g t))]
 extensionMixins =
   Map.fromList [
      (Set.fromList [IdentifierSyntax],               [(0, identifierSyntaxMixin)]),
@@ -362,9 +365,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      binary = empty}
    where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
 
-identifierSyntaxMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                                    g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+identifierSyntaxMixin :: ExtensionOverlay l g t
 identifierSyntaxMixin self super = super{
    report= (report super){
       variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
@@ -372,18 +373,14 @@ identifierSyntaxMixin self super = super{
       variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
       constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}}
 
-overloadedLabelsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                        Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+overloadedLabelsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 overloadedLabelsMixin self super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
                        <|> Abstract.overloadedLabel . Text.pack . toString mempty
                            <$> token (string "#" *> variableLexeme)}}
 
-unicodeSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                 Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                   => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+unicodeSyntaxMixin :: ExtensionOverlay l g t
 unicodeSyntaxMixin self super = super{
    keywordForall = keywordForall super <|> delimiter "∀",
    report= (report super){
@@ -393,9 +390,7 @@ unicodeSyntaxMixin self super = super{
       leftArrow = (super & report & leftArrow) <|> delimiter "←",
       variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (super & report & variableSymbol)}}
 
-magicHashMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                             g ~ ExtendedGrammar l t (NodeWrap t))
-               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 magicHashMixin self super =
   let integer', integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
       float', floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
@@ -442,11 +437,8 @@ magicHashMixin self super =
                        <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
      & negationConstraintMixin prefixMinusFollow self
 
-recursiveDoMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecursiveDo l,
-                                   LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                               Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
-                               g ~ ExtendedGrammar l t (NodeWrap t))
-                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+recursiveDoMixin :: (Abstract.ExtendedWith 'RecursiveDo l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                 => ExtensionOverlay l g t
 recursiveDoMixin self super = super{
    report= (report super){
       closedBlockExpresion = (super & report & closedBlockExpresion)
@@ -459,18 +451,14 @@ recursiveDoMixin self super = super{
                                 <*> blockOf (self & report & statement)),
       variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (super & report & variableIdentifier)}}
 
-parallelListComprehensionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                              Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
                        <|> brackets (Abstract.parallelListComprehension
                                      <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
-tupleSectionsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                 Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                   => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+tupleSectionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}} super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
@@ -478,27 +466,23 @@ tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}} supe
              <$> parens (filter (\l-> any isJust l && any isNothing l)
                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
 
-lambdaCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
-                              g ~ ExtendedGrammar l t (NodeWrap t))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+lambdaCaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 lambdaCaseMixin self super = super{
    report= (report super){
       closedBlockExpresion = (super & report & closedBlockExpresion)
          <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
              <*> (self & report & alternatives)}}
 
-emptyCaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                             Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                             g ~ ExtendedGrammar l t (NodeWrap t))
-                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+emptyCaseMixin :: (Abstract.ExtendedHaskell l,
+                   Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))
+               => ExtensionOverlay l g t
 emptyCaseMixin self super = super{
    report= (report super){
       alternatives = blockOf (alternative $ report super)}}
 
-multiWayIfMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                              g ~ ExtendedGrammar l t (NodeWrap t))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+multiWayIfMixin :: (Abstract.ExtendedHaskell l,
+                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
+                => ExtensionOverlay l g t
 multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, rightArrow}} super = super{
    report= (report super){
       closedBlockExpresion = (super & report & closedBlockExpresion)
@@ -506,9 +490,7 @@ multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, 
              <*> blockOf' (Abstract.guardedExpression . toList
                            <$> guards <* rightArrow <*> expression)}}
 
-packageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
-                                  OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+packageImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 packageImportsMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -520,9 +502,7 @@ packageImportsMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-safeImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                               g ~ ExtendedGrammar l t (NodeWrap t))
-                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+safeImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 safeImportsMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -533,9 +513,7 @@ safeImportsMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-importQualifiedPostMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                                       g ~ ExtendedGrammar l t (NodeWrap t))
-                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+importQualifiedPostMixin :: ExtensionOverlay l g t
 importQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -546,9 +524,7 @@ importQualifiedPostMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-safePackageImportsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t), Ord t, Show t,
-                                      OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+safePackageImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 safePackageImportsMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -560,9 +536,7 @@ safePackageImportsMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-packageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                               Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+packageImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 packageImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -576,9 +550,7 @@ packageImportsQualifiedPostMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-safeImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                            Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                              => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+safeImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 safeImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -589,9 +561,7 @@ safeImportsQualifiedPostMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-safePackageImportsQualifiedPostMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                   Ord t, Show t, OutlineMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+safePackageImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 safePackageImportsQualifiedPostMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -605,10 +575,7 @@ safePackageImportsQualifiedPostMixin self super = super{
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
-explicitNamespacesMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
-                                      LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                                      g ~ ExtendedGrammar l t (NodeWrap t))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+explicitNamespacesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 explicitNamespacesMixin self super = super{
    report= (report super){
       moduleLevel= (super & report & moduleLevel){
@@ -624,11 +591,7 @@ explicitNamespacesMixin self super = super{
                            <|> Abstract.explicitlyNamespacedMemberList
                                <$> namespacedMember self `sepEndBy` comma)}}}
 
-blockArgumentsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                  Ord t, Show t, OutlineMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l),
-                                  g ~ ExtendedGrammar l t (NodeWrap t))
-                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+blockArgumentsMixin :: ExtensionOverlay l g t
 blockArgumentsMixin self super = super{
    report= (report super){
       lExpression = (super & report & lExpression)
@@ -637,9 +600,7 @@ blockArgumentsMixin self super = super{
       dExpression = (self & report & fExpression),
       bareExpression = (super & report & bareExpression) <|> (self & report & closedBlockExpresion)}}
 
-lexicalNegationMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                                   Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+lexicalNegationMixin :: ExtensionOverlay l g t
 lexicalNegationMixin self super = super{
    report= (report super){
       qualifiedVariableSymbol = notFollowedBy (string "-"
@@ -656,9 +617,7 @@ lexicalNegationMixin self super = super{
                              <* lift ([[Token Modifier "-"]], ()))
                        <?> "prefix -"
 
-negativeLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                                    Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+negativeLiteralsMixin :: ExtensionOverlay l g t
 negativeLiteralsMixin self super =
    super{
       report= (report super){
@@ -666,9 +625,7 @@ negativeLiteralsMixin self super =
          floatLexeme = (negate <$ string "-" <|> pure id) <*> (super & report & floatLexeme)}}
    & negationConstraintMixin (satisfyCharInput Char.isDigit) self
 
-binaryLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
-                                  g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+binaryLiteralsMixin :: ExtensionOverlay l g t
 binaryLiteralsMixin self super = super{
    binary = (string "0b" <|> string "0B") *> (takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number"),
    report = (report super){
@@ -678,9 +635,7 @@ binaryLiteralsMixin self super = super{
          addBinary n '1' = 2*n + 1
          addBinary _ _ = error "non-binary"
 
-hexFloatLiteralsMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
-                                    g ~ ExtendedGrammar l t (NodeWrap t))
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+hexFloatLiteralsMixin :: ExtensionOverlay l g t
 hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexadecimal}} super = super{
    report= (report super){
       integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
@@ -698,9 +653,7 @@ hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexad
            fst (head $ Numeric.readHex $ toString mempty $ whole <> fraction)
            * 2 ^^ (magnitude - Factorial.length fraction)
 
-numericUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
-                                      g ~ ExtendedGrammar l t (NodeWrap t))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+numericUnderscoresMixin :: ExtensionOverlay l g t
 numericUnderscoresMixin self super = super{
    report= (report super){
       decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit)
@@ -710,16 +663,12 @@ numericUnderscoresMixin self super = super{
       hexadecimal = takeCharsWhile1 Char.isHexDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isHexDigit)
                     <?> "hexadecimal number"}}
 
-binaryUnderscoresMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
-                                     g ~ ExtendedGrammar l t (NodeWrap t))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+binaryUnderscoresMixin :: ExtensionOverlay l g t
 binaryUnderscoresMixin self super = super{
    binary = (string "0b" <|> string "0B") *> (binaryDigits <> concatAll (char '_' *> binaryDigits) <?> "binary number")}
    where binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
-typeOperatorsMixin :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
-                                 LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t)
-                   => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+typeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 typeOperatorsMixin self super =
    super{
       report= (report super){
@@ -777,9 +726,7 @@ typeOperatorsMixin self super =
    where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
          anyQualifiedSymbol = (self & report & qualifiedConstructorSymbol) <|> (self & report & qualifiedVariableSymbol)
 
-equalityConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                       g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
-                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -789,9 +736,7 @@ equalityConstraintsMixin self super = super{
             Abstract.typeEqualityConstraint <$> wrap (self & report & bType)
             <* delimiter "~" <*> wrap ((self & report & bType))
 
-multiParameterConstraintsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                             g ~ ExtendedGrammar l t (NodeWrap t), Ord t, Show t, TextualMonoid t)
-                               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -808,10 +753,7 @@ multiParameterConstraintsMixin self super = super{
                <*> wrap ((self & report & declarationLevel & instanceTypeDesignator)
                          <|> Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar))}}}
 
-multiParameterConstraintsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                                          Ord t, Show t, TextualMonoid t)
-                                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+multiParameterConstraintsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsTypeOperatorsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -821,13 +763,10 @@ multiParameterConstraintsTypeOperatorsMixin self super = super{
                 <*> (self & report & qualifiedOperator)
                 <*> wrap ((self & report & bType))}}}
 
-gratuitouslyParenthesizedTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                  g ~ ExtendedGrammar l t (NodeWrap t),
-                                                  OutlineMonoid t, Ord t, Show t, TextualMonoid t,
-                                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                                                  Deep.Foldable (Serialization (Down Int) t)
-                                                                (Abstract.GADTConstructor l l))
-                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gratuitouslyParenthesizedTypesMixin :: (Abstract.ExtendedHaskell l,
+                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                                    => ExtensionOverlay l g t
 gratuitouslyParenthesizedTypesMixin self super = super{
    report= (report super){
       declarationLevel = (super & report & declarationLevel){
@@ -931,21 +870,16 @@ gratuitouslyParenthesizedTypesMixin self super = super{
             <|> parens forallAndNewBody
          uncurry3 f (a, b, c) = f a b c
 
-flexibleInstancesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                     g ~ ExtendedGrammar l t (NodeWrap t),
-                                     Ord t, Show t, TextualMonoid t)
-                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+flexibleInstancesMixin :: ExtensionOverlay l g t
 flexibleInstancesMixin self super = super{
    report= (report super){
              declarationLevel= (super & report & declarationLevel){
                 instanceDesignator = flexibleInstanceDesignator self}}}
 
-typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                    g ~ ExtendedGrammar l t (NodeWrap t),
-                                    Ord t, Show t, TextualMonoid t, OutlineMonoid t,
+typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l,
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+                  => ExtensionOverlay l g t
 typeFamiliesMixin self@ExtendedGrammar
                   {report= HaskellGrammar{
                      declarationLevel= DeclarationGrammar{optionalContext, simpleType, derivingClause,
@@ -1046,12 +980,10 @@ typeFamiliesMixin self@ExtendedGrammar
            <* delimiter "="
            <*> wrap (self & report & typeTerm)}
 
-typeFamilyDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+typeFamilyDependenciesMixin :: (Abstract.ExtendedHaskell l,
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                            => ExtensionOverlay l g t
 typeFamilyDependenciesMixin
   self@ExtendedGrammar{report= HaskellGrammar{declarationLevel= DeclarationGrammar{simpleType}}}
   super =
@@ -1080,11 +1012,7 @@ typeFamilyDependenciesMixin
    where dependencies = (,) <$> (delimiter "|" *> (self & report & typeVar)) <* (self & report & rightArrow)
                             <*> someNonEmpty (self & report & typeVar)
 
-dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                  g ~ ExtendedGrammar l t (NodeWrap t),
-                                  Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
 dataKindsMixin self super = super{
    report= (report super){
       aType = (super & report & aType)
@@ -1120,11 +1048,7 @@ dataKindsMixin self super = super{
      <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (kind self) <*> some (comma *> wrap (kind self)))
      <|> Abstract.listKind <$> brackets (wrap $ kind self)}
 
-dataKindsTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsTypeOperatorsMixin self super = super{
    instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
       <|> Abstract.promotedInfixTypeApplication
@@ -1156,11 +1080,7 @@ dataKindsTypeOperatorsMixin self super = super{
           <*> (super & report & qualifiedOperator)
           <*> wrap (cTypeWithWildcards super)}
 
-polyKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                             g ~ ExtendedGrammar l t (NodeWrap t),
-                             Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+polyKindsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 polyKindsMixin self super = super{
    report= (report super){
       aType = (super & report & aType)
@@ -1173,11 +1093,7 @@ polyKindsMixin self super = super{
    aKind = Abstract.typeKind <$> wrap (self & report & aType),
    aKindWithWildcards = Abstract.typeKind <$> wrap (self & aTypeWithWildcards)}
 
-visibleDependentKindQualificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                     g ~ ExtendedGrammar l t (NodeWrap t),
-                                                     Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+visibleDependentKindQualificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 visibleDependentKindQualificationMixin self super = super{
    arrowType = arrowType super
      <|> Abstract.visibleDependentType
@@ -1192,11 +1108,7 @@ visibleDependentKindQualificationMixin self super = super{
          <* (self & report & rightArrow)
          <*> wrap (arrowTypeWithWildcards self)}
 
-kindSignaturesBaseMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                      g ~ ExtendedGrammar l t (NodeWrap t),
-                                      Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                      Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self super = super{
    kindSignature = (self & report & doubleColon) *> kind self,
    kind = Abstract.functionKind <$> wrap (bKind self) <* (self & report & rightArrow) <*> wrap (kind self)
@@ -1221,27 +1133,15 @@ kindSignaturesBaseMixin self super = super{
       <|> Abstract.kindVariable <$> kindVar self
       <|> parens (kindWithWildCards self)}
 
-starIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                              g ~ ExtendedGrammar l t (NodeWrap t),
-                              Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+starIsTypeMixin :: ExtensionOverlay l g t
 starIsTypeMixin self super = super{
    groundTypeKind = groundTypeKind super <|> delimiter "*"}
 
-unicodeStarIsTypeMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                     g ~ ExtendedGrammar l t (NodeWrap t),
-                                     Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                       => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+unicodeStarIsTypeMixin :: ExtensionOverlay l g t
 unicodeStarIsTypeMixin self super = super{
    groundTypeKind = groundTypeKind super <|> delimiter "★"}
 
-roleAnnotationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                       g ~ ExtendedGrammar l t (NodeWrap t),
-                                       Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                       Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+roleAnnotationsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 roleAnnotationsMixin self super = super{
    report = (report super) {
       declarationLevel= (super & report & declarationLevel) {
@@ -1256,11 +1156,8 @@ roleAnnotationsMixin self super = super{
       }
    }
 
-typeApplicationsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                        g ~ ExtendedGrammar l t (NodeWrap t),
-                                        Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                      => ExtensionOverlay l g t
 typeApplicationsMixin self super = super{
    report = (report super){
       bType = (super & report & bType)
@@ -1308,11 +1205,7 @@ typeApplicationsMixin self super = super{
           <*> wrap (self & aKindWithWildcards)
    }
 
-linearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                   g ~ ExtendedGrammar l t (NodeWrap t),
-                                   Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+linearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 linearTypesMixin self super = super{
   arrowType = (super & arrowType)
     <|> Abstract.linearFunctionType
@@ -1329,11 +1222,7 @@ linearTypesMixin self super = super{
         <* (self & report & rightArrow)
         <*> wrap (self & arrowType)}
 
-gadtLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                       g ~ ExtendedGrammar l t (NodeWrap t),
-                                       Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtLinearTypesMixin self super = super{
   prefix_gadt_body = (super & prefix_gadt_body)
     <|> Abstract.linearFunctionType
@@ -1364,11 +1253,7 @@ gadtLinearTypesMixin self super = super{
         <* (self & report & rightArrow)
         <*> wrap (self & return_type)}
 
-unicodeLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                          Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+unicodeLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 unicodeLinearTypesMixin self super = super{
   arrowType = (super & arrowType)
     <|> Abstract.linearFunctionType
@@ -1376,11 +1261,7 @@ unicodeLinearTypesMixin self super = super{
         <* delimiter "⊸"
         <*> wrap (self & arrowType)}
 
-gadtUnicodeLinearTypesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                              g ~ ExtendedGrammar l t (NodeWrap t),
-                                              Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                            => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtUnicodeLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtUnicodeLinearTypesMixin self super = super{
   prefix_gadt_body = (super & prefix_gadt_body)
     <|> Abstract.linearFunctionType
@@ -1393,11 +1274,7 @@ gadtUnicodeLinearTypesMixin self super = super{
         <* delimiter "⊸"
         <*> wrap (self & return_type)}
 
-standaloneKindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                            g ~ ExtendedGrammar l t (NodeWrap t),
-                                            Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                            Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                              => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneKindSignaturesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 standaloneKindSignaturesMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -1408,11 +1285,9 @@ standaloneKindSignaturesMixin self super = super{
                   <*> wrap (self & report & declarationLevel & optionalContext)
                   <*> wrap (kind self)}}}
 
-kindSignaturesMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                  g ~ ExtendedGrammar l t (NodeWrap t),
-                                  Ord t, Show t, TextualMonoid t, OutlineMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+kindSignaturesMixin :: (Abstract.ExtendedHaskell l,
+                        Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                    => ExtensionOverlay l g t
 kindSignaturesMixin
    self@ExtendedGrammar{
      report= HaskellGrammar{
@@ -1477,10 +1352,7 @@ kindSignaturesMixin
                                   <$> (self & report & typeVar)
                                   <*> wrap (kindSignature self))}
 
-existentialQuantificationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                             g ~ ExtendedGrammar l t (NodeWrap t),
-                                             Ord t, Show t, TextualMonoid t)
-                               => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+existentialQuantificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 existentialQuantificationMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -1495,11 +1367,9 @@ existentialQuantificationMixin self super = super{
                 <* (self & report & rightDoubleArrow)
                 <*> wrap (super & report & declarationLevel & declaredConstructor)}}}
 
-explicitForAllMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                  g ~ ExtendedGrammar l t (NodeWrap t),
-                                  Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+explicitForAllMixin :: (Abstract.ExtendedHaskell l,
+                        Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                    => ExtensionOverlay l g t
 explicitForAllMixin
    self@ExtendedGrammar{
       report= HaskellGrammar{
@@ -1542,11 +1412,9 @@ explicitForAllMixin
              <*> wrap (kind self),
       kindVar = notFollowedBy (keywordForall self) *> kindVar super}
 
-gadtSyntaxMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                              g ~ ExtendedGrammar l t (NodeWrap t),
-                              Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                              Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtSyntaxMixin :: (Abstract.ExtendedHaskell l,
+                    Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
+                => ExtensionOverlay l g t
 gadtSyntaxMixin
    self@ExtendedGrammar{report= HaskellGrammar{declarationLevel= DeclarationGrammar{simpleType, derivingClause}}}
    super = super{
@@ -1565,24 +1433,14 @@ gadtSyntaxMixin
                    <*> moptional derivingClause}},
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
 
-gadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                           g ~ ExtendedGrammar l t (NodeWrap t),
-                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                           Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+gadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtSyntaxTypeOperatorsMixin self super = super{
    return_type = return_type super <|>
       Abstract.infixTypeApplication <$> wrap (arg_type self)
                                     <*> (self & report & qualifiedOperator)
                                     <*> wrap (arg_type self)}
 
-dataKindsGadtSyntaxTypeOperatorsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                        g ~ ExtendedGrammar l t (NodeWrap t),
-                                                        Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                                        Deep.Foldable
-                                                           (Serialization (Down Int) t)
-                                                           (Abstract.GADTConstructor l l))
-                                      => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+dataKindsGadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsGadtSyntaxTypeOperatorsMixin self super =
    super{
       return_type = return_type super <|>
@@ -1592,10 +1450,7 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super =
          <*> (self & report & qualifiedOperator)
          <*> wrap (arg_type self)}
 
-namedFieldPunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                      g ~ ExtendedGrammar l t (NodeWrap t),
-                                      Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                    => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+namedFieldPunsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 namedFieldPunsMixin self super =
    super{
       report = (report super){
@@ -1604,12 +1459,7 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
-recordWildCardsMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'RecordWildCards l,
-                                       LexicalParsing (Parser g t),
-                                       g ~ ExtendedGrammar l t (NodeWrap t),
-                                       Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
-                     => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+recordWildCardsMixin :: Abstract.ExtendedWith 'RecordWildCards l => ExtensionOverlay l g t
 recordWildCardsMixin self super =
    super{
       report = (report super){
@@ -1620,10 +1470,7 @@ recordWildCardsMixin self super =
             <|> Abstract.wildcardRecordPattern' Abstract.build <$> (self & report & qualifiedConstructor)
                 <*> braces (wrap (self & report & fieldPattern) `endBy` comma <* delimiter "..")}}
 
-overloadedRecordDotMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                           g ~ ExtendedGrammar l t (NodeWrap t),
-                                           Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                         => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+overloadedRecordDotMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 overloadedRecordDotMixin self super =
    super{
       report = (report super){
@@ -1638,11 +1485,7 @@ overloadedRecordDotMixin self super =
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
 
-bangPatternsMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'BangPatterns l,
-                                    LexicalParsing (Parser g t),
-                                    g ~ ExtendedGrammar l t (NodeWrap t),
-                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+bangPatternsMixin :: Abstract.ExtendedWith 'BangPatterns l => ExtensionOverlay l g t
 bangPatternsMixin self super =
    super{
       report = (report super){
@@ -1651,11 +1494,7 @@ bangPatternsMixin self super =
       variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
    where bang = string "!" <* notSatisfyChar Char.isSpace <* lift ([[Token Delimiter "!"]], ())
 
-standaloneDerivingMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'StandaloneDeriving l,
-                                          LexicalParsing (Parser g t),
-                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{
                            report= HaskellGrammar{
                               declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
@@ -1668,11 +1507,7 @@ standaloneDerivingMixin self@ExtendedGrammar{
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator}}}
 
-derivingStrategiesMixin :: forall l g t. (Abstract.Haskell l, Abstract.ExtendedWith 'DerivingStrategies l,
-                                          LexicalParsing (Parser g t),
-                                          g ~ ExtendedGrammar l t (NodeWrap t),
-                                          Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                        => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith 'DerivingStrategies l => ExtensionOverlay l g t
 derivingStrategiesMixin self@ExtendedGrammar{
                            report= HaskellGrammar{
                               declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
@@ -1690,13 +1525,9 @@ derivingStrategiesMixin self@ExtendedGrammar{
                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
 
-standaloneDerivingStrategiesMixin :: forall l g t. (Abstract.Haskell l,
-                                                    Abstract.ExtendedWith 'StandaloneDeriving l,
-                                                    Abstract.ExtendedWith 'DerivingStrategies l,
-                                                    LexicalParsing (Parser g t),
-                                                    g ~ ExtendedGrammar l t (NodeWrap t),
-                                                    Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                                  => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+standaloneDerivingStrategiesMixin :: (Abstract.ExtendedWith 'StandaloneDeriving l,
+                                      Abstract.ExtendedWith 'DerivingStrategies l)
+                                  => ExtensionOverlay l g t
 standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                                      report= HaskellGrammar{
                                         declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
@@ -1712,13 +1543,8 @@ standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
 
-derivingViaMixin :: forall l g t. (Abstract.Haskell l,
-                                   Abstract.ExtendedWith 'DerivingStrategies l,
-                                   Abstract.ExtendedWith 'DerivingVia l,
-                                   LexicalParsing (Parser g t),
-                                   g ~ ExtendedGrammar l t (NodeWrap t),
-                                   Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                 => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+derivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'DerivingStrategies l, Abstract.ExtendedWith 'DerivingVia l)
+                 => ExtensionOverlay l g t
 derivingViaMixin self@ExtendedGrammar{
                     report= HaskellGrammar{
                        declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
@@ -1735,14 +1561,10 @@ derivingViaMixin self@ExtendedGrammar{
    where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
                        <*> wrap (self & report & typeTerm)
 
-standaloneDerivingViaMixin :: forall l g t. (Abstract.Haskell l,
-                                             Abstract.ExtendedWith 'StandaloneDeriving l,
+standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'StandaloneDeriving l,
                                              Abstract.ExtendedWith 'DerivingStrategies l,
-                                             Abstract.ExtendedWith 'DerivingVia l,
-                                             LexicalParsing (Parser g t),
-                                             g ~ ExtendedGrammar l t (NodeWrap t),
-                                             Ord t, Show t, OutlineMonoid t, TextualMonoid t)
-                           => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+                                             Abstract.ExtendedWith 'DerivingVia l)
+                           => ExtensionOverlay l g t
 standaloneDerivingViaMixin self@ExtendedGrammar{
                               report= HaskellGrammar{
                                  declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
@@ -1761,11 +1583,8 @@ standaloneDerivingViaMixin self@ExtendedGrammar{
                        <*> wrap (self & report & typeTerm)
 
 mptcsMixin :: forall l g t. (Abstract.ExtendedHaskell l,
-                             LexicalParsing (Parser g t),
-                             g ~ ExtendedGrammar l t (NodeWrap t),
-                             Ord t, Show t, TextualMonoid t, OutlineMonoid t,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-           => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+           => ExtensionOverlay l g t
 mptcsMixin
    self@ExtendedGrammar{
      typeVarBinder,
@@ -1790,9 +1609,7 @@ mptcsMixin
             ((start, ls, end), Abstract.simpleTypeLHSApplication lhs param)
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
-negationConstraintMixin :: forall l g t. (Abstract.Haskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                                          Ord t, Show t, TextualMonoid t, g ~ ExtendedGrammar l t (NodeWrap t))
-                        => Parser g t t -> GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+negationConstraintMixin :: Parser g t t -> ExtensionOverlay l g t
 negationConstraintMixin prefixMinusFollow
                         self@ExtendedGrammar{
                            report= HaskellGrammar{
@@ -1804,11 +1621,9 @@ negationConstraintMixin prefixMinusFollow
       prefixNegation = negationGuard *> (super & report & prefixNegation)}}
    where negationGuard = notFollowedBy (string "-" *> prefixMinusFollow)
 
-nondecreasingIndentationMixin :: forall l g t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser g t),
-                                                g ~ ExtendedGrammar l t (NodeWrap t),
-                                                Ord t, Show t, OutlineMonoid t, TextualMonoid t,
-                                                Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-                              => GrammarOverlay g (ParserT ((,) [[Lexeme t]]) g t)
+nondecreasingIndentationMixin :: (Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
+                              => ExtensionOverlay l g t
 nondecreasingIndentationMixin self super =
    super{
       report = (report super){
@@ -1862,8 +1677,7 @@ blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >
          terminators :: [Char]
          terminators = ",;)]}"
 
-nonDecreasingIndentLine :: (Ord t, Show t, OutlineMonoid t,
-                            Deep.Foldable (Serialization (Down Int) t) node)
+nonDecreasingIndentLine :: (Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
                         => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
 nonDecreasingIndentLine indent _input node = allIndented False (lexemes node) where
    allIndented nested (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented nested rest
