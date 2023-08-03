@@ -16,7 +16,8 @@ module Language.Haskell.Extensions.Abstract (
               DerivingStrategiesConstruction,
               stockStrategy, newtypeStrategy, anyClassStrategy,
               standaloneStrategicDerivingDeclaration, strategicDerive,
-              DerivingViaConstruction, derivingViaStrategy),
+              DerivingViaConstruction, derivingViaStrategy,
+              DefaultSignatureConstruction, defaultMethodSignature),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    DerivingStrategy,
@@ -112,11 +113,15 @@ data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrate
 data instance Construct 'Extensions.DerivingVia λ l d s = DerivingViaConstruction {
    derivingViaStrategy :: s (Type l l d d) -> DerivingStrategy λ l d s}
 
+data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatureConstruction {
+   defaultMethodSignature :: Name λ -> s (Context l l d d) -> s (Type l l d d) -> Declaration λ l d s}
+
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
                           'Extensions.BangPatterns,
-                          'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia] λ) =>
+                          'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
+                          'Extensions.DefaultSignatures] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ

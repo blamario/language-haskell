@@ -303,6 +303,8 @@ declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext context $ typeTemplate $ extract t) | name <- toList names]
 declarationTemplates (KindSignature name context k) =
    [KiSigD (nameTemplate name) (inContext context $ typeTemplate $ extract k)]
+declarationTemplates (DefaultMethodSignature () name context t) =
+   [DefaultSigD (nameTemplate name) (inContext context $ typeTemplate $ extract t)]
 
 declarationTemplates (DataFamilyDeclaration lhs kind)
    | (con, vars) <- extractSimpleTypeLHS lhs

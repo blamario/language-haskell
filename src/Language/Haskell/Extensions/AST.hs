@@ -41,7 +41,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.BangPatterns,
    'Extensions.StandaloneDeriving,
    'Extensions.DerivingStrategies,
-   'Extensions.DerivingVia]
+   'Extensions.DerivingVia,
+   'Extensions.DefaultSignatures]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -89,6 +90,10 @@ instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
 instance Abstract.ExtendedWith 'Extensions.DerivingVia Language where
    build = Abstract.DerivingViaConstruction {
       Abstract.derivingViaStrategy = Via ()}
+
+instance Abstract.ExtendedWith 'Extensions.DefaultSignatures Language where
+   build = Abstract.DefaultSignatureConstruction {
+      Abstract.defaultMethodSignature = DefaultMethodSignature ()}
 
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 
@@ -382,6 +387,8 @@ data Declaration λ l d s =
    | GADTDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                      [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | DefaultDeclaration [s (Abstract.Type l l d d)]
+   | DefaultMethodSignature !(Abstract.SupportFor 'Extensions.DefaultSignatures λ)
+                             (Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
                          [s (Abstract.Declaration l l d d)]
    | FixityDeclaration (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
@@ -442,11 +449,11 @@ data DataConstructor λ l d s =
 
 data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    SimpleDerive (Abstract.QualifiedName λ)
-   | StrategicDerive (Abstract.SupportFor 'Extensions.DerivingStrategies λ)
+   | StrategicDerive !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
                      (s (Abstract.DerivingStrategy l l d d)) [Abstract.QualifiedName λ]
 
 data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   Stock | AnyClass | Newtype | Via (Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
+   Stock | AnyClass | Newtype | Via !(Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
 
 data Context λ l d s =
    SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
@@ -594,6 +601,7 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
 deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
                    Data (s (Abstract.DerivingStrategy l l d d)),
@@ -605,6 +613,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
                    Show (s (Abstract.DerivingStrategy l l d d)),
@@ -616,6 +625,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
+                   Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.DerivingStrategy l l d d)),

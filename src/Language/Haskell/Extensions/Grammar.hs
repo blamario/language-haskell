@@ -160,6 +160,7 @@ extensionMixins =
      (Set.fromList [StandaloneDeriving,
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
+     (Set.fromList [DefaultSignatures],              [(9, defaultSignaturesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
@@ -1607,6 +1608,19 @@ mptcsMixin
          addParam = (combineWraps .) <$> ((,) <$> wrap typeVarBinder)
          combineWraps (((_, ls, end), param), lhs@((start, _, _), _)) =
             ((start, ls, end), Abstract.simpleTypeLHSApplication lhs param)
+
+defaultSignaturesMixin :: Abstract.ExtendedWith 'DefaultSignatures l => ExtensionOverlay l g t
+defaultSignaturesMixin
+   self@ExtendedGrammar{
+      report= HaskellGrammar{doubleColon, typeTerm, variable,
+                             declarationLevel= DeclarationGrammar{optionalTypeSignatureContext}}}
+   super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            inClassDeclaration = (super & report & declarationLevel & inClassDeclaration)
+               <|> Abstract.defaultMethodSignature Abstract.build <$ keyword "default"
+                      <*> variable <* doubleColon <*> wrap optionalTypeSignatureContext <*> wrap typeTerm}}}
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: Parser g t t -> ExtensionOverlay l g t

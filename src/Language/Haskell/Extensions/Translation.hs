@@ -1,7 +1,7 @@
 {-# Language ConstraintKinds, DataKinds, DefaultSignatures,
              FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
              ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# Options_GHC -Wall -Werror=incomplete-patterns #-}
 
 module Language.Haskell.Extensions.Translation where
 
@@ -194,6 +194,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
       AST.TypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t rhs)
    translateDeeply t (AST.KindSignature name context kind) =
       AST.KindSignature name (translateFully t context) (translateFully t kind)
+   translateDeeply t (AST.DefaultMethodSignature support name context ty) =
+      AST.DefaultMethodSignature support name (translateFully t context) (translateFully t ty)
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
    translateDeeply t (AST.StandaloneDerivingDeclaration support context lhs) =
       AST.StandaloneDerivingDeclaration support (translateFully t context) (translateFully t lhs)
