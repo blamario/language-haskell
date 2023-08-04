@@ -154,7 +154,6 @@ instance Abstract.Haskell Language where
 
    guardedExpression = GuardedExpression
 
-   simpleConstraint = SimpleConstraint
    classConstraint = ClassConstraint
    constraints = Constraints
    noContext = NoContext
@@ -293,8 +292,7 @@ data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | ReExportModule (Abstract.ModuleName λ)
 
 data Context λ l d s =
-   SimpleConstraint (Abstract.QualifiedName λ) (Abstract.Name λ)
-   | ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
    | NoContext
 

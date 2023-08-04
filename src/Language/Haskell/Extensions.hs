@@ -199,7 +199,6 @@ implications = transitiveClosure directImplications directImplications
 directImplications :: Map Extension (Map Extension Bool)
 directImplications = Map.fromList <$> Map.fromList [
   (AutoDeriveTypeable, [(DeriveDataTypeable, True)]),
-  (DataKinds, [(MultiParameterConstraints, True)]),
   (DeriveTraversable, [(DeriveFoldable, True), (DeriveFunctor, True)]),
   (DerivingVia, [(DerivingStrategies, True)]),
   (DuplicateRecordFields, [(DisambiguateRecordFields, True)]),
@@ -225,7 +224,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (StandaloneKindSignatures, [(StarIsType, True)]),
   (Trustworthy, [(SafeImports, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
-                  (KindSignatures, True), (MonoLocalBinds, True), (MultiParameterConstraints, True)]),
+                  (KindSignatures, True), (MonoLocalBinds, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
   (TypeInType, [(PolyKinds, True), (DataKinds, True), (KindSignatures, True)]),
   (TypeOperators, [(ExplicitNamespaces, True)]),

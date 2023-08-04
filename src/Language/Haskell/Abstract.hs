@@ -160,7 +160,6 @@ class Haskell λ where
 
    guardedExpression :: [s (Statement l l d d)] -> s (Expression  l l d d) -> GuardedExpression λ l d s
 
-   simpleConstraint :: QualifiedName λ -> Name λ -> Context λ l d s
    classConstraint :: QualifiedName λ -> s (Type l l d d) -> Context λ l d s
    constraints :: [s (Context l l d d)] -> Context λ l d s
    noContext :: Context λ l d s

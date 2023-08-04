@@ -297,8 +297,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
       context = constraint <|> Abstract.constraints <$> parens (wrap constraint `sepBy` comma),
       constraint = classConstraint,
-      classConstraint = Abstract.simpleConstraint <$> qualifiedTypeClass <*> typeVar
-                        <|> Abstract.classConstraint <$> qualifiedTypeClass <*> parens (wrap typeApplications),
+      classConstraint = Abstract.classConstraint <$> qualifiedTypeClass
+                        <*> wrap (Abstract.typeVariable <$> typeVar <|> parens typeApplications),
       typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
                                                   <*> wrap aType,
       simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,

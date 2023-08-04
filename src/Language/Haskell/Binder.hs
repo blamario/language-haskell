@@ -496,16 +496,14 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
    BindingVerifier l f `Transformation.At` AST.Context l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
-      where verify (AST.SimpleConstraint q _) = verifyTypeName q env
-            verify (AST.ClassConstraint q _) = verifyTypeName q env
+      where verify (AST.ClassConstraint q _) = verifyTypeName q env
             verify _ = mempty
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
    BindingVerifier l f `Transformation.At` ExtAST.Context l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
-      where verify (ExtAST.SimpleConstraint q _) = verifyTypeName q env
-            verify (ExtAST.ClassConstraint q _) = verifyTypeName q env
+      where verify (ExtAST.ClassConstraint q _) = verifyTypeName q env
             verify (ExtAST.InfixConstraint _ q _) = verifyTypeName q env
             verify _ = mempty
 

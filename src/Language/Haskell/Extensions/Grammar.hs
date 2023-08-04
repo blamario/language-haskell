@@ -745,7 +745,7 @@ multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay
 multiParameterConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
-         constraint= (super & report & declarationLevel & constraint)
+         constraint = (super & report & declarationLevel & constraint)
             <|> Abstract.multiParameterClassConstraint <$> (self & report & declarationLevel & qualifiedTypeClass)
                 <*> filter
                        ((1 /=) . length)
@@ -788,10 +788,6 @@ gratuitouslyParenthesizedTypesMixin self super = super{
             <|> Abstract.constraints
                 <$> parens (filter ((1 /=) . length)
                             $ wrap ((self & report & declarationLevel & constraint)) `sepBy` comma),
-         classConstraint = (super & report & declarationLevel & classConstraint)
-            <|> Abstract.simpleConstraint
-                <$> (self & report & declarationLevel & qualifiedTypeClass)
-                <*> parens (optionallyParenthesizedTypeVar self),
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
          typeApplications =
             Abstract.typeApplication

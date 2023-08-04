@@ -410,7 +410,6 @@ strategyTemplate AnyClass = AnyclassStrategy
 strategyTemplate (Via () ty) = ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
-contextTemplate (SimpleConstraint cls var) = [AppT (ConT $ qnameTemplate cls) (VarT $ nameTemplate var)]
 contextTemplate (ClassConstraint cls ts) = [foldl' AppT (ConT $ qnameTemplate cls) (typeTemplate . extract <$> ts)]
 contextTemplate (InfixConstraint left op right) =
    [InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)]
@@ -420,7 +419,6 @@ contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
 contextTemplate NoContext = []
 
 freeContextVars :: TemplateWrapper f => ExtAST.Context Language Language f f -> [TH.Name]
-freeContextVars (SimpleConstraint _cls var) = [nameTemplate var]
 freeContextVars (ClassConstraint _cls ts) = foldMap (freeTypeVars . extract) ts
 freeContextVars (InfixConstraint left op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
