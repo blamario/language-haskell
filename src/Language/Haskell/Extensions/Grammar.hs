@@ -177,7 +177,8 @@ extensionMixins =
                     TypeOperators],                  [(9, multiParameterConstraintsTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
-     (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)])]
+     (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)]),
+     (Set.fromList [FlexibleContexts],               [(9, flexibleContextsMixin)])]
 
 languagePragmas :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) =>
                    Parser g t [ExtensionSwitch]
@@ -795,11 +796,6 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                 <$> parens (filter ((1 /=) . length)
                             $ wrap ((self & report & declarationLevel & constraint)) `sepBy` comma),
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
-         typeApplications =
-            Abstract.typeApplication
-            <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
-                      <|> (self & report & declarationLevel & typeApplications))
-            <*> wrap (self & report & aType),
          typeVarApplications =
             (self & report & generalTypeConstructor)
             <|> Abstract.typeApplication
@@ -1636,6 +1632,14 @@ functionalDependenciesMixin
                                    <$> someNonEmpty typeVar <* rightArrow <*> someNonEmpty typeVar)
                          `sepBy` comma
                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
+
+flexibleContextsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+flexibleContextsMixin self super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            typeApplications = empty}},
+      classConstraintHead = self & report & aType}
 
 instanceSignaturesMixin :: ExtensionOverlay l g t
 instanceSignaturesMixin
