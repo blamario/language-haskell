@@ -4,7 +4,7 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..), GADTConstructor(..),
-                                        DerivingClause(..), DerivingStrategy(..),
+                                        FunctionalDependency(..), DerivingClause(..), DerivingStrategy(..),
                                         Expression(..), Pattern(..), FieldBinding(..), FieldPattern(..), Statement(..),
                                         ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..), Value(..),
@@ -42,7 +42,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.StandaloneDeriving,
    'Extensions.DerivingStrategies,
    'Extensions.DerivingVia,
-   'Extensions.DefaultSignatures]
+   'Extensions.DefaultSignatures,
+   'Extensions.FunctionalDependencies]
 
 instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
    build = Abstract.MagicHashConstruction {
@@ -95,6 +96,12 @@ instance Abstract.ExtendedWith 'Extensions.DefaultSignatures Language where
    build = Abstract.DefaultSignatureConstruction {
       Abstract.defaultMethodSignature = DefaultMethodSignature ()}
 
+instance Abstract.ExtendedWith 'Extensions.FunctionalDependencies Language where
+   build = Abstract.FunctionalDependenciesConstruction {
+      Abstract.functionalDependency = FunctionalDependency,
+      Abstract.fundepClassDeclaration = FunDepClassDeclaration ()}
+
+type instance Abstract.FunctionalDependency Language = FunctionalDependency Language
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 
 instance Abstract.ExtendedHaskell Language where
@@ -382,6 +389,9 @@ data TypeRole λ = InferredRole
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
+   | FunDepClassDeclaration !(Abstract.SupportFor 'Extensions.FunctionalDependencies λ)
+                            (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
+                            [s (Abstract.FunctionalDependency l l d d)] [s (Abstract.Declaration l l d d)]
    | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                      [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | GADTDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
@@ -437,6 +447,9 @@ data Declaration λ l d s =
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
+
+data FunctionalDependency λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   FunctionalDependency (NonEmpty (Abstract.Name λ)) (NonEmpty (Abstract.Name λ))
 
 data GADTConstructor λ l d s =
    GADTConstructors (NonEmpty (Abstract.Name λ)) [TypeVarBinding λ l d s]
@@ -602,7 +615,9 @@ deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
+                   Data (s (Abstract.FunctionalDependency l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
                    Data (s (Abstract.DerivingStrategy l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
@@ -614,7 +629,9 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
 deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
+                   Show (s (Abstract.FunctionalDependency l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
                    Show (s (Abstract.DerivingStrategy l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
@@ -626,15 +643,23 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
 deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.DerivingStrategy l l d d)),
+                   Eq (s (Abstract.FunctionalDependency l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.ClassInstanceLHS l l d d)),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ),
                    Eq (Abstract.TypeRole λ)) => Eq (Declaration λ l d s)
+
+deriving instance Typeable (FunctionalDependency λ l d s)
+deriving instance (Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (FunctionalDependency λ l d s)
+deriving instance (Show (Abstract.Name λ)) => Show (FunctionalDependency λ l d s)
+deriving instance (Eq (Abstract.Name λ)) => Eq (FunctionalDependency λ l d s)
 
 deriving instance Typeable (DataConstructor λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.DataConstructor l l d d)),
@@ -808,6 +833,7 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Declaration, ''DataConstructor, ''GADTConstructor, ''DerivingClause, ''DerivingStrategy,
+             [''Import, ''Declaration, ''FunctionalDependency, ''DataConstructor, ''GADTConstructor,
+              ''DerivingClause, ''DerivingStrategy,
               ''Type, ''TypeLHS, ''TypeVarBinding, ''ClassInstanceLHS, ''Context,
               ''Expression, ''FieldBinding, ''Pattern, ''FieldPattern, ''Statement, ''Value]))

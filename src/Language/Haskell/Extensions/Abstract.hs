@@ -17,10 +17,11 @@ module Language.Haskell.Extensions.Abstract (
               stockStrategy, newtypeStrategy, anyClassStrategy,
               standaloneStrategicDerivingDeclaration, strategicDerive,
               DerivingViaConstruction, derivingViaStrategy,
-              DefaultSignatureConstruction, defaultMethodSignature),
+              DefaultSignatureConstruction, defaultMethodSignature,
+              FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
-   DerivingStrategy,
+   DerivingStrategy, FunctionalDependency,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
@@ -116,12 +117,19 @@ data instance Construct 'Extensions.DerivingVia λ l d s = DerivingViaConstructi
 data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatureConstruction {
    defaultMethodSignature :: Name λ -> s (Context l l d d) -> s (Type l l d d) -> Declaration λ l d s}
 
+type family FunctionalDependency λ :: TreeNodeSubKind
+
+data instance Construct 'Extensions.FunctionalDependencies λ l d s = FunctionalDependenciesConstruction {
+   functionalDependency :: NonEmpty (Name λ) -> NonEmpty (Name λ) -> FunctionalDependency λ l d s,
+   fundepClassDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (FunctionalDependency l l d d)]
+                          -> [s (Declaration l l d d)] -> Declaration λ l d s}
+
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
                           'Extensions.BangPatterns,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
-                          'Extensions.DefaultSignatures] λ) =>
+                          'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ
@@ -271,10 +279,13 @@ class (Haskell λ,
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
+                          Deep.Functor t (FunctionalDependency l l),
                           Report.DeeplyFunctor t l)
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
                            Deep.Foldable t (TypeVarBinding l l), Deep.Foldable t (DerivingStrategy l l),
+                           Deep.Foldable t (FunctionalDependency l l),
                            Report.DeeplyFoldable t l)
 type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
                               Deep.Traversable t (TypeVarBinding l l), Deep.Traversable t (DerivingStrategy l l),
+                              Deep.Traversable t (FunctionalDependency l l),
                               Report.DeeplyTraversable t l)

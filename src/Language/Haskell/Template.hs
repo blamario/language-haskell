@@ -241,6 +241,10 @@ declarationTemplates (ClassDeclaration context lhs members)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [ClassD (contextTemplate $ extract context) (nameTemplate con) vars []
              (foldMap (declarationTemplates . extract) members)]
+declarationTemplates (FunDepClassDeclaration () context lhs fundeps members)
+   | (con, vars) <- extractSimpleTypeLHS lhs =
+     [ClassD (contextTemplate $ extract context) (nameTemplate con) vars (fundepTemplate . extract <$> fundeps)
+             (foldMap (declarationTemplates . extract) members)]
 declarationTemplates (DataDeclaration context lhs kind constructors derivings)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [DataD (contextTemplate $ extract context) (nameTemplate con) vars
@@ -387,7 +391,10 @@ typeFamilyInstanceTemplate (TypeFamilyInstance vars lhs rhs) =
             (lhsTypeTemplate $ extract lhs)
             (typeTemplate $ extract rhs)
 typeFamilyInstanceTemplate d = error ("Expected a type family instance, got " <> show (const (Const ()) Rank2.<$> d))
-     
+
+fundepTemplate :: FunctionalDependency Language l f f -> FunDep
+fundepTemplate (FunctionalDependency from to) = FunDep (nameTemplate <$> toList from) (nameTemplate <$> toList to)
+
 derivingsTemplate :: TemplateWrapper f => [DerivingClause Language Language f f] -> [DerivClause]
 derivingsTemplate = foldr derived []
    where derived (SimpleDerive name) (DerivClause Nothing ctx : rest) =

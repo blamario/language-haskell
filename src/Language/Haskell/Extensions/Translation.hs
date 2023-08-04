@@ -105,6 +105,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
 
 instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,
+          FullyTranslatable t AST.FunctionalDependency,
           FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
           FullyTranslatable t AST.DerivingClause, FullyTranslatable t AST.DerivingStrategy,
@@ -115,6 +116,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           Abstract.Context (Target t) ~ AST.Context (Target t),
           Abstract.ClassInstanceLHS (Origin t) ~ AST.ClassInstanceLHS (Origin t),
           Abstract.ClassInstanceLHS (Target t) ~ AST.ClassInstanceLHS (Target t),
+          Abstract.FunctionalDependency (Origin t) ~ AST.FunctionalDependency (Origin t),
+          Abstract.FunctionalDependency (Target t) ~ AST.FunctionalDependency (Target t),
           Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),
           Abstract.TypeLHS (Target t) ~ AST.TypeLHS (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
@@ -138,6 +141,9 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
          DeeplyTranslatable t AST.Declaration where
    translateDeeply t (AST.ClassDeclaration context lhs methods) =
       AST.ClassDeclaration (translateFully t context) (translateFully t lhs) (translateFully t <$> methods)
+   translateDeeply t (AST.FunDepClassDeclaration support context lhs fundeps methods) =
+      AST.FunDepClassDeclaration support (translateFully t context) (translateFully t lhs)
+                                 (translateFully t <$> fundeps) (translateFully t <$> methods)
    translateDeeply t (AST.DataDeclaration context lhs kind constructors derivings) =
       AST.DataDeclaration (translateFully t context) (translateFully t lhs) (translateFully t <$> kind)
                           (translateFully t <$> constructors) (translateFully t <$> derivings)
@@ -227,6 +233,9 @@ instance (WrapTranslation t,
    translateDeeply _ AST.EmptyListConstructor = AST.EmptyListConstructor
    translateDeeply _ (AST.TupleConstructor size) = AST.TupleConstructor size
    translateDeeply _ AST.UnitConstructor = AST.UnitConstructor
+
+instance WrapTranslation t => DeeplyTranslatable t AST.FunctionalDependency where
+   translateDeeply _ (AST.FunctionalDependency from to) = AST.FunctionalDependency from to
 
 instance (WrapTranslation t, WrappedTranslation t AST.DataConstructor,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type, FullyTranslatable t AST.FieldDeclaration,

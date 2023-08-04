@@ -61,6 +61,7 @@ import Prelude hiding (exponent, filter)
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
+   classLHS :: p (Abstract.TypeLHS l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
@@ -160,6 +161,7 @@ extensionMixins =
      (Set.fromList [StandaloneDeriving,
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
+     (Set.fromList [FunctionalDependencies],         [(9, functionalDependenciesMixin)]),
      (Set.fromList [DefaultSignatures],              [(9, defaultSignaturesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
@@ -250,6 +252,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
              <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
              <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         typeTerm = nonTerminal arrowType},
+     classLHS = empty,
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
@@ -1597,17 +1600,41 @@ mptcsMixin
          declarationLevel= (super & report & declarationLevel){
             topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                <|> Abstract.classDeclaration
-                       <$ keyword "class"
-                       <*> wrap optionalContext
-                       <*> mptc
-                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
-   where mptc = wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
-                <**> addParam <**> (appEndo . foldMap Endo . reverse <$> some addParam)
-         addParam :: Parser g t (NodeWrap t (Abstract.TypeLHS l l (NodeWrap t) (NodeWrap t)) ->
-                                 NodeWrap t (Abstract.TypeLHS l l (NodeWrap t) (NodeWrap t)))
-         addParam = (combineWraps .) <$> ((,) <$> wrap typeVarBinder)
-         combineWraps (((_, ls, end), param), lhs@((start, _, _), _)) =
-            ((start, ls, end), Abstract.simpleTypeLHSApplication lhs param)
+                      <$ keyword "class"
+                      <*> wrap optionalContext
+                      <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [] <|> classLHS self)
+                      <*> moptional (keyword "where" *> blockOf inClassDeclaration)}},
+      classLHS = classLHS super
+         <|> Abstract.simpleTypeLHSApplication
+                <$> wrap (Abstract.simpleTypeLHSApplication
+                             <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
+                             <*> typeVarBinder)
+                <*> typeVarBinder
+         <|> Abstract.simpleTypeLHSApplication <$> wrap (classLHS self) <*> typeVarBinder}
+
+functionalDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l,
+                                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                            => ExtensionOverlay l g t
+functionalDependenciesMixin
+   self@ExtendedGrammar{
+     classLHS, typeVarBinder,
+     report= HaskellGrammar{
+        rightArrow, typeVar,
+        declarationLevel= DeclarationGrammar{optionalContext, inClassDeclaration}}}
+   super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+               <|> Abstract.fundepClassDeclaration Abstract.build
+                      <$ keyword "class"
+                      <*> wrap optionalContext
+                      <*> wrap classLHS
+                      <* delimiter "|"
+                      <*> wrap (Abstract.functionalDependency Abstract.build
+                                   <$> someNonEmpty typeVar <* rightArrow <*> someNonEmpty typeVar)
+                         `sepBy` comma
+                      <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
 
 defaultSignaturesMixin :: Abstract.ExtendedWith 'DefaultSignatures l => ExtensionOverlay l g t
 defaultSignaturesMixin
