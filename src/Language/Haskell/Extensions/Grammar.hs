@@ -62,6 +62,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
+   classConstraintHead :: p (Abstract.Type l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
@@ -243,17 +244,26 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= r'{
         declarationLevel= (declarationLevel r'){
-          simpleType =
-             Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
-             <|> Abstract.simpleTypeLHSApplication
-                 <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
-                 <*> nonTerminal typeVarBinder,
-          instanceTypeDesignator =
-             nonTerminal (Report.generalTypeConstructor . report)
-             <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-             <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
+           simpleType =
+              Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+              <|> Abstract.simpleTypeLHSApplication
+                  <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
+                  <*> nonTerminal typeVarBinder,
+           classConstraint = Abstract.classConstraint
+                             <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+                             <*> wrap (nonTerminal classConstraintHead
+                                       <|> parens (nonTerminal (Report.typeApplications . declarationLevel . report))),
+           typeApplications = Abstract.typeApplication
+                              <$> wrap (nonTerminal classConstraintHead
+                                        <|> nonTerminal (Report.typeApplications . declarationLevel . report))
+                              <*> wrap (nonTerminal (Report.aType . report)),
+           instanceTypeDesignator =
+              nonTerminal (Report.generalTypeConstructor . report)
+              <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
+              <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
+     classConstraintHead = Abstract.typeVariable <$> typeVar,
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
@@ -747,11 +757,7 @@ multiParameterConstraintsMixin self super = super{
       declarationLevel= (super & report & declarationLevel){
          constraint = (super & report & declarationLevel & constraint)
             <|> Abstract.multiParameterClassConstraint <$> (self & report & declarationLevel & qualifiedTypeClass)
-                <*> filter
-                       ((1 /=) . length)
-                       (many $ wrap $
-                        optionallyKindedAndParenthesizedTypeVar self
-                        <|> parens (self & report & declarationLevel & typeApplications)),
+                <*> filter ((1 /=) . length) (many $ wrap $ classConstraintHead self),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
             Abstract.classInstanceLHSApplication
                <$> wrap (self & report & declarationLevel & instanceDesignator)
@@ -806,6 +812,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))}},
+   classConstraintHead = (super & classConstraintHead) <|> parens (self & classConstraintHead),
    gadtConstructors = (super & gadtConstructors)
       <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
                                     <* (self & report & doubleColon)
@@ -1324,16 +1331,13 @@ kindSignaturesMixin
                            *> blockOf inClassDeclaration
                            <|> pure []),
             typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
-                                <*> some (comma *> wrap (optionallyKindedTypeVar self)),
-           classConstraint = (super & report & declarationLevel & classConstraint)
-              <|> Abstract.multiParameterClassConstraint
-                  <$> (self & report & declarationLevel & qualifiedTypeClass)
-                  <*> parens (pure
-                              <$> wrap (Abstract.kindedType
-                                        <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
-                                        <*> wrap (kindSignature self)))},
+                                <*> some (comma *> wrap (optionallyKindedTypeVar self))},
          typeTerm = (super & report & typeTerm) <|>
             Abstract.kindedType <$> wrap (self & report & typeTerm) <*> wrap (kindSignature self)},
+      classConstraintHead = (super & classConstraintHead)
+         <|> parens (Abstract.kindedType
+                     <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
+                     <*> wrap (kindSignature self)),
       instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
          <|> Abstract.kindedType
              <$> wrap (self & instanceTypeDesignatorInsideParens)
