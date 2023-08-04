@@ -162,6 +162,7 @@ extensionMixins =
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
      (Set.fromList [FunctionalDependencies],         [(9, functionalDependenciesMixin)]),
+     (Set.fromList [InstanceSigs],                   [(9, instanceSignaturesMixin)]),
      (Set.fromList [DefaultSignatures],              [(9, defaultSignaturesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
      (Set.fromList [LinearTypes, GADTSyntax],        [(9, gadtLinearTypesMixin)]),
@@ -1612,7 +1613,7 @@ mptcsMixin
                 <*> typeVarBinder
          <|> Abstract.simpleTypeLHSApplication <$> wrap (classLHS self) <*> typeVarBinder}
 
-functionalDependenciesMixin :: forall l g t. (Abstract.ExtendedHaskell l,
+functionalDependenciesMixin :: forall l g t. (Abstract.ExtendedWith 'FunctionalDependencies l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => ExtensionOverlay l g t
 functionalDependenciesMixin
@@ -1635,6 +1636,19 @@ functionalDependenciesMixin
                                    <$> someNonEmpty typeVar <* rightArrow <*> someNonEmpty typeVar)
                          `sepBy` comma
                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
+
+instanceSignaturesMixin :: ExtensionOverlay l g t
+instanceSignaturesMixin
+   self@ExtendedGrammar{
+      report= HaskellGrammar{doubleColon, typeTerm,
+                             declarationLevel= DeclarationGrammar{optionalTypeSignatureContext, variables}}}
+   super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            inInstanceDeclaration = (super & report & declarationLevel & inInstanceDeclaration)
+               <|> Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalTypeSignatureContext
+                                          <*> wrap typeTerm}}}
 
 defaultSignaturesMixin :: Abstract.ExtendedWith 'DefaultSignatures l => ExtensionOverlay l g t
 defaultSignaturesMixin
