@@ -169,6 +169,7 @@ instance Abstract.ExtendedHaskell Language where
    infixKindApplication = InfixKindApplication
    groundTypeKind = GroundTypeKind
    typeEqualityConstraint = TypeEqualityConstraint
+   typeConstraint = TypeConstraint
    tupleKind = TupleKind
    listKind = ListKind
    typeRepresentationKind = TypeRepresentationKind
@@ -472,6 +473,7 @@ data Context λ l d s =
    | Constraints [s (Abstract.Context l l d d)]
    | InfixConstraint (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
+   | TypeConstraint (s (Abstract.Type l l d d))
    | NoContext
 
 data Type λ l d s =

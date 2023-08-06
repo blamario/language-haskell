@@ -746,8 +746,8 @@ equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
-         constraint = (super & report & declarationLevel & constraint) <|> equalityConstraint},
-      typeTerm = (super & report & typeTerm) <|> Abstract.constraintType <$> wrap equalityConstraint}}
+         constraint = (super & report & declarationLevel & constraint) <|> equalityConstraint}},
+   cType = (super & cType) <|> Abstract.constraintType <$> wrap equalityConstraint}
    where equalityConstraint =
             Abstract.typeEqualityConstraint <$> wrap (self & report & bType)
             <* delimiter "~" <*> wrap ((self & report & bType))
@@ -1638,8 +1638,7 @@ flexibleContextsMixin self super =
    super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
-            typeApplications = empty}},
-      classConstraintHead = self & report & aType}
+            context = Abstract.typeConstraint <$> wrap (self & cType)}}}
 
 instanceSignaturesMixin :: ExtensionOverlay l g t
 instanceSignaturesMixin

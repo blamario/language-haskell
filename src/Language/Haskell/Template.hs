@@ -415,6 +415,10 @@ contextTemplate (InfixConstraint left op right) =
    [InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)]
 contextTemplate (TypeEqualityConstraint t1 t2) =
    [EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)]
+contextTemplate (TypeConstraint t) = case extract t of
+   ConstructorType c | UnitConstructor <- extract c -> []
+   TupleType ts -> wrappedTypeTemplate <$> toList ts
+   _ -> [wrappedTypeTemplate t]
 contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
 contextTemplate NoContext = []
 
@@ -423,6 +427,7 @@ freeContextVars (ClassConstraint _cls ts) = foldMap (freeTypeVars . extract) ts
 freeContextVars (InfixConstraint left op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
 freeContextVars (TypeEqualityConstraint left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
+freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
 freeContextVars NoContext = []
 
 conventionTemplate :: CallingConvention l -> Callconv

@@ -223,6 +223,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Context,
       AST.InfixConstraint (translateFully t left) op (translateFully t right)
    translateDeeply t (AST.TypeEqualityConstraint left right) =
       AST.TypeEqualityConstraint (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.TypeConstraint ty) = AST.TypeConstraint (translateFully t ty)
    translateDeeply _ AST.NoContext = AST.NoContext
 
 instance (WrapTranslation t,
