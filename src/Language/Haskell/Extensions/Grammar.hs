@@ -394,7 +394,8 @@ overloadedLabelsMixin self super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
                        <|> Abstract.overloadedLabel . Text.pack . toString mempty
-                           <$> token (string "#" *> variableLexeme)}}
+                           <$> token (string "#" *> variableLexeme),
+      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> (super & report & variableSymbol)}}
 
 unicodeSyntaxMixin :: ExtensionOverlay l g t
 unicodeSyntaxMixin self super = super{
