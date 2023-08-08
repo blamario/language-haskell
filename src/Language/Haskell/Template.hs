@@ -611,7 +611,10 @@ typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) 
 typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
 wrappedTypeTemplate :: TemplateWrapper f => f (ExtAST.Type Language Language f f) -> TH.Type
-wrappedTypeTemplate x = (if isParenthesized x then ParensT else id) (typeTemplate $ extract x)
+wrappedTypeTemplate x = (if isParenthesized x && not (isTuple t) then ParensT else id) (typeTemplate t)
+   where isTuple TupleType{} = True
+         isTuple _ = False
+         t = extract x
 
 freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TyVarBndrSpec]
 freeTypeVarBindings = map plainTVInferred . freeTypeVars
