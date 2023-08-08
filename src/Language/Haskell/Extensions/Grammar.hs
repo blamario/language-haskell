@@ -1441,10 +1441,18 @@ gadtSyntaxMixin
 
 gadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtSyntaxTypeOperatorsMixin self super = super{
+   prefix_gadt_body = (super & prefix_gadt_body)
+      <|> Abstract.functionType
+             <$> wrap (Abstract.infixTypeApplication
+                          <$> wrap (self & cType)
+                          <*> (self & report & qualifiedOperator)
+                          <*> wrap (self & report & bType))
+             <* nonTerminal (Report.rightArrow . report)
+             <*> wrap (nonTerminal prefix_gadt_body),
    return_type = return_type super <|>
-      Abstract.infixTypeApplication <$> wrap (arg_type self)
-                                    <*> (self & report & qualifiedOperator)
-                                    <*> wrap (arg_type self)}
+       Abstract.infixTypeApplication <$> wrap (arg_type self)
+                                     <*> (self & report & qualifiedOperator)
+                                     <*> wrap (arg_type self)}
 
 dataKindsGadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsGadtSyntaxTypeOperatorsMixin self super =
