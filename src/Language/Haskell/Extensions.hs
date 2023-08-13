@@ -213,7 +213,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (IncoherentInstances, [(OverlappingInstances, True)]),
   (KindSignatures, [(GratuitouslyParenthesizedTypes, True), (StarIsType, True)]),
   (LiberalTypeSynonyms, [(ExplicitForAll, True)]),
-  (MultiParamTypeClasses, [(MultiParameterConstraints, True)]),
+  (MultiParamTypeClasses, [(ConstrainedClassMethods, True), (MultiParameterConstraints, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
   (PolyKinds, [(KindSignatures, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
