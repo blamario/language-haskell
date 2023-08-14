@@ -244,7 +244,6 @@ class (Haskell λ,
    kindSignature :: Name λ -> s (Context l l d d) -> s (Kind l l d d) -> Declaration λ l d s
 
    typeEqualityConstraint :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
-   multiParameterClassConstraint :: QualifiedName λ -> [s (Type l l d d)] -> Context λ l d s
    infixConstraint :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Context λ l d s
    typeConstraint :: s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s

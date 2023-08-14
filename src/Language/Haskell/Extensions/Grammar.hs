@@ -62,7 +62,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
-   classConstraintHead :: p (Abstract.Type l l f f),
+   constraintClass, classConstraintHead :: p (Abstract.Type l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
@@ -132,6 +132,7 @@ extensionMixins =
      (Set.fromList [MultiWayIf],                     [(8, multiWayIfMixin)]),
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
+     (Set.fromList [TypeVariableConstraints],        [(8, typeVariableConstraintsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
      (Set.fromList [EqualityConstraints],            [(8, equalityConstraintsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
@@ -250,10 +251,12 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> Abstract.simpleTypeLHSApplication
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
-           classConstraint = Abstract.classConstraint
-                             <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
-                             <*> wrap (nonTerminal classConstraintHead
-                                       <|> parens (nonTerminal (Report.typeApplications . declarationLevel . report))),
+           classConstraint =
+              Abstract.typeConstraint
+              <$> wrap (Abstract.typeApplication
+                        <$> wrap (nonTerminal constraintClass)
+                        <*> wrap (nonTerminal classConstraintHead
+                                  <|> parens (nonTerminal (Report.typeApplications . declarationLevel . report)))),
            typeApplications = Abstract.typeApplication
                               <$> wrap (nonTerminal classConstraintHead
                                         <|> nonTerminal (Report.typeApplications . declarationLevel . report))
@@ -264,6 +267,10 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
+     constraintClass =
+        Abstract.constructorType
+           <$> wrap (Abstract.constructorReference
+                     <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)),
      classConstraintHead = Abstract.typeVariable <$> typeVar,
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -758,8 +765,10 @@ multiParameterConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
          constraint = (super & report & declarationLevel & constraint)
-            <|> Abstract.multiParameterClassConstraint <$> (self & report & declarationLevel & qualifiedTypeClass)
-                <*> filter ((1 /=) . length) (many $ wrap $ classConstraintHead self),
+            <|> Abstract.typeConstraint
+                   <$> (List.foldl' (rewrap2 Abstract.typeApplication)
+                           <$> wrap (self & constraintClass)
+                           <*> filter ((1 /=) . length) (many $ wrap $ classConstraintHead self)),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
             Abstract.classInstanceLHSApplication
                <$> wrap (self & report & declarationLevel & instanceDesignator)
@@ -769,6 +778,10 @@ multiParameterConstraintsMixin self super = super{
       <|> Abstract.classInstanceLHSApplication
              <$> wrap (self & flexibleInstanceDesignator)
              <*> wrap (self & report & aType)}
+
+typeVariableConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+typeVariableConstraintsMixin self super = super{
+   constraintClass = constraintClass super <|> optionallyKindedAndParenthesizedTypeVar self}
 
 multiParameterConstraintsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsTypeOperatorsMixin self super = super{
@@ -1721,6 +1734,9 @@ whiteSpaceTrailing node = case lexemes node of
     Comment{} -> True
     _ -> False
   _ -> False
+
+rewrap2 :: (NodeWrap t a -> NodeWrap t b -> c) -> NodeWrap t a -> NodeWrap t b -> NodeWrap t c
+rewrap2 f node1@((start, _, _), _) node2@((_, _, end), _) = ((start, mempty, end), f node1 node2)
 
 blockOf' :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node)

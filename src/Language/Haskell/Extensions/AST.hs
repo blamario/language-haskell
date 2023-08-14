@@ -11,6 +11,7 @@ module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(
                                         module Report) where
 
 import Control.Monad (forM)
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty, toList)
 import Data.Data (Data, Typeable)
 import qualified Data.Kind as Kind
@@ -174,7 +175,6 @@ instance Abstract.ExtendedHaskell Language where
    listKind = ListKind
    typeRepresentationKind = TypeRepresentationKind
    constraintType = ConstraintType
-   multiParameterClassConstraint = ClassConstraint
    infixConstraint = InfixConstraint
 
    dataFamilyDeclaration = DataFamilyDeclaration

@@ -71,7 +71,7 @@ data Extension = AllowAmbiguousTypes
                | Haskell2010
                | Haskell98
                | HexFloatLiterals
-               | IdentifierSyntax
+               | IdentifierSyntax -- active but unnamed in GHC
                | ImplicitParams
                | ImplicitPrelude
                | ImportQualifiedPost
@@ -92,7 +92,7 @@ data Extension = AllowAmbiguousTypes
                | MonoPatBinds
                | MonomorphismRestriction
                | MultiParamTypeClasses
-               | MultiParameterConstraints
+               | MultiParameterConstraints -- active unnamed in GHC
                | MultiWayIf
                | NPlusKPatterns
                | NamedFieldPuns
@@ -112,7 +112,7 @@ data Extension = AllowAmbiguousTypes
                | ParallelArrays
                | ParallelListComp
                | ParallelListComprehensions
-               | GratuitouslyParenthesizedTypes
+               | GratuitouslyParenthesizedTypes -- active but unnamed in GHC
                | PartialTypeSignatures
                | PatternGuards
                | PatternSynonyms
@@ -149,6 +149,7 @@ data Extension = AllowAmbiguousTypes
                | TypeInType
                | TypeOperators
                | TypeSynonymInstances
+               | TypeVariableConstraints -- active but unnamed in GHC
                | UnboxedSums
                | UnboxedTuples
                | UndecidableInstances
@@ -182,7 +183,8 @@ allExtensions = Set.fromList [minBound .. maxBound]
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   ForeignFunctionInterface, IdentifierSyntax, MultiParameterConstraints, PatternGuards,
-                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, TraditionalRecordSyntax]
+                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, TraditionalRecordSyntax,
+                                  TypeVariableConstraints]
 
 languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]
