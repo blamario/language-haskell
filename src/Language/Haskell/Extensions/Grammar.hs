@@ -781,7 +781,13 @@ multiParameterConstraintsMixin self super = super{
 
 typeVariableConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 typeVariableConstraintsMixin self super = super{
-   constraintClass = constraintClass super <|> optionallyKindedAndParenthesizedTypeVar self}
+   report= (report super){
+      declarationLevel= (super & report & declarationLevel){
+         classConstraint = (super & report & declarationLevel & classConstraint)
+            <|> Abstract.typeConstraint
+                <$> wrap (Abstract.typeApplication
+                          <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
+                          <*> wrap (self & report & aType))}}}
 
 multiParameterConstraintsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsTypeOperatorsMixin self super = super{

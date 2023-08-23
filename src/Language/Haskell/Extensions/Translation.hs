@@ -216,8 +216,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Context,
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
           Abstract.Type (Target t) ~ AST.Type (Target t)) =>
          DeeplyTranslatable t AST.Context where
-   translateDeeply t (AST.ClassConstraint className types) =
-      AST.ClassConstraint className (translateFully t <$> types)
+   translateDeeply t (AST.ClassConstraint className ty) =
+      AST.ClassConstraint className (translateFully t ty)
    translateDeeply t (AST.Constraints constraints) = AST.Constraints (translateFully t <$> constraints)
    translateDeeply t (AST.InfixConstraint left op right) =
       AST.InfixConstraint (translateFully t left) op (translateFully t right)

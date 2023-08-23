@@ -338,7 +338,7 @@ instance Abstract.Haskell Language where
 
    guardedExpression = GuardedExpression
 
-   classConstraint cls t = ClassConstraint cls [t]
+   classConstraint cls t = ClassConstraint cls t
    constraints = Constraints
    noContext = NoContext
 
@@ -469,7 +469,7 @@ data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind
    Stock | AnyClass | Newtype | Via !(Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
 
 data Context λ l d s =
-   ClassConstraint (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
+   ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
    | InfixConstraint (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
