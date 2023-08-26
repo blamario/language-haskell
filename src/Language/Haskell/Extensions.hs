@@ -54,7 +54,7 @@ data Extension = AllowAmbiguousTypes
                | EmptyCase
                | EmptyDataDeclarations
                | EmptyDataDeriving
-               | EqualityConstraints
+               | EqualityConstraints -- unnamed in GHC
                | ExistentialQuantification
                | ExplicitForAll
                | ExplicitNamespaces

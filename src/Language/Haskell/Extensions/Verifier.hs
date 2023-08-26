@@ -168,6 +168,26 @@ instance Accounting l pos s
       Const (Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
    Accounting $ _ = mempty
 
+instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l, Eq s, IsString s) =>
+         Accounting l pos s `Transformation.At` ExtAST.Context l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ d@(Compose (_, ((start, _, end), dec))) =
+      case dec
+      of ExtAST.NoContext -> mempty
+         ExtAST.Constraints{} -> mempty
+         ExtAST.ClassConstraint className t -> Const (foldMap checkFlexibleContextHead t)
+         ExtAST.InfixConstraint{} -> Const (Map.singleton Extensions.TypeOperators [(start, end)])
+         ExtAST.TypeEqualityConstraint{} -> Const (Map.singleton Extensions.EqualityConstraints [(start, end)])
+         ExtAST.TypeConstraint t -> Const (foldMap checkFlexibleContext t)
+      where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
+            checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
+            checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
+            checkFlexibleContext (ExtAST.TypeApplication left right)
+               | any isConstructor left = foldMap checkFlexibleContextHead right
+               | otherwise = foldMap checkFlexibleContext left
+            checkFlexibleContext _ = mempty
+            isConstructor ExtAST.ConstructorType{} = True
+            isConstructor _ = False
+
 instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.QualifiedName l), Eq s, IsString s) =>
          Accounting l pos s
@@ -248,9 +268,12 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
          `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
       case t
-      of ExtAST.SimpleTypeLHS op _ | any (Textual.any isSymbol . lexemeText) lexemes
-            -> Map.singleton Extensions.TypeOperators [(start, end)]
-         _ -> mempty
+      of ExtAST.SimpleTypeLHS op vars
+            -> (if any (Textual.any isSymbol . lexemeText) lexemes
+                then Map.singleton Extensions.TypeOperators [(start, end)]
+                else mempty)
+               <> foldMap (checkKindedTypevar (start, end)) vars
+         ExtAST.SimpleTypeLHSApplication _ var -> checkKindedTypevar (start, end) var
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
@@ -283,11 +306,18 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
-         ExtAST.ForallType{} -> Map.singleton Extensions.ExplicitForAll [(start, end)]
-         ExtAST.ForallKind{} -> Map.singleton Extensions.ExplicitForAll [(start, end)]
+         ExtAST.ForallType vars _ ->
+            Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
+         ExtAST.ForallKind vars _ ->
+            Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
+         ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
          ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
                                                         (Extensions.PolyKinds, [(start, end)])]
          _ -> mempty
+
+checkKindedTypevar :: (pos, pos) -> ExtAST.TypeVarBinding λ l d s -> Map Extension [(pos, pos)]
+checkKindedTypevar span ExtAST.ExplicitlyKindedTypeVariable{} = Map.singleton Extensions.KindSignatures [span]
+checkKindedTypevar _ ExtAST.ImplicitlyKindedTypeVariable{} = mempty
 
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
