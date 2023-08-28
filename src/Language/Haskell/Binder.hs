@@ -165,6 +165,7 @@ instance Transformation (BindingVerifier l f) where
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
+          Abstract.Pattern l ~ ExtAST.Pattern l, Abstract.FieldPattern l ~ ExtAST.FieldPattern l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Foldable f) =>
          Di.Attribution
@@ -194,9 +195,10 @@ instance {-# OVERLAPS #-}
                         Just (ValueBinding RecordFieldAndValue)
                      constructorOrField (TypeAndValueBinding _ v) = constructorOrField (ValueBinding v)
                      constructorOrField _ = Nothing
-            export (AST.EquationDeclaration lhs _ _)
-               | [name] <- foldMap getOperatorName (getCompose lhs mempty)
-               = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
+            export (AST.EquationDeclaration lhs _ _) =
+              UnionWith
+              $ Map.fromList
+              $ ((,) `flip` ValueBinding DefinedValue) <$> foldMap getBindingNames (getCompose lhs mempty)
             export (AST.DataDeclaration _context lhs _kind _constructors _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
@@ -218,10 +220,31 @@ instance {-# OVERLAPS #-}
             export (AST.KindSignature name _context _type)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding UnknownType)
             export _ = mempty
-            getOperatorName (AST.InfixLHS _ name _) = [name]
-            getOperatorName (AST.PrefixLHS lhs _) = foldMap getOperatorName (getCompose lhs mempty)
-            getOperatorName (AST.VariableLHS name) = [name]
-            getOperatorName _ = []
+            getBindingNames (AST.InfixLHS _ name _) = [name]
+            getBindingNames (AST.PrefixLHS lhs _) = foldMap getBindingNames (getCompose lhs mempty)
+            getBindingNames (AST.VariableLHS name) = [name]
+            getBindingNames (AST.PatternLHS p) = foldMap getPatternVariables (getCompose p mempty)
+            getPatternVariables (ExtAST.AsPattern name p) = name : foldMap getPatternVariables (getCompose p mempty)
+            getPatternVariables (ExtAST.ConstructorPattern _ _ args) =
+               foldMap (foldMap getPatternVariables . flip getCompose mempty) args
+            getPatternVariables (ExtAST.InfixPattern left _ right) =
+               foldMap getPatternVariables (getCompose left mempty)
+               <> foldMap getPatternVariables (getCompose right mempty)
+            getPatternVariables (ExtAST.IrrefutablePattern p) = foldMap getPatternVariables (getCompose p mempty)
+            getPatternVariables (ExtAST.ListPattern items) =
+               foldMap (foldMap getPatternVariables . flip getCompose mempty) items
+            getPatternVariables ExtAST.LiteralPattern{} = []
+            getPatternVariables (ExtAST.RecordPattern _ fields) =
+               foldMap (foldMap getFieldPatternVariables . flip getCompose mempty) fields
+            getPatternVariables (ExtAST.WildcardRecordPattern _ _ fields) =
+               foldMap (foldMap getFieldPatternVariables . flip getCompose mempty) fields
+            getPatternVariables (ExtAST.BangPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
+            getPatternVariables (ExtAST.TuplePattern items) =
+               foldMap (foldMap getPatternVariables . flip getCompose mempty) items
+            getPatternVariables (ExtAST.VariablePattern name) = [name]
+            getPatternVariables ExtAST.WildcardPattern = []
+            getFieldPatternVariables (ExtAST.FieldPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
+            getFieldPatternVariables ExtAST.PunnedFieldPattern{} = []
             getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
             getTypeName (ExtAST.SimpleTypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
             bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
