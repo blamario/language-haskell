@@ -132,7 +132,6 @@ extensionMixins =
      (Set.fromList [MultiWayIf],                     [(8, multiWayIfMixin)]),
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
-     (Set.fromList [TypeVariableConstraints],        [(8, typeVariableConstraintsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
      (Set.fromList [EqualityConstraints],            [(8, equalityConstraintsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
@@ -270,7 +269,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
      constraintClass =
         Abstract.constructorType
            <$> wrap (Abstract.constructorReference
-                     <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)),
+                     <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report))
+        <|> nonTerminal optionallyKindedAndParenthesizedTypeVar,
      classConstraintHead = Abstract.typeVariable <$> typeVar,
      keywordForall = keyword "forall",
      kindSignature = empty,
@@ -778,16 +778,6 @@ multiParameterConstraintsMixin self super = super{
       <|> Abstract.classInstanceLHSApplication
              <$> wrap (self & flexibleInstanceDesignator)
              <*> wrap (self & report & aType)}
-
-typeVariableConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-typeVariableConstraintsMixin self super = super{
-   report= (report super){
-      declarationLevel= (super & report & declarationLevel){
-         classConstraint = (super & report & declarationLevel & classConstraint)
-            <|> Abstract.typeConstraint
-                <$> wrap (Abstract.typeApplication
-                          <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-                          <*> wrap (self & report & aType))}}}
 
 multiParameterConstraintsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsTypeOperatorsMixin self super = super{

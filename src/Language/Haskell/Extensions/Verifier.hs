@@ -183,7 +183,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
             checkFlexibleContext (ExtAST.TypeApplication left right)
                | any isConstructor left = foldMap checkFlexibleContextHead right
-               | otherwise = foldMap checkFlexibleContext left
+               | otherwise = Map.singleton Extensions.TypeVariableConstraints [(start, end)]
+                             <> foldMap checkFlexibleContext left
             checkFlexibleContext _ = mempty
             isConstructor ExtAST.ConstructorType{} = True
             isConstructor _ = False
