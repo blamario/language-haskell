@@ -970,10 +970,8 @@ oneExtendedLine indent _input node =
          allIndented (WhiteSpace ws : Token _ tok : rest)
             | Textual.all isLineChar ws = allIndented rest
             | tokenIndent < indent = False
-            | tokenIndent == indent && tok `Set.notMember` reservedWords
-              && all (`notElem` terminators) (characterPrefix tok) = False
+            | tokenIndent == indent && tok `notElem` terminators = False
             where tokenIndent = currentColumn (Factorial.dropWhile (const True) ws)
          allIndented (_ : rest) = allIndented rest
          allIndented [] = True
-         terminators :: [Char]
-         terminators = ",;)]}"
+         terminators = [",", ";", ")", "]", "}", "else", "in", "of", "then"]
