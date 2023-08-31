@@ -38,6 +38,7 @@ data Extension = AllowAmbiguousTypes
                | Cpp
                | DataKinds
                | DatatypeContexts
+               | DeepSubsumption
                | DefaultSignatures
                | DeriveAnyClass
                | DeriveDataTypeable
@@ -277,6 +278,7 @@ byName = Map.fromList [
   ("Cpp", Cpp),
   ("DataKinds", DataKinds),
   ("DatatypeContexts", DatatypeContexts),
+  ("DeepSubsumption", DeepSubsumption),
   ("DefaultSignatures", DefaultSignatures),
   ("DeriveAnyClass", DeriveAnyClass),
   ("DeriveDataTypeable", DeriveDataTypeable),
