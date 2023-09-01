@@ -219,10 +219,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Context,
    translateDeeply t (AST.ClassConstraint className ty) =
       AST.ClassConstraint className (translateFully t ty)
    translateDeeply t (AST.Constraints constraints) = AST.Constraints (translateFully t <$> constraints)
-   translateDeeply t (AST.InfixConstraint left op right) =
-      AST.InfixConstraint (translateFully t left) op (translateFully t right)
-   translateDeeply t (AST.TypeEqualityConstraint left right) =
-      AST.TypeEqualityConstraint (translateFully t left) (translateFully t right)
    translateDeeply t (AST.TypeConstraint ty) = AST.TypeConstraint (translateFully t ty)
    translateDeeply _ AST.NoContext = AST.NoContext
 
@@ -386,6 +382,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.ForallKind vars body) = AST.ForallKind (translateDeeply t <$> vars) (translateFully t body)
    translateDeeply t (AST.ConstrainedType context body) =
       AST.ConstrainedType (translateFully t context) (translateFully t body)
+   translateDeeply t (AST.TypeEquality left right) = AST.TypeEquality (translateFully t left) (translateFully t right)
    translateDeeply t (AST.KindedType body kind) = AST.KindedType (translateFully t body) (translateFully t kind)
    translateDeeply _ AST.TypeWildcard = AST.TypeWildcard
    translateDeeply t (AST.TypeKind body) = AST.TypeKind (translateFully t body)
@@ -409,7 +406,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.TupleKind items) = AST.TupleKind (translateFully t <$> items)
    translateDeeply t (AST.ListKind item) = AST.ListKind (translateFully t item)
    translateDeeply t (AST.TypeRepresentationKind rep) = AST.TypeRepresentationKind (translateFully t rep)
-   translateDeeply t (AST.ConstraintType context) = AST.ConstraintType (translateFully t context)
    translateDeeply t (AST.VisibleKindApplication ty kind) =
       AST.VisibleKindApplication (translateFully t ty) (translateFully t kind)
    translateDeeply t (AST.VisibleKindKindApplication left right) =

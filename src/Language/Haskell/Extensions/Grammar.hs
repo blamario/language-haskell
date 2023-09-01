@@ -742,11 +742,10 @@ typeOperatorsMixin self super =
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
-   cType = (super & cType) <|> Abstract.constraintType <$> wrap equalityConstraint,
-   cTypeWithWildcards = (super & cTypeWithWildcards) <|> Abstract.constraintType <$> wrap equalityConstraint}
-   where equalityConstraint =
-            Abstract.typeEqualityConstraint <$> wrap (self & report & bType)
-            <* delimiter "~" <*> wrap ((self & report & bType))
+   cType = (super & cType) <|> equalityConstraintType,
+   cTypeWithWildcards = (super & cTypeWithWildcards) <|> equalityConstraintType}
+   where equalityConstraintType =
+            Abstract.typeEquality <$> wrap (self & report & bType) <* delimiter "~" <*> wrap ((self & report & bType))
 
 multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{

@@ -129,6 +129,7 @@ instance Abstract.ExtendedHaskell Language where
    typeKind = TypeKind
    typeWildcard = TypeWildcard
    groundType = GroundTypeKind
+   typeEquality = TypeEquality
 
    kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
    kindedNewtypeDeclaration context lhs = NewtypeDeclaration context lhs . Just
@@ -169,13 +170,10 @@ instance Abstract.ExtendedHaskell Language where
    kindApplication = KindApplication
    infixKindApplication = InfixKindApplication
    groundTypeKind = GroundTypeKind
-   typeEqualityConstraint = TypeEqualityConstraint
    typeConstraint = TypeConstraint
    tupleKind = TupleKind
    listKind = ListKind
    typeRepresentationKind = TypeRepresentationKind
-   constraintType = ConstraintType
-   infixConstraint = InfixConstraint
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -471,8 +469,6 @@ data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind
 data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
-   | InfixConstraint (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | TypeEqualityConstraint (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | TypeConstraint (s (Abstract.Type l l d d))
    | NoContext
 
@@ -507,10 +503,10 @@ data Type λ l d s =
    | PromotedCharLiteral Char
    | PromotedStringLiteral Text
    | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | TypeEquality (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
    | ListKind (s (Abstract.Kind l l d d))
    | TypeRepresentationKind (s (Abstract.Type l l d d))
-   | ConstraintType (s (Abstract.Context l l d d))
    | VisibleKindApplication (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | VisibleKindKindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
 

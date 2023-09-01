@@ -411,10 +411,6 @@ strategyTemplate (Via () ty) = ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate $ extract t)]
-contextTemplate (InfixConstraint left op right) =
-   [InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)]
-contextTemplate (TypeEqualityConstraint t1 t2) =
-   [EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)]
 contextTemplate (TypeConstraint t) = case extract t of
    ConstructorType c | UnitConstructor <- extract c -> []
    TupleType ts -> wrappedTypeTemplate <$> toList ts
@@ -424,9 +420,7 @@ contextTemplate NoContext = []
 
 freeContextVars :: TemplateWrapper f => ExtAST.Context Language Language f f -> [TH.Name]
 freeContextVars (ClassConstraint _cls t) = freeTypeVars (extract t)
-freeContextVars (InfixConstraint left op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
-freeContextVars (TypeEqualityConstraint left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
 freeContextVars NoContext = []
 
@@ -578,6 +572,7 @@ typeTemplate (ForallKind vars body) =
          bindingVars = bindingVarName <$> vars
 typeTemplate (ConstrainedType context body) =
    ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
+typeTemplate (TypeEquality t1 t2) = EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)
 typeTemplate (VisibleDependentType vars body) =
    ForallVisT (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars))
               (typeTemplate type')
@@ -604,9 +599,6 @@ typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (TypeRepresentationKind t) = AppT (ConT ''TYPE) (typeTemplate $ extract t)
 typeTemplate (PromotedInfixTypeApplication left op right) =
    PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
-typeTemplate (ConstraintType c) = case contextTemplate (extract c) of
-   [c1] -> c1
-   cs -> foldl' AppT (TupleT $! length cs) cs
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
@@ -640,6 +632,7 @@ freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName <$> vars)
 freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
+freeTypeVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
 freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
@@ -648,7 +641,6 @@ freeTypeVars (VisibleDependentType vars body) = nub (freeTypeVars (extract body)
 freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)
 freeTypeVars (TypeRepresentationKind t) = freeTypeVars (extract t)
-freeTypeVars (ConstraintType ctx) = freeContextVars (extract ctx)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t

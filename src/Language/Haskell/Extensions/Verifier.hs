@@ -175,8 +175,6 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
       of ExtAST.NoContext -> mempty
          ExtAST.Constraints{} -> mempty
          ExtAST.ClassConstraint className t -> Const (foldMap checkFlexibleContextHead t)
-         ExtAST.InfixConstraint{} -> Const (Map.singleton Extensions.TypeOperators [(start, end)])
-         ExtAST.TypeEqualityConstraint{} -> Const (Map.singleton Extensions.EqualityConstraints [(start, end)])
          ExtAST.TypeConstraint t -> Const (foldMap checkFlexibleContext t) <> Const (foldMap checkMPTC t)
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
@@ -315,6 +313,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
          ExtAST.ForallType vars _ ->
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
+         ExtAST.TypeEquality{} -> Map.singleton Extensions.EqualityConstraints [(start, end)]
          ExtAST.ForallKind vars _ ->
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
