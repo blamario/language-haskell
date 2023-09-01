@@ -108,7 +108,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    infixConstructorArgType :: p (Abstract.Type l l f f),
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
-   optionalContext, optionalTypeSignatureContext, context, constraint, classConstraint :: p (Abstract.Context l l f f),
+   optionalContext, optionalTypeSignatureContext, context, constraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
@@ -296,9 +296,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 
       optionalContext = context <* rightDoubleArrow <|> pure Abstract.noContext,
       context = constraint <|> Abstract.constraints <$> parens (wrap constraint `sepBy` comma),
-      constraint = classConstraint,
-      classConstraint = Abstract.classConstraint <$> qualifiedTypeClass
-                        <*> wrap (Abstract.typeVariable <$> typeVar <|> parens typeApplications),
+      constraint = Abstract.classConstraint <$> qualifiedTypeClass
+                   <*> wrap (Abstract.typeVariable <$> typeVar <|> parens typeApplications),
       typeApplications = Abstract.typeApplication <$> wrap (Abstract.typeVariable <$> typeVar <|> typeApplications)
                                                   <*> wrap aType,
       simpleType = Abstract.simpleTypeLHS <$> typeConstructor <*> many typeVar,

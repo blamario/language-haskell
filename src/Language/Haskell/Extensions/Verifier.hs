@@ -177,7 +177,7 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
          ExtAST.ClassConstraint className t -> Const (foldMap checkFlexibleContextHead t)
          ExtAST.InfixConstraint{} -> Const (Map.singleton Extensions.TypeOperators [(start, end)])
          ExtAST.TypeEqualityConstraint{} -> Const (Map.singleton Extensions.EqualityConstraints [(start, end)])
-         ExtAST.TypeConstraint t -> Const (foldMap checkFlexibleContext t)
+         ExtAST.TypeConstraint t -> Const (foldMap checkFlexibleContext t) <> Const (foldMap checkMPTC t)
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
@@ -186,6 +186,12 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
                | otherwise = Map.singleton Extensions.TypeVariableConstraints [(start, end)]
                              <> foldMap checkFlexibleContext left
             checkFlexibleContext _ = mempty
+            checkMPTC (ExtAST.TypeApplication left _) = foldMap checkMPTC1 left
+            checkMPTC c@ExtAST.InfixTypeApplication{} = checkMPTC1 c
+            checkMPTC _ = mempty
+            checkMPTC1 ExtAST.TypeApplication{} = Map.singleton Extensions.MultiParameterConstraints [(start, end)]
+            checkMPTC1 ExtAST.InfixTypeApplication{} = Map.singleton Extensions.MultiParameterConstraints [(start, end)]
+            checkMPTC1 _ = mempty
             isConstructor ExtAST.ConstructorType{} = True
             isConstructor _ = False
 

@@ -62,7 +62,6 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
-   constraintClass, classConstraintHead :: p (Abstract.Type l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
@@ -173,8 +172,6 @@ extensionMixins =
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
-     (Set.fromList [MultiParameterConstraints,
-                    TypeOperators],                  [(9, multiParameterConstraintsTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)]),
@@ -250,28 +247,15 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> Abstract.simpleTypeLHSApplication
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
-           classConstraint =
-              Abstract.typeConstraint
-              <$> wrap (Abstract.typeApplication
-                        <$> wrap (nonTerminal constraintClass)
-                        <*> wrap (nonTerminal classConstraintHead
-                                  <|> parens (nonTerminal (Report.typeApplications . declarationLevel . report)))),
-           typeApplications = Abstract.typeApplication
-                              <$> wrap (nonTerminal classConstraintHead
-                                        <|> nonTerminal (Report.typeApplications . declarationLevel . report))
-                              <*> wrap (nonTerminal (Report.aType . report)),
+           context = nonTerminal (Report.constraint . declarationLevel . report),
+           constraint = Abstract.typeConstraint <$> wrap (nonTerminal cTypeWithWildcards),
+           optionalTypeSignatureContext = pure Abstract.noContext,
            instanceTypeDesignator =
               nonTerminal (Report.generalTypeConstructor . report)
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
-     constraintClass =
-        Abstract.constructorType
-           <$> wrap (Abstract.constructorReference
-                     <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report))
-        <|> nonTerminal optionallyKindedAndParenthesizedTypeVar,
-     classConstraintHead = Abstract.typeVariable <$> typeVar,
      keywordForall = keyword "forall",
      kindSignature = empty,
      kindVar = nonTerminal (Report.typeVar . report),
@@ -286,7 +270,10 @@ reportGrammar g@ExtendedGrammar{report= r} =
      arrowType = nonTerminal cType
         <|> Abstract.functionType <$> wrap (nonTerminal cType)
                                   <* nonTerminal (Report.rightArrow . report)
-                                  <*> wrap (nonTerminal arrowType),
+                                  <*> wrap (nonTerminal arrowType)
+        <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
+                                     <* nonTerminal (Report.rightDoubleArrow . report)
+                                     <*> wrap (nonTerminal arrowType),
      cType = nonTerminal (Report.bType . report),
      typeWithWildcards =
         Abstract.kindedType <$> wrap (nonTerminal arrowTypeWithWildcards) <*> wrap (nonTerminal kindSignature)
@@ -294,6 +281,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
      arrowTypeWithWildcards =
         Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
                               <*> wrap (nonTerminal arrowTypeWithWildcards)
+        <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
+                                     <* nonTerminal (Report.rightDoubleArrow . report)
+                                     <*> wrap (nonTerminal arrowTypeWithWildcards)
         <|> nonTerminal cTypeWithWildcards,
      cTypeWithWildcards = nonTerminal bTypeWithWildcards,
      bTypeWithWildcards =
@@ -752,10 +742,8 @@ typeOperatorsMixin self super =
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
-   report= (report super){
-      declarationLevel= (super & report & declarationLevel){
-         constraint = (super & report & declarationLevel & constraint) <|> equalityConstraint}},
-   cType = (super & cType) <|> Abstract.constraintType <$> wrap equalityConstraint}
+   cType = (super & cType) <|> Abstract.constraintType <$> wrap equalityConstraint,
+   cTypeWithWildcards = (super & cTypeWithWildcards) <|> Abstract.constraintType <$> wrap equalityConstraint}
    where equalityConstraint =
             Abstract.typeEqualityConstraint <$> wrap (self & report & bType)
             <* delimiter "~" <*> wrap ((self & report & bType))
@@ -764,11 +752,6 @@ multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay
 multiParameterConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
-         constraint = (super & report & declarationLevel & constraint)
-            <|> Abstract.typeConstraint
-                   <$> (List.foldl' (rewrap2 Abstract.typeApplication)
-                           <$> wrap (self & constraintClass)
-                           <*> filter ((1 /=) . length) (many $ wrap $ classConstraintHead self)),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
             Abstract.classInstanceLHSApplication
                <$> wrap (self & report & declarationLevel & instanceDesignator)
@@ -778,16 +761,6 @@ multiParameterConstraintsMixin self super = super{
       <|> Abstract.classInstanceLHSApplication
              <$> wrap (self & flexibleInstanceDesignator)
              <*> wrap (self & report & aType)}
-
-multiParameterConstraintsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-multiParameterConstraintsTypeOperatorsMixin self super = super{
-   report= (report super){
-      declarationLevel= (super & report & declarationLevel){
-         constraint = (super & report & declarationLevel & constraint)
-            <|> Abstract.infixConstraint
-                <$> wrap ((self & report & bType))
-                <*> (self & report & qualifiedOperator)
-                <*> wrap ((self & report & bType))}}}
 
 gratuitouslyParenthesizedTypesMixin :: (Abstract.ExtendedHaskell l,
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -803,12 +776,6 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           <$> (self & report & declarationLevel & typeClass)
                           <*> ((:[]) <$> parens (typeVarBinder self)))
                 <*> (keyword "where" *> blockOf (self & report & declarationLevel & inClassDeclaration) <|> pure []),
-         constraint = (super & report & declarationLevel & constraint)
-            <|> parens (self & report & declarationLevel & constraint),
-         context = (self & report & declarationLevel & constraint)
-            <|> Abstract.constraints
-                <$> parens (filter ((1 /=) . length)
-                            $ wrap ((self & report & declarationLevel & constraint)) `sepBy` comma),
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
          typeVarApplications =
             (self & report & generalTypeConstructor)
@@ -822,7 +789,6 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
                               <|> parens (filter ((/= 1) . length)
                                           $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))}},
-   classConstraintHead = (super & classConstraintHead) <|> parens (self & classConstraintHead),
    gadtConstructors = (super & gadtConstructors)
       <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
                                     <* (self & report & doubleColon)
@@ -1344,10 +1310,6 @@ kindSignaturesMixin
                                 <*> some (comma *> wrap (optionallyKindedTypeVar self))},
          typeTerm = (super & report & typeTerm) <|>
             Abstract.kindedType <$> wrap (self & report & typeTerm) <*> wrap (kindSignature self)},
-      classConstraintHead = (super & classConstraintHead)
-         <|> parens (Abstract.kindedType
-                     <$> wrap (Abstract.typeVariable <$> optionallyParenthesizedTypeVar self)
-                     <*> wrap (kindSignature self)),
       instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
          <|> Abstract.kindedType
              <$> wrap (self & instanceTypeDesignatorInsideParens)
@@ -1407,19 +1369,11 @@ explicitForAllMixin
       arrowType = arrowType super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap (arrowType self)
-         <|> Abstract.constrainedType
-             <$> wrap context
-             <* (self & report & rightDoubleArrow)
              <*> wrap (arrowType self),
       arrowTypeWithWildcards = arrowTypeWithWildcards super
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap (arrowTypeWithWildcards self)
-         <|> Abstract.constrainedType
-             <$> wrap context
-             <* (self & report & rightDoubleArrow)
-             <*> wrap (arrowType self),
+             <*> wrap (arrowTypeWithWildcards self),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self
