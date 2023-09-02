@@ -3,6 +3,7 @@
 module Main where
 
 import Data.Monoid.Instances.Positioned (extract)
+import Data.Monoid.Instances.PrefixMemory (content)
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -56,7 +57,7 @@ assertCompiles predefinedModules preludeBindings src =
    case Haskell.parseModule extensions predefinedModules preludeBindings True src of
       Right [tree] -> pure ()
       Right trees -> assertFailure (show (length trees) ++ " ambiguous parses.")
-      Left err -> assertFailure (Text.unpack $ failureDescription src (extract <$> err) 4)
+      Left err -> assertFailure (Text.unpack $ failureDescription src (extract . content <$> err) 4)
 
 assertFails :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> Text -> Text -> Assertion
 assertFails predefinedModules preludeBindings ext noExt =

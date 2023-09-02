@@ -2,6 +2,7 @@ module Main where
 
 import Data.List (sort)
 import Data.Monoid.Instances.Positioned (extract)
+import Data.Monoid.Instances.PrefixMemory (content)
 import qualified Data.Map as Map
 import Data.Text (Text, pack, unpack)
 import Data.Text.IO (readFile)
@@ -59,4 +60,4 @@ prettyFile moduleBindings preludeBindings path src = do
    case Haskell.parseModule extensions moduleBindings preludeBindings False src of
       Right [tree] -> return (Reserializer.reserializeNested tree, pack $ Template.pprint tree)
       Right trees -> error (show (length trees) ++ " ambiguous parses.")
-      Left err -> error (unpack $ failureDescription src (extract <$> err) 4)
+      Left err -> error (unpack $ failureDescription src (extract . content <$> err) 4)

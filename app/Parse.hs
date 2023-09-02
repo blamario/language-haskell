@@ -3,7 +3,7 @@
 
 module Main where
 
-import Language.Haskell (Bound, Placed)
+import Language.Haskell (Bound, Input, Placed)
 import qualified Language.Haskell as Haskell
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST (Language)
@@ -28,6 +28,8 @@ import Control.Monad
 import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
+import Data.Monoid.Instances.PrefixMemory (content)
+import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -95,7 +97,7 @@ main' Opts{..} = do
    (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
    (predefinedModules :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
    let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-              a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+              a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
               e ~ Binder.WithEnvironment Language w,
               Abstract.QualifiedName l ~ AST.QualifiedName l,
               Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
@@ -105,33 +107,33 @@ main' Opts{..} = do
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
-              Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
+              Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
               FullyTranslatable
                  (ReformulationOf
                      'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
                  g,
-              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
-              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
+              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
               Deep.Functor
                  (Transformation.Mapped
                     ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                    (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
+                    (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
                  (g l l),
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-              Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
+              Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
               Deep.Foldable
                  (Transformation.Folded
                     ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                     (Reserializer.Serialization Int Text))
                  (g l l))
-          => (LinePositioned Text -> ParseResults (LinePositioned Text) [w (g l l w w)])
+          => (Input -> ParseResults Input [w (g l l w w)])
           -> String -> Text -> IO ()
-       go parser _filename contents = report contents (parser $ pure contents)
+       go parser _filename contents = report contents (parser $ fromText contents)
        report :: forall g l a e w.
                  (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-                  a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap (LinePositioned Text),
+                  a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
                   e ~ Binder.WithEnvironment Language w,
                   Abstract.QualifiedName l ~ AST.QualifiedName l,
                   Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
@@ -141,31 +143,31 @@ main' Opts{..} = do
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
-                  Full.Traversable (Reorganizer.Reorganization l (Down Int) (LinePositioned Text)) (g l l),
+                  Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
                          'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
                      g,
-                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Bound) (g l l),
-                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text))
+                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
+                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
                   Deep.Functor
                      (Transformation.Mapped
                         ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                        (Rank2.Map (Reserializer.Wrapped (Down Int) (LinePositioned Text)) Placed))
+                        (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
                      (g l l),
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-                  Deep.Foldable (Reserializer.Serialization (Down Int) (LinePositioned Text)) (g l l),
+                  Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
                   Deep.Foldable
                      (Transformation.Folded
                         ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                         (Reserializer.Serialization Int Text))
                      (g l l))
-              => Text -> ParseResults (LinePositioned Text) [w (g l l w w)] -> IO ()
+              => Text -> ParseResults Input [w (g l l w w)] -> IO ()
        report contents (Right [parsed]) = case optsOutput of
           Original -> case optsStage of
-             Parsed -> Text.putStr (extract $ Reserializer.reserialize parsed)
+             Parsed -> Text.putStr (extract $ content $ Reserializer.reserialize parsed)
              Bound -> Text.putStr $ Reserializer.reserializeNested $ Transformation.Mapped (Rank2.Map rewrap) Full.<$> bound
              Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
              Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
@@ -194,12 +196,12 @@ main' Opts{..} = do
                 resolved :: Bound (g l l Bound Bound)
                 resolved = Haskell.resolvePositions defaultExtensions predefinedModules preludeBindings contents parsed
                 bound = Binder.withBindings defaultExtensions predefinedModules preludeBindings parsed
-                rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
-                rewrap = Reserializer.mapWrapping (offset contents) extract
+                rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
+                rewrap = Reserializer.mapWrapping (offset contents) (extract . content)
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])
-       report contents (Left err) = Text.putStrLn (failureDescription contents (extract <$> err) 4)
+       report contents (Left err) = Text.putStrLn (failureDescription contents (extract . content <$> err) 4)
    case optsFile of
       Just file -> (if file == "-" then getContents else readFile file)
                    >>= go parseModule file

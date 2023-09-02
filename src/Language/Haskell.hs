@@ -4,7 +4,8 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions, Bound, Placed) where
+module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions,
+                         Input, Bound, Placed) where
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
@@ -29,6 +30,8 @@ import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid.Instances.Positioned (LinePositioned, extract)
+import Data.Monoid.Instances.PrefixMemory (Shadowed, content)
+import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.Text (Text)
@@ -50,23 +53,25 @@ type Placed = Reserializer.Wrapped Int Text
 -- | Every node in a parsed and resolved AST is wrapped with this functor
 type Bound = Binder.WithEnvironment AST.Language Placed
 
+type Input = Shadowed (LinePositioned Text)
+
 -- | Parse the given text of a single module.
 parseModule :: Map Extension Bool
             -> Binder.ModuleEnvironment AST.Language
             -> Binder.Environment AST.Language
             -> Bool
             -> Text
-            -> ParseResults (LinePositioned Text) [Bound (AST.Module AST.Language AST.Language Bound Bound)]
+            -> ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
 parseModule extensions modEnv env verify source =
    ((resolvePositions extensions modEnv env source <$>)
-    <$> Grammar.parseModule extensions (pure source :: LinePositioned Text))
+    <$> Grammar.parseModule extensions (fromText source :: Input))
    >>= (if verify then traverse (checkAllBound >=> checkRestrictions extensions) else pure)
 
 -- | Replace the stored positions in the entire tree with offsets from the start of the given source text
-resolvePositions :: (p ~ Grammar.NodeWrap (LinePositioned Text),
-                     q ~ Reserializer.Wrapped (Down Int) (LinePositioned Text), r ~ Bound,
+resolvePositions :: (p ~ Grammar.NodeWrap Input,
+                     q ~ Reserializer.Wrapped (Down Int) Input, r ~ Bound,
                      Full.Traversable (Di.Keep (Binder.Binder AST.Language p)) g,
-                     Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) (LinePositioned Text)) g,
+                     Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) g,
                      Deep.Functor
                         (Transformation.Mapped
                             ((,) (Di.Atts (Binder.Environment AST.Language) (Binder.LocalEnvironment AST.Language)))
@@ -83,11 +88,11 @@ resolvePositions extensions modEnv env src =
    . either (error . show) id . validationToEither
    . Full.traverse Reorganizer.Reorganization
    . Binder.withBindings extensions modEnv env
-   where rewrap :: forall a. Reserializer.Wrapped (Down Int) (LinePositioned Text) a -> Reserializer.Wrapped Int Text a
-         rewrap = Reserializer.mapWrapping (offset src) extract
+   where rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
+         rewrap = Reserializer.mapWrapping (offset src) (extract . content)
 
 checkAllBound :: Bound (AST.Module AST.Language AST.Language Bound Bound)
-              -> ParseResults (LinePositioned Text) (Bound (AST.Module AST.Language AST.Language Bound Bound))
+              -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))
 checkAllBound m = if unbounds == mempty then pure m
                   else Left mempty{errorAlternatives= [show unbounds]}
    where unbounds = Binder.unboundNames m
@@ -95,7 +100,7 @@ checkAllBound m = if unbounds == mempty then pure m
 -- | Check if the given module conforms to and depends on the given extensions.
 checkRestrictions :: Map Extension Bool
                   -> Bound (AST.Module AST.Language AST.Language Bound Bound)
-                  -> ParseResults (LinePositioned Text) (Bound (AST.Module AST.Language AST.Language Bound Bound))
+                  -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))
 checkRestrictions extensions m = case Verifier.verifyModule extensions m of
    [] -> pure m
    errors -> Left mempty{errorAlternatives= show <$> errors}

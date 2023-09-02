@@ -7,7 +7,6 @@
 -- * @TransformListComp@ is not supported by TemplateHaskell
 -- * @OverloadedRecordUpdate@ is not supported by TemplateHaskell
 -- * @Arrows@ is not supported by TemplateHaskell
--- * @LexicalNegation@ ignores the presence or absence of whitespace preceding the minus
 
 module Language.Haskell.Extensions.Grammar (extendedGrammar, parseModule, report, module Report) where
 
@@ -23,7 +22,9 @@ import Data.Ord (Down)
 import Data.Maybe (isJust, isNothing)
 import Data.Function.Memoize (memoize)
 import Data.Monoid (Endo(..))
+import Data.Monoid.Cancellative (RightReductive, isSuffixOf)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
+import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -58,6 +59,16 @@ import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..), 
 
 import Prelude hiding (exponent, filter)
 
+class TextualMonoid t => SpaceMonoid t where
+   precededByOpenSpace :: t -> Bool
+
+instance (Eq t, Factorial.StableFactorial t, RightReductive t, TextualMonoid t) => SpaceMonoid (Shadowed t) where
+   precededByOpenSpace t = Textual.any isOpenOrSpace (Factorial.primeSuffix $ prefix t) || "-}" `isSuffixOf` prefix t
+      where isOpenOrSpace c = Char.isSpace c || c `elem` ("([{,;" :: [Char])
+
+instance (Eq t, Factorial.StableFactorial t, OutlineMonoid t) => OutlineMonoid (Shadowed t) where
+   currentColumn = Report.currentColumn . content
+
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
@@ -88,12 +99,12 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
 
-type ExtensionOverlay l g t = (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
+type ExtensionOverlay l g t = (Abstract.Haskell l, LexicalParsing (Parser g t), Ord t, Show t, TextualMonoid t,
                                g ~ ExtendedGrammar l t (NodeWrap t)) => GrammarOverlay g (Parser g t)
 
 extensionMixins :: forall l g t. (Abstract.ExtendedHaskell l,
                                   LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                                  Ord t, Show t, OutlineMonoid t,
+                                  Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
                                   Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                                   g ~ ExtendedGrammar l t (NodeWrap t))
                 => Map (Set Extension) [(Int, GrammarOverlay g (Parser g t))]
@@ -201,7 +212,7 @@ languagePragmas = spaceChars
                         *> string "-}"
 
 parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                            Ord t, Show t, OutlineMonoid t,
+                            Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
             => Map Extension Bool -> t
             -> ParseResults t [NodeWrap t (Abstract.Module l l (NodeWrap t) (NodeWrap t))]
@@ -222,7 +233,7 @@ parseModule extensions source = case moduleExtensions of
 
 extendedGrammar :: forall l t.
                    (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
-                    Ord t, Show t, OutlineMonoid t,
+                    Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => Set Extension -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 extendedGrammar extensions = memoize extendWith mixinKeys
@@ -451,7 +462,8 @@ magicHashMixin self super =
                        <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
      & negationConstraintMixin prefixMinusFollow self
 
-recursiveDoMixin :: (Abstract.ExtendedWith 'RecursiveDo l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith 'RecursiveDo l,
+                     Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => ExtensionOverlay l g t
 recursiveDoMixin self super = super{
    report= (report super){
@@ -487,14 +499,14 @@ lambdaCaseMixin self super = super{
          <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
              <*> (self & report & alternatives)}}
 
-emptyCaseMixin :: (Abstract.ExtendedHaskell l,
+emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                    Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))
                => ExtensionOverlay l g t
 emptyCaseMixin self super = super{
    report= (report super){
       alternatives = blockOf (alternative $ report super)}}
 
-multiWayIfMixin :: (Abstract.ExtendedHaskell l,
+multiWayIfMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
                 => ExtensionOverlay l g t
 multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, rightArrow}} super = super{
@@ -614,10 +626,11 @@ blockArgumentsMixin self super = super{
       dExpression = (self & report & fExpression),
       bareExpression = (super & report & bareExpression) <|> (self & report & closedBlockExpresion)}}
 
-lexicalNegationMixin :: ExtensionOverlay l g t
+lexicalNegationMixin :: SpaceMonoid t => ExtensionOverlay l g t
 lexicalNegationMixin self super = super{
    report= (report super){
-      qualifiedVariableSymbol = notFollowedBy (string "-"
+      qualifiedVariableSymbol = notFollowedBy (filter precededByOpenSpace getInput
+                                               *> string "-"
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
                                 *> token (nameQualifier <*> (self & report & variableSymbol)),
       prefixNegation = empty,
@@ -626,7 +639,8 @@ lexicalNegationMixin self super = super{
          <|> parens (Abstract.rightSectionExpression
                      <$> (notFollowedBy prefixMinus *> (self & report & qualifiedOperator))
                      <*> (self & report & infixExpression))}}
-   where prefixMinus = void (string "-"
+   where prefixMinus = void (filter precededByOpenSpace getInput
+                             *> string "-"
                              <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
                              <* lift ([[Token Modifier "-"]], ()))
                        <?> "prefix -"
@@ -761,7 +775,7 @@ multiParameterConstraintsMixin self super = super{
              <$> wrap (self & flexibleInstanceDesignator)
              <*> wrap (self & report & aType)}
 
-gratuitouslyParenthesizedTypesMixin :: (Abstract.ExtendedHaskell l,
+gratuitouslyParenthesizedTypesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                                     => ExtensionOverlay l g t
@@ -859,7 +873,7 @@ flexibleInstancesMixin self super = super{
              declarationLevel= (super & report & declarationLevel){
                 instanceDesignator = flexibleInstanceDesignator self}}}
 
-typeFamiliesMixin :: forall l g t. (Abstract.ExtendedHaskell l,
+typeFamiliesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                   => ExtensionOverlay l g t
@@ -963,7 +977,7 @@ typeFamiliesMixin self@ExtendedGrammar
            <* delimiter "="
            <*> wrap (self & report & typeTerm)}
 
-typeFamilyDependenciesMixin :: (Abstract.ExtendedHaskell l,
+typeFamilyDependenciesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                             => ExtensionOverlay l g t
@@ -1268,7 +1282,7 @@ standaloneKindSignaturesMixin self super = super{
                   <*> wrap (self & report & declarationLevel & optionalContext)
                   <*> wrap (kind self)}}}
 
-kindSignaturesMixin :: (Abstract.ExtendedHaskell l,
+kindSignaturesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => ExtensionOverlay l g t
 kindSignaturesMixin
@@ -1343,7 +1357,7 @@ existentialQuantificationMixin self super = super{
                 <* (self & report & rightDoubleArrow)
                 <*> wrap (super & report & declarationLevel & declaredConstructor)}}}
 
-explicitForAllMixin :: (Abstract.ExtendedHaskell l,
+explicitForAllMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => ExtensionOverlay l g t
 explicitForAllMixin
@@ -1380,7 +1394,7 @@ explicitForAllMixin
              <*> wrap (kind self),
       kindVar = notFollowedBy (keywordForall self) *> kindVar super}
 
-gadtSyntaxMixin :: (Abstract.ExtendedHaskell l,
+gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                 => ExtensionOverlay l g t
 gadtSyntaxMixin
@@ -1461,14 +1475,18 @@ overloadedRecordDotMixin self super =
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
 
-bangPatternsMixin :: Abstract.ExtendedWith 'BangPatterns l => ExtensionOverlay l g t
+bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith 'BangPatterns l) => ExtensionOverlay l g t
 bangPatternsMixin self super =
    super{
       report = (report super){
          aPattern = (super & report & aPattern)
             <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap (self & report & aPattern),
       variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
-   where bang = string "!" <* notSatisfyChar Char.isSpace <* lift ([[Token Delimiter "!"]], ())
+   where bang = filter precededByOpenSpace getInput
+                *> string "!"
+                <* notSatisfyChar Char.isSpace
+                <* notFollowedBy Report.comment
+                <* lift ([[Token Delimiter "!"]], ())
 
 standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{
@@ -1558,7 +1576,7 @@ standaloneDerivingViaMixin self@ExtendedGrammar{
    where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
                        <*> wrap (self & report & typeTerm)
 
-mptcsMixin :: forall l g t. (Abstract.ExtendedHaskell l,
+mptcsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
                              Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
            => ExtensionOverlay l g t
 mptcsMixin
@@ -1584,7 +1602,7 @@ mptcsMixin
                 <*> typeVarBinder
          <|> Abstract.simpleTypeLHSApplication <$> wrap (classLHS self) <*> typeVarBinder}
 
-functionalDependenciesMixin :: forall l g t. (Abstract.ExtendedWith 'FunctionalDependencies l,
+functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'FunctionalDependencies l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => ExtensionOverlay l g t
 functionalDependenciesMixin
@@ -1655,7 +1673,8 @@ negationConstraintMixin prefixMinusFollow
    where negationGuard = notFollowedBy (string "-" *> prefixMinusFollow)
 
 nondecreasingIndentationMixin :: (Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
+                                  OutlineMonoid t)
                               => ExtensionOverlay l g t
 nondecreasingIndentationMixin self super =
    super{
