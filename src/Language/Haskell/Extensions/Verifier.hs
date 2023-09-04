@@ -317,6 +317,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.ForallKind vars _ ->
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
+         ExtAST.TypeWildcard{} -> Map.singleton Extensions.PartialTypeSignatures [(start, end)]
          ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
                                                         (Extensions.PolyKinds, [(start, end)])]
          _ -> mempty

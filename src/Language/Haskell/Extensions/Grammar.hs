@@ -74,11 +74,8 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
-   kindWithWildCards, bKindWithWildcards, aKindWithWildcards :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
    cType, arrowType :: p (Abstract.Type l l f f),
-   typeWithWildcards, arrowTypeWithWildcards :: p (Abstract.Type l l f f),
-   cTypeWithWildcards, bTypeWithWildcards, aTypeWithWildcards :: p (Abstract.Type l l f f),
    promotedLiteral :: p (Abstract.Type l l f f),
    instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
@@ -259,12 +256,13 @@ reportGrammar g@ExtendedGrammar{report= r} =
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
            context = nonTerminal (Report.constraint . declarationLevel . report),
-           constraint = Abstract.typeConstraint <$> wrap (nonTerminal cTypeWithWildcards),
+           constraint = Abstract.typeConstraint <$> wrap (nonTerminal cType),
            optionalTypeSignatureContext = pure Abstract.noContext,
            instanceTypeDesignator =
               nonTerminal (Report.generalTypeConstructor . report)
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
+        aType = Report.aType r' <|> Abstract.typeWildcard <$ keyword "_",
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
      keywordForall = keyword "forall",
@@ -273,9 +271,6 @@ reportGrammar g@ExtendedGrammar{report= r} =
      kind = empty,
      bKind = empty,
      aKind = empty,
-     kindWithWildCards = empty,
-     bKindWithWildcards = empty,
-     aKindWithWildcards = empty,
      groundTypeKind = empty,
      derivingStrategy = empty,
      arrowType = nonTerminal cType
@@ -286,29 +281,6 @@ reportGrammar g@ExtendedGrammar{report= r} =
                                      <* nonTerminal (Report.rightDoubleArrow . report)
                                      <*> wrap (nonTerminal arrowType),
      cType = nonTerminal (Report.bType . report),
-     typeWithWildcards =
-        Abstract.kindedType <$> wrap (nonTerminal arrowTypeWithWildcards) <*> wrap (nonTerminal kindSignature)
-        <|> nonTerminal arrowTypeWithWildcards,
-     arrowTypeWithWildcards =
-        Abstract.functionType <$> wrap (nonTerminal cTypeWithWildcards) <* rightArrow
-                              <*> wrap (nonTerminal arrowTypeWithWildcards)
-        <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
-                                     <* nonTerminal (Report.rightDoubleArrow . report)
-                                     <*> wrap (nonTerminal arrowTypeWithWildcards)
-        <|> nonTerminal cTypeWithWildcards,
-     cTypeWithWildcards = nonTerminal bTypeWithWildcards,
-     bTypeWithWildcards =
-        Abstract.typeApplication <$> wrap (nonTerminal bTypeWithWildcards) <*> wrap (nonTerminal aTypeWithWildcards)
-        <|> nonTerminal aTypeWithWildcards,
-     aTypeWithWildcards =
-        nonTerminal (Report.generalTypeConstructor . report)
-        <|> Abstract.typeVariable <$> nonTerminal (Report.typeVar . report)
-        <|> Abstract.typeWildcard <$ keyword "_"
-        <|> Abstract.tupleType
-            <$> parens ((:|) <$> wrap (nonTerminal typeWithWildcards)
-                             <*> some (comma *> wrap (nonTerminal typeWithWildcards)))
-        <|> Abstract.listType <$> brackets (wrap $ nonTerminal typeWithWildcards)
-        <|> parens (nonTerminal typeWithWildcards),
      promotedLiteral =
         Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
@@ -325,7 +297,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         nonTerminal familyInstanceDesignatorBase
         <|> Abstract.classInstanceLHSApplication
             <$> wrap (nonTerminal familyInstanceDesignatorApplications)
-            <*> wrap (nonTerminal aTypeWithWildcards),
+            <*> wrap (nonTerminal (Report.aType . report)),
      familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
      flexibleInstanceDesignator =
         Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap (nonTerminal $ Report.aType . report)
@@ -736,11 +708,6 @@ typeOperatorsMixin self super =
                   <$> wrap (self & cType)
                   <*> (self & report & qualifiedOperator)
                   <*> wrap (self & report & bType),
-        cTypeWithWildcards = cTypeWithWildcards super
-           <|> Abstract.infixTypeApplication
-                  <$> wrap (bTypeWithWildcards self)
-                  <*> (self & report & qualifiedOperator)
-                  <*> wrap (cTypeWithWildcards self),
         instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
            <|> Abstract.infixTypeApplication
                <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
@@ -748,18 +715,17 @@ typeOperatorsMixin self super =
                <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
         familyInstanceDesignator = familyInstanceDesignator super
            <|> Abstract.infixTypeClassInstanceLHS
-                  <$> wrap (bTypeWithWildcards super)
+                  <$> wrap (super & report & bType)
                   <*> (self & report & qualifiedOperator)
-                  <*> wrap (cTypeWithWildcards super)}
+                  <*> wrap (cType super)}
    where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
          anyQualifiedSymbol = (self & report & qualifiedConstructorSymbol) <|> (self & report & qualifiedVariableSymbol)
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
-   cType = (super & cType) <|> equalityConstraintType,
-   cTypeWithWildcards = (super & cTypeWithWildcards) <|> equalityConstraintType}
+   cType = (super & cType) <|> equalityConstraintType}
    where equalityConstraintType =
-            Abstract.typeEquality <$> wrap (self & report & bType) <* delimiter "~" <*> wrap ((self & report & bType))
+            Abstract.typeEquality <$> wrap (self & cType) <* delimiter "~" <*> wrap ((self & report & bType))
 
 multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
@@ -1027,15 +993,6 @@ dataKindsMixin self super = super{
       declarationLevel= (super & report & declarationLevel){
          instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
             <|> promotedLiteral self}},
-   aTypeWithWildcards = aTypeWithWildcards super
-      <|> promotedLiteral self
-      <|> Abstract.promotedTupleType <$ terminator "'"
-          <*> parens ((:|) <$> wrap (typeWithWildcards self)
-                           <*> some (comma *> wrap (typeWithWildcards self)))
-      <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (typeWithWildcards self) `sepBy1` comma)
-      <|> Abstract.promotedListType
-          <$> brackets ((:) <$> wrap (typeWithWildcards self) <* comma
-                            <*> wrap (typeWithWildcards self) `sepBy1` comma),
    bKind = bKind super
      <|> Abstract.typeRepresentationKind
          <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
@@ -1051,31 +1008,25 @@ dataKindsTypeOperatorsMixin self super = super{
       <|> Abstract.promotedInfixTypeApplication
           <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
           <* terminator "'"
-          <*> (super & report & qualifiedOperator)
+          <*> (self & report & qualifiedOperator)
           <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
    bKind = bKind super
            <|> Abstract.infixKindApplication
            <$> wrap (bKind self)
-           <*> (super & report & qualifiedOperator)
+           <*> (self & report & qualifiedOperator)
            <*> wrap (aKind self),
    cType = (super & cType)
       <|> Abstract.promotedInfixTypeApplication
-          <$> wrap (self & cType)
+          <$> wrap (cType self)
           <* terminator "'"
-          <*> (super & report & qualifiedOperator)
-             <*> wrap (self & report & bType),
-   cTypeWithWildcards = cTypeWithWildcards super
-      <|> Abstract.infixTypeApplication
-          <$> wrap (bTypeWithWildcards self)
-          <* terminator "'"
-          <*> (super & report & qualifiedOperator)
-          <*> wrap (cTypeWithWildcards self),
+          <*> (self & report & qualifiedOperator)
+          <*> wrap (self & report & bType),
    familyInstanceDesignator = familyInstanceDesignator super
       <|> Abstract.infixTypeClassInstanceLHS
-          <$> wrap (bTypeWithWildcards super)
+          <$> wrap (self & report & bType)
           <* terminator "'"
-          <*> (super & report & qualifiedOperator)
-          <*> wrap (cTypeWithWildcards super)}
+          <*> (self & report & qualifiedOperator)
+          <*> wrap (cType self)}
 
 polyKindsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 polyKindsMixin self super = super{
@@ -1083,27 +1034,17 @@ polyKindsMixin self super = super{
       aType = (super & report & aType)
           <|> Abstract.groundType <$ groundTypeKind self
       },
-   aTypeWithWildcards = aTypeWithWildcards super
-       <|> Abstract.groundType <$ groundTypeKind self,
    kind = Abstract.typeKind <$> wrap (self & report & typeTerm),
-   kindWithWildCards = Abstract.typeKind <$> wrap (self & typeWithWildcards),
-   aKind = Abstract.typeKind <$> wrap (self & report & aType),
-   aKindWithWildcards = Abstract.typeKind <$> wrap (self & aTypeWithWildcards)}
+   aKind = Abstract.typeKind <$> wrap (self & report & aType)}
 
 visibleDependentKindQualificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 visibleDependentKindQualificationMixin self super = super{
    arrowType = arrowType super
-     <|> Abstract.visibleDependentType
-         <$ keywordForall self
-         <*> many (typeVarBinder self)
-         <* (self & report & rightArrow)
-         <*> wrap (arrowType self),
-   arrowTypeWithWildcards = arrowTypeWithWildcards super
-     <|> Abstract.visibleDependentType
-         <$ keywordForall self
-         <*> many (typeVarBinder self)
-         <* (self & report & rightArrow)
-         <*> wrap (arrowTypeWithWildcards self)}
+      <|> Abstract.visibleDependentType
+          <$ keywordForall self
+          <*> many (typeVarBinder self)
+          <* (self & report & rightArrow)
+          <*> wrap (arrowType self)}
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self super = super{
@@ -1115,20 +1056,7 @@ kindSignaturesBaseMixin self super = super{
    aKind = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
            <|> Abstract.groundTypeKind <$ groundTypeKind self
            <|> Abstract.kindVariable <$> kindVar self
-           <|> parens (kind self),
-   kindWithWildCards =
-      Abstract.functionKind
-               <$> wrap (bKindWithWildcards self)
-               <* (self & report & rightArrow)
-               <*> wrap (kindWithWildCards self)
-      <|> bKindWithWildcards self,
-   bKindWithWildcards =
-      Abstract.kindApplication <$> wrap (bKindWithWildcards self) <*> wrap (aKindWithWildcards self)
-      <|> aKindWithWildcards self,
-   aKindWithWildcards = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
-      <|> Abstract.groundTypeKind <$ groundTypeKind self
-      <|> Abstract.kindVariable <$> kindVar self
-      <|> parens (kindWithWildCards self)}
+           <|> parens (kind self)}
 
 starIsTypeMixin :: ExtensionOverlay l g t
 starIsTypeMixin self super = super{
@@ -1161,45 +1089,35 @@ typeApplicationsMixin self super = super{
          <|> Abstract.visibleKindApplication
              <$> filter whiteSpaceTrailing (wrap $ self & report & bType)
              <* delimiter "@"
-             <*> wrap (aKindWithWildcards self),
+             <*> wrap (self & aKind),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
              <$> filter whiteSpaceTrailing (self & report & aExpression)
              <* delimiter "@"
-             <*> wrap (aTypeWithWildcards self),
+             <*> wrap (self & report & aType),
       lPattern = (super & report & lPattern)
          <|> Abstract.constructorPatternWithTypeApplications
              <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
-             <*> some (delimiter "@" *> wrap (aTypeWithWildcards self))
+             <*> some (delimiter "@" *> wrap (self & report & aType))
              <*> many (wrap $ self & report & aPattern)
       },
    return_type = (super & return_type)
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
           <* delimiter "@"
-          <*> wrap (aKindWithWildcards self),
-   bTypeWithWildcards = (super & bTypeWithWildcards)
-      <|> Abstract.visibleKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & bTypeWithWildcards)
-          <* delimiter "@"
-          <*> wrap (aKindWithWildcards self),
+          <*> wrap (self & aKind),
    bKind = (super & bKind)
       <|> Abstract.visibleKindKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & bKind)
           <* delimiter "@"
-          <*> wrap (aKindWithWildcards self),
-   bKindWithWildcards = (super & bKindWithWildcards)
-      <|> Abstract.visibleKindKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & bKindWithWildcards)
-          <* delimiter "@"
-          <*> wrap (aKindWithWildcards self),
+          <*> wrap (self & aKind),
    typeVarBinder = typeVarBinder super
       <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
    familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
           <* delimiter "@"
-          <*> wrap (self & aKindWithWildcards)
+          <*> wrap (self & aKind)
    }
 
 linearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
@@ -1383,10 +1301,6 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap (arrowType self),
-      arrowTypeWithWildcards = arrowTypeWithWildcards super
-         <|> Abstract.forallType <$ keywordForall self
-             <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap (arrowTypeWithWildcards self),
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
       kind = kind super
          <|> Abstract.forallKind <$ keywordForall self
