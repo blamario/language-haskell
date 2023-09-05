@@ -132,6 +132,7 @@ data Extension = AllowAmbiguousTypes
                | Safe
                | SafeImports
                | ScopedTypeVariables
+               | SpaceSensitiveOperators
                | StandaloneDeriving
                | StandaloneKindSignatures
                | StarIsType
@@ -184,8 +185,8 @@ allExtensions = Set.fromList [minBound .. maxBound]
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   ForeignFunctionInterface, IdentifierSyntax, MultiParameterConstraints, PatternGuards,
-                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, TraditionalRecordSyntax,
-                                  TypeVariableConstraints]
+                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, SpaceSensitiveOperators,
+                                  TraditionalRecordSyntax, TypeVariableConstraints]
 
 languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]
@@ -376,6 +377,7 @@ byName = Map.fromList [
   ("RoleAnnotations", RoleAnnotations),
   ("Safe", Safe),
   ("ScopedTypeVariables", ScopedTypeVariables),
+  ("SpaceSensitiveOperators", SpaceSensitiveOperators),
   ("StandaloneDeriving", StandaloneDeriving),
   ("StandaloneKindSignatures", StandaloneKindSignatures),
   ("StarIsType", StarIsType),

@@ -22,7 +22,7 @@ import Data.Ord (Down)
 import Data.Maybe (isJust, isNothing)
 import Data.Function.Memoize (memoize)
 import Data.Monoid (Endo(..))
-import Data.Monoid.Cancellative (RightReductive, isSuffixOf)
+import Data.Monoid.Cancellative (RightReductive, isPrefixOf, isSuffixOf)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
 import Data.Monoid.Textual (TextualMonoid, toString)
@@ -65,6 +65,11 @@ class TextualMonoid t => SpaceMonoid t where
 instance (Eq t, Factorial.StableFactorial t, RightReductive t, TextualMonoid t) => SpaceMonoid (Shadowed t) where
    precededByOpenSpace t = Textual.any isOpenOrSpace (Factorial.primeSuffix $ prefix t) || "-}" `isSuffixOf` prefix t
       where isOpenOrSpace c = Char.isSpace c || c `elem` ("([{,;" :: [Char])
+
+followedByCloseSpace :: TextualMonoid t => t -> Bool
+followedByCloseSpace t =
+   any isCloseOrSpace (Textual.characterPrefix t) || "{-" `isPrefixOf` t || "--" `isPrefixOf` t
+   where isCloseOrSpace c = Char.isSpace c || c `elem` (")]},;" :: [Char])
 
 instance (Eq t, Factorial.StableFactorial t, OutlineMonoid t) => OutlineMonoid (Shadowed t) where
    currentColumn = Report.currentColumn . content
@@ -183,7 +188,8 @@ extensionMixins =
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)]),
-     (Set.fromList [FlexibleContexts],               [(9, flexibleContextsMixin)])]
+     (Set.fromList [FlexibleContexts],               [(9, flexibleContextsMixin)]),
+     (Set.fromList [SpaceSensitiveOperators],        [(9, spaceSensitiveOperatorsMixin)])]
 
 languagePragmas :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) =>
                    Parser g t [ExtensionSwitch]
@@ -597,6 +603,17 @@ blockArgumentsMixin self super = super{
                                             <*> wrap (self & report & openBlockExpression)),
       dExpression = (self & report & fExpression),
       bareExpression = (super & report & bareExpression) <|> (self & report & closedBlockExpresion)}}
+
+spaceSensitiveOperatorsMixin :: SpaceMonoid t => ExtensionOverlay l g t
+spaceSensitiveOperatorsMixin self super = super{
+   report= (report super){
+      aPattern = Abstract.variablePattern <$> (super & report & variable) <* lookAhead unreservedSymbolLexeme
+                 <<|> notFollowedBy unreservedSymbolLexeme *> (super & report & aPattern),
+      variableSymbol = (super & report & variableSymbol) <|> Report.nameToken unreservedSymbolLexeme}}
+   where unreservedSymbolLexeme =
+            filter precededByOpenSpace getInput
+               *> (string "@" <|> string "~") <* filter followedByCloseSpace getInput
+            <|> filter (not . precededByOpenSpace) getInput *> string "~"
 
 lexicalNegationMixin :: SpaceMonoid t => ExtensionOverlay l g t
 lexicalNegationMixin self super = super{
