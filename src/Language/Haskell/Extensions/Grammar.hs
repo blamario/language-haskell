@@ -80,7 +80,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    classLHS :: p (Abstract.TypeLHS l l f f),
    kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
-   cType, arrowType :: p (Abstract.Type l l f f),
+   cType, equalityConstraintType, arrowType :: p (Abstract.Type l l f f),
    promotedLiteral :: p (Abstract.Type l l f f),
    instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
@@ -141,11 +141,11 @@ extensionMixins =
      (Set.fromList [EmptyCase],                      [(6, emptyCaseMixin)]),
      (Set.fromList [LambdaCase],                     [(7, lambdaCaseMixin)]),
      (Set.fromList [GratuitouslyParenthesizedTypes], [(7, gratuitouslyParenthesizedTypesMixin)]),
+     (Set.fromList [EqualityConstraints],            [(7, equalityConstraintsMixin)]),
      (Set.fromList [MultiWayIf],                     [(8, multiWayIfMixin)]),
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
-     (Set.fromList [EqualityConstraints],            [(8, equalityConstraintsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
@@ -286,7 +286,8 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
                                      <* nonTerminal (Report.rightDoubleArrow . report)
                                      <*> wrap (nonTerminal arrowType),
-     cType = nonTerminal (Report.bType . report),
+     cType = nonTerminal (Report.bType . report) <|> nonTerminal equalityConstraintType,
+     equalityConstraintType = empty,
      promotedLiteral =
         Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
@@ -610,10 +611,12 @@ spaceSensitiveOperatorsMixin self super = super{
       aPattern = Abstract.variablePattern <$> (super & report & variable) <* lookAhead unreservedSymbolLexeme
                  <<|> notFollowedBy unreservedSymbolLexeme *> (super & report & aPattern),
       variableSymbol = (super & report & variableSymbol) <|> Report.nameToken unreservedSymbolLexeme}}
-   where unreservedSymbolLexeme =
-            filter precededByOpenSpace getInput
-               *> (string "@" <|> string "~") <* filter followedByCloseSpace getInput
-            <|> filter (not . precededByOpenSpace) getInput *> string "~"
+
+unreservedSymbolLexeme :: (Rank2.Apply g, Ord t, SpaceMonoid t) => Parser g t t
+unreservedSymbolLexeme =
+   filter precededByOpenSpace getInput
+      *> (string "@" <|> string "~") <* filter followedByCloseSpace getInput
+   <|> filter (not . precededByOpenSpace) getInput *> string "~"
 
 lexicalNegationMixin :: SpaceMonoid t => ExtensionOverlay l g t
 lexicalNegationMixin self super = super{
@@ -720,29 +723,29 @@ typeOperatorsMixin self super =
          generalTypeConstructor = (super & report & generalTypeConstructor)
            <|> Abstract.constructorType
                <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
-        cType = (super & cType)
-           <|> Abstract.infixTypeApplication
-                  <$> wrap (self & cType)
-                  <*> (self & report & qualifiedOperator)
-                  <*> wrap (self & report & bType),
-        instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
-           <|> Abstract.infixTypeApplication
-               <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-               <*> (self & report & qualifiedOperator)
-               <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
-        familyInstanceDesignator = familyInstanceDesignator super
-           <|> Abstract.infixTypeClassInstanceLHS
-                  <$> wrap (super & report & bType)
-                  <*> (self & report & qualifiedOperator)
-                  <*> wrap (cType super)}
+      equalityConstraintType = empty,
+      cType = (super & cType)
+         <|> Abstract.infixTypeApplication
+                <$> wrap (self & cType)
+                <*> (self & report & qualifiedOperator)
+                <*> wrap (self & report & bType),
+      instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
+         <|> Abstract.infixTypeApplication
+             <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
+             <*> (self & report & qualifiedOperator)
+             <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
+      familyInstanceDesignator = familyInstanceDesignator super
+         <|> Abstract.infixTypeClassInstanceLHS
+                <$> wrap (super & report & bType)
+                <*> (self & report & qualifiedOperator)
+                <*> wrap (cType super)}
    where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
          anyQualifiedSymbol = (self & report & qualifiedConstructorSymbol) <|> (self & report & qualifiedVariableSymbol)
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
-   cType = (super & cType) <|> equalityConstraintType}
-   where equalityConstraintType =
-            Abstract.typeEquality <$> wrap (self & cType) <* delimiter "~" <*> wrap ((self & report & bType))
+   equalityConstraintType =
+      Abstract.typeEquality <$> wrap (self & report & bType) <* delimiter "~" <*> wrap ((self & report & bType))}
 
 multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
@@ -1098,44 +1101,45 @@ roleAnnotationsMixin self super = super{
       }
    }
 
-typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
-                      => ExtensionOverlay l g t
+typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
+                          SpaceMonoid t) => ExtensionOverlay l g t
 typeApplicationsMixin self super = super{
    report = (report super){
       bType = (super & report & bType)
          <|> Abstract.visibleKindApplication
              <$> filter whiteSpaceTrailing (wrap $ self & report & bType)
-             <* delimiter "@"
+             <* typeApplicationDelimiter
              <*> wrap (self & aKind),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
              <$> filter whiteSpaceTrailing (self & report & aExpression)
-             <* delimiter "@"
+             <* typeApplicationDelimiter
              <*> wrap (self & report & aType),
       lPattern = (super & report & lPattern)
          <|> Abstract.constructorPatternWithTypeApplications
              <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
-             <*> some (delimiter "@" *> wrap (self & report & aType))
+             <*> some (typeApplicationDelimiter *> wrap (self & report & aType))
              <*> many (wrap $ self & report & aPattern)
       },
    return_type = (super & return_type)
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
-          <* delimiter "@"
+          <* typeApplicationDelimiter
           <*> wrap (self & aKind),
    bKind = (super & bKind)
       <|> Abstract.visibleKindKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & bKind)
-          <* delimiter "@"
+          <* typeApplicationDelimiter
           <*> wrap (self & aKind),
    typeVarBinder = typeVarBinder super
       <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
    familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
-          <* delimiter "@"
+          <* typeApplicationDelimiter
           <*> wrap (self & aKind)
    }
+   where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 linearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 linearTypesMixin self super = super{
