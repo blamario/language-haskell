@@ -469,6 +469,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
    translateDeeply t (AST.WildcardRecordPattern support con fields) =
       AST.WildcardRecordPattern support con (translateFully t <$> fields)
    translateDeeply t (AST.TuplePattern items) = AST.TuplePattern (translateFully t <$> items)
+   translateDeeply t (AST.TypedPattern p ty) = AST.TypedPattern (translateFully t p) (translateFully t ty)
    translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
    translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
 

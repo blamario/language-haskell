@@ -512,6 +512,7 @@ patternTemplate (RecordPattern constructor fields) =
 patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
+patternTemplate (TypedPattern p t) = SigP (patternTemplate $ extract p) (typeTemplate $ extract t)
 patternTemplate WildcardPattern = WildP
 
 rhsTemplate :: TemplateWrapper f => EquationRHS Language Language f f -> Body

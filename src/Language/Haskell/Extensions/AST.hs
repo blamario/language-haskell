@@ -194,6 +194,7 @@ instance Abstract.ExtendedHaskell Language where
    visibleTypeApplication = VisibleTypeApplication
    visibleKindApplication = VisibleKindApplication
    visibleKindKindApplication = VisibleKindKindApplication
+   typedPattern = TypedPattern
    constructorPatternWithTypeApplications = ConstructorPattern
 
    overloadedLabel = OverloadedLabel
@@ -577,6 +578,7 @@ data Pattern λ l d s =
    | WildcardRecordPattern !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
                             (Abstract.QualifiedName λ)
                             [s (Abstract.FieldPattern l l d d)]
+   | TypedPattern (s (Abstract.Pattern l l d d)) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)

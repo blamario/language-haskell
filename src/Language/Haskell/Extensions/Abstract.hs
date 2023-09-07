@@ -269,6 +269,7 @@ class (Haskell λ,
    visibleTypeApplication :: s (Expression l l d d) -> s (Type l l d d) -> Expression λ l d s
    visibleKindApplication :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    visibleKindKindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
+   typedPattern :: s (Pattern l l d d) -> s (Type l l d d) -> Pattern λ l d s
    constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
                                           -> Pattern λ l d s
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s

@@ -84,6 +84,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    promotedLiteral :: p (Abstract.Type l l f f),
    instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
    kindVar :: p (Abstract.Name l),
+   infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
@@ -150,6 +151,7 @@ extensionMixins =
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
      (Set.fromList [ExplicitForAll],                 [(9, explicitForAllMixin)]),
+     (Set.fromList [ScopedTypeVariables],            [(9, scopedTypeVariablesMixin)]),
      (Set.fromList [GADTSyntax],                     [(9, gadtSyntaxMixin)]),
      (Set.fromList [FlexibleInstances],              [(9, flexibleInstancesMixin)]),
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
@@ -268,6 +270,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
               nonTerminal (Report.generalTypeConstructor . report)
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
+        pattern = nonTerminal infixPattern,
         aType = Report.aType r' <|> Abstract.typeWildcard <$ keyword "_",
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
@@ -288,6 +291,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                                      <*> wrap (nonTerminal arrowType),
      cType = nonTerminal (Report.bType . report) <|> nonTerminal equalityConstraintType,
      equalityConstraintType = empty,
+     infixPattern = Report.pattern r',
      promotedLiteral =
         Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
         <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
@@ -1295,6 +1299,15 @@ existentialQuantificationMixin self super = super{
                 <$> wrap (self & report & declarationLevel & context)
                 <* (self & report & rightDoubleArrow)
                 <*> wrap (super & report & declarationLevel & declaredConstructor)}}}
+
+scopedTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+scopedTypeVariablesMixin self super = super{
+   report= (report super){
+      pattern = (super & report & pattern)
+         <|> Abstract.typedPattern
+                <$> wrap (self & infixPattern)
+                <* (self & report & doubleColon)
+                <*> wrap (self & report & typeTerm)}}
 
 explicitForAllMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
