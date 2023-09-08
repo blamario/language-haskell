@@ -434,7 +434,7 @@ data Declaration λ l d s =
                                (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | TypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
-   | KindSignature (Abstract.Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Kind l l d d))
+   | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
 
 data FunctionalDependency λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =

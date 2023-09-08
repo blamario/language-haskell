@@ -198,8 +198,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
                                     (translateFully t constructor) (translateFully t <$> derivings)
    translateDeeply t (AST.TypeFamilyInstance vars lhs rhs) =
       AST.TypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t rhs)
-   translateDeeply t (AST.KindSignature name context kind) =
-      AST.KindSignature name (translateFully t context) (translateFully t kind)
+   translateDeeply t (AST.KindSignature name kind) = AST.KindSignature name (translateFully t kind)
    translateDeeply t (AST.DefaultMethodSignature support name context ty) =
       AST.DefaultMethodSignature support name (translateFully t context) (translateFully t ty)
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role

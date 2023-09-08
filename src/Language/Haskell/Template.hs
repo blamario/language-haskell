@@ -305,8 +305,7 @@ declarationTemplates (TypeSynonymDeclaration lhs t)
    | (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
    [SigD (nameTemplate name) (inContext context $ typeTemplate $ extract t) | name <- toList names]
-declarationTemplates (KindSignature name context k) =
-   [KiSigD (nameTemplate name) (inContext context $ typeTemplate $ extract k)]
+declarationTemplates (KindSignature name k) = [KiSigD (nameTemplate name) (typeTemplate $ extract k)]
 declarationTemplates (DefaultMethodSignature () name context t) =
    [DefaultSigD (nameTemplate name) (inContext context $ typeTemplate $ extract t)]
 

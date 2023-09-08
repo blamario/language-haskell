@@ -217,7 +217,7 @@ instance {-# OVERLAPS #-}
             export (AST.GADTNewtypeFamilyInstance _vars lhs _kind _constructors _derivings) = Di.syn atts
             export (AST.TypeSignature names _context _type)
                = Di.syn atts <> UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
-            export (AST.KindSignature name _context _type)
+            export (AST.KindSignature name _type)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding UnknownType)
             export _ = mempty
             getBindingNames (AST.InfixLHS _ name _) = [name]

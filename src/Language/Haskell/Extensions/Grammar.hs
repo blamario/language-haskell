@@ -1187,9 +1187,7 @@ standaloneKindSignaturesMixin self super = super{
          topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
             <|> Abstract.kindSignature <$ keyword "type"
                   <*> (self & report & typeConstructor)
-                  <* (self & report & doubleColon)
-                  <*> wrap (self & report & declarationLevel & optionalContext)
-                  <*> wrap (Abstract.typeKind <$> wrap (self & report & typeTerm))}}}
+                  <*> wrap (self & kindSignature)}}}
 
 kindSignaturesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))

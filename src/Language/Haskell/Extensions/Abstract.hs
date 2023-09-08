@@ -235,7 +235,7 @@ class (Haskell λ,
    classReferenceInstanceLHS :: QualifiedName λ -> ClassInstanceLHS λ l d s
    infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
    classInstanceLHSApplication :: s (ClassInstanceLHS l l d d) -> s (Type l l d d) -> ClassInstanceLHS λ l d s
-   kindSignature :: Name λ -> s (Context l l d d) -> s (Kind l l d d) -> Declaration λ l d s
+   kindSignature :: Name λ -> s (Kind l l d d) -> Declaration λ l d s
 
    typeConstraint :: s (Type l l d d) -> Context λ l d s
 
