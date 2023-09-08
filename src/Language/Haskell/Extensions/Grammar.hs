@@ -1145,22 +1145,26 @@ typeApplicationsMixin self super = super{
    }
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
-linearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+linearTypesMixin :: (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
 linearTypesMixin self super = super{
-  arrowType = (super & arrowType)
-    <|> Abstract.linearFunctionType
-        <$> wrap (self & cType)
-        <* delimiter "%"
-        <* keyword "1"
-        <* (self & report & rightArrow)
-        <*> wrap (self & arrowType)
-    <|> Abstract.multiplicityFunctionType
-        <$> wrap (self & cType)
-        <* delimiter "%"
-        <* notFollowedBy (keyword "1")
-        <*> wrap (self & report & aType)
-        <* (self & report & rightArrow)
-        <*> wrap (self & arrowType)}
+   report= (report super){
+      variableSymbol = notFollowedBy prefixPercent *> (super & report & variableSymbol)},
+   arrowType = (super & arrowType)
+      <|> Abstract.linearFunctionType
+          <$> wrap (self & cType)
+          <* token prefixPercent
+          <* keyword "1"
+          <* (self & report & rightArrow)
+          <*> wrap (self & arrowType)
+      <|> Abstract.multiplicityFunctionType
+          <$> wrap (self & cType)
+          <* token prefixPercent
+          <* notFollowedBy (keyword "1")
+          <*> wrap (self & report & aType)
+          <* (self & report & rightArrow)
+          <*> wrap (self & arrowType)}
+   where prefixPercent =
+            filter precededByOpenSpace getInput *> string "%" <* filter (not . followedByCloseSpace) getInput
 
 gadtLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtLinearTypesMixin self super = super{
