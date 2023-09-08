@@ -310,13 +310,20 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
    Accounting $ Compose (_, ((start, _, end), t)) = Const $
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
+         ExtAST.PromotedInfixTypeApplication{} -> Map.fromList [(Extensions.DataKinds, [(start, end)]),
+                                                                (Extensions.TypeOperators, [(start, end)])]
+         ExtAST.PromotedConstructorType{} -> Map.singleton Extensions.DataKinds [(start, end)]
+         ExtAST.PromotedTupleType{} -> Map.singleton Extensions.DataKinds [(start, end)]
+         ExtAST.PromotedListType{} -> Map.singleton Extensions.DataKinds [(start, end)]
+         ExtAST.PromotedIntegerLiteral{} -> Map.singleton Extensions.DataKinds [(start, end)]
+         ExtAST.PromotedCharLiteral{} -> Map.singleton Extensions.DataKinds [(start, end)]
+         ExtAST.PromotedStringLiteral{} -> Map.singleton Extensions.DataKinds [(start, end)]
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
          ExtAST.ForallType vars _ ->
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.TypeEquality{} -> Map.singleton Extensions.EqualityConstraints [(start, end)]
-         ExtAST.ForallKind vars _ ->
-            Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
+         ExtAST.GroundTypeKind{} -> Map.singleton Extensions.StarIsType [(start, end)]
          ExtAST.TypeWildcard{} -> Map.singleton Extensions.PartialTypeSignatures [(start, end)]
          ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
                                                         (Extensions.PolyKinds, [(start, end)])]

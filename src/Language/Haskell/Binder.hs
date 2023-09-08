@@ -534,7 +534,6 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
    BindingVerifier l f `Transformation.At` ExtAST.Type l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (ExtAST.InfixTypeApplication _ q _) = verifyTypeName q env
-            verify (ExtAST.InfixKindApplication _ q _) = verifyTypeName q env
             verify (ExtAST.PromotedInfixTypeApplication _ q _) = verifyTypeName q env
             verify _ = mempty
 

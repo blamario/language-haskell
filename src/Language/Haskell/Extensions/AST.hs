@@ -163,17 +163,8 @@ instance Abstract.ExtendedHaskell Language where
    inferredTypeVariable = ImplicitlyKindedTypeVariable True
    inferredExplicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable True
    
-   constructorKind = ConstructorType
-   kindVariable = TypeVariable
-   functionKind = FunctionKind
-   forallKind = ForallKind
-   kindApplication = KindApplication
-   infixKindApplication = InfixKindApplication
    groundTypeKind = GroundTypeKind
    typeConstraint = TypeConstraint
-   tupleKind = TupleKind
-   listKind = ListKind
-   typeRepresentationKind = TypeRepresentationKind
 
    dataFamilyDeclaration = DataFamilyDeclaration
    openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
@@ -193,7 +184,6 @@ instance Abstract.ExtendedHaskell Language where
 
    visibleTypeApplication = VisibleTypeApplication
    visibleKindApplication = VisibleKindApplication
-   visibleKindKindApplication = VisibleKindKindApplication
    typedPattern = TypedPattern
    constructorPatternWithTypeApplications = ConstructorPattern
 
@@ -487,16 +477,12 @@ data Type λ l d s =
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
    | ForallType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
-   | ForallKind [TypeVarBinding λ l d s] (s (Abstract.Kind l l d d))
    | ConstrainedType (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | TypeWildcard
    | TypeKind (s (Abstract.Type l l d d))
-   | VisibleDependentType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
    | GroundTypeKind
-   | FunctionKind (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
-   | KindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
-   | InfixKindApplication (s (Abstract.Kind l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Kind l l d d))
+   | VisibleDependentType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
    | PromotedConstructorType (s (Abstract.Constructor l l d d))
    | PromotedTupleType (NonEmpty (s (Abstract.Type l l d d)))
    | PromotedListType [s (Abstract.Type l l d d)]
@@ -505,11 +491,7 @@ data Type λ l d s =
    | PromotedStringLiteral Text
    | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeEquality (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
-   | TupleKind (NonEmpty (s (Abstract.Kind l l d d)))
-   | ListKind (s (Abstract.Kind l l d d))
-   | TypeRepresentationKind (s (Abstract.Type l l d d))
    | VisibleKindApplication (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
-   | VisibleKindKindApplication (s (Abstract.Kind l l d d)) (s (Abstract.Kind l l d d))
 
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable Bool (Abstract.Name λ) (s (Abstract.Kind l l d d))

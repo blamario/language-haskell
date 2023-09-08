@@ -379,7 +379,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
       AST.InfixTypeApplication (translateFully t left) op (translateFully t right)
    translateDeeply _ (AST.TypeVariable name) = AST.TypeVariable name
    translateDeeply t (AST.ForallType vars body) = AST.ForallType (translateDeeply t <$> vars) (translateFully t body)
-   translateDeeply t (AST.ForallKind vars body) = AST.ForallKind (translateDeeply t <$> vars) (translateFully t body)
    translateDeeply t (AST.ConstrainedType context body) =
       AST.ConstrainedType (translateFully t context) (translateFully t body)
    translateDeeply t (AST.TypeEquality left right) = AST.TypeEquality (translateFully t left) (translateFully t right)
@@ -389,12 +388,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.VisibleDependentType vars body) =
       AST.VisibleDependentType (translateDeeply t <$> vars) (translateFully t body)
    translateDeeply _ AST.GroundTypeKind = AST.GroundTypeKind
-   translateDeeply t (AST.FunctionKind domain codomain) =
-      AST.FunctionKind (translateFully t domain) (translateFully t codomain)
-   translateDeeply t (AST.KindApplication left right) =
-      AST.KindApplication (translateFully t left) (translateFully t right)
-   translateDeeply t (AST.InfixKindApplication left op right) =
-      AST.InfixKindApplication (translateFully t left) op (translateFully t right)
    translateDeeply t (AST.PromotedConstructorType con) = AST.PromotedConstructorType (translateFully t con)
    translateDeeply t (AST.PromotedTupleType items) = AST.PromotedTupleType (translateFully t <$> items)
    translateDeeply t (AST.PromotedListType items) = AST.PromotedListType (translateFully t <$> items)
@@ -403,13 +396,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply _ (AST.PromotedStringLiteral t) = AST.PromotedStringLiteral t
    translateDeeply t (AST.PromotedInfixTypeApplication left op right) =
       AST.PromotedInfixTypeApplication (translateFully t left) op (translateFully t right)
-   translateDeeply t (AST.TupleKind items) = AST.TupleKind (translateFully t <$> items)
-   translateDeeply t (AST.ListKind item) = AST.ListKind (translateFully t item)
-   translateDeeply t (AST.TypeRepresentationKind rep) = AST.TypeRepresentationKind (translateFully t rep)
    translateDeeply t (AST.VisibleKindApplication ty kind) =
       AST.VisibleKindApplication (translateFully t ty) (translateFully t kind)
-   translateDeeply t (AST.VisibleKindKindApplication left right) =
-      AST.VisibleKindKindApplication (translateFully t left) (translateFully t right)
 
 instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.Kind (Origin t) ~ AST.Type (Origin t),

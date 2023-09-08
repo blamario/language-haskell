@@ -78,12 +78,11 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
-   kindSignature, kind, bKind, aKind :: p (Abstract.Kind l l f f),
+   kindSignature :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
    cType, equalityConstraintType, arrowType :: p (Abstract.Type l l f f),
    promotedLiteral :: p (Abstract.Type l l f f),
    instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
-   kindVar :: p (Abstract.Name l),
    infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -157,7 +156,6 @@ extensionMixins =
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
      (Set.fromList [TypeFamilyDependencies],         [(9, typeFamilyDependenciesMixin)]),
      (Set.fromList [DataKinds],                      [(9, dataKindsMixin)]),
-     (Set.fromList [PolyKinds],                      [(9, polyKindsMixin)]),
      (Set.fromList [StandaloneKindSignatures],       [(7, kindSignaturesBaseMixin),
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
@@ -276,10 +274,6 @@ reportGrammar g@ExtendedGrammar{report= r} =
      classLHS = empty,
      keywordForall = keyword "forall",
      kindSignature = empty,
-     kindVar = nonTerminal (Report.typeVar . report),
-     kind = empty,
-     bKind = empty,
-     aKind = empty,
      groundTypeKind = empty,
      derivingStrategy = empty,
      arrowType = nonTerminal cType
@@ -1016,15 +1010,7 @@ dataKindsMixin self super = super{
          <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (self & report & generalConstructor),
       declarationLevel= (super & report & declarationLevel){
          instanceTypeDesignator = (super & report & declarationLevel & instanceTypeDesignator)
-            <|> promotedLiteral self}},
-   bKind = bKind super
-     <|> Abstract.typeRepresentationKind
-         <$ (Report.nameQualifier <*> Report.nameToken (string "TYPE") :: Report.Parser g t (Abstract.QualifiedName l))
-         <* notFollowedBy (fst <$> match (aKind self))
-         <*> wrap (self & report & aType),
-   aKind = aKind super
-     <|> Abstract.tupleKind <$> parens ((:|) <$> wrap (kind self) <*> some (comma *> wrap (kind self)))
-     <|> Abstract.listKind <$> brackets (wrap $ kind self)}
+            <|> promotedLiteral self}}}
 
 dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsTypeOperatorsMixin self super = super{
@@ -1034,11 +1020,6 @@ dataKindsTypeOperatorsMixin self super = super{
           <* terminator "'"
           <*> (self & report & qualifiedOperator)
           <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
-   bKind = bKind super
-           <|> Abstract.infixKindApplication
-           <$> wrap (bKind self)
-           <*> (self & report & qualifiedOperator)
-           <*> wrap (aKind self),
    cType = (super & cType)
       <|> Abstract.promotedInfixTypeApplication
           <$> wrap (cType self)
@@ -1052,15 +1033,6 @@ dataKindsTypeOperatorsMixin self super = super{
           <*> (self & report & qualifiedOperator)
           <*> wrap (cType self)}
 
-polyKindsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-polyKindsMixin self super = super{
-   report= (report super){
-      aType = (super & report & aType)
-          <|> Abstract.groundType <$ groundTypeKind self
-      },
-   kind = Abstract.typeKind <$> wrap (self & report & typeTerm),
-   aKind = Abstract.typeKind <$> wrap (self & report & aType)}
-
 visibleDependentKindQualificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 visibleDependentKindQualificationMixin self super = super{
    arrowType = arrowType super
@@ -1072,15 +1044,11 @@ visibleDependentKindQualificationMixin self super = super{
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self super = super{
-   kindSignature = (self & report & doubleColon) *> kind self,
-   kind = Abstract.functionKind <$> wrap (bKind self) <* (self & report & rightArrow) <*> wrap (kind self)
-          <|> bKind self,
-   bKind = Abstract.kindApplication <$> wrap (bKind self) <*> wrap (aKind self)
-           <|> aKind self,
-   aKind = Abstract.constructorKind <$> wrap (self & report & generalConstructor)
-           <|> Abstract.groundTypeKind <$ groundTypeKind self
-           <|> Abstract.kindVariable <$> kindVar self
-           <|> parens (kind self)}
+   report= (report super){
+      aType = (super & report & aType)
+          <|> Abstract.groundType <$ groundTypeKind self
+      },
+   kindSignature = Abstract.typeKind <$ (self & report & doubleColon) <*> wrap (self & report & typeTerm)}
 
 starIsTypeMixin :: ExtensionOverlay l g t
 starIsTypeMixin self super = super{
@@ -1113,7 +1081,7 @@ typeApplicationsMixin self super = super{
          <|> Abstract.visibleKindApplication
              <$> filter whiteSpaceTrailing (wrap $ self & report & bType)
              <* typeApplicationDelimiter
-             <*> wrap (self & aKind),
+             <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
       bareExpression = (super & report & bareExpression)
          <|> Abstract.visibleTypeApplication
              <$> filter whiteSpaceTrailing (self & report & aExpression)
@@ -1129,20 +1097,14 @@ typeApplicationsMixin self super = super{
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
           <* typeApplicationDelimiter
-          <*> wrap (self & aKind),
-   bKind = (super & bKind)
-      <|> Abstract.visibleKindKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & bKind)
-          <* typeApplicationDelimiter
-          <*> wrap (self & aKind),
+          <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
    typeVarBinder = typeVarBinder super
       <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
    familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
           <* typeApplicationDelimiter
-          <*> wrap (self & aKind)
-   }
+          <*> wrap (Abstract.typeKind <$> wrap (self & report & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 linearTypesMixin :: (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
@@ -1227,7 +1189,7 @@ standaloneKindSignaturesMixin self super = super{
                   <*> (self & report & typeConstructor)
                   <* (self & report & doubleColon)
                   <*> wrap (self & report & declarationLevel & optionalContext)
-                  <*> wrap (kind self)}}}
+                  <*> wrap (Abstract.typeKind <$> wrap (self & report & typeTerm))}}}
 
 kindSignaturesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
@@ -1339,12 +1301,7 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap (arrowType self),
-      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure [],
-      kind = kind super
-         <|> Abstract.forallKind <$ keywordForall self
-             <*> many (typeVarBinder self) <* delimiter "."
-             <*> wrap (kind self),
-      kindVar = notFollowedBy (keywordForall self) *> kindVar super}
+      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
 
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))

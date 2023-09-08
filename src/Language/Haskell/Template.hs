@@ -541,7 +541,6 @@ typeTemplate (FunctionType from to) = ArrowT `AppT` typeTemplate (extract from) 
 typeTemplate (RecordFunctionType fields result) = foldr (fieldsArrow . extract) (typeTemplate $ extract result) fields
    where fieldsArrow (ConstructorFields names t) rt = foldr (fieldArrow $ typeTemplate $ extract t) rt names
          fieldArrow t _ = (ArrowT `AppT` t `AppT`)
-typeTemplate (FunctionKind from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
 #if MIN_VERSION_template_haskell(2,17,0)
 typeTemplate (LinearFunctionType from to) =
    MulArrowT `AppT` PromotedT 'GHC.Types.One `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
@@ -552,21 +551,13 @@ typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
-typeTemplate (KindApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
-   InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)
-typeTemplate (InfixKindApplication left op right) =
    InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)
 typeTemplate (TypeVariable name) = VarT (nameTemplate name)
 typeTemplate TypeWildcard = WildCardT
 typeTemplate (TypeKind t) = typeTemplate (extract t)
 typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate $ extract kind)
 typeTemplate (ForallType vars body) =
-   ForallT varBindings [] (typeTemplate type')
-   where type' = extract body
-         varBindings = typeVarBindingSpecTemplate <$> vars
-         bindingVars = bindingVarName <$> vars
-typeTemplate (ForallKind vars body) =
    ForallT varBindings [] (typeTemplate type')
    where type' = extract body
          varBindings = typeVarBindingSpecTemplate <$> vars
@@ -595,13 +586,9 @@ typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
 #if MIN_VERSION_template_haskell(2,18,0)
 typeTemplate (PromotedCharLiteral c) = LitT (CharTyLit c)
 #endif
-typeTemplate (TupleKind items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
-typeTemplate (ListKind itemType) = AppT ListT (typeTemplate $ extract itemType)
-typeTemplate (TypeRepresentationKind t) = AppT (ConT ''TYPE) (typeTemplate $ extract t)
 typeTemplate (PromotedInfixTypeApplication left op right) =
    PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
-typeTemplate (VisibleKindKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
 wrappedTypeTemplate :: TemplateWrapper f => f (ExtAST.Type Language Language f f) -> TH.Type
 wrappedTypeTemplate x = (if isParenthesized x && not (isTuple t) then ParensT else id) (typeTemplate t)
@@ -627,21 +614,13 @@ freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (VisibleKindApplication t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
-freeTypeVars (VisibleKindKindApplication k1 k2) = freeTypeVars (extract k1) <> freeTypeVars (extract k2)
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName <$> vars)
 freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
 freeTypeVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
-freeTypeVars (FunctionKind from to) = nub (freeTypeVars (extract from) <> freeTypeVars (extract to))
-freeTypeVars (KindApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
-freeTypeVars (InfixKindApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
-freeTypeVars (ForallKind vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
 freeTypeVars (VisibleDependentType vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
-freeTypeVars (TupleKind items) = nub (foldMap (freeTypeVars . extract) items)
-freeTypeVars (ListKind itemType) = freeTypeVars (extract itemType)
-freeTypeVars (TypeRepresentationKind t) = freeTypeVars (extract t)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t

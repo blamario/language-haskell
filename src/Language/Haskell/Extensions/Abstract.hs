@@ -189,14 +189,8 @@ class (Haskell λ,
    inferredTypeVariable :: Name λ -> TypeVarBinding λ l d s
    inferredExplicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
 
-   kindVariable :: Name λ -> Kind λ l d s
-   constructorKind :: s (Constructor l l d d) -> Kind λ l d s
-   kindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
-   infixKindApplication :: s (Kind l l d d) -> QualifiedName λ -> s (Kind l l d d) -> Kind λ l d s
-   functionKind :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
-   forallKind :: [TypeVarBinding λ l d s] -> s (Kind l l d d) -> Kind λ l d s
-   groundTypeKind :: Kind λ l d s
    typeKind :: s (Type l l d d) -> Kind λ l d s
+   groundTypeKind :: Type λ l d s
    typeRoleDeclaration :: QualifiedName λ -> [TypeRole λ] -> Declaration λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
@@ -262,13 +256,9 @@ class (Haskell λ,
    promotedStringLiteral :: Text -> Type λ l d s
    promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
    visibleDependentType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
-   tupleKind :: NonEmpty (s (Kind l l d d)) -> Kind λ l d s
-   listKind :: s (Kind l l d d) -> Kind λ l d s
-   typeRepresentationKind :: s (Type l l d d) -> Kind λ l d s
 
    visibleTypeApplication :: s (Expression l l d d) -> s (Type l l d d) -> Expression λ l d s
    visibleKindApplication :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
-   visibleKindKindApplication :: s (Kind l l d d) -> s (Kind l l d d) -> Kind λ l d s
    typedPattern :: s (Pattern l l d d) -> s (Type l l d d) -> Pattern λ l d s
    constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
                                           -> Pattern λ l d s
