@@ -711,13 +711,13 @@ typeOperatorsMixin self super =
             simpleType = (super & report & declarationLevel & simpleType)
                <|> Abstract.simpleInfixTypeLHSApplication
                             <$> typeVarBinder self
-                            <*> anySymbol
+                            <*> anyOperator
                             <*> typeVarBinder self
                <|> parens ((self & report & declarationLevel & simpleType)),
             qualifiedTypeClass =
-               (super & report & declarationLevel & qualifiedTypeClass) <|> parens anyQualifiedSymbol},
-         typeConstructor = (self & report & constructorIdentifier) <|> parens anySymbol,
-         qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedSymbol,
+               (super & report & declarationLevel & qualifiedTypeClass) <|> parens anyQualifiedOperator},
+         typeConstructor = (self & report & constructorIdentifier) <|> parens anyOperator,
+         qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedOperator,
          generalTypeConstructor = (super & report & generalTypeConstructor)
            <|> Abstract.constructorType
                <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
@@ -737,8 +737,9 @@ typeOperatorsMixin self super =
                 <$> wrap (super & report & bType)
                 <*> (self & report & qualifiedOperator)
                 <*> wrap (cType super)}
-   where anySymbol = (self & report & constructorSymbol) <|> (self & report & variableSymbol)
-         anyQualifiedSymbol = (self & report & qualifiedConstructorSymbol) <|> (self & report & qualifiedVariableSymbol)
+   where anyOperator = (self & report & constructorOperator) <|> (self & report & variableOperator)
+         anyQualifiedOperator =
+            (self & report & qualifiedConstructorOperator) <|> (self & report & qualifiedVariableOperator)
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
