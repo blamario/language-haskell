@@ -269,7 +269,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         pattern = nonTerminal infixPattern,
-        aType = Report.aType r' <|> Abstract.typeWildcard <$ keyword "_",
+        aType = Report.aType r'
+                <|> Abstract.typeWildcard <$ keyword "_"
+                <|> Abstract.groundType <$ nonTerminal groundTypeKind,
         typeTerm = nonTerminal arrowType},
      classLHS = empty,
      keywordForall = keyword "forall",
@@ -1045,10 +1047,6 @@ visibleDependentKindQualificationMixin self super = super{
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self super = super{
-   report= (report super){
-      aType = (super & report & aType)
-          <|> Abstract.groundType <$ groundTypeKind self
-      },
    kindSignature = Abstract.typeKind <$ (self & report & doubleColon) <*> wrap (self & report & typeTerm)}
 
 starIsTypeMixin :: ExtensionOverlay l g t

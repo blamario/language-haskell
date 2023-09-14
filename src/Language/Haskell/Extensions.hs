@@ -185,7 +185,7 @@ allExtensions = Set.fromList [minBound .. maxBound]
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   ForeignFunctionInterface, IdentifierSyntax, MultiParameterConstraints, PatternGuards,
-                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, SpaceSensitiveOperators,
+                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
 
 languageVersions :: Set Extension
@@ -215,7 +215,7 @@ directImplications = Map.fromList <$> Map.fromList [
                (ForeignFunctionInterface, False), (PatternGuards, False), (RelaxedPolyRec, False)]),
   (ImpredicativeTypes, [(ExplicitForAll, True), (RankNTypes, True)]),
   (IncoherentInstances, [(OverlappingInstances, True)]),
-  (KindSignatures, [(GratuitouslyParenthesizedTypes, True), (StarIsType, True)]),
+  (KindSignatures, [(GratuitouslyParenthesizedTypes, True)]),
   (LiberalTypeSynonyms, [(ExplicitForAll, True)]),
   (LinearTypes, [(SpaceSensitiveOperators, True)]),
   (MultiParamTypeClasses, [(ConstrainedClassMethods, True), (MultiParameterConstraints, True)]),
@@ -226,7 +226,6 @@ directImplications = Map.fromList <$> Map.fromList [
   (RecordWildCards, [(DisambiguateRecordFields, True)]),
   (Safe, [(SafeImports, True)]),
   (ScopedTypeVariables, [(ExplicitForAll, True)]),
-  (StandaloneKindSignatures, [(StarIsType, True)]),
   (Trustworthy, [(SafeImports, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
                   (KindSignatures, True), (MonoLocalBinds, True)]),
