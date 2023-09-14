@@ -113,6 +113,7 @@ data Extension = AllowAmbiguousTypes
                | ParallelArrays
                | ParallelListComp
                | ParallelListComprehensions
+               | ParenthesizedTypeOperators     -- active but unnamed in GHC
                | GratuitouslyParenthesizedTypes -- active but unnamed in GHC
                | PartialTypeSignatures
                | PatternGuards
@@ -184,8 +185,9 @@ allExtensions = Set.fromList [minBound .. maxBound]
 
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
-                                  ForeignFunctionInterface, IdentifierSyntax, MultiParameterConstraints, PatternGuards,
-                                  GratuitouslyParenthesizedTypes, RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
+                                  ForeignFunctionInterface, GratuitouslyParenthesizedTypes, IdentifierSyntax,
+                                  MultiParameterConstraints, ParenthesizedTypeOperators, PatternGuards,
+                                  RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
 
 languageVersions :: Set Extension
@@ -231,7 +233,7 @@ directImplications = Map.fromList <$> Map.fromList [
                   (KindSignatures, True), (MonoLocalBinds, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
   (TypeInType, [(PolyKinds, True), (DataKinds, True), (KindSignatures, True)]),
-  (TypeOperators, [(ExplicitNamespaces, True)]),
+  (TypeOperators, [(ExplicitNamespaces, True), (ParenthesizedTypeOperators, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
 
@@ -359,6 +361,7 @@ byName = Map.fromList [
   ("ParallelListComp", ParallelListComprehensions),
   ("ParallelListComprehensions", ParallelListComprehensions),
   ("GratuitouslyParenthesizedTypes", GratuitouslyParenthesizedTypes),
+  ("ParenthesizedTypeOperators", ParenthesizedTypeOperators),
   ("PartialTypeSignatures", PartialTypeSignatures),
   ("PatternGuards", PatternGuards),
   ("PatternSynonyms", PatternSynonyms),

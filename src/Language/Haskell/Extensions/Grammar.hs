@@ -145,6 +145,7 @@ extensionMixins =
      (Set.fromList [MultiWayIf],                     [(8, multiWayIfMixin)]),
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
+     (Set.fromList [ParenthesizedTypeOperators],     [(8, parenthesizedTypeOperatorsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
@@ -688,8 +689,8 @@ binaryUnderscoresMixin self super = super{
    binary = (string "0b" <|> string "0B") *> (binaryDigits <> concatAll (char '_' *> binaryDigits) <?> "binary number")}
    where binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
-typeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-typeOperatorsMixin self super =
+parenthesizedTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+parenthesizedTypeOperatorsMixin self super =
    super{
       report= (report super){
          moduleLevel= (super & report & moduleLevel){
@@ -701,7 +702,22 @@ typeOperatorsMixin self super =
                <|> Abstract.exportClassOrType
                    <$> (self & report & qualifiedTypeConstructor)
                    <*> (Just <$> (self & report & moduleLevel & members))
-               <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId,
+               <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId},
+         qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedOperator,
+         generalTypeConstructor = (super & report & generalTypeConstructor)
+           <|> Abstract.constructorType
+               <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol)),
+         declarationLevel= (super & report & declarationLevel){
+            qualifiedTypeClass =
+               (super & report & declarationLevel & qualifiedTypeClass) <|> parens anyQualifiedOperator}}}
+   where anyQualifiedOperator =
+            (self & report & qualifiedConstructorOperator) <|> (self & report & qualifiedVariableOperator)
+
+typeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+typeOperatorsMixin self super =
+   super{
+      report= (report super){
+         moduleLevel= (super & report & moduleLevel){
             importItem = Abstract.importVar <$> (self & report & variable)
                <|> Abstract.importClassOrType
                    <$> ((self & report & constructorIdentifier) <|> parens (self & report & constructorSymbol))
@@ -715,14 +731,8 @@ typeOperatorsMixin self super =
                             <$> typeVarBinder self
                             <*> anyOperator
                             <*> typeVarBinder self
-               <|> parens ((self & report & declarationLevel & simpleType)),
-            qualifiedTypeClass =
-               (super & report & declarationLevel & qualifiedTypeClass) <|> parens anyQualifiedOperator},
-         typeConstructor = (self & report & constructorIdentifier) <|> parens anyOperator,
-         qualifiedTypeConstructor = (self & report & qualifiedConstructorIdentifier) <|> parens anyQualifiedOperator,
-         generalTypeConstructor = (super & report & generalTypeConstructor)
-           <|> Abstract.constructorType
-               <$> wrap (Abstract.constructorReference <$> parens (self & report & qualifiedVariableSymbol))},
+               <|> parens ((self & report & declarationLevel & simpleType))},
+         typeConstructor = (self & report & constructorIdentifier) <|> parens anyOperator},
       equalityConstraintType = empty,
       cType = (super & cType)
          <|> Abstract.infixTypeApplication
@@ -740,8 +750,6 @@ typeOperatorsMixin self super =
                 <*> (self & report & qualifiedOperator)
                 <*> wrap (cType super)}
    where anyOperator = (self & report & constructorOperator) <|> (self & report & variableOperator)
-         anyQualifiedOperator =
-            (self & report & qualifiedConstructorOperator) <|> (self & report & qualifiedVariableOperator)
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
@@ -1387,7 +1395,7 @@ bangPatternsMixin self super =
       report = (report super){
          aPattern = (super & report & aPattern)
             <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap (self & report & aPattern),
-      variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
+         variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
    where bang = filter precededByOpenSpace getInput
                 *> string "!"
                 <* notSatisfyChar Char.isSpace
