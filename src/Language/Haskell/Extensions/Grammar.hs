@@ -898,7 +898,7 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap optionalContext
                 <*> wrap (familyInstanceDesignator self)
                 <*> optional (wrap $ kindSignature self)
-                <*> (delimiter "=" *> declaredConstructors <|> pure [])
+                <*> moptional (delimiter "=" *> declaredConstructors)
                 <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
@@ -943,8 +943,7 @@ typeFamiliesMixin self@ExtendedGrammar
            <*> wrap optionalContext
            <*> wrap (familyInstanceDesignator self)
            <*> optional (wrap $ kindSignature self)
-           <* delimiter "="
-           <*> declaredConstructors
+           <*> moptional (delimiter "=" *> declaredConstructors)
            <*> moptional derivingClause
        <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
            <*> optionalForall self
