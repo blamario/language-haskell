@@ -183,6 +183,8 @@ extensionMixins =
      (Set.fromList [LinearTypes, UnicodeSyntax],     [(9, unicodeLinearTypesMixin)]),
      (Set.fromList [GADTSyntax, LinearTypes,
                     UnicodeSyntax],                  [(9, gadtUnicodeLinearTypesMixin)]),
+     (Set.fromList [StarIsType,
+                    ParenthesizedTypeOperators],     [(9, starIsTypeOperatorsMixin)]),
      (Set.fromList [StarIsType, UnicodeSyntax],      [(9, unicodeStarIsTypeMixin)]),
      (Set.fromList [GADTSyntax, TypeOperators],      [(9, gadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
@@ -1064,6 +1066,14 @@ starIsTypeMixin self super = super{
 unicodeStarIsTypeMixin :: ExtensionOverlay l g t
 unicodeStarIsTypeMixin self super = super{
    groundTypeKind = groundTypeKind super <|> delimiter "★"}
+
+starIsTypeOperatorsMixin :: ExtensionOverlay l g t
+starIsTypeOperatorsMixin self super = super{
+   report = (report super) {
+      aType = parens (Abstract.constructorType
+                      <$> wrap (Abstract.constructorReference . Abstract.qualifiedName Nothing
+                                <$> token (Report.nameToken $ string "*")))
+              <<|> (super & report & aType)}}
 
 roleAnnotationsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 roleAnnotationsMixin self super = super{
