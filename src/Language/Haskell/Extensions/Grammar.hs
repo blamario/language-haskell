@@ -1526,6 +1526,13 @@ mptcsMixin
                              <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
                              <*> typeVarBinder)
                 <*> typeVarBinder
+         <|> Abstract.simpleInfixTypeLHSApplication
+             <$> typeVarBinder
+             <* terminator "`"
+             <*> typeClass
+             <* terminator "`"
+             <*> typeVarBinder
+         <|> parens (classLHS self)
          <|> Abstract.simpleTypeLHSApplication <$> wrap (classLHS self) <*> typeVarBinder}
 
 functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'FunctionalDependencies l,
