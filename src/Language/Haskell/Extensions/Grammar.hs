@@ -746,6 +746,11 @@ typeOperatorsMixin self super =
              <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
              <*> (self & report & qualifiedOperator)
              <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
+      classLHS = classLHS super
+         <|> Abstract.simpleInfixTypeLHSApplication
+             <$> typeVarBinder self
+             <*> anyOperator
+             <*> typeVarBinder self,
       familyInstanceDesignator = familyInstanceDesignator super
          <|> Abstract.infixTypeClassInstanceLHS
                 <$> wrap (super & report & bType)
