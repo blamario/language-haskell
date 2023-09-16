@@ -934,40 +934,38 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> inClassOrInstanceTypeFamilyDeclaration self,
          inInstanceDeclaration = (super & report & declarationLevel & inInstanceDeclaration)
-            <|> inClassOrInstanceTypeFamilyDeclaration self
-        }
-    },
+            <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
+                <*> optionalForall self
+                <*> wrap optionalContext
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
+                <*> moptional (delimiter "=" *> declaredConstructors)
+                <*> moptional derivingClause
+            <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
+                <*> optionalForall self
+                <*> wrap optionalContext
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
+                <* delimiter "="
+                <*> wrap newConstructor
+                <*> moptional derivingClause
+            <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
+                <*> optionalForall self
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
+                <* keyword "where"
+                <*> blockOf (gadtConstructors self)
+                <*> moptional derivingClause
+            <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
+                <*> optionalForall self
+                <*> wrap (familyInstanceDesignator self)
+                <*> optional (wrap $ kindSignature self)
+                <* keyword "where"
+                <*> wrap (gadtNewConstructor self)
+                <*> moptional derivingClause
+            <|> inClassOrInstanceTypeFamilyDeclaration self}},
     inClassOrInstanceTypeFamilyDeclaration =
-       Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
-           <*> optionalForall self
-           <*> wrap optionalContext
-           <*> wrap (familyInstanceDesignator self)
-           <*> optional (wrap $ kindSignature self)
-           <*> moptional (delimiter "=" *> declaredConstructors)
-           <*> moptional derivingClause
-       <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
-           <*> optionalForall self
-           <*> wrap optionalContext
-           <*> wrap (familyInstanceDesignator self)
-           <*> optional (wrap $ kindSignature self)
-           <* delimiter "="
-           <*> wrap newConstructor
-           <*> moptional derivingClause
-       <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
-           <*> optionalForall self
-           <*> wrap (familyInstanceDesignator self)
-           <*> optional (wrap $ kindSignature self)
-           <* keyword "where"
-           <*> blockOf (gadtConstructors self)
-           <*> moptional derivingClause
-       <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
-           <*> optionalForall self
-           <*> wrap (familyInstanceDesignator self)
-           <*> optional (wrap $ kindSignature self)
-           <* keyword "where"
-           <*> wrap (gadtNewConstructor self)
-           <*> moptional derivingClause
-       <|> Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
+       Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
            <*> optionalForall self
            <*> wrap (familyInstanceDesignator self)
            <* delimiter "="
