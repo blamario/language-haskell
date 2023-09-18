@@ -1474,12 +1474,11 @@ derivingViaMixin self@ExtendedGrammar{
          declarationLevel= declarationLevel{
             derivingClause = concatSome ((declarationLevel & derivingClause)
                                          <|> (takeSome . wrap $
-                                              flip (Abstract.strategicDerive @l Abstract.build) <$ keyword "deriving"
+                                              Abstract.deriveVia @l Abstract.build <$ keyword "deriving"
                                                  <*> (pure <$> qualifiedTypeClass
                                                       <<|> parens (qualifiedTypeClass `sepBy` comma))
-                                                 <*> wrap derivingVia))}}}
-   where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
-                       <*> wrap (self & report & typeTerm)
+                                                 <* keyword "via"
+                                                 <*> wrap (self & report & typeTerm)))}}}
 
 standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'StandaloneDeriving l,
                                              Abstract.ExtendedWith 'DerivingStrategies l,

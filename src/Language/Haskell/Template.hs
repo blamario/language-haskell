@@ -401,6 +401,8 @@ derivingsTemplate = foldr derived []
          derived (SimpleDerive name) templates = DerivClause Nothing [ConT $ qnameTemplate name] : templates
          derived (StrategicDerive () strategy names) templates =
             DerivClause (Just $ strategyTemplate $ extract strategy) (ConT . qnameTemplate <$> names) :  templates
+         derived (DeriveVia () names viaType) templates =
+            DerivClause (Just $ strategyTemplate $ Via () viaType) (ConT . qnameTemplate <$> names) :  templates
 
 strategyTemplate :: TemplateWrapper f => DerivingStrategy Language Language f f -> DerivStrategy
 strategyTemplate Stock = StockStrategy

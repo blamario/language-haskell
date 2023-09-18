@@ -16,7 +16,7 @@ module Language.Haskell.Extensions.Abstract (
               DerivingStrategiesConstruction,
               stockStrategy, newtypeStrategy, anyClassStrategy,
               standaloneStrategicDerivingDeclaration, strategicDerive,
-              DerivingViaConstruction, derivingViaStrategy,
+              DerivingViaConstruction, deriveVia, derivingViaStrategy,
               DefaultSignatureConstruction, defaultMethodSignature,
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
@@ -112,6 +112,7 @@ data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrate
                                           -> Declaration λ l d s}
 
 data instance Construct 'Extensions.DerivingVia λ l d s = DerivingViaConstruction {
+   deriveVia :: [QualifiedName λ] -> s (Type l l d d) -> DerivingClause λ l d s,
    derivingViaStrategy :: s (Type l l d d) -> DerivingStrategy λ l d s}
 
 data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatureConstruction {
