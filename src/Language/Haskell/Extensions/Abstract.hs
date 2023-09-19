@@ -14,7 +14,7 @@ module Language.Haskell.Extensions.Abstract (
               BangPatternConstruction, bangPattern,
               StandaloneDerivingConstruction, standaloneDerivingDeclaration,
               DerivingStrategiesConstruction,
-              stockStrategy, newtypeStrategy, anyClassStrategy,
+              defaultStrategy, stockStrategy, newtypeStrategy, anyClassStrategy,
               standaloneStrategicDerivingDeclaration, strategicDerive,
               DerivingViaConstruction, deriveVia, derivingViaStrategy,
               DefaultSignatureConstruction, defaultMethodSignature,
@@ -101,10 +101,11 @@ data instance Construct 'Extensions.StandaloneDeriving λ l d s = StandaloneDeri
 type family DerivingStrategy λ :: TreeNodeSubKind
 
 data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrategiesConstruction {
+   defaultStrategy :: DerivingStrategy λ l d s,
    stockStrategy :: DerivingStrategy λ l d s,
    newtypeStrategy :: DerivingStrategy λ l d s,
    anyClassStrategy :: DerivingStrategy λ l d s,
-   strategicDerive :: s (DerivingStrategy l l d d) -> [QualifiedName λ] -> DerivingClause λ l d s,
+   strategicDerive :: s (DerivingStrategy l l d d) -> [s (Type l l d d)] -> DerivingClause λ l d s,
    standaloneStrategicDerivingDeclaration :: Supports 'Extensions.StandaloneDeriving λ
                                           => s (DerivingStrategy l l d d)
                                           -> s (Context l l d d)
@@ -112,7 +113,7 @@ data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrate
                                           -> Declaration λ l d s}
 
 data instance Construct 'Extensions.DerivingVia λ l d s = DerivingViaConstruction {
-   deriveVia :: [QualifiedName λ] -> s (Type l l d d) -> DerivingClause λ l d s,
+   deriveVia :: [s (Type l l d d)] -> s (Type l l d d) -> DerivingClause λ l d s,
    derivingViaStrategy :: s (Type l l d d) -> DerivingStrategy λ l d s}
 
 data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatureConstruction {

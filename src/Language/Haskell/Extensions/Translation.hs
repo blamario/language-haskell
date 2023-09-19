@@ -263,19 +263,21 @@ instance (WrapTranslation t,
    translateDeeply t (AST.GADTConstructors names vars context ty) =
       AST.GADTConstructors names (translateDeeply t <$> vars) (translateFully t context) (translateFully t ty)
 
-instance (WrapTranslation t, FullyTranslatable t AST.DerivingStrategy, FullyTranslatable t AST.Type,
+instance (WrapTranslation t, FullyTranslatable t AST.Type, FullyTranslatable t AST.DerivingStrategy,
           Abstract.DerivingClause (Origin t) ~ AST.DerivingClause (Origin t),
           Abstract.DerivingClause (Target t) ~ AST.DerivingClause (Target t),
+          Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Type (Target t) ~ AST.Type (Target t),
           Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
           Abstract.DerivingStrategy (Target t) ~ AST.DerivingStrategy (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
           Abstract.Type (Target t) ~ AST.Type (Target t)) =>
          DeeplyTranslatable t AST.DerivingClause where
    translateDeeply _ (AST.SimpleDerive name) = AST.SimpleDerive name
-   translateDeeply t (AST.StrategicDerive support strategy names) =
-      AST.StrategicDerive support (translateFully t strategy) names
-   translateDeeply t (AST.DeriveVia support names via) =
-      AST.DeriveVia support names (translateFully t via)
+   translateDeeply t (AST.StrategicDerive support strategy types) =
+      AST.StrategicDerive support (translateFully t strategy) (translateFully t <$> types)
+   translateDeeply t (AST.DeriveVia support types via) =
+      AST.DeriveVia support (translateFully t <$> types) (translateFully t via)
 
 instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.DerivingStrategy (Origin t) ~ AST.DerivingStrategy (Origin t),
@@ -283,6 +285,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.Type,
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
           Abstract.Type (Target t) ~ AST.Type (Target t)) =>
          DeeplyTranslatable t AST.DerivingStrategy where
+   translateDeeply _ AST.Default = AST.Default
    translateDeeply _ AST.Stock = AST.Stock
    translateDeeply _ AST.Newtype = AST.Newtype
    translateDeeply _ AST.AnyClass = AST.AnyClass

@@ -368,7 +368,7 @@ declarationTemplates (TypeRoleDeclaration name roles) =
 declarationTemplates (StandaloneDerivingDeclaration () context lhs) =
    [StandaloneDerivD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)]
 declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy context lhs) =
-   [StandaloneDerivD (Just $ strategyTemplate $ extract strategy) (contextTemplate $ extract context)
+   [StandaloneDerivD (strategyTemplate $ extract strategy) (contextTemplate $ extract context)
                      (lhsTypeTemplate $ extract lhs)]
 
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
@@ -399,16 +399,17 @@ derivingsTemplate = foldr derived []
    where derived (SimpleDerive name) (DerivClause Nothing ctx : rest) =
             DerivClause Nothing (ConT (qnameTemplate name) : ctx) : rest
          derived (SimpleDerive name) templates = DerivClause Nothing [ConT $ qnameTemplate name] : templates
-         derived (StrategicDerive () strategy names) templates =
-            DerivClause (Just $ strategyTemplate $ extract strategy) (ConT . qnameTemplate <$> names) :  templates
-         derived (DeriveVia () names viaType) templates =
-            DerivClause (Just $ strategyTemplate $ Via () viaType) (ConT . qnameTemplate <$> names) :  templates
+         derived (StrategicDerive () strategy types) templates =
+            DerivClause (strategyTemplate $ extract strategy) (typeTemplate . extract <$> types) : templates
+         derived (DeriveVia () types viaType) templates =
+            DerivClause (strategyTemplate $ Via () viaType) (typeTemplate . extract <$> types) : templates
 
-strategyTemplate :: TemplateWrapper f => DerivingStrategy Language Language f f -> DerivStrategy
-strategyTemplate Stock = StockStrategy
-strategyTemplate Newtype = NewtypeStrategy
-strategyTemplate AnyClass = AnyclassStrategy
-strategyTemplate (Via () ty) = ViaStrategy (typeTemplate $ extract ty)
+strategyTemplate :: TemplateWrapper f => DerivingStrategy Language Language f f -> Maybe DerivStrategy
+strategyTemplate Default = Nothing
+strategyTemplate Stock = Just StockStrategy
+strategyTemplate Newtype = Just NewtypeStrategy
+strategyTemplate AnyClass = Just AnyclassStrategy
+strategyTemplate (Via () ty) = Just $ ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate $ extract t)]

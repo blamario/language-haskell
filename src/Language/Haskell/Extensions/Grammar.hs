@@ -763,10 +763,16 @@ equalityConstraintsMixin self super = super{
    equalityConstraintType =
       Abstract.typeEquality <$> wrap (self & report & bType) <* delimiter "~" <*> wrap ((self & report & bType))}
 
-multiParameterConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+multiParameterConstraintsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
+         derivingClause =
+            keyword "deriving"
+            *> (pure <$> wrap (parens (Abstract.strategicDerive Abstract.build
+                                       <$> wrap (pure $ Abstract.defaultStrategy @l Abstract.build)
+                                       <*> wrap (self & report & typeTerm) `sepBy` comma)
+                               <<|> Abstract.simpleDerive <$> (self & report & declarationLevel & qualifiedTypeClass))),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
             Abstract.classInstanceLHSApplication
                <$> wrap (self & report & declarationLevel & instanceDesignator)
@@ -799,11 +805,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                           <|> parens (self & report & declarationLevel & typeVarApplications))
                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator)
-            <|> parens (self & report & declarationLevel & instanceDesignator),
-         derivingClause = keyword "deriving"
-                          *> (pure <$> wrap (Abstract.simpleDerive <$> qtc)
-                              <|> parens (filter ((/= 1) . length)
-                                          $ wrap (Abstract.simpleDerive <$> qtc) `sepBy` comma))}},
+            <|> parens (self & report & declarationLevel & instanceDesignator)}},
    gadtConstructors = (super & gadtConstructors)
       <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
                                     <* (self & report & doubleColon)
@@ -1429,18 +1431,18 @@ standaloneDerivingMixin self@ExtendedGrammar{
 
 derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith 'DerivingStrategies l => ExtensionOverlay l g t
 derivingStrategiesMixin self@ExtendedGrammar{
-                           report= HaskellGrammar{
-                              declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
+                           report= HaskellGrammar{generalConstructor, typeTerm}}
                         super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
    super{
       report = report{
          declarationLevel= declarationLevel{
-            derivingClause = concatSome ((declarationLevel & derivingClause)
-                                         <|> (takeSome . wrap $
-                                              Abstract.strategicDerive Abstract.build <$ keyword "deriving"
-                                                 <*> wrap (self & derivingStrategy)
-                                                 <*> (pure <$> qualifiedTypeClass
-                                                      <<|> parens (qualifiedTypeClass `sepBy` comma))))}},
+            derivingClause =
+               concatSome ((declarationLevel & derivingClause)
+                           <|> (takeSome . wrap $
+                                Abstract.strategicDerive Abstract.build <$ keyword "deriving"
+                                   <*> wrap (self & derivingStrategy)
+                                   <*> (pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor)
+                                        <<|> parens (wrap typeTerm `sepBy` comma))))}},
      derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
@@ -1463,22 +1465,21 @@ standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
 
-derivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'DerivingStrategies l, Abstract.ExtendedWith 'DerivingVia l)
-                 => ExtensionOverlay l g t
+derivingViaMixin :: forall l g t. Abstract.ExtendedWith 'DerivingVia l => ExtensionOverlay l g t
 derivingViaMixin self@ExtendedGrammar{
-                    report= HaskellGrammar{
-                       declarationLevel= DeclarationGrammar{qualifiedTypeClass}}}
+                    report= HaskellGrammar{generalConstructor, typeTerm}}
                  super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
    super{
       report = (report super){
          declarationLevel= declarationLevel{
-            derivingClause = concatSome ((declarationLevel & derivingClause)
-                                         <|> (takeSome . wrap $
-                                              Abstract.deriveVia @l Abstract.build <$ keyword "deriving"
-                                                 <*> (pure <$> qualifiedTypeClass
-                                                      <<|> parens (qualifiedTypeClass `sepBy` comma))
-                                                 <* keyword "via"
-                                                 <*> wrap (self & report & typeTerm)))}}}
+            derivingClause =
+               concatSome ((declarationLevel & derivingClause)
+                           <|> (takeSome . wrap $
+                                Abstract.deriveVia Abstract.build <$ keyword "deriving"
+                                <*> (parens (wrap typeTerm `sepBy` comma)
+                                     <<|> pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor))
+                                <* keyword "via"
+                                <*> wrap typeTerm))}}}
 
 standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'StandaloneDeriving l,
                                              Abstract.ExtendedWith 'DerivingStrategies l,

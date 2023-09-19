@@ -83,6 +83,7 @@ instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
 
 instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
    build = Abstract.DerivingStrategiesConstruction {
+      Abstract.defaultStrategy = Default,
       Abstract.stockStrategy = Stock,
       Abstract.newtypeStrategy = Newtype,
       Abstract.anyClassStrategy = AnyClass,
@@ -453,11 +454,13 @@ data DataConstructor λ l d s =
 data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    SimpleDerive (Abstract.QualifiedName λ)
    | StrategicDerive !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
-                     (s (Abstract.DerivingStrategy l l d d)) [Abstract.QualifiedName λ]
-   | DeriveVia !(Abstract.SupportFor 'Extensions.DerivingVia λ) [Abstract.QualifiedName λ] (s (Abstract.Type l l d d))
+                     (s (Abstract.DerivingStrategy l l d d)) [s (Abstract.Type l l d d)]
+   | DeriveVia !(Abstract.SupportFor 'Extensions.DerivingVia λ)
+               [s (Abstract.Type l l d d)] (s (Abstract.Type l l d d))
 
 data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   Stock | AnyClass | Newtype | Via !(Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
+   Default | Stock | AnyClass | Newtype
+   | Via !(Abstract.SupportFor 'Extensions.DerivingVia λ) (s (Abstract.Type l l d d))
 
 data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
