@@ -310,7 +310,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
             <*> wrap (nonTerminal (Report.aType . report)),
      familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
      flexibleInstanceDesignator =
-        Abstract.typeClassInstanceLHS <$> qualifiedTypeClass <*> wrap (nonTerminal $ Report.aType . report)
+        Abstract.typeClassInstanceLHS
+           <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
+           <*> wrap (nonTerminal $ Report.aType . report)
         <|> parens (nonTerminal flexibleInstanceDesignator),
      instanceTypeDesignatorInsideParens =
         nonTerminal (Report.typeVarApplications . declarationLevel . report)
@@ -728,6 +730,7 @@ typeOperatorsMixin self super =
                    <$> (self & report & typeConstructor)
                    <*> (Just <$> (self & report & moduleLevel & members))},
          declarationLevel= (super & report & declarationLevel){
+            typeClass = (super & report & declarationLevel & typeClass) <|> parens anyOperator,
             simpleType = (super & report & declarationLevel & simpleType)
                <|> Abstract.simpleInfixTypeLHSApplication
                             <$> typeVarBinder self
