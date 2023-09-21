@@ -514,6 +514,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
       where verify (ExtAST.TypeClassInstanceLHS q _) = verifyTypeName q env
             verify (ExtAST.ClassReferenceInstanceLHS q) = verifyTypeName q env
             verify (ExtAST.InfixTypeClassInstanceLHS _ q _) = verifyTypeName q env
+            verify _ = mempty
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>

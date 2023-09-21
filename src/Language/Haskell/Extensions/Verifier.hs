@@ -265,8 +265,11 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          `Transformation.At` ExtAST.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
       case t
-      of ExtAST.TypeClassInstanceLHS{} | all (not . isAnyDelimiter) lexemes -> mempty
-         _ -> Map.singleton Extensions.TypeOperators [(start, end)]
+      of ExtAST.InfixTypeClassInstanceLHS{} -> typeOperators
+         ExtAST.TypeClassInstanceLHS{} | any isAnyDelimiter lexemes -> typeOperators
+         ExtAST.ClassReferenceInstanceLHS{} | any isAnyDelimiter lexemes -> typeOperators
+         _ -> mempty
+         where typeOperators = Map.singleton Extensions.TypeOperators [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
          Accounting l pos s
