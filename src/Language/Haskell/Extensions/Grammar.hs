@@ -153,7 +153,6 @@ extensionMixins =
      (Set.fromList [ExplicitForAll],                 [(9, explicitForAllMixin)]),
      (Set.fromList [ScopedTypeVariables],            [(9, scopedTypeVariablesMixin)]),
      (Set.fromList [GADTSyntax],                     [(9, gadtSyntaxMixin)]),
-     (Set.fromList [FlexibleInstances],              [(9, flexibleInstancesMixin)]),
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
      (Set.fromList [TypeFamilyDependencies],         [(9, typeFamilyDependenciesMixin)]),
      (Set.fromList [DataKinds],                      [(9, dataKindsMixin)]),
@@ -176,6 +175,7 @@ extensionMixins =
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
      (Set.fromList [FunctionalDependencies],         [(9, functionalDependenciesMixin)]),
+     (Set.fromList [FlexibleInstances],              [(9, flexibleInstancesMixin)]),
      (Set.fromList [InstanceSigs],                   [(9, instanceSignaturesMixin)]),
      (Set.fromList [DefaultSignatures],              [(9, defaultSignaturesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
@@ -776,15 +776,18 @@ multiParameterConstraintsMixin self super = super{
                                        <$> wrap (pure $ Abstract.defaultStrategy @l Abstract.build)
                                        <*> wrap (self & report & typeTerm) `sepBy` comma)
                                <<|> Abstract.simpleDerive <$> (self & report & declarationLevel & qualifiedTypeClass))),
-         instanceDesignator = (super & report & declarationLevel & instanceDesignator) <|>
-            Abstract.classInstanceLHSApplication
-               <$> wrap (self & report & declarationLevel & instanceDesignator)
-               <*> wrap ((self & report & declarationLevel & instanceTypeDesignator)
-                         <|> Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar))}},
-   flexibleInstanceDesignator = (super & flexibleInstanceDesignator)
+         instanceDesignator =
+            Abstract.classReferenceInstanceLHS <$> (self & report & declarationLevel & qualifiedTypeClass)
+            <|> Abstract.classInstanceLHSApplication
+                <$> wrap (self & report & declarationLevel & instanceDesignator)
+                <*> wrap ((self & report & declarationLevel & instanceTypeDesignator)
+                          <|> Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar))}},
+   flexibleInstanceDesignator =
+      Abstract.classReferenceInstanceLHS <$> (self & report & declarationLevel & qualifiedTypeClass)
       <|> Abstract.classInstanceLHSApplication
-             <$> wrap (self & flexibleInstanceDesignator)
-             <*> wrap (self & report & aType)}
+          <$> wrap (self & flexibleInstanceDesignator)
+          <*> wrap (self & report & aType)
+      <|> parens (self & flexibleInstanceDesignator)}
 
 gratuitouslyParenthesizedTypesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
