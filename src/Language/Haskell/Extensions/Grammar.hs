@@ -76,6 +76,7 @@ instance (Eq t, Factorial.StableFactorial t, OutlineMonoid t) => OutlineMonoid (
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
+   singleDerivingClause :: p [f (Abstract.DerivingClause l l f f)],
    keywordForall :: p (),
    classLHS :: p (Abstract.TypeLHS l l f f),
    kindSignature :: p (Abstract.Kind l l f f),
@@ -1438,20 +1439,20 @@ standaloneDerivingMixin self@ExtendedGrammar{
 derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith 'DerivingStrategies l => ExtensionOverlay l g t
 derivingStrategiesMixin self@ExtendedGrammar{
                            report= HaskellGrammar{generalConstructor, typeTerm}}
-                        super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
+                        super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
    super{
-      report = report{
+      report = (report super){
          declarationLevel= declarationLevel{
-            derivingClause =
-               concatSome ((declarationLevel & derivingClause)
-                           <|> (takeSome . wrap $
-                                Abstract.strategicDerive Abstract.build <$ keyword "deriving"
-                                   <*> wrap (self & derivingStrategy)
-                                   <*> (pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor)
-                                        <<|> parens (wrap typeTerm `sepBy` comma))))}},
-     derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
-                        <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
-                        <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
+            derivingClause = concatSome (self & singleDerivingClause)}},
+      singleDerivingClause = (declarationLevel & derivingClause)
+         <|> takeSome (wrap $
+                       Abstract.strategicDerive Abstract.build <$ keyword "deriving"
+                       <*> wrap (self & derivingStrategy)
+                       <*> (pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor)
+                            <<|> parens (wrap typeTerm `sepBy` comma))),
+      derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
+                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
+                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
 
 standaloneDerivingStrategiesMixin :: (Abstract.ExtendedWith 'StandaloneDeriving l,
                                       Abstract.ExtendedWith 'DerivingStrategies l)
@@ -1476,16 +1477,14 @@ derivingViaMixin self@ExtendedGrammar{
                     report= HaskellGrammar{generalConstructor, typeTerm}}
                  super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
    super{
-      report = (report super){
-         declarationLevel= declarationLevel{
-            derivingClause =
-               concatSome ((declarationLevel & derivingClause)
-                           <|> (takeSome . wrap $
-                                Abstract.deriveVia Abstract.build <$ keyword "deriving"
-                                <*> (parens (wrap typeTerm `sepBy` comma)
-                                     <<|> pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor))
-                                <* keyword "via"
-                                <*> wrap typeTerm))}}}
+      singleDerivingClause =
+         singleDerivingClause super
+         <|> takeSome (wrap $
+                       Abstract.deriveVia Abstract.build <$ keyword "deriving"
+                       <*> (parens (wrap typeTerm `sepBy` comma)
+                            <<|> pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor))
+                       <* keyword "via"
+                       <*> wrap typeTerm)}
 
 standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'StandaloneDeriving l,
                                              Abstract.ExtendedWith 'DerivingStrategies l,
