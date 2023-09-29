@@ -1128,6 +1128,11 @@ typeApplicationsMixin self super = super{
           <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
    typeVarBinder = typeVarBinder super
       <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
+   flexibleInstanceDesignator = flexibleInstanceDesignator super
+      <|> Abstract.classInstanceLHSKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & flexibleInstanceDesignator)
+          <* typeApplicationDelimiter
+          <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
    familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)

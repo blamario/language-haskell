@@ -237,6 +237,7 @@ class (Haskell λ,
    classReferenceInstanceLHS :: QualifiedName λ -> ClassInstanceLHS λ l d s
    infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
    classInstanceLHSApplication :: s (ClassInstanceLHS l l d d) -> s (Type l l d d) -> ClassInstanceLHS λ l d s
+   classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
    kindSignature :: Name λ -> s (Kind l l d d) -> Declaration λ l d s
 
    typeConstraint :: s (Type l l d d) -> Context λ l d s
@@ -266,7 +267,6 @@ class (Haskell λ,
                                           -> Pattern λ l d s
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
    wildcardRecordPattern = wildcardRecordPattern' build
-   classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
 
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
