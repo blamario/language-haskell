@@ -7,9 +7,7 @@ import qualified Data.Char as Char
 import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
 import Data.Functor.Compose (Compose(..))
-import Data.Map.Lazy (Map)
 import Data.Maybe (isJust)
-import Data.Map (Map)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix)
 import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Any(Any, getAny))
@@ -17,6 +15,7 @@ import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
 import Data.Semigroup.Factorial (Factorial)
 import Data.Semigroup.Union (UnionWith(UnionWith, getUnionWith))
 import qualified Data.Semigroup.Factorial as Factorial
+import Data.Map.Lazy (Map)
 import Data.Set (Set)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
@@ -43,7 +42,7 @@ data Accounting l pos s = Accounting
 data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
 data Verification l pos s = Verification
 
-type Accounted pos = Const (Map Extension [(pos, pos)])
+type Accounted pos = Const (UnionWith (Map Extension) [(pos, pos)])
 type Verified pos = Const (Map Extension Bool -> [Error pos])
 
 data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
@@ -65,7 +64,7 @@ instance Transformation.Transformation (Verification l pos s) where
     type Domain (Verification l pos s) = Wrap l pos s
     type Codomain (Verification l pos s) = Verified pos
 
-verifyModule :: forall l pos s. (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
+verifyModule :: forall l pos s. (TextualMonoid s, Num pos, Ord pos, Show pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
                                  Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
                                  Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
                 Map Extension Bool
@@ -78,7 +77,7 @@ verifyModule extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitc
                    Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
    where usedExtensions :: Map Extension [(pos, pos)]
-         usedExtensions = Full.foldMap (Accounting :: Accounting l pos s) m
+         usedExtensions = filterExtensions $ getUnionWith $ Full.foldMap (Accounting :: Accounting l pos s) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
@@ -86,9 +85,23 @@ verifyModule extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitc
          extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
 verifyModule extensions m =
    uncurry UndeclaredExtensionUse
-   <$> Map.toList (Full.foldMap (Accounting :: Accounting l pos s) m Map.\\ declaredExtensions)
+   <$> Map.toList (filterExtensions $
+                   getUnionWith (Full.foldMap (Accounting :: Accounting l pos s) m) Map.\\ declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
+
+filterExtensions :: (Num pos, Ord pos, Show pos) => Map Extension [(pos, pos)] -> Map Extension [(pos, pos)]
+filterExtensions = Map.mapMaybeWithKey filterPatternGuards
+   where filterPatternGuards Extensions.PatternGuards ranges =
+            case filterActive ranges
+            of [] -> Nothing
+               rest -> Just rest
+         filterPatternGuards _ ranges = Just ranges
+         filterActive (outer@(start1, end1) : inner@(start2, end2) : rest)
+            | start1 < 0, end1 > 0, start2 >= -start1, end2 > 0, end2 <= end1  = inner : filterActive (outer : rest)
+            | start1 > 0, end1 < 0, start2 >= start1, end2 <= -end1 = filterActive (outer : rest)
+         filterActive ((start, end) : rest) = filterActive rest
+         filterActive [] = []
 
 instance {-# overlappable #-} Accounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
@@ -99,9 +112,10 @@ instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    Verification $ Compose (_, (_, m)) = Const $ \extensions->
       uncurry UndeclaredExtensionUse
-      <$> Map.toList (Deep.foldMap (Accounting :: Accounting l pos s) m Map.\\ withImplications extensions)
+      <$> Map.toList (getUnionWith (Deep.foldMap (Accounting :: Accounting l pos s) m)
+                      Map.\\ withImplications extensions)
 
-instance (TextualMonoid s, Abstract.DeeplyFoldable (Accounting l pos s) l,
+instance (TextualMonoid s, Num pos, Ord pos, Show pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Verification l pos s
@@ -113,17 +127,17 @@ instance (TextualMonoid s, Abstract.Module l l ~ AST.Module l l, Ord (Abstract.M
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ d@(Compose (_, (_, AST.AnonymousModule _ declarations)))
       | Just clashingFieldLocations <- checkDuplicateRecordFields declarations
-      = Const $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
+      = Const $ UnionWith $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
    Accounting $ d@(Compose (_, (_, AST.NamedModule _ _ _ declarations)))
       | Just clashingFieldLocations <- checkDuplicateRecordFields declarations
-      = Const $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
+      = Const $ UnionWith $ Map.singleton Extensions.DuplicateRecordFields clashingFieldLocations
    Accounting $ Compose (_, (_, m)) = mempty
 
 instance (Eq s, IsString s, Show s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Import l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), ExtAST.Import safe _qualified package name alias spec)) =
-      Const $
+      Const $ UnionWith $
          (if safe then Map.singleton Extensions.SafeImports [(start, end)] else mempty)
          <>
          (if isJust package then Map.singleton Extensions.PackageImports [(start, end)] else mempty)
@@ -135,7 +149,7 @@ instance (Eq s, IsString s, Show s) =>
 instance (Eq s, IsString s) =>
          Accounting l pos s
          `Transformation.At` AST.ImportItem l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, Trailing lexemes, end), AST.ImportClassOrType{})) = Const $
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), AST.ImportClassOrType{})) = Const $ UnionWith $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
    Accounting $ _ = mempty
 
@@ -143,29 +157,30 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ d@(Compose (_, ((start, _, end), dec))) =
+   Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $
       case dec
       of ExtAST.DataDeclaration context _lhs _kind constructors _derivings ->
-            Const $
-               (if null constructors then Map.singleton Extensions.EmptyDataDeclarations [(start, end)] else mempty)
-               <>
-               (case snd . snd . getCompose $ context
-                of ExtAST.NoContext -> mempty
-                   _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
-               <>
-               (Full.foldMap UnicodeSyntaxAccounting d)
+            (if null constructors
+             then UnionWith $ Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
+             else mempty)
+            <>
+            (case snd . snd . getCompose $ context
+             of ExtAST.NoContext -> mempty
+                _ -> UnionWith $ Map.singleton Extensions.DatatypeContexts [(start, end)])
+            <>
+            (Full.foldMap UnicodeSyntaxAccounting d)
          ExtAST.GADTDeclaration context _lhs constructors _derivings ->
-            Const $ Map.singleton Extensions.GADTSyntax [(start, end)]
+            UnionWith $ Map.singleton Extensions.GADTSyntax [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
-            Const $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
-         _ -> Const (Full.foldMap UnicodeSyntaxAccounting d)
+            UnionWith $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
+         _ -> Full.foldMap UnicodeSyntaxAccounting d
 
 instance Accounting l pos s
          `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, _, end), ExtAST.ExistentialConstructor{})) =
-     Const (Map.singleton Extensions.ExistentialQuantification [(start, end)])
+      Const (UnionWith $ Map.singleton Extensions.ExistentialQuantification [(start, end)])
    Accounting $ Compose (_, ((start, _, end), ExtAST.RecordConstructor{})) =
-      Const (Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
+      Const (UnionWith $ Map.singleton Extensions.TraditionalRecordSyntax [(start, end)])
    Accounting $ _ = mempty
 
 instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l, Eq s, IsString s) =>
@@ -174,8 +189,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
       case dec
       of ExtAST.NoContext -> mempty
          ExtAST.Constraints{} -> mempty
-         ExtAST.ClassConstraint className t -> Const (foldMap checkFlexibleContextHead t)
-         ExtAST.TypeConstraint t -> Const (foldMap checkFlexibleContext t) <> Const (foldMap checkMPTC t)
+         ExtAST.ClassConstraint className t -> Const (UnionWith $ foldMap checkFlexibleContextHead t)
+         ExtAST.TypeConstraint t -> Const $ UnionWith (foldMap checkFlexibleContext t) <> UnionWith (foldMap checkMPTC t)
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
@@ -194,18 +209,25 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
             isConstructor _ = False
 
 instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Ord (Abstract.QualifiedName l), Eq s, IsString s) =>
+          Ord (Abstract.QualifiedName l), Eq s, IsString s, Num pos) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Expression l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (bindings, ((start, _, end), e)) = Const . ($ [(start, end)]) $
+   Accounting $ Compose (bindings, ((start, _, end), e)) = Const . UnionWith . ($ [(start, end)]) $
       (case e
        of ExtAST.ApplyExpression _ (Compose (_, ((_, Trailing (lexeme1 : _), _), r)))
              | isBlock r && not (isToken "(" lexeme1) -> Map.singleton Extensions.BlockArguments
           ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
           ExtAST.MultiWayIfExpression{} -> Map.singleton Extensions.MultiWayIf
-          ExtAST.MDoExpression{} -> Map.singleton Extensions.RecursiveDo
-          ExtAST.ParallelListComprehension{} -> Map.singleton Extensions.ParallelListComprehensions
+          -- negative end of the range means not really PatternGuards follow
+          ExtAST.DoExpression{} -> Map.singleton Extensions.PatternGuards . ((negate <$>) <$>)
+          ExtAST.MDoExpression{} ->
+             \ranges-> Map.fromList [(Extensions.RecursiveDo, ranges),
+                                     (Extensions.PatternGuards, (negate <$>) <$> ranges)]
+          ExtAST.ListComprehension{} -> Map.singleton Extensions.PatternGuards . ((negate <$>) <$>)
+          ExtAST.ParallelListComprehension{} ->
+             \ranges-> Map.fromList [(Extensions.ParallelListComprehensions, ranges),
+                                     (Extensions.PatternGuards, (negate <$>) <$> ranges)]
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
           ExtAST.OverloadedLabel{} -> Map.singleton Extensions.OverloadedLabels
           ExtAST.ReferenceExpression q
@@ -220,17 +242,26 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
             isBlock ExtAST.LetExpression{} = True
             isBlock _ = False
 
+instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.QualifiedName l), Eq s, IsString s, Num pos) =>
+         Accounting l pos s
+         `Transformation.At` ExtAST.EquationRHS l l (Wrap l pos s) (Wrap l pos s) where
+   -- negative start of the range means real PatternGuards follow
+   Accounting $ Compose (_, ((start, _, end), e)) =
+      Const $ UnionWith $ Map.singleton Extensions.PatternGuards [(-start, end)]
+
 instance Accounting l pos s
          `Transformation.At` ExtAST.Statement l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), e)) = Const $
+   Accounting $ Compose (_, ((start, _, end), e)) = Const $ UnionWith $
       (case e
-       of ExtAST.RecursiveStatement{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
+       of ExtAST.BindStatement{} -> Map.singleton Extensions.PatternGuards [(start, end)]
+          ExtAST.RecursiveStatement{} -> Map.singleton Extensions.RecursiveDo [(start, end)]
           _ -> mempty)
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Value l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, Trailing lexemes, end), literal)) = Const $
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), literal)) = Const $ UnionWith $
       (if any ((isPrefixOf "0b" ||| isPrefixOf "0B") . lexemeText) lexemes
       then Map.singleton Extensions.BinaryLiterals [(start, end)]
        else mempty)
@@ -263,7 +294,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $ UnionWith $
       case t
       of ExtAST.InfixTypeClassInstanceLHS{} -> typeOperators
          ExtAST.TypeClassInstanceLHS{} | any isAnyDelimiter lexemes -> typeOperators
@@ -274,7 +305,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $ UnionWith $
       case t
       of ExtAST.SimpleTypeLHS op vars
             -> (if any (Textual.any isSymbol . lexemeText) lexemes
@@ -286,7 +317,7 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.FieldBinding l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
       <> case t of ExtAST.PunnedFieldBinding {} -> Map.singleton Extensions.NamedFieldPuns [(start, end)]
                    _ -> mempty
@@ -294,7 +325,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.FieldPattern l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
       <> case t of ExtAST.PunnedFieldPattern {} -> Map.singleton Extensions.NamedFieldPuns [(start, end)]
                    _ -> mempty
@@ -302,7 +333,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Pattern l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       case t of ExtAST.BangPattern {} -> Map.singleton Extensions.BangPatterns [(start, end)]
                 ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
@@ -310,7 +341,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Type l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ Compose (_, ((start, _, end), t)) = Const $
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       case t
       of ExtAST.InfixTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
          ExtAST.PromotedInfixTypeApplication{} -> Map.fromList [(Extensions.DataKinds, [(start, end)]),
@@ -343,7 +374,8 @@ instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    UnicodeSyntaxAccounting $ Compose (_, ((start, Trailing lexemes, end), _))
-      | any (`elem` unicodeDelimiters) lexemes = Const (Map.singleton Extensions.UnicodeSyntax [(start, end)])
+      | any (`elem` unicodeDelimiters) lexemes =
+        Const (UnionWith $ Map.singleton Extensions.UnicodeSyntax [(start, end)])
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]

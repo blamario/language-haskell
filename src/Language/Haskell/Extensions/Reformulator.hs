@@ -125,7 +125,8 @@ instance (TextualMonoid s,
           Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
   where
    translate t@(Reformulation e es) (AST.ExtendedModule oldExts m)
-      | Map.notMember e (Full.foldMap (Accounting :: Accounting l1 pos s) m) = AST.ExtendedModule oldExts m
+      | Map.notMember e (getUnionWith $ Full.foldMap (Accounting :: Accounting l1 pos s) m) =
+         AST.ExtendedModule oldExts m
       | otherwise = case List.union (Extensions.on <$> es) $ List.delete (Extensions.on e) oldExts of
          [] -> Translation.translate t (Foldable1.head m)
          newExts -> AST.ExtendedModule newExts m
