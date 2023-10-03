@@ -438,11 +438,13 @@ instance (WrapTranslation t, WrappedTranslation t AST.EquationRHS,
 
 instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
           FullyTranslatable t AST.Constructor, FullyTranslatable t AST.FieldPattern,
-          FullyTranslatable t AST.Type, FullyTranslatable t AST.Value,
+          FullyTranslatable t AST.Type, FullyTranslatable t AST.Expression, FullyTranslatable t AST.Value,
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
           Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
           Abstract.Constructor (Origin t) ~ AST.Constructor (Origin t),
           Abstract.Constructor (Target t) ~ AST.Constructor (Target t),
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t),
           Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
           Abstract.FieldPattern (Target t) ~ AST.FieldPattern (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
@@ -452,6 +454,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
          DeeplyTranslatable t AST.Pattern where
    translateDeeply t (AST.AsPattern name body) = AST.AsPattern name (translateFully t body)
    translateDeeply t (AST.BangPattern support body) = AST.BangPattern support (translateFully t body)
+   translateDeeply t (AST.ViewPattern support view pattern) =
+      AST.ViewPattern support (translateFully t view) (translateFully t pattern)
    translateDeeply t (AST.ConstructorPattern con types args) =
       AST.ConstructorPattern (translateFully t con) (translateFully t <$> types) (translateFully t <$> args)
    translateDeeply t (AST.InfixPattern left con right) =

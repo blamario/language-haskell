@@ -63,7 +63,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    statements :: p (Abstract.GuardedExpression l l f f),
    statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
    fieldBinding :: p (Abstract.FieldBinding l l f f),
-   pattern, lPattern, aPattern :: p (Abstract.Pattern l l f f),
+   pattern, lPattern, aPattern, pPattern :: p (Abstract.Pattern l l f f),
    fieldPattern :: p (Abstract.FieldPattern l l f f),
    generalConstructor :: p (Abstract.Constructor l l f f),
    variable, constructor, variableOperator, constructorOperator, operator :: p (Abstract.Name l),
@@ -540,12 +540,13 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
               <|> Abstract.recordPattern <$> qualifiedConstructor <*> braces (wrap fieldPattern `sepBy` comma)
               <|> Abstract.literalPattern <$> wrap literal
               <|> Abstract.wildcardPattern <$ keyword "_"
-              <|> parens (pattern
+              <|> parens (pPattern
                           <|> Abstract.tuplePattern
-                              <$> ((:|) <$> wrap pattern <*> some (terminator "," *> wrap pattern)))
-              <|> Abstract.listPattern <$> brackets (wrap pattern `sepBy1` comma)
+                              <$> ((:|) <$> wrap pPattern <*> some (terminator "," *> wrap pPattern)))
+              <|> Abstract.listPattern <$> brackets (wrap pPattern `sepBy1` comma)
               <|> Abstract.irrefutablePattern <$ delimiter "~" <*> wrap aPattern,
-   fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pattern,
+   fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pPattern,
+   pPattern = pattern,  -- parenthesized pattern
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
                         <|> Abstract.unitConstructor <$ terminator "(" <* terminator ")"
                         <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
