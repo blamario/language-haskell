@@ -242,6 +242,7 @@ instance {-# OVERLAPS #-}
             getPatternVariables (ExtAST.TuplePattern items) =
                foldMap (foldMap getPatternVariables . flip getCompose mempty) items
             getPatternVariables (ExtAST.VariablePattern name) = [name]
+            getPatternVariables (ExtAST.ViewPattern _ view p) = foldMap getPatternVariables (getCompose p mempty)
             getPatternVariables ExtAST.WildcardPattern = []
             getFieldPatternVariables (ExtAST.FieldPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
             getFieldPatternVariables ExtAST.PunnedFieldPattern{} = []
