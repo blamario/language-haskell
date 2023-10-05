@@ -335,6 +335,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          `Transformation.At` ExtAST.Pattern l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       case t of ExtAST.BangPattern {} -> Map.singleton Extensions.BangPatterns [(start, end)]
+                ExtAST.ViewPattern {} -> Map.singleton Extensions.ViewPatterns [(start, end)]
                 ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
 

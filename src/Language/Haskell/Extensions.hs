@@ -185,7 +185,8 @@ allExtensions = Set.fromList [minBound .. maxBound]
 
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
-                                  ForeignFunctionInterface, GratuitouslyParenthesizedTypes, IdentifierSyntax,
+                                  FieldSelectors, ForeignFunctionInterface,
+                                  GratuitouslyParenthesizedTypes, IdentifierSyntax,
                                   MultiParameterConstraints, ParenthesizedTypeOperators, PatternGuards,
                                   RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
