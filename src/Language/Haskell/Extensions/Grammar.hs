@@ -1437,7 +1437,7 @@ viewPatternsMixin self super =
             <|> Abstract.viewPattern Abstract.build
                 <$> (self & report & expression)
                 <* (self & report & rightArrow)
-                <*> wrap (self & report & pattern)}}
+                <*> wrap (self & report & pPattern)}}
 
 standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{
