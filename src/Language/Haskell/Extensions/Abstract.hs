@@ -13,6 +13,7 @@ module Language.Haskell.Extensions.Abstract (
               TupleSectionConstruction, tupleSectionExpression',
               BangPatternConstruction, bangPattern,
               ViewPatternConstruction, viewPattern,
+              NPlusKPatternConstruction, nPlusKPattern,
               StandaloneDerivingConstruction, standaloneDerivingDeclaration,
               DerivingStrategiesConstruction,
               defaultStrategy, stockStrategy, newtypeStrategy, anyClassStrategy,
@@ -99,6 +100,9 @@ data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruct
 data instance Construct 'Extensions.ViewPatterns λ l d s = ViewPatternConstruction {
    viewPattern :: s (Expression l l d d) -> s (Pattern l l d d) -> Pattern λ l d s}
 
+data instance Construct 'Extensions.NPlusKPatterns λ l d s = NPlusKPatternConstruction {
+   nPlusKPattern :: Name λ -> Integer -> Pattern λ l d s}
+
 data instance Construct 'Extensions.StandaloneDeriving λ l d s = StandaloneDerivingConstruction {
    standaloneDerivingDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> Declaration λ l d s}
 
@@ -133,7 +137,7 @@ data instance Construct 'Extensions.FunctionalDependencies λ l d s = Functional
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
-                          'Extensions.BangPatterns, 'Extensions.ViewPatterns,
+                          'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
                           'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ) =>
       ExtendedHaskell λ where

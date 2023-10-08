@@ -456,6 +456,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
    translateDeeply t (AST.BangPattern support body) = AST.BangPattern support (translateFully t body)
    translateDeeply t (AST.ViewPattern support view pattern) =
       AST.ViewPattern support (translateFully t view) (translateFully t pattern)
+   translateDeeply _ (AST.NPlusKPattern support n k) = AST.NPlusKPattern support n k
    translateDeeply t (AST.ConstructorPattern con types args) =
       AST.ConstructorPattern (translateFully t con) (translateFully t <$> types) (translateFully t <$> args)
    translateDeeply t (AST.InfixPattern left con right) =

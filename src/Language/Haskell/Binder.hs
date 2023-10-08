@@ -12,7 +12,7 @@ module Language.Haskell.Binder (
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    lookupType, lookupValue, unboundNames,
    onMap, withBindings,
-   preludeName, baseName) where
+   preludeName, baseName, unqualifiedName) where
 
 import Control.Applicative ((<|>))
 import Control.Exception (assert)

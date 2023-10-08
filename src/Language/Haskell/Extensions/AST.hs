@@ -41,6 +41,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.TupleSections,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
+   'Extensions.NPlusKPatterns,
    'Extensions.StandaloneDeriving,
    'Extensions.DerivingStrategies,
    'Extensions.DerivingVia,
@@ -81,6 +82,10 @@ instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
 instance Abstract.ExtendedWith 'Extensions.ViewPatterns Language where
    build = Abstract.ViewPatternConstruction {
       Abstract.viewPattern = ViewPattern ()}
+
+instance Abstract.ExtendedWith 'Extensions.NPlusKPatterns Language where
+   build = Abstract.NPlusKPatternConstruction {
+      Abstract.nPlusKPattern = NPlusKPattern ()}
 
 instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
    build = Abstract.StandaloneDerivingConstruction {
@@ -575,6 +580,7 @@ data Pattern λ l d s =
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
                   (s (Abstract.Pattern l l d d))
+   | NPlusKPattern !(Abstract.SupportFor 'Extensions.NPlusKPatterns λ) (Abstract.Name λ) Integer
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
@@ -787,6 +793,7 @@ deriving instance Typeable (Pattern λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.ViewPatterns λ),
+                   Data (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Expression l l d d)),
                    Data (s (Abstract.FieldPattern l l d d)), Data (s (Abstract.Pattern l l d d)),
                    Data (s (Abstract.Value l l d d)), Data (s (Abstract.Type l l d d)),
@@ -795,6 +802,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
 deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.ViewPatterns λ),
+                   Show (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Expression l l d d)),
                    Show (s (Abstract.FieldPattern l l d d)), Show (s (Abstract.Pattern l l d d)),
                    Show (s (Abstract.Value l l d d)), Show (s (Abstract.Type l l d d)),
@@ -802,6 +810,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
 deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.ViewPatterns λ),
+                   Eq (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Expression l l d d)),
                    Eq (s (Abstract.FieldPattern l l d d)), Eq (s (Abstract.Pattern l l d d)),
                    Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),

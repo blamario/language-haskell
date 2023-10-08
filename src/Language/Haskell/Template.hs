@@ -41,8 +41,9 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
 pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
-           FullyTranslatable (Reformulator.ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] Language Language pos s) node) => a -> String
-pprint = render . Ppr.to_HPJ_Doc . prettyViaTH . Reformulator.dropRecordWildCards
+           FullyTranslatable (Reformulator.ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] Language Language pos s) node,
+           FullyTranslatable (Reformulator.ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] Language Language pos s) node) => a -> String
+pprint = render . Ppr.to_HPJ_Doc . prettyViaTH . Reformulator.dropRecordWildCards . Reformulator.dropNPlusKPatterns
 
 doE, mdoE :: [Stmt] -> Exp
 #if MIN_VERSION_template_haskell(2,17,0)
@@ -513,6 +514,7 @@ patternTemplate (RecordPattern constructor fields) =
      fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
      fieldPatternTemplate (PunnedFieldPattern q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
 patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
+patternTemplate NPlusKPattern{} = error "TH doesn't support N+K patterns"
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate (TypedPattern p t) = SigP (patternTemplate $ extract p) (typeTemplate $ extract t)

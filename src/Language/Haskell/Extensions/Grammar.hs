@@ -168,6 +168,7 @@ extensionMixins =
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
+     (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
      (Set.fromList [StandaloneDeriving],             [(9, standaloneDerivingMixin)]),
      (Set.fromList [DerivingStrategies],             [(9, derivingStrategiesMixin)]),
      (Set.fromList [DerivingVia],                    [(9, derivingViaMixin)]),
@@ -1438,6 +1439,16 @@ viewPatternsMixin self super =
                 <$> (self & report & expression)
                 <* (self & report & rightArrow)
                 <*> wrap (self & report & pPattern)}}
+
+nPlusKPatternsMixin :: Abstract.ExtendedWith 'NPlusKPatterns l => ExtensionOverlay l g t
+nPlusKPatternsMixin self super =
+   super{
+      report = (report super){
+         pPattern = (super & report & pPattern)
+            <|> Abstract.nPlusKPattern Abstract.build
+                <$> (self & report & variable)
+                <* delimiter "+"
+                <*> (self & report & integer)}}
 
 standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{

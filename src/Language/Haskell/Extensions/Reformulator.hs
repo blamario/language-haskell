@@ -1,5 +1,6 @@
-{-# Language ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+             OverloadedStrings, RankNTypes, ScopedTypeVariables,
+             TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Language.Haskell.Extensions.Reformulator where
 
@@ -113,6 +114,19 @@ dropRecordWildCards =
                                ::
                                  ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
+dropNPlusKPatterns :: forall l1 l2 node pos s.
+                      (Abstract.Haskell l2, Abstract.ExtendedWith 'Extensions.ViewPatterns l2,
+                       SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s l1 l2,
+                       FullyTranslatable (ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] l1 l2 pos s) node)
+                    => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                    -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropNPlusKPatterns =
+   Translation.translateFully (Reformulation Extensions.NPlusKPatterns [Extensions.ViewPatterns]
+                               ::
+                                 ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] l1 l2 pos s)
+
+-- Generic instance to adjust the LANGUAGE pragma
+
 instance (TextualMonoid s,
           Abstract.DeeplyFoldable (Accounting l1 pos s) l1,
           Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
@@ -133,6 +147,8 @@ instance (TextualMonoid s,
    translate t (AST.NamedModule name exports imports declarations) =
       AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
    translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
+
+-- RecordWildCards instances
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
@@ -188,6 +204,45 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
             conExp | let (start, _, _) = s = Compose (env, ((start, mempty, start), Abstract.referenceExpression con))
    _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 
+-- NPlusKPattern instances
+
+instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s λ l2,
+          Abstract.Haskell l2,
+          Abstract.Supports 'Extensions.NPlusKPatterns λ,
+          Abstract.Supports 'Extensions.ViewPatterns l2,
+          Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
+          Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+          Abstract.ModuleName l2 ~ AST.ModuleName l2,
+          Abstract.Name l2 ~ AST.Name l2) =>
+   WrappedTranslation
+      (ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] λ l2 pos s)
+      AST.Pattern
+  where
+   translateWrapped
+      Reformulation{}
+      (Compose (env, (s@(start, lexemes, end), AST.NPlusKPattern () n k))) =
+      Compose (env,
+               (s, AST.ViewPattern () (justGreaterOrEqual k) (rewrap $ AST.ConstructorPattern just [] [rewrap $ AST.VariablePattern n])))
+      where justGreaterOrEqual k =
+               rewrap
+               $ AST.LambdaExpression [rewrap $ AST.VariablePattern n]
+               $ rewrap $ AST.ConditionalExpression
+                    (nOpK ">=")
+                    (rewrap $ rewrap (AST.ConstructorExpression just) `AST.ApplyExpression` nOpK "-")
+                    (rewrap $ AST.ConstructorExpression $
+                     rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Nothing")
+            nOpK op =
+               rewrap $
+               AST.InfixExpression nExp (rewrap $ AST.ReferenceExpression $ qualifiedWithPrelude $ AST.Name op) kExp
+            nExp = rewrap $ AST.ReferenceExpression $ Binder.unqualifiedName n
+            kExp = rewrap $ AST.LiteralExpression $ rewrap $ AST.IntegerLiteral k
+            just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Just"
+            qualifiedWithPrelude = AST.QualifiedName (Just Binder.preludeName)
+            rewrap :: node -> Wrap l2 pos s node
+            rewrap node = Compose (env, ((start, mempty, end), node))
+   translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
+
+-- auxiliary functions
 
 mapImport :: (Abstract.ExtendedHaskell λ2,
               Abstract.ModuleName λ1 ~ AST.ModuleName λ1,

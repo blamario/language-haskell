@@ -112,6 +112,10 @@ main' Opts{..} = do
                  (ReformulationOf
                      'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
                  g,
+              FullyTranslatable
+                 (ReformulationOf
+                     'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns] Language Language Int Text)
+                 g,
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
@@ -147,6 +151,10 @@ main' Opts{..} = do
                   FullyTranslatable
                      (ReformulationOf
                          'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
+                     g,
+                  FullyTranslatable
+                     (ReformulationOf
+                         'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns] Language Language Int Text)
                      g,
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
