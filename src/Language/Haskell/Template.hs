@@ -372,6 +372,33 @@ declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy cont
    [StandaloneDerivD (strategyTemplate $ extract strategy) (contextTemplate $ extract context)
                      (lhsTypeTemplate $ extract lhs)]
 
+declarationTemplates (ImplicitPatternSynonym () lhs rhs) =
+   [PatSynD name args TH.ImplBidir $ patternTemplate $ extract rhs]
+   where (name, args) = lhsPatternTemplate (extract lhs)
+declarationTemplates (UnidirectionalPatternSynonym () lhs rhs) =
+   [PatSynD name args TH.Unidir $ patternTemplate $ extract rhs]
+   where (name, args) = lhsPatternTemplate (extract lhs)
+declarationTemplates (ExplicitPatternSynonym () lhs rhs clauses) =
+   [PatSynD name args (TH.ExplBidir $ clauseTemplate <$> clauses) $ patternTemplate $ extract rhs]
+   where (name, args) = lhsPatternTemplate (extract lhs)
+         clauseTemplate (EquationClause lhs rhs wheres) =
+            TH.Clause (patternTemplate . extract <$> patterns) (rhsTemplate $ extract rhs)
+                      (foldMap (declarationTemplates . extract) wheres)
+            where patterns = case extract lhs
+                             of PrefixPatternEquationLHS _ pats -> pats
+                                InfixPatternEquationLHS l _ r -> [l, r]
+declarationTemplates (PatternSynonymSignature () names vars1 ctx1 vars2 ctx2 args result) =
+   [PatSynSigD (nameTemplate name) $
+    ForallT (typeVarBindingSpecTemplate <$> vars1) (contextTemplate $ extract ctx1) $
+    ForallT (typeVarBindingSpecTemplate <$> vars2) (contextTemplate $ extract ctx2) $
+    foldr (TH.AppT . TH.AppT TH.ArrowT . typeTemplate . extract) (typeTemplate $ extract result) args
+   | name <- toList names]
+
+lhsPatternTemplate :: ExtAST.PatternLHS Language Language f f -> (TH.Name, TH.PatSynArgs)
+lhsPatternTemplate (PrefixPatternLHS name args) = (nameTemplate name, TH.PrefixPatSyn $ nameTemplate <$> args)
+lhsPatternTemplate (InfixPatternLHS l name r) = (nameTemplate name, TH.InfixPatSyn (nameTemplate l) (nameTemplate r))
+lhsPatternTemplate (RecordPatternLHS name args) = (nameTemplate name, TH.RecordPatSyn $ nameTemplate <$> args)
+
 lhsTypeTemplate :: TemplateWrapper f => ExtAST.ClassInstanceLHS Language Language f f -> TH.Type
 lhsTypeTemplate (TypeClassInstanceLHS name t) = AppT (ConT $ qnameTemplate name) (typeTemplate $ extract t)
 lhsTypeTemplate (ClassReferenceInstanceLHS name) = ConT (qnameTemplate name)

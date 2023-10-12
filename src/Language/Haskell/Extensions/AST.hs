@@ -4,9 +4,11 @@
 
 module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..), GADTConstructor(..),
-                                        FunctionalDependency(..), DerivingClause(..), DerivingStrategy(..),
-                                        Expression(..), Pattern(..), FieldBinding(..), FieldPattern(..), Statement(..),
-                                        ClassInstanceLHS(..), Context(..),
+                                        FunctionalDependency(..), EquationClause(..),
+                                        DerivingClause(..), DerivingStrategy(..),
+                                        Expression(..), Pattern(..), PatternLHS(..), PatternEquationLHS(..),
+                                        FieldBinding(..), FieldPattern(..),
+                                        Statement(..), ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..), Value(..),
                                         module Report) where
 
@@ -42,6 +44,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
+   'Extensions.PatternSynonyms,
    'Extensions.StandaloneDeriving,
    'Extensions.DerivingStrategies,
    'Extensions.DerivingVia,
@@ -87,6 +90,19 @@ instance Abstract.ExtendedWith 'Extensions.NPlusKPatterns Language where
    build = Abstract.NPlusKPatternConstruction {
       Abstract.nPlusKPattern = NPlusKPattern ()}
 
+instance Abstract.ExtendedWith 'Extensions.PatternSynonyms Language where
+   build = Abstract.PatternSynonymConstruction {
+      Abstract.prefixPatternLHS = PrefixPatternLHS,
+      Abstract.infixPatternLHS = InfixPatternLHS,
+      Abstract.recordPatternLHS = RecordPatternLHS,
+      Abstract.prefixPatternEquationLHS = PrefixPatternEquationLHS,
+      Abstract.infixPatternEquationLHS = InfixPatternEquationLHS,
+      Abstract.implicitPatternSynonym = ImplicitPatternSynonym (),
+      Abstract.unidirectionalPatternSynonym = UnidirectionalPatternSynonym (),
+      Abstract.explicitPatternSynonym = \lhs rhs clauses-> ExplicitPatternSynonym () lhs rhs (toClause <$> clauses),
+      Abstract.patternSynonymSignature = PatternSynonymSignature ()}
+      where toClause (lhs, rhs, wheres) = EquationClause lhs rhs wheres
+
 instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
    build = Abstract.StandaloneDerivingConstruction {
       Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration ()}
@@ -116,6 +132,8 @@ instance Abstract.ExtendedWith 'Extensions.FunctionalDependencies Language where
 
 type instance Abstract.FunctionalDependency Language = FunctionalDependency Language
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
+type instance Abstract.PatternLHS Language = PatternLHS Language
+type instance Abstract.PatternEquationLHS Language = PatternEquationLHS Language
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
@@ -448,6 +466,27 @@ data Declaration λ l d s =
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
+   | ImplicitPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
+                            (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
+   | UnidirectionalPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
+                                  (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
+   | ExplicitPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
+                            (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
+                            [EquationClause λ l d s]
+   | PatternSynonymSignature !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
+                             (NonEmpty (Abstract.Name λ))
+                             [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+                             [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+                             [s (Abstract.Type l l d d)]
+                             (s (Abstract.Type l l d d))
+
+data EquationClause λ l d s = EquationClause (s (Abstract.PatternEquationLHS l l d d))
+                                             (s (Abstract.EquationRHS l l d d))
+                                             [s (Abstract.Declaration l l d d)]
+
+data PatternEquationLHS λ l d s =
+   PrefixPatternEquationLHS (Abstract.Name λ) [s (Abstract.Pattern l l d d)]
+   | InfixPatternEquationLHS (s (Abstract.Pattern l l d d)) (Abstract.Name λ) (s (Abstract.Pattern l l d d))
 
 data FunctionalDependency λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    FunctionalDependency (NonEmpty (Abstract.Name λ)) (NonEmpty (Abstract.Name λ))
@@ -561,8 +600,8 @@ data Expression λ l d s =
                                [s (Abstract.FieldBinding l l d d)]
 
 data FieldBinding λ l d s =
-  FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
-  | PunnedFieldBinding (Abstract.QualifiedName λ)
+   FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
+   | PunnedFieldBinding (Abstract.QualifiedName λ)
 
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
@@ -584,6 +623,11 @@ data Pattern λ l d s =
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
+
+data PatternLHS λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   PrefixPatternLHS (Name λ) [Name λ]
+   | InfixPatternLHS (Name λ) (Name λ) (Name λ)
+   | RecordPatternLHS (Name λ) [Name λ]
 
 data FieldPattern λ l d s =
   FieldPattern (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
@@ -615,6 +659,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Data (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.FunctionalDependency l l d d)),
                    Data (s (Abstract.DataConstructor l l d d)), Data (s (Abstract.GADTConstructor l l d d)),
@@ -623,12 +668,16 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.ClassInstanceLHS l l d d)),
+                   Data (s (Abstract.PatternLHS l l d d)), Data (s (Abstract.PatternEquationLHS l l d d)),
+                   Data (s (Abstract.Pattern l l d d)),
+                   Data (Abstract.TypeVarBinding λ l d s),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ), Data (Abstract.TypeRole λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Show (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.FunctionalDependency l l d d)),
                    Show (s (Abstract.DataConstructor l l d d)), Show (s (Abstract.GADTConstructor l l d d)),
@@ -637,12 +686,16 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.ClassInstanceLHS l l d d)),
+                   Show (s (Abstract.PatternLHS l l d d)), Show (s (Abstract.PatternEquationLHS l l d d)),
+                   Show (s (Abstract.Pattern l l d d)),
+                   Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Eq (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
                    Eq (s (Abstract.DerivingStrategy l l d d)),
@@ -651,8 +704,26 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.ClassInstanceLHS l l d d)),
+                   Eq (s (Abstract.PatternLHS l l d d)), Eq (s (Abstract.PatternEquationLHS l l d d)),
+                   Eq (s (Abstract.Pattern l l d d)),
+                   Eq (Abstract.TypeVarBinding λ l d s),
                    Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ),
                    Eq (Abstract.TypeRole λ)) => Eq (Declaration λ l d s)
+
+deriving instance Typeable (EquationClause λ l d s)
+deriving instance (Typeable λ, Typeable l, Typeable d, Typeable s,
+                   Data (s (Abstract.PatternEquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+                   Data (s (Abstract.Declaration l l d d))) => Data (EquationClause λ l d s)
+deriving instance (Eq (s (Abstract.PatternEquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
+                   Eq (s (Abstract.Declaration l l d d))) => Eq (EquationClause λ l d s)
+deriving instance (Show (s (Abstract.PatternEquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
+                   Show (s (Abstract.Declaration l l d d))) => Show (EquationClause λ l d s)
+
+deriving instance Typeable (PatternEquationLHS λ l d s)
+deriving instance (Typeable λ, Typeable l, Typeable d, Typeable s,
+                   Data (Abstract.Name λ), Data (s (Abstract.Pattern l l d d))) => Data (PatternEquationLHS λ l d s)
+deriving instance (Eq (Abstract.Name λ), Eq (s (Abstract.Pattern l l d d))) => Eq (PatternEquationLHS λ l d s)
+deriving instance (Show (Abstract.Name λ), Show (s (Abstract.Pattern l l d d))) => Show (PatternEquationLHS λ l d s)
 
 deriving instance Typeable (FunctionalDependency λ l d s)
 deriving instance (Data (Abstract.Name λ),
@@ -822,6 +893,11 @@ deriving instance (Data (s (Abstract.Pattern l l d d)), Data (Abstract.Qualified
 deriving instance (Show (s (Abstract.Pattern l l d d)), Show (Abstract.QualifiedName λ)) => Show (FieldPattern λ l d s)
 deriving instance (Eq (s (Abstract.Pattern l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (FieldPattern λ l d s)
 
+deriving instance Typeable (PatternLHS λ l d s)
+deriving instance (Data (Abstract.Name λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (PatternLHS λ l d s)
+deriving instance (Show (Abstract.Name λ)) => Show (PatternLHS λ l d s)
+deriving instance (Eq (Abstract.Name λ)) => Eq (PatternLHS λ l d s)
+
 deriving instance Typeable (Statement λ l d s)
 deriving instance (Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.Expression l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
@@ -844,6 +920,7 @@ $(concat <$>
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
              [''Import, ''Declaration, ''FunctionalDependency, ''DataConstructor, ''GADTConstructor,
-              ''DerivingClause, ''DerivingStrategy,
+              ''EquationClause, ''DerivingClause, ''DerivingStrategy,
               ''Type, ''TypeLHS, ''TypeVarBinding, ''ClassInstanceLHS, ''Context,
-              ''Expression, ''FieldBinding, ''Pattern, ''FieldPattern, ''Statement, ''Value]))
+              ''Expression, ''FieldBinding, ''Pattern, ''PatternLHS, ''PatternEquationLHS, ''FieldPattern,
+              ''Statement, ''Value]))
