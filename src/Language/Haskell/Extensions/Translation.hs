@@ -110,7 +110,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
           FullyTranslatable t AST.DerivingClause, FullyTranslatable t AST.DerivingStrategy,
           FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS,
-          FullyTranslatable t AST.EquationClause, FullyTranslatable t AST.PatternLHS, FullyTranslatable t AST.Pattern,
+          FullyTranslatable t AST.PatternEquationClause,
+          FullyTranslatable t AST.PatternLHS, FullyTranslatable t AST.Pattern,
           Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
           Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
           Abstract.Context (Origin t) ~ AST.Context (Origin t),
@@ -141,6 +142,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
           Abstract.PatternLHS (Origin t) ~ AST.PatternLHS (Origin t),
           Abstract.PatternLHS (Target t) ~ AST.PatternLHS (Target t),
+          Abstract.PatternEquationClause (Origin t) ~ AST.PatternEquationClause (Origin t),
+          Abstract.PatternEquationClause (Target t) ~ AST.PatternEquationClause (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
           Abstract.Pattern (Target t) ~ AST.Pattern (Target t)) =>
          DeeplyTranslatable t AST.Declaration where
@@ -217,7 +220,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.UnidirectionalPatternSynonym support lhs rhs) =
       AST.UnidirectionalPatternSynonym support (translateFully t lhs) (translateFully t rhs)
    translateDeeply t (AST.ExplicitPatternSynonym support lhs rhs clauses) =
-      AST.ExplicitPatternSynonym support (translateFully t lhs) (translateFully t rhs) (translateDeeply t <$> clauses)
+      AST.ExplicitPatternSynonym support (translateFully t lhs) (translateFully t rhs) (translateFully t <$> clauses)
    translateDeeply t (AST.PatternSynonymSignature support names vars1 context1 vars2 context2 args result) =
       AST.PatternSynonymSignature support names
                                   (translateDeeply t <$> vars1) (translateFully t context1)
@@ -233,9 +236,9 @@ instance (WrapTranslation t,
           Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
           Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
           Abstract.Declaration (Target t) ~ AST.Declaration (Target t)) =>
-         DeeplyTranslatable t AST.EquationClause where
-   translateDeeply t (AST.EquationClause lhs rhs wheres) =
-      AST.EquationClause (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
+         DeeplyTranslatable t AST.PatternEquationClause where
+   translateDeeply t (AST.PatternEquationClause support lhs rhs wheres) =
+      AST.PatternEquationClause support (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
 
 instance (WrapTranslation t,
           FullyTranslatable t AST.Pattern,

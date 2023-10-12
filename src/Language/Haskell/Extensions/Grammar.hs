@@ -1450,6 +1450,51 @@ nPlusKPatternsMixin self super =
                 <* delimiter "+"
                 <*> (self & report & integer)}}
 
+patternSynonymsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'PatternSynonyms l,
+                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.PatternEquationClause l l),
+                                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
+                     => ExtensionOverlay l g t
+patternSynonymsMixin self super =
+   super{
+      report= (report super){
+         declarationLevel= (super & report & declarationLevel){
+            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+               <|> keyword "pattern" *>
+               (Abstract.implicitPatternSynonym Abstract.build
+                   <$> wrap lhsPattern <* delimiter "=" <*> wrap (self & report & pattern)
+                <|> Abstract.unidirectionalPatternSynonym Abstract.build
+                       <$> wrap lhsPattern <* (self & report & leftArrow) <*> wrap (self & report & pattern)
+                <|> Abstract.explicitPatternSynonym Abstract.build
+                       <$> wrap lhsPattern
+                       <* (self & report & leftArrow)
+                       <*> wrap (self & report & pattern)
+                       <*> patternClauses)}}}
+   where lhsPattern =
+            Abstract.prefixPatternLHS Abstract.build
+               <$> (self & report & constructor)
+               <*> many (self & report & variableIdentifier)
+            <|> Abstract.infixPatternLHS Abstract.build
+                   <$> (self & report & variableIdentifier)
+                   <*> (self & report & constructor)
+                   <*> (self & report & variableIdentifier)
+            <|> Abstract.recordPatternLHS Abstract.build
+                   <$> (self & report & constructor)
+                   <*> braces ((self & report & variableIdentifier) `sepBy` comma)
+         patternClauses = moptional (keyword "where" *> blockOf patternClause)
+--         patternClause :: Parser g t (Abstract.PatternEquationClause l l (NodeWrap t) (NodeWrap t))
+         patternClause = Abstract.patternEquationClause @l Abstract.build
+                         <$> wrap patternClauseLHS
+                         <*> wrap (self & report & rhs)
+                         <*> (self & report & declarationLevel & whereClauses)
+         patternClauseLHS =
+            Abstract.prefixPatternEquationLHS Abstract.build
+               <$> (self & report & constructor)
+               <*> many (wrap (self & report & pattern))
+            <|> Abstract.infixPatternEquationLHS Abstract.build
+                   <$> wrap (self & report & pattern)
+                   <*> (self & report & constructor)
+                   <*> wrap (self & report & pattern)
+
 standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{
                            report= HaskellGrammar{

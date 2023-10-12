@@ -379,9 +379,9 @@ declarationTemplates (UnidirectionalPatternSynonym () lhs rhs) =
    [PatSynD name args TH.Unidir $ patternTemplate $ extract rhs]
    where (name, args) = lhsPatternTemplate (extract lhs)
 declarationTemplates (ExplicitPatternSynonym () lhs rhs clauses) =
-   [PatSynD name args (TH.ExplBidir $ clauseTemplate <$> clauses) $ patternTemplate $ extract rhs]
+   [PatSynD name args (TH.ExplBidir $ clauseTemplate . extract <$> clauses) $ patternTemplate $ extract rhs]
    where (name, args) = lhsPatternTemplate (extract lhs)
-         clauseTemplate (EquationClause lhs rhs wheres) =
+         clauseTemplate (PatternEquationClause () lhs rhs wheres) =
             TH.Clause (patternTemplate . extract <$> patterns) (rhsTemplate $ extract rhs)
                       (foldMap (declarationTemplates . extract) wheres)
             where patterns = case extract lhs

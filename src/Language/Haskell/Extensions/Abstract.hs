@@ -15,7 +15,8 @@ module Language.Haskell.Extensions.Abstract (
               ViewPatternConstruction, viewPattern,
               NPlusKPatternConstruction, nPlusKPattern,
               PatternSynonymConstruction,
-              prefixPatternLHS, infixPatternLHS, recordPatternLHS, prefixPatternEquationLHS, infixPatternEquationLHS, 
+              prefixPatternLHS, infixPatternLHS, recordPatternLHS, prefixPatternEquationLHS, infixPatternEquationLHS,
+              patternEquationClause,
               implicitPatternSynonym, unidirectionalPatternSynonym, explicitPatternSynonym, patternSynonymSignature,
               StandaloneDerivingConstruction, standaloneDerivingDeclaration,
               DerivingStrategiesConstruction,
@@ -26,7 +27,7 @@ module Language.Haskell.Extensions.Abstract (
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
-   DerivingStrategy, FunctionalDependency, PatternLHS, PatternEquationLHS,
+   DerivingStrategy, FunctionalDependency, PatternLHS, PatternEquationClause, PatternEquationLHS,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
@@ -108,6 +109,7 @@ data instance Construct 'Extensions.NPlusKPatterns λ l d s = NPlusKPatternConst
 
 type family PatternLHS λ :: TreeNodeSubKind
 type family PatternEquationLHS λ :: TreeNodeSubKind
+type family PatternEquationClause λ :: TreeNodeSubKind
 
 data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymConstruction {
    prefixPatternLHS :: Name λ -> [Name λ] -> PatternLHS λ l d s,
@@ -115,6 +117,9 @@ data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymCon
    recordPatternLHS :: Name λ -> [Name λ] -> PatternLHS λ l d s,
    prefixPatternEquationLHS :: Name λ -> [s (Pattern l l d d)] -> PatternEquationLHS λ l d s,
    infixPatternEquationLHS :: s (Pattern l l d d) -> Name λ -> s (Pattern l l d d) -> PatternEquationLHS λ l d s,
+   patternEquationClause :: Supports 'Extensions.PatternSynonyms λ
+                         => s (PatternEquationLHS l l d d) -> s (EquationRHS l l d d) -> [s (Declaration l l d d)]
+                         -> PatternEquationClause λ l d s,
    implicitPatternSynonym :: Supports 'Extensions.PatternSynonyms λ
                           => s (PatternLHS l l d d) -> s (Pattern l l d d) -> Declaration λ l d s,
    unidirectionalPatternSynonym :: Supports 'Extensions.PatternSynonyms λ
@@ -122,7 +127,7 @@ data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymCon
    explicitPatternSynonym :: Supports 'Extensions.PatternSynonyms λ
                           => s (PatternLHS l l d d)
                           -> s (Pattern l l d d)
-                          -> [(s (PatternEquationLHS l l d d), s (EquationRHS l l d d), [s (Declaration l l d d)])]
+                          -> [s (PatternEquationClause l l d d)]
                           -> Declaration λ l d s,
    patternSynonymSignature :: Supports 'Extensions.PatternSynonyms λ
                            => NonEmpty (Name λ)
@@ -309,14 +314,17 @@ type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
                           Deep.Functor t (FunctionalDependency l l),
                           Deep.Functor t (PatternLHS l l), Deep.Functor t (PatternEquationLHS l l),
+                          Deep.Functor t (PatternEquationClause l l),
                           Report.DeeplyFunctor t l)
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
                            Deep.Foldable t (TypeVarBinding l l), Deep.Foldable t (DerivingStrategy l l),
                            Deep.Foldable t (FunctionalDependency l l),
                            Deep.Foldable t (PatternLHS l l), Deep.Foldable t (PatternEquationLHS l l),
+                           Deep.Foldable t (PatternEquationClause l l),
                            Report.DeeplyFoldable t l)
 type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
                               Deep.Traversable t (TypeVarBinding l l), Deep.Traversable t (DerivingStrategy l l),
                               Deep.Traversable t (FunctionalDependency l l),
                               Deep.Traversable t (PatternLHS l l), Deep.Traversable t (PatternEquationLHS l l),
+                              Deep.Traversable t (PatternEquationClause l l),
                               Report.DeeplyTraversable t l)
