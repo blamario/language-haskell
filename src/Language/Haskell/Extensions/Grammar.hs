@@ -1469,7 +1469,16 @@ patternSynonymsMixin self super =
                        <$> wrap lhsPattern
                        <* (self & report & leftArrow)
                        <*> wrap (self & report & pattern)
-                       <*> patternClauses)},
+                       <*> patternClauses
+                <|> Abstract.patternSynonymSignature Abstract.build
+                       <$> (self & report & constructor) `sepByNonEmpty` comma
+                       <* (self & report & doubleColon)
+                       <*> optionalForall self
+                       <*> wrap (self & report & declarationLevel & optionalContext)
+                       <*> optionalForall self
+                       <*> wrap (self & report & declarationLevel & optionalContext)
+                       <*> many (wrap (self & cType) <* (self & report & rightArrow))
+                       <*> wrap (self & cType))},
          variableIdentifier = notFollowedBy (keyword "pattern") *> (super & report & variableIdentifier)}}
    where lhsPattern =
             Abstract.prefixPatternLHS Abstract.build
