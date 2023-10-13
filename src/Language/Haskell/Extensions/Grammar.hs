@@ -169,6 +169,7 @@ extensionMixins =
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
      (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
+     (Set.fromList [PatternSynonyms],                [(9, patternSynonymsMixin)]),
      (Set.fromList [StandaloneDeriving],             [(9, standaloneDerivingMixin)]),
      (Set.fromList [DerivingStrategies],             [(9, derivingStrategiesMixin)]),
      (Set.fromList [DerivingVia],                    [(9, derivingViaMixin)]),
@@ -1468,7 +1469,8 @@ patternSynonymsMixin self super =
                        <$> wrap lhsPattern
                        <* (self & report & leftArrow)
                        <*> wrap (self & report & pattern)
-                       <*> patternClauses)}}}
+                       <*> patternClauses)},
+         variableIdentifier = notFollowedBy (keyword "pattern") *> (super & report & variableIdentifier)}}
    where lhsPattern =
             Abstract.prefixPatternLHS Abstract.build
                <$> (self & report & constructor)
@@ -1480,8 +1482,7 @@ patternSynonymsMixin self super =
             <|> Abstract.recordPatternLHS Abstract.build
                    <$> (self & report & constructor)
                    <*> braces ((self & report & variableIdentifier) `sepBy` comma)
-         patternClauses = moptional (keyword "where" *> blockOf patternClause)
---         patternClause :: Parser g t (Abstract.PatternEquationClause l l (NodeWrap t) (NodeWrap t))
+         patternClauses = keyword "where" *> blockOf patternClause
          patternClause = Abstract.patternEquationClause @l Abstract.build
                          <$> wrap patternClauseLHS
                          <*> wrap (self & report & rhs)

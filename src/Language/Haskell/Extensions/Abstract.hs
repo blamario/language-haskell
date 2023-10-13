@@ -172,6 +172,7 @@ class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
+                          'Extensions.PatternSynonyms,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
                           'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ) =>
       ExtendedHaskell λ where
