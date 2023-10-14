@@ -1487,7 +1487,7 @@ patternSynonymsMixin self super =
                <*> many (self & report & variableIdentifier)
             <|> Abstract.infixPatternLHS Abstract.build
                    <$> (self & report & variableIdentifier)
-                   <*> (self & report & constructor)
+                   <*> (self & report & constructorOperator)
                    <*> (self & report & variableIdentifier)
             <|> Abstract.recordPatternLHS Abstract.build
                    <$> (self & report & constructor)
