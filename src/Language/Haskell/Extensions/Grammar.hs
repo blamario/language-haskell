@@ -1335,7 +1335,7 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap (arrowType self),
-      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
+      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <<|> pure []}
 
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
@@ -1356,7 +1356,7 @@ gadtSyntaxMixin
                    <*> optional (wrap $ kindSignature self) <* keyword "where"
                    <*> wrap (gadtNewConstructor self)
                    <*> moptional derivingClause}},
-      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <|> pure []}
+      optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <<|> pure []}
 
 gadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtSyntaxTypeOperatorsMixin self super = super{
@@ -1474,7 +1474,8 @@ patternSynonymsMixin self super =
                        <$> (self & report & constructor) `sepByNonEmpty` comma
                        <* (self & report & doubleColon)
                        <*> optionalForall self
-                       <*> wrap (self & report & declarationLevel & optionalContext)
+                       <*> wrap ((self & report & declarationLevel & context) <* (self & report & rightDoubleArrow)
+                                 <<|> pure Abstract.noContext)
                        <*> optionalForall self
                        <*> wrap (self & report & declarationLevel & optionalContext)
                        <*> many (wrap (self & cType) <* (self & report & rightArrow))
