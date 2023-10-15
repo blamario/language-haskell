@@ -80,6 +80,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
          DeeplyTranslatable t AST.Export where
    translateDeeply _ (AST.ExportClassOrType name members) = AST.ExportClassOrType name members
    translateDeeply _ (AST.ExportVar name) = AST.ExportVar name
+   translateDeeply _ (AST.ExportPattern name) = AST.ExportPattern name
    translateDeeply _ (AST.ReExportModule name) = AST.ReExportModule name
 
 instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
@@ -102,6 +103,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
          DeeplyTranslatable t AST.ImportItem where
    translateDeeply _ (AST.ImportClassOrType name members) = AST.ImportClassOrType name members
    translateDeeply _ (AST.ImportVar name) = AST.ImportVar name
+   translateDeeply _ (AST.ImportPattern name) = AST.ImportPattern name
 
 instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,

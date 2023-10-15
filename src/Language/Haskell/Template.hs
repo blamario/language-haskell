@@ -103,6 +103,9 @@ instance PrettyViaTH (Export Language Language f f) where
    prettyViaTH (ExportVar name@(AST.QualifiedName _ (AST.Name local)))
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.parens (prettyViaTH name)
       | otherwise = prettyViaTH name
+   prettyViaTH (ExportPattern name@(AST.QualifiedName _ (AST.Name local)))
+      | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.parens (prettyViaTH name)
+      | otherwise = prettyViaTH name
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
 instance TemplateWrapper f => PrettyViaTH (Import Language Language f f) where
@@ -127,11 +130,13 @@ instance PrettyViaTH (ImportItem Language Language f f) where
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
       where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
+   prettyViaTH (ImportPattern name@(AST.Name local)) = prettyIdentifier name
 
 instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
    prettyViaTH (ExplicitlyNamespacedMemberList members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
    prettyViaTH AllMembers = Ppr.text ".."
+   prettyViaTH (AllMembersPlus extras) = Ppr.sep $ Ppr.punctuate Ppr.comma $ Ppr.text ".." : (prettyViaTH <$> extras)
 
 instance PrettyViaTH (ModuleMember Language) where
    prettyViaTH (DefaultMember name) = prettyIdentifier name

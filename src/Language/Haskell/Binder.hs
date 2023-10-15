@@ -259,9 +259,9 @@ instance {-# OVERLAPS #-}
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Abstract.Module l l ~ AST.Module l l, Abstract.ModuleName l ~ AST.ModuleName l,
-          Abstract.Export l l ~ AST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
+          Abstract.Export l l ~ ExtAST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
-          Abstract.ImportItem l l ~ AST.ImportItem l l,
+          Abstract.ImportItem l l ~ ExtAST.ImportItem l l,
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
          Di.Attribution
@@ -298,11 +298,12 @@ instance {-# OVERLAPS #-}
                        | modName == moduleName = Di.syn atts
                        | otherwise = onMap (Map.mapKeys baseName) $ importsFrom modImports modName (fold $ Map.lookup modName $ getUnionWith modEnv)
                      fromModule modName (AST.QualifiedName modName' _) = modName' == Just modName
-                     itemExports :: AST.Export l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
-                     itemExports (AST.ReExportModule modName) = reexportModule modName
-                     itemExports (AST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
-                     itemExports (AST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
-                     itemExports (AST.ExportClassOrType parent (Just members)) =
+                     itemExports :: ExtAST.Export l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+                     itemExports (ExtAST.ReExportModule modName) = reexportModule modName
+                     itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
+                     itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
+                     itemExports (ExtAST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
+                     itemExports (ExtAST.ExportClassOrType parent (Just members)) =
                         case Map.lookup parent (getUnionWith moduleGlobalScope)
                         of Just b@(TypeBinding (TypeClass env)) ->
                               onMap (Map.insert (baseName parent) b) (filterMembers members env)
@@ -338,13 +339,13 @@ instance {-# OVERLAPS #-}
                              <> maybe mempty (`qualifiedWith` imports spec) alias
                where imports (Just spec) = foldMap specImports (getCompose spec mempty)
                      imports Nothing = allImports
-                     specImports (AST.ImportSpecification True items) = itemsImports items
-                     specImports (AST.ImportSpecification False items) =
+                     specImports (ExtAST.ImportSpecification True items) = itemsImports items
+                     specImports (ExtAST.ImportSpecification False items) =
                         UnionWith (getUnionWith allImports `Map.difference` getUnionWith (itemsImports items))
                      allImports = moduleExports
                      itemsImports = foldMapWrapped itemImports
-                     itemImports (AST.ImportClassOrType name Nothing) = nameImport name allImports
-                     itemImports (AST.ImportClassOrType parent (Just members)) =
+                     itemImports (ExtAST.ImportClassOrType name Nothing) = nameImport name allImports
+                     itemImports (ExtAST.ImportClassOrType parent (Just members)) =
                         case Map.lookup parent (getUnionWith allImports)
                         of Just b@(TypeBinding (TypeClass env)) ->
                               onMap (Map.insert parent b) (filterMembers members env)
@@ -355,7 +356,8 @@ instance {-# OVERLAPS #-}
                            Just (TypeAndValueBinding b@(DataType env) _) ->
                               onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
                            _ -> nameImport parent allImports
-                     itemImports (AST.ImportVar name) = nameImport name allImports
+                     itemImports (ExtAST.ImportPattern name) = nameImport name allImports
+                     itemImports (ExtAST.ImportVar name) = nameImport name allImports
             filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> LocalEnvironment l
             filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
             foldMapWrapped :: forall a g m. (Foldable g, Monoid m)
@@ -631,6 +633,7 @@ instance BindingMembers AST.Language where
 
 instance BindingMembers ExtAST.Language where
   filterMembers ExtAST.AllMembers env = env
+  filterMembers ExtAST.AllMembersPlus{} env = env
   filterMembers (ExtAST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
   filterMembers (ExtAST.ExplicitlyNamespacedMemberList members) env = foldMap memberImport members
      where memberImport (ExtAST.DefaultMember name) = onMap (`Map.restrictKeys` Set.singleton name) env

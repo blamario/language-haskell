@@ -2,7 +2,8 @@
              MultiParamTypeClasses, OverloadedStrings, StandaloneDeriving,
              TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.AST (Language(Language), Import(..), Members(..), ModuleMember(..),
+module Language.Haskell.Extensions.AST (Language(Language),
+                                        Export(..), Import(..), ImportItem(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..), GADTConstructor(..),
                                         FunctionalDependency(..), PatternEquationClause(..),
                                         DerivingClause(..), DerivingStrategy(..),
@@ -27,7 +28,7 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..),
                              FieldDeclaration(..), CaseAlternative(..),
                              CallingConvention(..), CallSafety(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
-                             ImportSpecification(..), ImportItem(..), Export(..))
+                             ImportSpecification(..))
 import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
@@ -92,6 +93,9 @@ instance Abstract.ExtendedWith 'Extensions.NPlusKPatterns Language where
 
 instance Abstract.ExtendedWith 'Extensions.PatternSynonyms Language where
    build = Abstract.PatternSynonymConstruction {
+      Abstract.exportPattern = ExportPattern,
+      Abstract.importPattern = ImportPattern,
+      Abstract.allMembersPlus = AllMembersPlus,
       Abstract.prefixPatternLHS = PrefixPatternLHS,
       Abstract.infixPatternLHS = InfixPatternLHS,
       Abstract.recordPatternLHS = RecordPatternLHS,
@@ -388,10 +392,22 @@ instance Abstract.Haskell Language where
    safeCall = SafeCall
    unsafeCall = UnsafeCall
 
+data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (Abstract.Members λ))
+   | ExportVar (Abstract.QualifiedName λ)
+   | ExportPattern (Abstract.QualifiedName λ)
+   | ReExportModule (Abstract.ModuleName λ)
+
 data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
+data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
+   | ImportVar (Abstract.Name λ)
+   | ImportPattern (Abstract.Name λ)
+
 data Members λ = AllMembers
+               | AllMembersPlus [Name λ]
                | MemberList [Name λ]
                | ExplicitlyNamespacedMemberList [ModuleMember λ]
                deriving (Data, Eq, Show)
@@ -649,6 +665,14 @@ data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | StringLiteral Text
    | HashLiteral !(Abstract.SupportFor 'Extensions.MagicHash λ) (Value λ l d s)
 
+deriving instance Typeable (Export λ l d s)
+deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (Export λ l d s)
+deriving instance (Show (Abstract.Members λ),
+                   Show (Abstract.ModuleName λ), Show (Abstract.QualifiedName λ)) => Show (Export λ l d s)
+deriving instance (Eq (Abstract.Members λ),
+                   Eq (Abstract.ModuleName λ), Eq (Abstract.QualifiedName λ)) => Eq (Export λ l d s)
+
 deriving instance Typeable (Import λ l d s)
 deriving instance (Data (s (Abstract.ImportSpecification l l d d)), Data (Abstract.ModuleName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Import λ l d s)
@@ -656,6 +680,12 @@ deriving instance (Show (s (Abstract.ImportSpecification l l d d)), Show (Abstra
                   Show (Import λ l d s)
 deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.ModuleName λ)) =>
                   Eq (Import λ l d s)
+
+deriving instance Typeable (ImportItem λ l d s)
+deriving instance (Data (Abstract.Members λ), Data (Abstract.Name λ),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (ImportItem λ l d s)
+deriving instance (Show (Abstract.Members λ), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
+deriving instance (Eq (Abstract.Members λ), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
 
 deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
@@ -925,7 +955,8 @@ $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll] $
    \derive-> mconcat <$> mapM derive
-             [''Import, ''Declaration, ''FunctionalDependency, ''DataConstructor, ''GADTConstructor,
+             [''Export, ''Import, ''ImportItem,
+              ''Declaration, ''FunctionalDependency, ''DataConstructor, ''GADTConstructor,
               ''PatternEquationClause, ''DerivingClause, ''DerivingStrategy,
               ''Type, ''TypeLHS, ''TypeVarBinding, ''ClassInstanceLHS, ''Context,
               ''Expression, ''FieldBinding, ''Pattern, ''PatternLHS, ''PatternEquationLHS, ''FieldPattern,

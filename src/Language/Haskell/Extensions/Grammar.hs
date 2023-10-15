@@ -301,8 +301,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.promotedStringLiteral <$> nonTerminal (Report.stringLiteral . report),
      namespacedMember =
         Abstract.defaultMember <$> nonTerminal (cname . Report.moduleLevel . report)
-        <|> Abstract.typeMember <$ keyword "type" <*> nonTerminal (cname . Report.moduleLevel . report)
-        <|> Abstract.patternMember <$ keyword "pattern" <*> nonTerminal (cname . Report.moduleLevel . report),
+        <|> Abstract.typeMember <$ keyword "type" <*> nonTerminal (cname . Report.moduleLevel . report),
      inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignatorBase =
         Abstract.classReferenceInstanceLHS <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
@@ -1458,6 +1457,16 @@ patternSynonymsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'P
 patternSynonymsMixin self super =
    super{
       report= (report super){
+         moduleLevel= (super & report & moduleLevel){
+            export = (super & report & moduleLevel & export)
+               <|> Abstract.exportPattern Abstract.build <$ keyword "pattern"
+                   <*> (self & report & qualifiedConstructor),
+            importItem = (super & report & moduleLevel & importItem)
+               <|> Abstract.importPattern Abstract.build <$ keyword "pattern"
+                   <*> (self & report & constructor),
+            members = (super & report & moduleLevel & members)
+               <|> parens (Abstract.allMembersPlus Abstract.build <$ delimiter ".." <* delimiter ","
+                           <*> (self & report & moduleLevel & cname) `sepEndBy` comma)},
          declarationLevel= (super & report & declarationLevel){
             topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                <|> keyword "pattern" *>

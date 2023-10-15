@@ -15,6 +15,7 @@ module Language.Haskell.Extensions.Abstract (
               ViewPatternConstruction, viewPattern,
               NPlusKPatternConstruction, nPlusKPattern,
               PatternSynonymConstruction,
+              exportPattern, importPattern, allMembersPlus,
               prefixPatternLHS, infixPatternLHS, recordPatternLHS, prefixPatternEquationLHS, infixPatternEquationLHS,
               patternEquationClause,
               implicitPatternSynonym, unidirectionalPatternSynonym, explicitPatternSynonym, patternSynonymSignature,
@@ -112,6 +113,9 @@ type family PatternEquationLHS λ :: TreeNodeSubKind
 type family PatternEquationClause λ :: TreeNodeSubKind
 
 data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymConstruction {
+   exportPattern :: QualifiedName λ -> Export λ l d s,
+   importPattern :: Name λ -> ImportItem λ l d s,
+   allMembersPlus :: [Name λ] -> Members λ,
    prefixPatternLHS :: Name λ -> [Name λ] -> PatternLHS λ l d s,
    infixPatternLHS :: Name λ -> Name λ -> Name λ -> PatternLHS λ l d s,
    recordPatternLHS :: Name λ -> [Name λ] -> PatternLHS λ l d s,
