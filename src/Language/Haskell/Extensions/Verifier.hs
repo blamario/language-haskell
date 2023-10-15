@@ -153,6 +153,13 @@ instance (Eq s, IsString s) =>
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
    Accounting $ _ = mempty
 
+instance (Eq s, IsString s) =>
+         Accounting l pos s
+         `Transformation.At` ExtAST.ImportItem l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), ExtAST.ImportClassOrType{})) = Const $ UnionWith $
+      if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
+   Accounting $ _ = mempty
+
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l) =>
          Accounting l pos s
