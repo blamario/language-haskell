@@ -1465,8 +1465,11 @@ patternSynonymsMixin self super =
                <|> Abstract.importPattern Abstract.build <$ keyword "pattern"
                    <*> (self & report & constructor),
             members = (super & report & moduleLevel & members)
-               <|> parens (Abstract.allMembersPlus Abstract.build <$ delimiter ".." <* delimiter ","
-                           <*> (self & report & moduleLevel & cname) `sepEndBy` comma)},
+               <|> parens (Abstract.allMembersPlus Abstract.build
+                           <$> filter (not . null)
+                                  (moptional ((self & report & moduleLevel & cname) `sepBy` comma <* comma)
+                                   <> ([] <$ delimiter "..")
+                                   <> moptional (comma *> (self & report & moduleLevel & cname) `sepEndBy` comma)))},
          declarationLevel= (super & report & declarationLevel){
             topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
                <|> keyword "pattern" *>
