@@ -598,7 +598,7 @@ explicitNamespacesMixin self super = super{
                 <*> optional (self & report & moduleLevel & members),
          importItem = (super & report & moduleLevel & importItem)
             <|> Abstract.importClassOrType <$ keyword "type"
-                <*> parens (self & report & variableSymbol)
+                <*> parens ((self & report & variableSymbol) <|> (self & report & constructorSymbol))
                 <*> optional (self & report & moduleLevel & members),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList
