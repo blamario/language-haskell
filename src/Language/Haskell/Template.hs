@@ -130,7 +130,7 @@ instance PrettyViaTH (ImportItem Language Language f f) where
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
       where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
-   prettyViaTH (ImportPattern name@(AST.Name local)) = prettyIdentifier name
+   prettyViaTH (ImportPattern name@(AST.Name local)) = Ppr.text "pattern" <+> prettyIdentifier name
 
 instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
