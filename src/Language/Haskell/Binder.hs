@@ -219,6 +219,9 @@ instance {-# OVERLAPS #-}
                = Di.syn atts <> UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
             export (AST.KindSignature name _type)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding UnknownType)
+            export ExtAST.ImplicitPatternSynonym{} = Di.syn atts
+            export ExtAST.ExplicitPatternSynonym{} = Di.syn atts
+            export ExtAST.UnidirectionalPatternSynonym{} = Di.syn atts
             export _ = mempty
             getBindingNames (AST.InfixLHS _ name _) = [name]
             getBindingNames (AST.PrefixLHS lhs _) = foldMap getBindingNames (getCompose lhs mempty)
@@ -448,6 +451,27 @@ instance {-# OVERLAPS #-}
       where export :: AST.FieldDeclaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution
+            (Di.Keep (Binder l f))
+            (Environment l)
+            (LocalEnvironment l)
+            (ExtAST.PatternLHS l l)
+            (FromEnvironment l f)
+            f
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+      where export :: ExtAST.PatternLHS l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+            export (ExtAST.RecordPatternLHS con fields) =
+               UnionWith (Map.singleton con $ ValueBinding $ RecordConstructor fieldEnv) <> fieldEnv
+               where fieldEnv = UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- fields]
+            export _ = mempty
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
