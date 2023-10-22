@@ -1503,7 +1503,7 @@ patternSynonymsMixin self super =
                    <*> (self & report & variableIdentifier)
             <|> Abstract.recordPatternLHS Abstract.build
                    <$> (self & report & constructor)
-                   <*> braces ((self & report & variableIdentifier) `sepBy` comma)
+                   <*> braces ((self & report & variable) `sepBy` comma)
          patternClauses = keyword "where" *> blockOf patternClause
          patternClause = Abstract.patternEquationClause @l Abstract.build
                          <$> wrap patternClauseLHS
