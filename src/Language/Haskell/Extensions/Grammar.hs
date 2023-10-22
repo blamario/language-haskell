@@ -1515,7 +1515,7 @@ patternSynonymsMixin self super =
                <*> many (wrap (self & report & pattern))
             <|> Abstract.infixPatternEquationLHS Abstract.build
                    <$> wrap (self & report & pattern)
-                   <*> (self & report & constructor)
+                   <*> (self & report & constructorOperator)
                    <*> wrap (self & report & pattern)
 
 standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
