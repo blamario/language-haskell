@@ -148,6 +148,8 @@ extensionMixins =
      (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
      (Set.fromList [ParenthesizedTypeOperators],     [(8, parenthesizedTypeOperatorsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
+     (Set.fromList [MultiParamTypeClasses,
+                    TypeOperators],                  [(9, multiParamClassesTypeOperatorsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
@@ -763,6 +765,16 @@ typeOperatorsMixin self super =
                 <*> (self & report & qualifiedOperator)
                 <*> wrap (cType super)}
    where anyOperator = (self & report & constructorOperator) <|> (self & report & variableOperator)
+
+multiParamClassesTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+multiParamClassesTypeOperatorsMixin self super =
+   super{
+      flexibleInstanceDesignator =
+         (super & flexibleInstanceDesignator)
+         <|> Abstract.infixTypeClassInstanceLHS
+             <$> wrap (super & report & bType)
+             <*> (self & report & qualifiedOperator)
+             <*> wrap (cType super)}
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
