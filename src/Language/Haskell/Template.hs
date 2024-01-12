@@ -28,7 +28,7 @@ import Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.Reformulator as Reformulator
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
-import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit,
+import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit, TyVarBndrVis,
                                                kindedTV, plainTV, kindedTVInferred, plainTVInferred,
                                                kindedTVSpecified, plainTVSpecified)
 import Language.Haskell.TH.PprLib ((<+>), ($$))
@@ -675,6 +675,11 @@ typeVarBindingUnitTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingUnitTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
 
+typeVarBindingVisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
+typeVarBindingVisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
+   kindedTV (nameTemplate name) (typeTemplate $ extract kind)
+typeVarBindingVisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
+
 typeVarBindingSpecTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrSpec
 typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable False name kind) =
    kindedTVSpecified (nameTemplate name) (typeTemplate $ extract kind)
@@ -710,12 +715,12 @@ baseName (QualifiedName _ name) = name
 
 extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l,
                                  Abstract.Type l ~ ExtAST.Type l, l ~ Language, TemplateWrapper f)
-               => f (ExtAST.TypeLHS l l f f) -> (AST.Name l, [TyVarBndrUnit])
+               => f (ExtAST.TypeLHS l l f f) -> (AST.Name l, [TyVarBndrVis])
 extractSimpleTypeLHS = fromTypeLHS . extract
-   where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrUnit])
-         fromTypeLHS (SimpleTypeLHS con vars) = (con, typeVarBindingUnitTemplate <$> vars)
+   where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrVis])
+         fromTypeLHS (SimpleTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
-            | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingUnitTemplate var])
+            | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingVisibleTemplate var])
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s
