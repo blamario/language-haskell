@@ -508,7 +508,7 @@ data PatternEquationLHS λ l d s =
    | InfixPatternEquationLHS (s (Abstract.Pattern l l d d)) (Abstract.Name λ) (s (Abstract.Pattern l l d d))
 
 data FunctionalDependency λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   FunctionalDependency (NonEmpty (Abstract.Name λ)) (NonEmpty (Abstract.Name λ))
+   FunctionalDependency [Abstract.Name λ] [Abstract.Name λ]
 
 data GADTConstructor λ l d s =
    GADTConstructors (NonEmpty (Abstract.Name λ)) [TypeVarBinding λ l d s]

@@ -1667,7 +1667,7 @@ functionalDependenciesMixin
                       <*> wrap classLHS
                       <* delimiter "|"
                       <*> wrap (Abstract.functionalDependency Abstract.build
-                                   <$> someNonEmpty typeVar <* rightArrow <*> someNonEmpty typeVar)
+                                   <$> many typeVar <* rightArrow <*> many typeVar)
                          `sepBy` comma
                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
 

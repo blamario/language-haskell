@@ -425,7 +425,7 @@ typeFamilyInstanceTemplate (TypeFamilyInstance vars lhs rhs) =
 typeFamilyInstanceTemplate d = error ("Expected a type family instance, got " <> show (const (Const ()) Rank2.<$> d))
 
 fundepTemplate :: FunctionalDependency Language l f f -> FunDep
-fundepTemplate (FunctionalDependency from to) = FunDep (nameTemplate <$> toList from) (nameTemplate <$> toList to)
+fundepTemplate (FunctionalDependency from to) = FunDep (nameTemplate <$> from) (nameTemplate <$> to)
 
 derivingsTemplate :: TemplateWrapper f => [DerivingClause Language Language f f] -> [DerivClause]
 derivingsTemplate = foldr derived []

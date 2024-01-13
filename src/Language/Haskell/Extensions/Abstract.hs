@@ -168,7 +168,7 @@ data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatur
 type family FunctionalDependency λ :: TreeNodeSubKind
 
 data instance Construct 'Extensions.FunctionalDependencies λ l d s = FunctionalDependenciesConstruction {
-   functionalDependency :: NonEmpty (Name λ) -> NonEmpty (Name λ) -> FunctionalDependency λ l d s,
+   functionalDependency :: [Name λ] -> [Name λ] -> FunctionalDependency λ l d s,
    fundepClassDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (FunctionalDependency l l d d)]
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
 
