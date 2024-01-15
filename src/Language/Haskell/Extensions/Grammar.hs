@@ -162,6 +162,7 @@ extensionMixins =
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
+     (Set.fromList [InferredTypeVariables],          [(9, inferredTypeVariablesMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
@@ -1109,6 +1110,11 @@ roleAnnotationsMixin self super = super{
       }
    }
 
+inferredTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+inferredTypeVariablesMixin self super = super{
+   typeVarBinder = typeVarBinder super
+      <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar)}
+
 typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                           SpaceMonoid t) => ExtensionOverlay l g t
 typeApplicationsMixin self super = super{
@@ -1134,8 +1140,6 @@ typeApplicationsMixin self super = super{
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
           <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
-   typeVarBinder = typeVarBinder super
-      <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar),
    flexibleInstanceDesignator = flexibleInstanceDesignator super
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & flexibleInstanceDesignator)

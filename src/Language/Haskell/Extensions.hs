@@ -78,6 +78,7 @@ data Extension = AllowAmbiguousTypes
                | ImportQualifiedPost
                | ImpredicativeTypes
                | IncoherentInstances
+               | InferredTypeVariables -- unnamed in GHC
                | InstanceSigs
                | InterruptibleFFI
                | JavaScriptFFI
@@ -226,7 +227,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (ParallelArrays, [(ParallelListComprehensions, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
   (PolyKinds, [(KindSignatures, True)]),
-  (QuantifiedConstraints, [(ExplicitForAll, True)]),
+  (QuantifiedConstraints, [(ExplicitForAll, True), (InferredTypeVariables, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
   (RebindableSyntax, [(ImplicitPrelude, False)]),
   (RecordWildCards, [(DisambiguateRecordFields, True)]),
@@ -236,6 +237,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (Strict, [(StrictData, True)]),
   (TemplateHaskell, [(TemplateHaskellQuotes, True)]),
   (Trustworthy, [(SafeImports, True)]),
+  (TypeApplications, [(InferredTypeVariables, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
                   (KindSignatures, True), (MonoLocalBinds, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
@@ -332,6 +334,7 @@ byName = Map.fromList [
   ("ImportQualifiedPost", ImportQualifiedPost),
   ("ImpredicativeTypes", ImpredicativeTypes),
   ("IncoherentInstances", IncoherentInstances),
+  ("InferredTypeVariables", InferredTypeVariables),
   ("InstanceSigs", InstanceSigs),
   ("InterruptibleFFI", InterruptibleFFI),
   ("JavaScriptFFI", JavaScriptFFI),
