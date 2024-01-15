@@ -78,7 +78,6 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    singleDerivingClause :: p [f (Abstract.DerivingClause l l f f)],
    keywordForall :: p (),
-   classLHS :: p (Abstract.TypeLHS l l f f),
    kindSignature :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
    cType, equalityConstraintType, arrowType :: p (Abstract.Type l l f f),
@@ -272,6 +271,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
                   <*> nonTerminal typeVarBinder,
            context = nonTerminal (Report.constraint . declarationLevel . report),
            constraint = Abstract.typeConstraint <$> wrap (nonTerminal cType),
+           classLHS = Abstract.simpleKindedTypeLHS
+                         <$> nonTerminal (Report.typeClass . declarationLevel . report)
+                         <*> ((:[]) <$> nonTerminal typeVarBinder),
            optionalTypeSignatureContext = pure Abstract.noContext,
            instanceTypeDesignator =
               nonTerminal (Report.generalTypeConstructor . report)
@@ -282,7 +284,6 @@ reportGrammar g@ExtendedGrammar{report= r} =
                 <|> Abstract.typeWildcard <$ keyword "_"
                 <|> Abstract.groundType <$ nonTerminal groundTypeKind,
         typeTerm = nonTerminal arrowType},
-     classLHS = empty,
      keywordForall = keyword "forall",
      kindSignature = empty,
      groundTypeKind = empty,
@@ -736,6 +737,11 @@ typeOperatorsMixin self super =
                    <*> (Just <$> (self & report & moduleLevel & members))},
          declarationLevel= (super & report & declarationLevel){
             typeClass = (super & report & declarationLevel & typeClass) <|> parens anyOperator,
+            classLHS = (super & report & declarationLevel & classLHS)
+               <|> Abstract.simpleInfixTypeLHSApplication
+                   <$> typeVarBinder self
+                   <*> anyOperator
+                   <*> typeVarBinder self,
             simpleType = (super & report & declarationLevel & simpleType)
                <|> Abstract.simpleInfixTypeLHSApplication
                             <$> typeVarBinder self
@@ -754,11 +760,6 @@ typeOperatorsMixin self super =
              <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
              <*> (self & report & qualifiedOperator)
              <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
-      classLHS = classLHS super
-         <|> Abstract.simpleInfixTypeLHSApplication
-             <$> typeVarBinder self
-             <*> anyOperator
-             <*> typeVarBinder self,
       familyInstanceDesignator = familyInstanceDesignator super
          <|> Abstract.infixTypeClassInstanceLHS
                 <$> wrap (super & report & bType)
@@ -811,13 +812,6 @@ gratuitouslyParenthesizedTypesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskel
 gratuitouslyParenthesizedTypesMixin self super = super{
    report= (report super){
       declarationLevel = (super & report & declarationLevel){
-         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
-            <|> Abstract.classDeclaration <$ keyword "class"
-                <*> wrap (self & report & declarationLevel & optionalContext)
-                <*> wrap (Abstract.simpleKindedTypeLHS
-                          <$> (self & report & declarationLevel & typeClass)
-                          <*> ((:[]) <$> parens (typeVarBinder self)))
-                <*> (keyword "where" *> blockOf (self & report & declarationLevel & inClassDeclaration) <|> pure []),
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
          typeVarApplications =
             (self & report & generalTypeConstructor)
@@ -1261,18 +1255,7 @@ kindSignaturesMixin
                       <*> wrap (kindSignature self)
                       <* delimiter "="
                       <*> wrap newConstructor
-                      <*> moptional derivingClause
-               <|> Abstract.classDeclaration
-                      <$ keyword "class"
-                      <*> wrap optionalContext
-                      <*> wrap (Abstract.simpleTypeLHSApplication
-                                   <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
-                                   <*> parens (Abstract.explicitlyKindedTypeVariable
-                                               <$> (self & report & typeVar)
-                                               <*> wrap (kindSignature self)))
-                      <*> (keyword "where"
-                           *> blockOf inClassDeclaration
-                           <|> pure []),
+                      <*> moptional derivingClause,
             typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
                                 <*> some (comma *> wrap (optionallyKindedTypeVar self))},
          typeTerm = (super & report & typeTerm) <|>
@@ -1621,41 +1604,31 @@ mptcsMixin
    self@ExtendedGrammar{
      typeVarBinder,
      report= HaskellGrammar{
-        declarationLevel= DeclarationGrammar{optionalContext, typeClass, inClassDeclaration}}}
+        declarationLevel= DeclarationGrammar{typeClass, classLHS}}}
    super =
    super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
-            topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
-               <|> Abstract.classDeclaration
-                      <$ keyword "class"
-                      <*> wrap optionalContext
-                      <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [] <|> classLHS self)
-                      <*> moptional (keyword "where" *> blockOf inClassDeclaration)}},
-      classLHS = classLHS super
-         <|> Abstract.simpleTypeLHSApplication
-                <$> wrap (Abstract.simpleTypeLHSApplication
-                             <$> wrap (Abstract.simpleTypeLHS <$> typeClass <*> pure [])
-                             <*> typeVarBinder)
-                <*> typeVarBinder
-         <|> Abstract.simpleInfixTypeLHSApplication
-             <$> typeVarBinder
-             <* terminator "`"
-             <*> typeClass
-             <* terminator "`"
-             <*> typeVarBinder
-         <|> parens (classLHS self)
-         <|> Abstract.simpleTypeLHSApplication <$> wrap (classLHS self) <*> typeVarBinder}
+            classLHS = (super & report & declarationLevel & Report.classLHS)
+               <|> Abstract.simpleTypeLHS <$> typeClass <*> pure [] <* notFollowedBy (void typeVarBinder)
+               <|> Abstract.simpleInfixTypeLHSApplication
+                   <$> typeVarBinder
+                   <* terminator "`"
+                   <*> typeClass
+                   <* terminator "`"
+                   <*> typeVarBinder
+               <|> parens classLHS
+               <|> Abstract.simpleTypeLHSApplication <$> wrap classLHS <*> typeVarBinder}}}
 
 functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'FunctionalDependencies l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => ExtensionOverlay l g t
 functionalDependenciesMixin
    self@ExtendedGrammar{
-     classLHS, typeVarBinder,
+     typeVarBinder,
      report= HaskellGrammar{
         rightArrow, typeVar,
-        declarationLevel= DeclarationGrammar{optionalContext, inClassDeclaration}}}
+        declarationLevel= DeclarationGrammar{optionalContext, classLHS, inClassDeclaration}}}
    super =
    super{
       report= (report super){

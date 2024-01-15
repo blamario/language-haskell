@@ -111,6 +111,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    optionalContext, optionalTypeSignatureContext, context, constraint :: p (Abstract.Context l l f f),
    typeApplications :: p (Abstract.Type l l f f),
    simpleType :: p (Abstract.TypeLHS l l f f),
+   classLHS :: p (Abstract.TypeLHS l l f f),
    derivingClause :: p [f (Abstract.DerivingClause l l f f)],
    instanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
    instanceTypeDesignator :: p (Abstract.Type l l f f),
@@ -214,7 +215,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
              <*> wrap simpleType <* delimiter "=" <*> wrap newConstructor <*> moptional derivingClause
          <|> Abstract.classDeclaration <$ keyword "class"
              <*> wrap optionalContext
-             <*> wrap (Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar))
+             <*> wrap classLHS
              <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
          <|> Abstract.instanceDeclaration <$ keyword "instance"
              <*> wrap optionalContext
@@ -228,6 +229,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       declaration = generalDeclaration
                     <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                      <*> wrap rhs <*> whereClauses,
+
+      classLHS = Abstract.simpleTypeLHS <$> typeClass <*> ((:[]) <$> typeVar),
       inClassDeclaration = generalDeclaration <|> equationDeclaration,
       inInstanceDeclaration = equationDeclaration,
       equationDeclaration = Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.variableLHS <$> variable)
