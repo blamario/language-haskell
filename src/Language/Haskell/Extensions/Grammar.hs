@@ -1440,7 +1440,8 @@ implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{de
                      <*> (self & report & expression)},
           bareExpression = bareExpression
              <|> Abstract.implicitParameterExpression Abstract.build
-                 <$ delimiter "?" <*> (self & report & variableIdentifier)}}
+                 <$ delimiter "?" <*> (self & report & variableIdentifier),
+          qualifiedVariableSymbol = notFollowedBy (delimiter "?") *> (super & report & qualifiedVariableSymbol)}}
 
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith 'BangPatterns l) => ExtensionOverlay l g t
 bangPatternsMixin self super =
