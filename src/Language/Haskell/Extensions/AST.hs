@@ -42,6 +42,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
    'Extensions.TupleSections,
+   'Extensions.ImplicitParameters,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
@@ -78,6 +79,12 @@ instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
 instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
    build = Abstract.TupleSectionConstruction {
       Abstract.tupleSectionExpression' = TupleSectionExpression}
+
+instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
+   build = Abstract.ImplicitParametersConstruction {
+      Abstract.implicitParameterConstraint = ImplicitParameterConstraint (),
+      Abstract.implicitParameterDeclaration = ImplicitParameterDeclaration (),
+      Abstract.implicitParameterExpression = ImplicitParameterExpression ()}
 
 instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
    build = Abstract.BangPatternConstruction {
@@ -496,6 +503,9 @@ data Declaration λ l d s =
                              [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                              [s (Abstract.Type l l d d)]
                              (s (Abstract.Type l l d d))
+   | ImplicitParameterDeclaration !(Abstract.SupportFor 'Extensions.ImplicitParameters λ)
+                                  (Abstract.Name λ)
+                                  (s (Abstract.Expression l l d d))
 
 data PatternEquationClause λ l d s =
    PatternEquationClause !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
@@ -534,6 +544,9 @@ data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
    | TypeConstraint (s (Abstract.Type l l d d))
+   | ImplicitParameterConstraint !(Abstract.SupportFor 'Extensions.ImplicitParameters λ)
+                                 (Abstract.Name λ)
+                                 (s (Abstract.Type l l d d))
    | NoContext
 
 data Type λ l d s =
@@ -612,6 +625,7 @@ data Expression λ l d s =
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | OverloadedLabel Text
+   | ImplicitParameterExpression !(Abstract.SupportFor 'Extensions.ImplicitParameters λ) (Abstract.Name λ)
    | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
    | FieldProjection (NonEmpty (Abstract.Name λ))
    | WildcardRecordExpression !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
@@ -692,6 +706,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.FunctionalDependency l l d d)),
@@ -699,6 +714,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (s (Abstract.DerivingStrategy l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.DerivingClause l l d d)),
                    Data (s (Abstract.EquationLHS l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+                   Data (s (Abstract.Expression l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.ClassInstanceLHS l l d d)),
                    Data (s (Abstract.PatternLHS l l d d)), Data (s (Abstract.PatternEquationClause l l d d)),
@@ -710,6 +726,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.FunctionalDependency l l d d)),
@@ -717,6 +734,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (s (Abstract.DerivingStrategy l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.DerivingClause l l d d)),
                    Show (s (Abstract.EquationLHS l l d d)), Show (s (Abstract.EquationRHS l l d d)),
+                   Show (s (Abstract.Expression l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.ClassInstanceLHS l l d d)),
                    Show (s (Abstract.PatternLHS l l d d)), Show (s (Abstract.PatternEquationClause l l d d)),
@@ -728,6 +746,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
+                   Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
@@ -735,6 +754,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (s (Abstract.FunctionalDependency l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.DerivingClause l l d d)),
                    Eq (s (Abstract.EquationLHS l l d d)), Eq (s (Abstract.EquationRHS l l d d)),
+                   Eq (s (Abstract.Expression l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.ClassInstanceLHS l l d d)),
                    Eq (s (Abstract.PatternLHS l l d d)), Eq (s (Abstract.PatternEquationClause l l d d)),
@@ -856,16 +876,20 @@ deriving instance (Eq (s (Abstract.ClassInstanceLHS l l d d)), Eq (s (Abstract.T
                    Eq (s (Abstract.Kind l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (ClassInstanceLHS λ l d s)
 
 deriving instance Typeable (Context λ l d s)
-deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Context λ l d s)
-deriving instance (Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
+deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Show (s (Abstract.Context l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Context λ l d s)
-deriving instance (Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Context λ l d s)
 
 deriving instance Typeable (Expression λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
@@ -873,14 +897,16 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Expression λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),

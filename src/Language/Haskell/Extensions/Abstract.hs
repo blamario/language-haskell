@@ -11,6 +11,8 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
+              ImplicitParametersConstruction,
+              implicitParameterConstraint, implicitParameterDeclaration, implicitParameterExpression,
               BangPatternConstruction, bangPattern,
               ViewPatternConstruction, viewPattern,
               NPlusKPatternConstruction, nPlusKPattern,
@@ -81,6 +83,11 @@ data instance Construct 'Extensions.RecordWildCards λ l d s = RecordWildCardCon
 data instance Construct 'Extensions.NamedFieldPuns λ l d s = NamedFieldPunsConstruction {
    punnedFieldBinding' :: QualifiedName λ -> FieldBinding λ l d s,
    punnedFieldPattern' :: QualifiedName λ -> FieldPattern λ l d s}
+
+data instance Construct 'Extensions.ImplicitParameters λ l d s = ImplicitParametersConstruction {
+   implicitParameterConstraint :: Name λ -> s (Type l l d d) -> Context λ l d s,
+   implicitParameterDeclaration :: Name λ -> s (Expression l l d d) -> Declaration λ l d s,
+   implicitParameterExpression :: Name λ -> Expression λ l d s}
 
 data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
    hashLiteral' :: Value λ l d s -> Value λ l d s}
@@ -177,6 +184,7 @@ class (Haskell λ,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.PatternSynonyms,
+                          'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
                           'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ) =>
       ExtendedHaskell λ where

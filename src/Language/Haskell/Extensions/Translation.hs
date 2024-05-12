@@ -111,7 +111,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
           FullyTranslatable t AST.DataConstructor, FullyTranslatable t AST.GADTConstructor,
           FullyTranslatable t AST.DerivingClause, FullyTranslatable t AST.DerivingStrategy,
-          FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS,
+          FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Expression,
           FullyTranslatable t AST.PatternEquationClause,
           FullyTranslatable t AST.PatternLHS, FullyTranslatable t AST.Pattern,
           Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
@@ -142,6 +142,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           Abstract.EquationLHS (Target t) ~ AST.EquationLHS (Target t),
           Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
           Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
+          Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
+          Abstract.Expression (Target t) ~ AST.Expression (Target t),
           Abstract.PatternLHS (Origin t) ~ AST.PatternLHS (Origin t),
           Abstract.PatternLHS (Target t) ~ AST.PatternLHS (Target t),
           Abstract.PatternEquationClause (Origin t) ~ AST.PatternEquationClause (Origin t),
@@ -217,6 +219,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.StandaloneStrategicDerivingDeclaration support1 support2 strategy context lhs) =
       AST.StandaloneStrategicDerivingDeclaration support1 support2 (translateFully t strategy)
                                                  (translateFully t context) (translateFully t lhs)
+   translateDeeply t (AST.ImplicitParameterDeclaration support name value) =
+      AST.ImplicitParameterDeclaration support name (translateFully t value)
    translateDeeply t (AST.ImplicitPatternSynonym support lhs rhs) =
       AST.ImplicitPatternSynonym support (translateFully t lhs) (translateFully t rhs)
    translateDeeply t (AST.UnidirectionalPatternSynonym support lhs rhs) =
@@ -252,7 +256,7 @@ instance (WrapTranslation t,
    translateDeeply t (AST.InfixPatternEquationLHS l name r) =
       AST.InfixPatternEquationLHS (translateFully t l) name (translateFully t r)
 
-instance (WrapTranslation t, WrappedTranslation t AST.Context,
+instance (WrapTranslation t,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.Type,
           Abstract.Context (Origin t) ~ AST.Context (Origin t),
           Abstract.Context (Target t) ~ AST.Context (Target t),
@@ -263,6 +267,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Context,
       AST.ClassConstraint className (translateFully t ty)
    translateDeeply t (AST.Constraints constraints) = AST.Constraints (translateFully t <$> constraints)
    translateDeeply t (AST.TypeConstraint ty) = AST.TypeConstraint (translateFully t ty)
+   translateDeeply t (AST.ImplicitParameterConstraint sup name ty) =
+      AST.ImplicitParameterConstraint sup name (translateFully t ty)
    translateDeeply _ AST.NoContext = AST.NoContext
 
 instance (WrapTranslation t,
@@ -585,6 +591,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply t (AST.VisibleTypeApplication x ty) =
       AST.VisibleTypeApplication (translateFully t x) (translateFully t ty)
    translateDeeply _ (AST.OverloadedLabel l) = AST.OverloadedLabel l
+   translateDeeply _ (AST.ImplicitParameterExpression sup name) = AST.ImplicitParameterExpression sup name
    translateDeeply t (AST.GetField record name) = AST.GetField (translateFully t record) name
    translateDeeply _ (AST.FieldProjection fields) = AST.FieldProjection fields
    translateDeeply t (AST.WildcardRecordExpression sup con fields) =
@@ -666,6 +673,8 @@ instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wr
 
 instance {-# overlappable #-}
    (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+    Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t)) =>
    Translation t AST.Expression where
@@ -682,7 +691,8 @@ instance {-# overlappable #-}
    translate _ (AST.LambdaExpression pat body) = AST.LambdaExpression pat body
    translate _ (AST.LetExpression bindings body) = AST.LetExpression bindings body
    translate _ (AST.ListComprehension element guards) = AST.ListComprehension element guards
-   translate _ (AST.ParallelListComprehension element guards1 guards2 guardses) = AST.ParallelListComprehension element guards1 guards2 guardses
+   translate _ (AST.ParallelListComprehension element guards1 guards2 guardses) =
+      AST.ParallelListComprehension element guards1 guards2 guardses
    translate _ (AST.ListExpression items) = AST.ListExpression items
    translate _ (AST.LiteralExpression value) = AST.LiteralExpression value
    translate _ AST.Negate = AST.Negate
@@ -695,6 +705,8 @@ instance {-# overlappable #-}
    translate _ (AST.TypedExpression x signature) = AST.TypedExpression x signature
    translate _ (AST.VisibleTypeApplication x ty) = AST.VisibleTypeApplication x ty
    translate _ (AST.OverloadedLabel l) = AST.OverloadedLabel l
+   translate t (AST.ImplicitParameterExpression support name) =
+      AST.ImplicitParameterExpression support (translateName t name)
    translate t (AST.GetField record name) = AST.GetField record (translateName t name)
    translate t (AST.FieldProjection fields) = AST.FieldProjection (translateName t <$> fields)
    translate t (AST.WildcardRecordExpression sup con fields) =

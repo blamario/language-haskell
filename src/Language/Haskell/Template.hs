@@ -179,6 +179,7 @@ expressionTemplate (LambdaCaseExpression alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
+expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (nameString name)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
 expressionTemplate (LeftSectionExpression left op) =
@@ -218,7 +219,7 @@ expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTempla
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
 expressionTemplate (OverloadedLabel l) = LabelE (Text.unpack l)
-expressionTemplate (FieldProjection fields) = ProjectionE (Text.unpack . getName <$> fields)
+expressionTemplate (FieldProjection fields) = ProjectionE (nameString <$> fields)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
 guardedTemplate (GuardedExpression statements result) =
@@ -294,6 +295,8 @@ declarationTemplates (ForeignImport convention safety identification name t) =
                       (nameTemplate name) (typeTemplate $ extract t))]
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
+declarationTemplates (ImplicitParameterDeclaration _ name value) =
+   [ImplicitParamBindD (nameString name) (expressionTemplate $ extract value)]
 declarationTemplates (InstanceDeclaration _vars context lhs wheres) =
      [InstanceD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)
                 (foldMap (declarationTemplates . extract) wheres)]
@@ -446,6 +449,7 @@ strategyTemplate (Via () ty) = Just $ ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate $ extract t)]
+contextTemplate (ImplicitParameterConstraint _ name t) = [ImplicitParamT (nameString name) (typeTemplate $ extract t)]
 contextTemplate (TypeConstraint t) = case extract t of
    ConstructorType c | UnitConstructor <- extract c -> []
    TupleType ts -> wrappedTypeTemplate <$> toList ts
@@ -456,6 +460,7 @@ contextTemplate NoContext = []
 freeContextVars :: TemplateWrapper f => ExtAST.Context Language Language f f -> [TH.Name]
 freeContextVars (ClassConstraint _cls t) = freeTypeVars (extract t)
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
+freeContextVars (ImplicitParameterConstraint _ _ t) = freeTypeVars (extract t)
 freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
 freeContextVars NoContext = []
 
@@ -724,3 +729,6 @@ extractSimpleTypeLHS = fromTypeLHS . extract
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s
+
+nameString :: AST.Name λ -> String
+nameString = Text.unpack . nameText

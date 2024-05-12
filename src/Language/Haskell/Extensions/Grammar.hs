@@ -168,6 +168,7 @@ extensionMixins =
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
+     (Set.fromList [ImplicitParameters],             [(9, implicitParametersMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
      (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
@@ -1415,6 +1416,27 @@ overloadedRecordDotMixin self super =
                            <* lookAhead (satisfyCharInput varStart)
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
+
+implicitParametersMixin :: Abstract.ExtendedWith 'ImplicitParameters l => ExtensionOverlay l g t
+implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{declarationLevel, bareExpression}} =
+   super{
+      report = rep{
+          declarationLevel = declarationLevel{
+              constraint = constraint declarationLevel
+                 <|> Abstract.implicitParameterConstraint Abstract.build
+                     <$ delimiter "?"
+                     <*> (self & report & variableIdentifier)
+                     <* (self & report & doubleColon)
+                     <*> wrap (self & report & typeTerm),
+              declaration = declaration declarationLevel
+                 <|> Abstract.implicitParameterDeclaration Abstract.build
+                     <$ delimiter "?"
+                     <*> (self & report & variableIdentifier)
+                     <* delimiter "="
+                     <*> (self & report & expression)},
+          bareExpression = bareExpression
+             <|> Abstract.implicitParameterExpression Abstract.build
+                 <$ delimiter "?" <*> (self & report & variableIdentifier)}}
 
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith 'BangPatterns l) => ExtensionOverlay l g t
 bangPatternsMixin self super =

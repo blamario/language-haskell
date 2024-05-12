@@ -73,7 +73,7 @@ data Extension = AllowAmbiguousTypes
                | Haskell98
                | HexFloatLiterals
                | IdentifierSyntax -- active but unnamed in GHC
-               | ImplicitParams
+               | ImplicitParameters
                | ImplicitPrelude
                | ImportQualifiedPost
                | ImpredicativeTypes
@@ -329,7 +329,8 @@ byName = Map.fromList [
   ("Haskell98", Haskell98),
   ("HexFloatLiterals", HexFloatLiterals),
   ("IdentifierSyntax", IdentifierSyntax),
-  ("ImplicitParams", ImplicitParams),
+  ("ImplicitParameters", ImplicitParameters),
+  ("ImplicitParams", ImplicitParameters),
   ("ImplicitPrelude", ImplicitPrelude),
   ("ImportQualifiedPost", ImportQualifiedPost),
   ("ImpredicativeTypes", ImpredicativeTypes),
