@@ -295,7 +295,9 @@ class (Haskell λ,
    classInstanceLHSKindApplication :: s (ClassInstanceLHS l l d d) -> s (Kind l l d d) -> ClassInstanceLHS λ l d s
    kindSignature :: Name λ -> s (Kind l l d d) -> Declaration λ l d s
 
+   typeEquality :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
    typeConstraint :: s (Type l l d d) -> Context λ l d s
+   constraintType :: s (Context l l d d) -> Type λ l d s
 
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
    defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ
@@ -305,7 +307,6 @@ class (Haskell λ,
    representationalRole :: TypeRole λ
    phantomRole :: TypeRole λ
 
-   typeEquality :: s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
    promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
    promotedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s
    promotedListType :: [s (Type l l d d)] -> Type λ l d s

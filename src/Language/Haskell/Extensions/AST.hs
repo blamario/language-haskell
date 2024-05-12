@@ -168,6 +168,7 @@ instance Abstract.ExtendedHaskell Language where
    forallType = ForallType
    kindedType = KindedType
    constrainedType = ConstrainedType
+   constraintType = ConstraintType
    typeKind = TypeKind
    typeWildcard = TypeWildcard
    groundType = GroundTypeKind
@@ -544,6 +545,7 @@ data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | Constraints [s (Abstract.Context l l d d)]
    | TypeConstraint (s (Abstract.Type l l d d))
+   | TypeEquality (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | ImplicitParameterConstraint !(Abstract.SupportFor 'Extensions.ImplicitParameters λ)
                                  (Abstract.Name λ)
                                  (s (Abstract.Type l l d d))
@@ -564,6 +566,7 @@ data Type λ l d s =
    | TypeVariable (Abstract.Name λ)
    | ForallType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
    | ConstrainedType (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
+   | ConstraintType (s (Abstract.Context l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | TypeWildcard
    | TypeKind (s (Abstract.Type l l d d))
@@ -576,7 +579,6 @@ data Type λ l d s =
    | PromotedCharLiteral Char
    | PromotedStringLiteral Text
    | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | TypeEquality (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | VisibleKindApplication (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
 
 data TypeVarBinding λ l d s =

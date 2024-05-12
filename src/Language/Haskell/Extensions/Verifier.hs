@@ -197,7 +197,9 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
       of ExtAST.NoContext -> mempty
          ExtAST.Constraints{} -> mempty
          ExtAST.ClassConstraint className t -> Const (UnionWith $ foldMap checkFlexibleContextHead t)
-         ExtAST.TypeConstraint t -> Const $ UnionWith (foldMap checkFlexibleContext t) <> UnionWith (foldMap checkMPTC t)
+         ExtAST.TypeConstraint t ->
+            Const $ UnionWith (foldMap checkFlexibleContext t) <> UnionWith (foldMap checkMPTC t)
+         ExtAST.TypeEquality{} -> Const $ UnionWith $ Map.singleton Extensions.EqualityConstraints [(start, end)]
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
@@ -364,7 +366,6 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
          ExtAST.ForallType vars _ ->
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
-         ExtAST.TypeEquality{} -> Map.singleton Extensions.EqualityConstraints [(start, end)]
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
          ExtAST.GroundTypeKind{} -> Map.singleton Extensions.StarIsType [(start, end)]
          ExtAST.TypeWildcard{} -> Map.singleton Extensions.PartialTypeSignatures [(start, end)]

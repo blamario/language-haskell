@@ -267,6 +267,7 @@ instance (WrapTranslation t,
       AST.ClassConstraint className (translateFully t ty)
    translateDeeply t (AST.Constraints constraints) = AST.Constraints (translateFully t <$> constraints)
    translateDeeply t (AST.TypeConstraint ty) = AST.TypeConstraint (translateFully t ty)
+   translateDeeply t (AST.TypeEquality left right) = AST.TypeEquality (translateFully t left) (translateFully t right)
    translateDeeply t (AST.ImplicitParameterConstraint sup name ty) =
       AST.ImplicitParameterConstraint sup name (translateFully t ty)
    translateDeeply _ AST.NoContext = AST.NoContext
@@ -442,7 +443,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.ForallType vars body) = AST.ForallType (translateDeeply t <$> vars) (translateFully t body)
    translateDeeply t (AST.ConstrainedType context body) =
       AST.ConstrainedType (translateFully t context) (translateFully t body)
-   translateDeeply t (AST.TypeEquality left right) = AST.TypeEquality (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.ConstraintType context) = AST.ConstraintType (translateFully t context)
    translateDeeply t (AST.KindedType body kind) = AST.KindedType (translateFully t body) (translateFully t kind)
    translateDeeply _ AST.TypeWildcard = AST.TypeWildcard
    translateDeeply t (AST.TypeKind body) = AST.TypeKind (translateFully t body)

@@ -454,6 +454,7 @@ contextTemplate (TypeConstraint t) = case extract t of
    ConstructorType c | UnitConstructor <- extract c -> []
    TupleType ts -> wrappedTypeTemplate <$> toList ts
    _ -> [wrappedTypeTemplate t]
+contextTemplate (TypeEquality t1 t2) = [EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)]
 contextTemplate (Constraints cs) = foldMap (contextTemplate . extract) cs
 contextTemplate NoContext = []
 
@@ -462,6 +463,7 @@ freeContextVars (ClassConstraint _cls t) = freeTypeVars (extract t)
 freeContextVars (Constraints cs) = nub (foldMap (freeContextVars . extract) cs)
 freeContextVars (ImplicitParameterConstraint _ _ t) = freeTypeVars (extract t)
 freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
+freeContextVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars NoContext = []
 
 conventionTemplate :: CallingConvention l -> Callconv
@@ -606,7 +608,9 @@ typeTemplate (ForallType vars body) =
          bindingVars = bindingVarName <$> vars
 typeTemplate (ConstrainedType context body) =
    ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
-typeTemplate (TypeEquality t1 t2) = EqualityT `AppT` typeTemplate (extract t1) `AppT` typeTemplate (extract t2)
+typeTemplate (ConstraintType context) = case contextTemplate (extract context) of
+   [t] -> t
+   ts -> foldl' AppT (TupleT $! length ts) ts
 typeTemplate (VisibleDependentType vars body) =
    ForallVisT (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars))
               (typeTemplate type')
@@ -642,6 +646,7 @@ freeTypeVarBindings :: TemplateWrapper f => ExtAST.Type Language Language f f ->
 freeTypeVarBindings = map plainTVInferred . freeTypeVars
 
 freeTypeVars :: TemplateWrapper f => ExtAST.Type Language Language f f -> [TH.Name]
+freeTypeVars (ConstraintType c) = freeContextVars (extract c)
 freeTypeVars ConstructorType{} = []
 freeTypeVars FunctionConstructorType = []
 freeTypeVars TypeWildcard{} = []
@@ -661,7 +666,6 @@ freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName <$> vars)
 freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
-freeTypeVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (VisibleDependentType vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))

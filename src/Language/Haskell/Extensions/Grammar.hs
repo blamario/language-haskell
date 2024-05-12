@@ -782,7 +782,11 @@ multiParamClassesTypeOperatorsMixin self super =
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
    equalityConstraintType =
-      Abstract.typeEquality <$> wrap (self & report & bType) <* delimiter "~" <*> wrap ((self & report & bType))}
+      Abstract.constraintType
+      <$> wrap (Abstract.typeEquality
+                <$> wrap (self & report & bType)
+                <* delimiter "~"
+                <*> wrap ((self & report & bType)))}
 
 multiParameterConstraintsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
