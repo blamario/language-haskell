@@ -198,7 +198,7 @@ extensionMixins =
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
      (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)]),
-     (Set.fromList [FlexibleContexts],               [(9, flexibleContextsMixin)]),
+     (Set.fromList [ConstraintsAreTypes],            [(9, constraintsAreTypesMixin)]),
      (Set.fromList [SpaceSensitiveOperators],        [(9, spaceSensitiveOperatorsMixin)])]
 
 languagePragmas :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) =>
@@ -271,8 +271,6 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> Abstract.simpleTypeLHSApplication
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
-           context = nonTerminal (Report.constraint . declarationLevel . report),
-           constraint = Abstract.typeConstraint <$> wrap (nonTerminal cType),
            classLHS = Abstract.simpleKindedTypeLHS
                          <$> nonTerminal (Report.typeClass . declarationLevel . report)
                          <*> ((:[]) <$> nonTerminal typeVarBinder),
@@ -1675,12 +1673,13 @@ functionalDependenciesMixin
                          `sepBy` comma
                       <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
 
-flexibleContextsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-flexibleContextsMixin self super =
+constraintsAreTypesMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+constraintsAreTypesMixin self super =
    super{
       report= (report super){
          declarationLevel= (super & report & declarationLevel){
-            context = Abstract.typeConstraint <$> wrap (self & cType)}}}
+            context = (self & report & declarationLevel & constraint),
+            constraint = Abstract.typeConstraint <$> wrap (self & cType)}}}
 
 instanceSignaturesMixin :: ExtensionOverlay l g t
 instanceSignaturesMixin

@@ -34,6 +34,7 @@ data Extension = AllowAmbiguousTypes
                | CApiFFI
                | CUSKs
                | ConstrainedClassMethods
+               | ConstraintsAreTypes -- active but unnamed in GHC
                | ConstraintKinds
                | Cpp
                | DataKinds
@@ -185,7 +186,8 @@ allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
 
 includedByDefault :: Set Extension
-includedByDefault = Set.fromList [DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
+includedByDefault = Set.fromList [ConstraintsAreTypes,
+                                  DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   FieldSelectors, ForeignFunctionInterface,
                                   GratuitouslyParenthesizedTypes, IdentifierSyntax,
                                   MultiParameterConstraints, ParenthesizedTypeOperators, PatternGuards,
