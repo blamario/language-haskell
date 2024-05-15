@@ -80,9 +80,10 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    keywordForall :: p (),
    kindSignature :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
-   cType, equalityConstraintType, arrowType :: p (Abstract.Type l l f f),
+   cType, arrowType :: p (Abstract.Type l l f f),
    promotedLiteral :: p (Abstract.Type l l f f),
    instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
+   equalityConstraint, implicitParameterConstraint :: p (Abstract.Context  l l f f),
    infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
@@ -275,6 +276,12 @@ reportGrammar g@ExtendedGrammar{report= r} =
                          <$> nonTerminal (Report.typeClass . declarationLevel . report)
                          <*> ((:[]) <$> nonTerminal typeVarBinder),
            optionalTypeSignatureContext = pure Abstract.noContext,
+           context =
+              nonTerminal (Report.constraint . declarationLevel . report)
+              <|> nonTerminal equalityConstraint
+              <|> Abstract.constraints <$> parens (wrap (nonTerminal (Report.constraint . declarationLevel . report)
+                                                         <|> nonTerminal equalityConstraint
+                                                         <|> nonTerminal implicitParameterConstraint) `sepBy` comma),
            instanceTypeDesignator =
               nonTerminal (Report.generalTypeConstructor . report)
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
@@ -295,8 +302,9 @@ reportGrammar g@ExtendedGrammar{report= r} =
         <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
                                      <* nonTerminal (Report.rightDoubleArrow . report)
                                      <*> wrap (nonTerminal arrowType),
-     cType = nonTerminal (Report.bType . report) <|> nonTerminal equalityConstraintType,
-     equalityConstraintType = empty,
+     cType = nonTerminal (Report.bType . report),
+     equalityConstraint = empty,
+     implicitParameterConstraint = empty,
      infixPattern = Report.pattern r',
      promotedLiteral =
         Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
@@ -749,7 +757,7 @@ typeOperatorsMixin self super =
                             <*> typeVarBinder self
                <|> parens ((self & report & declarationLevel & simpleType))},
          typeConstructor = (self & report & constructorIdentifier) <|> parens anyOperator},
-      equalityConstraintType = empty,
+      equalityConstraint = empty,
       cType = (super & cType)
          <|> Abstract.infixTypeApplication
                 <$> wrap (self & cType)
@@ -779,12 +787,11 @@ multiParamClassesTypeOperatorsMixin self super =
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self super = super{
-   equalityConstraintType =
-      Abstract.constraintType
-      <$> wrap (Abstract.typeEquality
-                <$> wrap (self & report & bType)
-                <* delimiter "~"
-                <*> wrap ((self & report & bType)))}
+   equalityConstraint =
+      Abstract.typeEquality
+      <$> wrap (self & report & bType)
+      <* delimiter "~"
+      <*> wrap ((self & report & bType))}
 
 multiParameterConstraintsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 multiParameterConstraintsMixin self super = super{
@@ -1422,14 +1429,14 @@ overloadedRecordDotMixin self super =
 implicitParametersMixin :: Abstract.ExtendedWith 'ImplicitParameters l => ExtensionOverlay l g t
 implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{declarationLevel, bareExpression}} =
    super{
+      implicitParameterConstraint =
+         Abstract.implicitParameterConstraint Abstract.build
+         <$ delimiter "?"
+         <*> (self & report & variableIdentifier)
+         <* (self & report & doubleColon)
+         <*> wrap (self & report & typeTerm),
       report = rep{
           declarationLevel = declarationLevel{
-              constraint = constraint declarationLevel
-                 <|> Abstract.implicitParameterConstraint Abstract.build
-                     <$ delimiter "?"
-                     <*> (self & report & variableIdentifier)
-                     <* (self & report & doubleColon)
-                     <*> wrap (self & report & typeTerm),
               declaration = declaration declarationLevel
                  <|> Abstract.implicitParameterDeclaration Abstract.build
                      <$ delimiter "?"
@@ -1676,7 +1683,9 @@ functionalDependenciesMixin
 constraintsAreTypesMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 constraintsAreTypesMixin self super =
    super{
+      cType = cType super <|> Abstract.constraintType <$> wrap (equalityConstraint self),
       report= (report super){
+         typeTerm = (super & report & typeTerm) <|> Abstract.constraintType <$> wrap (implicitParameterConstraint self),
          declarationLevel= (super & report & declarationLevel){
             context = (self & report & declarationLevel & constraint),
             constraint = Abstract.typeConstraint <$> wrap (self & cType)}}}

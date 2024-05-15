@@ -192,14 +192,15 @@ instance Accounting l pos s
 
 instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l, Eq s, IsString s) =>
          Accounting l pos s `Transformation.At` ExtAST.Context l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ d@(Compose (_, ((start, _, end), dec))) =
-      case dec
+   Accounting $ d@(Compose (_, ((start, _, end), con))) =
+      case con
       of ExtAST.NoContext -> mempty
          ExtAST.Constraints{} -> mempty
          ExtAST.ClassConstraint className t -> Const (UnionWith $ foldMap checkFlexibleContextHead t)
          ExtAST.TypeConstraint t ->
             Const $ UnionWith (foldMap checkFlexibleContext t) <> UnionWith (foldMap checkMPTC t)
          ExtAST.TypeEquality{} -> Const $ UnionWith $ Map.singleton Extensions.EqualityConstraints [(start, end)]
+         ExtAST.ImplicitParameterConstraint{} -> Const $ UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
