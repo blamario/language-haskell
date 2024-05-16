@@ -178,6 +178,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             (Full.foldMap UnicodeSyntaxAccounting d)
          ExtAST.GADTDeclaration context _lhs constructors _derivings ->
             UnionWith $ Map.singleton Extensions.GADTSyntax [(start, end)]
+         ExtAST.ImplicitParameterDeclaration{} ->
+            UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
             UnionWith $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
          _ -> Full.foldMap UnicodeSyntaxAccounting d
@@ -200,7 +202,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Abstract.Type l ~ ExtAST.Type l
          ExtAST.TypeConstraint t ->
             Const $ UnionWith (foldMap checkFlexibleContext t) <> UnionWith (foldMap checkMPTC t)
          ExtAST.TypeEquality{} -> Const $ UnionWith $ Map.singleton Extensions.EqualityConstraints [(start, end)]
-         ExtAST.ImplicitParameterConstraint{} -> Const $ UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
+         ExtAST.ImplicitParameterConstraint{} ->
+            Const $ UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
       where checkFlexibleContextHead ExtAST.TypeVariable{} = mempty
             checkFlexibleContextHead (ExtAST.TypeApplication left right) = foldMap checkFlexibleContextHead left
             checkFlexibleContextHead _ = Map.singleton Extensions.FlexibleContexts [(start, end)]
@@ -234,6 +237,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
           ExtAST.MDoExpression{} ->
              \ranges-> Map.fromList [(Extensions.RecursiveDo, ranges),
                                      (Extensions.PatternGuards, (negate <$>) <$> ranges)]
+          ExtAST.ImplicitParameterExpression{} -> Map.singleton Extensions.ImplicitParameters
           ExtAST.ListComprehension{} -> Map.singleton Extensions.PatternGuards . ((negate <$>) <$>)
           ExtAST.ParallelListComprehension{} ->
              \ranges-> Map.fromList [(Extensions.ParallelListComprehensions, ranges),
