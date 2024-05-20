@@ -171,6 +171,7 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
    of ConstructorReference name -> ConE (qnameTemplate name)
       EmptyListConstructor -> ListE []
       TupleConstructor n -> TupE (replicate n Nothing)
+      UnboxedTupleConstructor () n -> UnboxedTupE (replicate n Nothing)
       UnitConstructor -> TupE []
 expressionTemplate (CaseExpression scrutinee alternatives) =
    CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
@@ -215,6 +216,7 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
    where s = wrappedExpressionTemplate start
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
+expressionTemplate (UnboxedTupleExpression () items) = UnboxedTupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
@@ -539,6 +541,7 @@ patternTemplate (ConstructorPattern con typeApps args) = case (extract con) of
 #endif
    EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
    TupleConstructor{} -> TupP (patternTemplate . extract <$> toList args)
+   UnboxedTupleConstructor{} -> UnboxedTupP (patternTemplate . extract <$> toList args)
    UnitConstructor -> TupP []
 patternTemplate (InfixPattern left op right) =
    InfixP (patternTemplate $ extract left) (qnameTemplate op) (patternTemplate $ extract right)
@@ -555,6 +558,7 @@ patternTemplate (RecordPattern constructor fields) =
 patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
 patternTemplate NPlusKPattern{} = error "TH doesn't support N+K patterns"
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
+patternTemplate (UnboxedTuplePattern () items) = UnboxedTupP (patternTemplate . extract <$> toList items)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate (TypedPattern p t) = SigP (patternTemplate $ extract p) (typeTemplate $ extract t)
 patternTemplate WildcardPattern = WildP
@@ -579,6 +583,7 @@ typeTemplate (ConstructorType con) = case (extract con) of
    ConstructorReference name -> ConT (qnameTemplate name)
    EmptyListConstructor -> ListT
    TupleConstructor n -> TupleT n
+   UnboxedTupleConstructor () n -> UnboxedTupleT n
    UnitConstructor -> TupleT 0
 typeTemplate FunctionConstructorType = ArrowT
 typeTemplate (FunctionType from to) = ArrowT `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
@@ -594,6 +599,7 @@ typeTemplate (MultiplicityFunctionType from mult to) =
 typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
+typeTemplate (UnboxedTupleType () items) = foldl' AppT (UnboxedTupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (TypeApplication left right) = AppT (typeTemplate $ extract left) (typeTemplate $ extract right)
 typeTemplate (InfixTypeApplication left op right) =
    InfixT (wrappedTypeTemplate left) (qnameTemplate op) (wrappedTypeTemplate right)
@@ -622,6 +628,7 @@ typeTemplate (PromotedConstructorType con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
    EmptyListConstructor -> PromotedNilT
    TupleConstructor n -> PromotedTupleT n
+   UnboxedTupleConstructor () n -> PromotedTupleT n  -- TODO verify
    UnitConstructor -> PromotedTupleT 0
 typeTemplate (PromotedTupleType items) =
    foldl' AppT (PromotedTupleT $! length items) (typeTemplate . extract <$> items)
@@ -659,6 +666,7 @@ freeTypeVars (MultiplicityFunctionType from mult to) =
 freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (UnboxedTupleType () items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (TypeApplication left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (VisibleKindApplication t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))

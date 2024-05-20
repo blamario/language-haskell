@@ -11,6 +11,8 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
+              UnboxedTuplesConstruction,
+              unboxedTupleType, unboxedTupleExpression, unboxedTuplePattern, unboxedTupleConstructor,
               ImplicitParametersConstruction,
               implicitParameterConstraint, implicitParameterDeclaration, implicitParameterExpression,
               BangPatternConstruction, bangPattern,
@@ -106,6 +108,12 @@ data instance Construct 'Extensions.ParallelListComprehensions λ l d s = Parall
 data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstruction {
    tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
+data instance Construct 'Extensions.UnboxedTuples λ l d s = UnboxedTuplesConstruction {
+   unboxedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
+   unboxedTupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s,
+   unboxedTupleConstructor :: Int -> Constructor λ l d s,
+   unboxedTuplePattern :: NonEmpty (s (Pattern l l d d)) -> Pattern λ l d s}
+
 data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
@@ -181,7 +189,8 @@ data instance Construct 'Extensions.FunctionalDependencies λ l d s = Functional
 
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
-                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.TupleSections,
+                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo,
+                          'Extensions.TupleSections, 'Extensions.UnboxedTuples,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,

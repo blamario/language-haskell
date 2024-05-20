@@ -166,6 +166,7 @@ extensionMixins =
      (Set.fromList [InferredTypeVariables],          [(9, inferredTypeVariablesMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
+     (Set.fromList [UnboxedTuples],                  [(9, unboxedTuplesMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
@@ -412,6 +413,22 @@ unicodeSyntaxMixin self super = super{
       rightArrow = (super & report & rightArrow) <|> delimiter "→",
       leftArrow = (super & report & leftArrow) <|> delimiter "←",
       variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (super & report & variableSymbol)}}
+
+unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedTuples l => ExtensionOverlay l g t
+unboxedTuplesMixin self super = super{
+   report= (report super){
+      aType = (super & report & aType)
+              <|> Abstract.unboxedTupleType Abstract.build
+                  <$> hashParens (wrap (self & report & typeTerm) `sepByNonEmpty` comma),
+      bareExpression = (super & report & bareExpression)
+                       <|> Abstract.unboxedTupleExpression Abstract.build
+                           <$> hashParens ((self & report & expression) `sepByNonEmpty` comma),
+      generalConstructor = (super & report & generalConstructor)
+                           <|> Abstract.tupleConstructor . succ . length <$> hashParens (many comma),
+      aPattern = (super & report & aPattern)
+                 <|> Abstract.unboxedTuplePattern Abstract.build
+                     <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma)}}
+   where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 magicHashMixin self super =
