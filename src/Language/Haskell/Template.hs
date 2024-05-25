@@ -217,6 +217,8 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (UnboxedTupleExpression () items) = UnboxedTupE (Just . expressionTemplate . extract <$> toList items)
+expressionTemplate (UnboxedTupleSectionExpression () items) =
+   UnboxedTupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)

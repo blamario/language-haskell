@@ -167,6 +167,7 @@ extensionMixins =
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [UnboxedTuples],                  [(9, unboxedTuplesMixin)]),
+     (Set.fromList [TupleSections, UnboxedTuples],   [(9, unboxedTupleSectionsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
@@ -424,10 +425,19 @@ unboxedTuplesMixin self super = super{
                        <|> Abstract.unboxedTupleExpression Abstract.build
                            <$> hashParens ((self & report & expression) `sepByNonEmpty` comma),
       generalConstructor = (super & report & generalConstructor)
-                           <|> Abstract.tupleConstructor . succ . length <$> hashParens (many comma),
+                           <|> Abstract.unboxedTupleConstructor Abstract.build . succ . length
+                               <$> hashParens (many comma),
       aPattern = (super & report & aPattern)
                  <|> Abstract.unboxedTuplePattern Abstract.build
                      <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma)}}
+   where hashParens p = delimiter "(#" *> p <* terminator "#)"
+
+unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedTuples l => ExtensionOverlay l g t
+unboxedTupleSectionsMixin self super = super{
+   report= (report super){
+      bareExpression = (super & report & bareExpression)
+                       <|> Abstract.unboxedTupleSectionExpression Abstract.build
+                           <$> hashParens (optional (self & report & expression) `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t

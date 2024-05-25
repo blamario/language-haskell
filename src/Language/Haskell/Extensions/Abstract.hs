@@ -12,7 +12,8 @@ module Language.Haskell.Extensions.Abstract (
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
               UnboxedTuplesConstruction,
-              unboxedTupleType, unboxedTupleExpression, unboxedTuplePattern, unboxedTupleConstructor,
+              unboxedTupleType, unboxedTupleExpression, unboxedTupleSectionExpression, unboxedTupleConstructor,
+              unboxedTuplePattern,
               ImplicitParametersConstruction,
               implicitParameterConstraint, implicitParameterDeclaration, implicitParameterExpression,
               BangPatternConstruction, bangPattern,
@@ -111,6 +112,7 @@ data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstru
 data instance Construct 'Extensions.UnboxedTuples λ l d s = UnboxedTuplesConstruction {
    unboxedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
    unboxedTupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s,
+   unboxedTupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s,
    unboxedTupleConstructor :: Int -> Constructor λ l d s,
    unboxedTuplePattern :: NonEmpty (s (Pattern l l d d)) -> Pattern λ l d s}
 

@@ -592,6 +592,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
       AST.TupleSectionExpression ((translateFully t <$>) <$> items)
    translateDeeply t (AST.UnboxedTupleExpression support items) =
       AST.UnboxedTupleExpression support (translateFully t <$> items)
+   translateDeeply t (AST.UnboxedTupleSectionExpression support items) =
+      AST.UnboxedTupleSectionExpression support ((translateFully t <$>) <$> items)
    translateDeeply t (AST.TypedExpression x signature) =
       AST.TypedExpression (translateFully t x) (translateFully t signature)
    translateDeeply t (AST.VisibleTypeApplication x ty) =
@@ -711,6 +713,7 @@ instance {-# overlappable #-}
    translate _ (AST.TupleExpression items) = AST.TupleExpression items
    translate _ (AST.TupleSectionExpression items) = AST.TupleSectionExpression items
    translate _ (AST.UnboxedTupleExpression support items) = AST.UnboxedTupleExpression support items
+   translate _ (AST.UnboxedTupleSectionExpression support items) = AST.UnboxedTupleSectionExpression support items
    translate _ (AST.TypedExpression x signature) = AST.TypedExpression x signature
    translate _ (AST.VisibleTypeApplication x ty) = AST.VisibleTypeApplication x ty
    translate _ (AST.OverloadedLabel l) = AST.OverloadedLabel l

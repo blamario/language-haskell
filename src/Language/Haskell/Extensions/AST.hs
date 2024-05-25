@@ -86,6 +86,7 @@ instance Abstract.ExtendedWith 'Extensions.UnboxedTuples Language where
       Abstract.unboxedTupleType = UnboxedTupleType (),
       Abstract.unboxedTupleConstructor = UnboxedTupleConstructor (),
       Abstract.unboxedTupleExpression = UnboxedTupleExpression (),
+      Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression (),
       Abstract.unboxedTuplePattern = UnboxedTuplePattern ()}
 
 instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
@@ -635,6 +636,8 @@ data Expression λ l d s =
    | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | UnboxedTupleExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
                             (NonEmpty (s (Abstract.Expression l l d d)))
+   | UnboxedTupleSectionExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
+                                   (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | OverloadedLabel Text
