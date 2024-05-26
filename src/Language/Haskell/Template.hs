@@ -287,10 +287,16 @@ declarationTemplates (EquationDeclaration lhs rhs wheres) = case extract lhs of
    where rhs' = rhsTemplate (extract rhs)
          declarations = foldMap (declarationTemplates . extract) wheres
 declarationTemplates (FixityDeclaration fixity precedence names) =
-   InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) . nameTemplate <$> toList names
+   infixD . nameTemplate <$> toList names
    where fixityTemplate NonAssociative = InfixN
          fixityTemplate LeftAssociative = InfixL
          fixityTemplate RightAssociative = InfixR
+         fixityTH = Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)
+#if MIN_VERSION_template_haskell(2,22,0)
+         infixD = InfixD fixityTH NoNamespaceSpecifier
+#else
+         infixD = InfixD fixityTH
+#endif
 declarationTemplates (ForeignExport convention identification name t) =
    [ForeignD (ExportF (conventionTemplate convention) (foldMap unpack identification) (nameTemplate name)
                       (typeTemplate $ extract t))]

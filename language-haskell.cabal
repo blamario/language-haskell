@@ -38,7 +38,7 @@ library
                        deep-transformations >= 0.2.1 && < 0.3,
                        either == 5.0.*, witherable == 0.4.*,
                        memoize == 1.1.*,
-                       template-haskell >= 2.11 && < 2.22, th-abstraction >= 0.4 && < 0.7, pretty == 1.1.*
+                       template-haskell >= 2.11 && < 2.23, th-abstraction >= 0.4 && < 0.7, pretty == 1.1.*
                        -- filepath < 1.5, directory < 1.4, prettyprinter >= 1.2.1 && < 1.7,
   hs-source-dirs:      src/
   default-language:    Haskell2010
