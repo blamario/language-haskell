@@ -437,7 +437,8 @@ unboxedTupleSectionsMixin self super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
                        <|> Abstract.unboxedTupleSectionExpression Abstract.build
-                           <$> hashParens (optional (self & report & expression) `sepByNonEmpty` comma)}}
+                           <$> hashParens (filter (\l-> any isJust l && any isNothing l)
+                                           $ optional (self & report & expression) `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
@@ -571,7 +572,7 @@ importQualifiedPostMixin self super = super{
          importDeclaration = (super & report & moduleLevel & importDeclaration)
                              <|> flip Abstract.importDeclaration <$ keyword "import"
                                  <*> moduleId
-                                 <*> (True <$ keyword "qualified" <|> pure False)
+                                 <*> (True <$ keyword "qualified")
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ self & report & moduleLevel & importSpecification)}}}
 
