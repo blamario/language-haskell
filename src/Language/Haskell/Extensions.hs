@@ -68,6 +68,8 @@ data Extension = AllowAmbiguousTypes
                | FunctionalDependencies
                | GADTSyntax
                | GADTs
+               | GHC2021
+               | GHC2024
                | GHCForeignImportPrim
                | GeneralizedNewtypeDeriving
                | Haskell2010
@@ -216,6 +218,30 @@ directImplications = Map.fromList <$> Map.fromList [
   (FlexibleInstances, [(TypeSynonymInstances, True)]),
   (FunctionalDependencies, [(MultiParamTypeClasses, True)]),
   (GADTs, [(EqualityConstraints, True), (ExistentialQuantification, True), (GADTSyntax, True), (MonoLocalBinds, True)]),
+  (GHC2021, [(BangPatterns, True), (BinaryLiterals, True),
+             (ConstrainedClassMethods, True), (ConstraintKinds, True),
+             (DeriveDataTypeable, True), (DeriveFoldable, True), (DeriveFunctor, True),
+             (DeriveGeneric, True), (DeriveLift, True), (DeriveTraversable, True), (DoAndIfThenElse, True),
+             (EmptyCase, True), (EmptyDataDeclarations, True), (EmptyDataDeriving, True),
+             (ExistentialQuantification, True), (ExplicitForAll, True),
+             (FieldSelectors, True), (FlexibleContexts, True),
+             (FlexibleInstances, True), (ForeignFunctionInterface, True),
+             (GADTSyntax, True), (GeneralizedNewtypeDeriving, True),
+             (HexFloatLiterals, True),
+             (ImplicitPrelude, True), (ImportQualifiedPost, True), (InstanceSigs, True),
+             (KindSignatures, True),
+             (MonomorphismRestriction, True), (MultiParamTypeClasses, True),
+             (NamedFieldPuns, True), (NamedWildCards, True), (NumericUnderscores, True),
+             (PatternGuards, True), (PolyKinds, True), (PostfixOperators, True),
+             (RankNTypes, True), (RelaxedPolyRec, True),
+             (ScopedTypeVariables, True), (StandaloneDeriving, True),
+             (StandaloneKindSignatures, True), (StarIsType, True),
+             (TraditionalRecordSyntax, True), (TupleSections, True),
+             (TypeApplications, True), (TypeOperators, True), (TypeSynonymInstances, True),
+             (ExplicitNamespaces, False)]),
+  (GHC2024, [(GHC2021, True), (DataKinds, True), (DerivingStrategies, True), (DisambiguateRecordFields, True),
+             (ExplicitNamespaces, True), (GADTs, True), (LambdaCase, True),
+             (MonoLocalBinds, True), (RoleAnnotations, True)]),
   (Haskell98, [(NPlusKPatterns, True), (NondecreasingIndentation, True),
                (DoAndIfThenElse, False), (EmptyDataDeclarations, False),
                (ForeignFunctionInterface, False), (PatternGuards, False), (RelaxedPolyRec, False)]),
@@ -324,6 +350,8 @@ byName = Map.fromList [
   ("FunctionalDependencies", FunctionalDependencies),
   ("GADTSyntax", GADTSyntax),
   ("GADTs", GADTs),
+  ("GHC2021", GHC2021),
+  ("GHC2024", GHC2024),
   ("GHCForeignImportPrim", GHCForeignImportPrim),
   ("GeneralisedNewtypeDeriving", GeneralizedNewtypeDeriving),
   ("GeneralizedNewtypeDeriving", GeneralizedNewtypeDeriving),
