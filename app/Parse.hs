@@ -27,7 +27,6 @@ import qualified Transformation.Full as Full
 import Control.Monad
 import Data.Data (Data)
 import Data.Functor.Compose (Compose(..))
-import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Monoid.Instances.PrefixMemory (content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
@@ -175,7 +174,7 @@ main' Opts{..} = do
               => Text -> ParseResults Input [w (g l l w w)] -> IO ()
        report contents (Right [parsed]) = case optsOutput of
           Original -> case optsStage of
-             Parsed -> Text.putStr (extract $ content $ Reserializer.reserialize parsed)
+             Parsed -> Text.putStr (content $ Reserializer.reserialize parsed)
              Bound -> Text.putStr $ Reserializer.reserializeNested $ Transformation.Mapped (Rank2.Map rewrap) Full.<$> bound
              Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
              Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
@@ -205,11 +204,11 @@ main' Opts{..} = do
                 resolved = Haskell.resolvePositions defaultExtensions predefinedModules preludeBindings contents parsed
                 bound = Binder.withBindings defaultExtensions predefinedModules preludeBindings parsed
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
-                rewrap = Reserializer.mapWrapping (offset contents) (extract . content)
+                rewrap = Reserializer.mapWrapping (offset contents) content
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])
-       report contents (Left err) = Text.putStrLn (failureDescription contents (extract . content <$> err) 4)
+       report contents (Left err) = Text.putStrLn (failureDescription contents (content <$> err) 4)
    case optsFile of
       Just file -> (if file == "-" then getContents else readFile file)
                    >>= go parseModule file

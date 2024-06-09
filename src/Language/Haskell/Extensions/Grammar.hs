@@ -24,7 +24,7 @@ import Data.Function.Memoize (memoize)
 import Data.Monoid (Endo(..))
 import Data.Monoid.Cancellative (RightReductive, isPrefixOf, isSuffixOf)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
-import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
+import Data.Monoid.Instances.PrefixMemory (Shadowed (prefix))
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -70,9 +70,6 @@ followedByCloseSpace :: TextualMonoid t => t -> Bool
 followedByCloseSpace t =
    any isCloseOrSpace (Textual.characterPrefix t) || "{-" `isPrefixOf` t || "--" `isPrefixOf` t
    where isCloseOrSpace c = Char.isSpace c || c `elem` (")]},;" :: [Char])
-
-instance (Eq t, Factorial.StableFactorial t, OutlineMonoid t) => OutlineMonoid (Shadowed t) where
-   currentColumn = Report.currentColumn . content
 
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,

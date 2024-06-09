@@ -29,7 +29,6 @@ import Data.Functor.Compose (Compose(..))
 import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Monoid.Instances.Positioned (LinePositioned, extract)
 import Data.Monoid.Instances.PrefixMemory (Shadowed, content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
@@ -53,7 +52,7 @@ type Placed = Reserializer.Wrapped Int Text
 -- | Every node in a parsed and resolved AST is wrapped with this functor
 type Bound = Binder.WithEnvironment AST.Language Placed
 
-type Input = Shadowed (LinePositioned Text)
+type Input = Shadowed Text
 
 -- | Parse the given text of a single module.
 parseModule :: Map Extension Bool
@@ -89,7 +88,7 @@ resolvePositions extensions modEnv env src =
    . Full.traverse Reorganizer.Reorganization
    . Binder.withBindings extensions modEnv env
    where rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
-         rewrap = Reserializer.mapWrapping (offset src) (extract . content)
+         rewrap = Reserializer.mapWrapping (offset src) content
 
 checkAllBound :: Bound (AST.Module AST.Language AST.Language Bound Bound)
               -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))

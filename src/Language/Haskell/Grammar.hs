@@ -19,6 +19,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid, characterPrefix, toString)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
+import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Text (Text)
@@ -152,7 +153,7 @@ grammar :: forall l g t. (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, Outl
 grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                        declarationLevel= DeclarationGrammar{..},
                        ..} = HaskellGrammar{
-   haskellModule = wrap (optional (char '\xfeff') *> whiteSpace
+   haskellModule = wrap (optional (char utf8bom) *> whiteSpace
                          *> (uncurry <$> (Abstract.namedModule <$ keyword "module" <*> moduleId
                                                                <*> optional exports <* keyword "where"
                                           <|> pure Abstract.anonymousModule)
@@ -956,6 +957,16 @@ class TextualMonoid t => OutlineMonoid t where
 
 instance OutlineMonoid (LinePositioned Text) where
    currentColumn = column
+
+instance OutlineMonoid (Shadowed Text) where
+   currentColumn t
+      | column > 0 && Text.head line == utf8bom = column - 1
+      | otherwise = column
+      where line = Text.takeWhileEnd (/= '\n') (prefix t)
+            column = Text.length line
+
+utf8bom :: Char
+utf8bom = '\xfeff'
 
 inputColumn :: (Rank2.Apply g, Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
