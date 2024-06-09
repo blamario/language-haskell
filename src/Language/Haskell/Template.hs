@@ -12,8 +12,8 @@ import Data.Functor.Const (Const (Const))
 import Data.List ((\\), nub)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Char8 as ByteString.Char8
 import Data.Text (Text, unpack)
-import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text as Text
 import GHC.Exts (TYPE)
 import qualified GHC.Types
@@ -535,7 +535,8 @@ literalTemplate (HashLiteral _ (FloatingLiteral x)) = FloatPrimL x
 literalTemplate (HashLiteral _ (HashLiteral _ (FloatingLiteral x))) = DoublePrimL x
 literalTemplate (HashLiteral _ (IntegerLiteral n)) = IntPrimL n
 literalTemplate (HashLiteral _ (HashLiteral _ (IntegerLiteral n))) = WordPrimL n
-literalTemplate (HashLiteral _ (StringLiteral s)) = StringPrimL (ByteString.unpack $ encodeUtf8 s)
+literalTemplate (HashLiteral _ (StringLiteral s))
+  | Text.all ((< 256) . Char.ord) s = StringPrimL (ByteString.unpack $ ByteString.Char8.pack $ Text.unpack s)
 literalTemplate (HashLiteral _ _) = error "Unexpected HashLiteral"
 
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
