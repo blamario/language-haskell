@@ -979,13 +979,17 @@ oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                     Deep.Foldable (Serialization (Down Int) t) node)
                 => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
 oneExtendedLine indent _input node =
-   allIndented (lexemes node)
-   where allIndented (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented rest
-         allIndented (WhiteSpace ws : Token _ tok : rest)
-            | Textual.all isLineChar ws = allIndented rest
+   allIndented 0 (lexemes node)
+   where allIndented nesting (WhiteSpace _ : Token Delimiter tok : rest) = allIndented nesting rest
+         allIndented nesting (WhiteSpace ws : Token _ tok : rest)
+            | Textual.all isLineChar ws = allIndented (nest tok nesting) rest
             | tokenIndent < indent = False
-            | tokenIndent == indent && tok `notElem` terminators = False
+            | tokenIndent == indent && nesting <= 0 && tok `notElem` terminators = False
             where tokenIndent = currentColumn (Factorial.dropWhile (const True) ws)
-         allIndented (_ : rest) = allIndented rest
-         allIndented [] = True
-         terminators = [",", ";", ")", "]", "}", "else", "in", "of", "then"]
+         allIndented nesting (Token _ tok : rest) = allIndented (nest tok nesting) rest
+         allIndented nesting (_ : rest) = allIndented nesting rest
+         allIndented _ [] = True
+         terminators = ["{", ",", ";", ")", "]", "}", "else", "in", "of", "then"]
+         nest "{" = succ
+         nest "}" = pred
+         nest _ = id

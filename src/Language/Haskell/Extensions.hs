@@ -334,7 +334,6 @@ byName = Map.fromList [
   ("DoAndIfThenElse", DoAndIfThenElse),
   ("DuplicateRecordFields", DuplicateRecordFields),
   ("EmptyCase", EmptyCase),
-  ("EmptyCase", EmptyCase),
   ("EmptyDataDeclarations", EmptyDataDeclarations),
   ("EmptyDataDecls", EmptyDataDeclarations),
   ("EmptyDataDeriving", EmptyDataDeriving),
