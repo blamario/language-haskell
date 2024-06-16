@@ -1148,7 +1148,10 @@ roleAnnotationsMixin self super = super{
 inferredTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 inferredTypeVariablesMixin self super = super{
    typeVarBinder = typeVarBinder super
-      <|> Abstract.inferredTypeVariable <$> braces (self & report & typeVar)}
+      <|> braces (Abstract.inferredTypeVariable <$> (self & report & typeVar)
+                  <|> Abstract.inferredExplicitlyKindedTypeVariable
+                      <$> (self & report & typeVar)
+                      <*> wrap (self & kindSignature))}
 
 typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                           SpaceMonoid t) => ExtensionOverlay l g t
