@@ -11,6 +11,8 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
+              UnboxedSumsConstruction,
+              unboxedSumType, unboxedSumConstructor, unboxedSumExpression, unboxedSumPattern,
               UnboxedTuplesConstruction,
               unboxedTupleType, unboxedTupleExpression, unboxedTupleSectionExpression, unboxedTupleConstructor,
               unboxedTuplePattern,
@@ -116,6 +118,12 @@ data instance Construct 'Extensions.UnboxedTuples λ l d s = UnboxedTuplesConstr
    unboxedTupleConstructor :: Int -> Constructor λ l d s,
    unboxedTuplePattern :: NonEmpty (s (Pattern l l d d)) -> Pattern λ l d s}
 
+data instance Construct 'Extensions.UnboxedSums λ l d s = UnboxedSumsConstruction {
+   unboxedSumType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
+   unboxedSumConstructor :: Int -> Constructor λ l d s,
+   unboxedSumExpression :: Int -> s (Expression l l d d) -> Int -> Expression λ l d s,
+   unboxedSumPattern :: Int -> s (Pattern l l d d) -> Int -> Pattern λ l d s}
+
 data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
@@ -192,7 +200,7 @@ data instance Construct 'Extensions.FunctionalDependencies λ l d s = Functional
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo,
-                          'Extensions.TupleSections, 'Extensions.UnboxedTuples,
+                          'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,

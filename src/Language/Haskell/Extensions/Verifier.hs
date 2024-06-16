@@ -247,6 +247,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
           ExtAST.ReferenceExpression q
              | Just (Binder.ValueBinding Binder.RecordField) <- Map.lookup q (getUnionWith $ AG.Di.inh bindings)
                -> Map.singleton Extensions.FieldSelectors
+          ExtAST.UnboxedSumExpression{} -> Map.singleton Extensions.UnboxedSums
           ExtAST.UnboxedTupleExpression{} -> Map.singleton Extensions.UnboxedTuples
           ExtAST.UnboxedTupleSectionExpression{} ->
              \ranges-> Map.fromList [(Extensions.TupleSections, ranges), (Extensions.UnboxedTuples, ranges)]
@@ -354,6 +355,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       case t of ExtAST.BangPattern {} -> Map.singleton Extensions.BangPatterns [(start, end)]
                 ExtAST.NPlusKPattern {} -> Map.singleton Extensions.NPlusKPatterns [(start, end)]
                 ExtAST.ViewPattern {} -> Map.singleton Extensions.ViewPatterns [(start, end)]
+                ExtAST.UnboxedSumPattern{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
                 ExtAST.UnboxedTuplePattern{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
                 ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
@@ -378,6 +380,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
          ExtAST.GroundTypeKind{} -> Map.singleton Extensions.StarIsType [(start, end)]
          ExtAST.TypeWildcard{} -> Map.singleton Extensions.PartialTypeSignatures [(start, end)]
+         ExtAST.UnboxedSumType{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
          ExtAST.UnboxedTupleType{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
          ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
                                                         (Extensions.PolyKinds, [(start, end)])]
@@ -389,6 +392,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
    Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       case t
       of ExtAST.UnboxedTupleConstructor{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
+         ExtAST.UnboxedSumConstructor{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
          _ -> mempty
 
 checkKindedTypevar :: (pos, pos) -> ExtAST.TypeVarBinding λ l d s -> Map Extension [(pos, pos)]

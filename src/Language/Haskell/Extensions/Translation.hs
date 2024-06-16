@@ -279,6 +279,7 @@ instance (WrapTranslation t,
    translateDeeply _ AST.EmptyListConstructor = AST.EmptyListConstructor
    translateDeeply _ (AST.TupleConstructor size) = AST.TupleConstructor size
    translateDeeply _ (AST.UnboxedTupleConstructor support size) = AST.UnboxedTupleConstructor support size
+   translateDeeply _ (AST.UnboxedSumConstructor support size) = AST.UnboxedSumConstructor support size
    translateDeeply _ AST.UnitConstructor = AST.UnitConstructor
 
 instance WrapTranslation t => DeeplyTranslatable t AST.FunctionalDependency where
@@ -437,6 +438,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.StrictType body) = AST.StrictType (translateFully t body)
    translateDeeply t (AST.TupleType items) = AST.TupleType (translateFully t <$> items)
    translateDeeply t (AST.UnboxedTupleType support items) = AST.UnboxedTupleType support (translateFully t <$> items)
+   translateDeeply t (AST.UnboxedSumType support items) = AST.UnboxedSumType support (translateFully t <$> items)
    translateDeeply t (AST.TypeApplication left right) =
       AST.TypeApplication (translateFully t left) (translateFully t right)
    translateDeeply t (AST.InfixTypeApplication left op right) =
@@ -526,7 +528,10 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
    translateDeeply t (AST.WildcardRecordPattern support con fields) =
       AST.WildcardRecordPattern support con (translateFully t <$> fields)
    translateDeeply t (AST.TuplePattern items) = AST.TuplePattern (translateFully t <$> items)
-   translateDeeply t (AST.UnboxedTuplePattern support items) = AST.UnboxedTuplePattern support (translateFully t <$> items)
+   translateDeeply t (AST.UnboxedTuplePattern support items) =
+      AST.UnboxedTuplePattern support (translateFully t <$> items)
+   translateDeeply t (AST.UnboxedSumPattern support before branch after) =
+      AST.UnboxedSumPattern support before (translateFully t branch) after
    translateDeeply t (AST.TypedPattern p ty) = AST.TypedPattern (translateFully t p) (translateFully t ty)
    translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
    translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
@@ -594,6 +599,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
       AST.UnboxedTupleExpression support (translateFully t <$> items)
    translateDeeply t (AST.UnboxedTupleSectionExpression support items) =
       AST.UnboxedTupleSectionExpression support ((translateFully t <$>) <$> items)
+   translateDeeply t (AST.UnboxedSumExpression support before branch after) =
+      AST.UnboxedSumExpression support before (translateFully t branch) after
    translateDeeply t (AST.TypedExpression x signature) =
       AST.TypedExpression (translateFully t x) (translateFully t signature)
    translateDeeply t (AST.VisibleTypeApplication x ty) =
@@ -685,6 +692,8 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t),
+    Abstract.SupportFor 'Extensions.UnboxedSums (Origin t)
+    ~ Abstract.SupportFor 'Extensions.UnboxedSums (Target t),
     Abstract.SupportFor 'Extensions.UnboxedTuples (Origin t)
     ~ Abstract.SupportFor 'Extensions.UnboxedTuples (Target t)) =>
    Translation t AST.Expression where
@@ -714,6 +723,8 @@ instance {-# overlappable #-}
    translate _ (AST.TupleSectionExpression items) = AST.TupleSectionExpression items
    translate _ (AST.UnboxedTupleExpression support items) = AST.UnboxedTupleExpression support items
    translate _ (AST.UnboxedTupleSectionExpression support items) = AST.UnboxedTupleSectionExpression support items
+   translate _ (AST.UnboxedSumExpression support before branch after) =
+      AST.UnboxedSumExpression support before branch after
    translate _ (AST.TypedExpression x signature) = AST.TypedExpression x signature
    translate _ (AST.VisibleTypeApplication x ty) = AST.VisibleTypeApplication x ty
    translate _ (AST.OverloadedLabel l) = AST.OverloadedLabel l

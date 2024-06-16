@@ -165,6 +165,7 @@ extensionMixins =
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
      (Set.fromList [UnboxedTuples],                  [(9, unboxedTuplesMixin)]),
      (Set.fromList [TupleSections, UnboxedTuples],   [(9, unboxedTupleSectionsMixin)]),
+     (Set.fromList [UnboxedSums],                    [(9, unboxedSumsMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
@@ -418,12 +419,12 @@ unboxedTuplesMixin self super = super{
       aType = (super & report & aType)
               <|> Abstract.unboxedTupleType Abstract.build
                   <$> hashParens (wrap (self & report & typeTerm) `sepByNonEmpty` comma),
-      bareExpression = (super & report & bareExpression)
-                       <|> Abstract.unboxedTupleExpression Abstract.build
-                           <$> hashParens ((self & report & expression) `sepByNonEmpty` comma),
       generalConstructor = (super & report & generalConstructor)
                            <|> Abstract.unboxedTupleConstructor Abstract.build . succ . length
                                <$> hashParens (many comma),
+      bareExpression = (super & report & bareExpression)
+                       <|> Abstract.unboxedTupleExpression Abstract.build
+                           <$> hashParens ((self & report & expression) `sepByNonEmpty` comma),
       aPattern = (super & report & aPattern)
                  <|> Abstract.unboxedTuplePattern Abstract.build
                      <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma)}}
@@ -436,6 +437,34 @@ unboxedTupleSectionsMixin self super = super{
                        <|> Abstract.unboxedTupleSectionExpression Abstract.build
                            <$> hashParens (filter (\l-> any isJust l && any isNothing l)
                                            $ optional (self & report & expression) `sepByNonEmpty` comma)}}
+   where hashParens p = delimiter "(#" *> p <* terminator "#)"
+
+unboxedSumsMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedSums l => ExtensionOverlay l g t
+unboxedSumsMixin self super = super{
+   report= (report super){
+      aType = (super & report & aType)
+              <|> Abstract.unboxedSumType Abstract.build
+                  <$> hashParens ((:|) <$> wrap (self & report & typeTerm)
+                                       <*> some (delimiter "|" *> wrap (self & report & typeTerm))),
+      generalConstructor = (super & report & generalConstructor)
+                           <|> Abstract.unboxedSumConstructor Abstract.build . succ . length
+                               <$> hashParens (some $ delimiter "|"),
+      bareExpression = (super & report & bareExpression)
+                       <|> hashParens (Abstract.unboxedSumExpression Abstract.build
+                                          <$> (length <$> some (delimiter "|")) 
+                                          <*> (self & report & expression)
+                                          <*> (length <$> many (delimiter "|"))
+                                       <|> Abstract.unboxedSumExpression Abstract.build 0
+                                          <$> (self & report & expression)
+                                          <*> (length <$> some (delimiter "|"))),
+      aPattern = (super & report & aPattern)
+                 <|> hashParens (Abstract.unboxedSumPattern Abstract.build
+                                    <$> (length <$> some (delimiter "|"))
+                                    <*> wrap (self & report & pPattern)
+                                    <*> (length <$> many (delimiter "|"))
+                                 <|> Abstract.unboxedSumPattern Abstract.build 0
+                                    <$> wrap (self & report & pPattern)
+                                    <*> (length <$> some (delimiter "|")))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t

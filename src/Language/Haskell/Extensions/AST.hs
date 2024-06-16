@@ -43,6 +43,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecursiveDo,
    'Extensions.ImplicitParameters,
    'Extensions.TupleSections,
+   'Extensions.UnboxedSums,
    'Extensions.UnboxedTuples,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
@@ -88,6 +89,13 @@ instance Abstract.ExtendedWith 'Extensions.UnboxedTuples Language where
       Abstract.unboxedTupleExpression = UnboxedTupleExpression (),
       Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression (),
       Abstract.unboxedTuplePattern = UnboxedTuplePattern ()}
+
+instance Abstract.ExtendedWith 'Extensions.UnboxedSums Language where
+   build = Abstract.UnboxedSumsConstruction {
+      Abstract.unboxedSumType = UnboxedSumType (),
+      Abstract.unboxedSumConstructor = UnboxedSumConstructor (),
+      Abstract.unboxedSumExpression = UnboxedSumExpression (),
+      Abstract.unboxedSumPattern = UnboxedSumPattern ()}
 
 instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
    build = Abstract.ImplicitParametersConstruction {
@@ -571,6 +579,7 @@ data Type λ l d s =
    | StrictType (s (Abstract.Type l l d d))
    | TupleType (NonEmpty (s (Abstract.Type l l d d)))
    | UnboxedTupleType !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (NonEmpty (s (Abstract.Type l l d d)))
+   | UnboxedSumType !(Abstract.SupportFor 'Extensions.UnboxedSums λ) (NonEmpty (s (Abstract.Type l l d d)))
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
@@ -634,6 +643,8 @@ data Expression λ l d s =
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
    | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
+   | UnboxedSumExpression !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
+                          Int (s (Abstract.Expression l l d d)) Int
    | UnboxedTupleExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
                             (NonEmpty (s (Abstract.Expression l l d d)))
    | UnboxedTupleSectionExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
@@ -671,6 +682,8 @@ data Pattern λ l d s =
    | NPlusKPattern !(Abstract.SupportFor 'Extensions.NPlusKPatterns λ) (Abstract.Name λ) Integer
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | UnboxedTuplePattern !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (NonEmpty (s (Abstract.Pattern l l d d)))
+   | UnboxedSumPattern !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
+                       Int (s (Abstract.Pattern l l d d)) Int
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
 
@@ -694,6 +707,7 @@ data Constructor λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type
    | EmptyListConstructor
    | TupleConstructor Int
    | UnboxedTupleConstructor !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) Int
+   | UnboxedSumConstructor !(Abstract.SupportFor 'Extensions.UnboxedSums λ) Int
    | UnitConstructor
 
 data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
@@ -859,18 +873,21 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.DerivingVia λ),
                    Eq (s (Abstract.Type l l d d))) => Eq (DerivingStrategy λ l d s)
 
 deriving instance Typeable (Type λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
                    Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)),
@@ -917,6 +934,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
@@ -927,6 +945,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
@@ -936,6 +955,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Expression λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
@@ -954,6 +974,7 @@ deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedN
 
 deriving instance Typeable (Pattern λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.ViewPatterns λ),
@@ -964,6 +985,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.ViewPatterns λ),
@@ -973,6 +995,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (s (Abstract.Value l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.ViewPatterns λ),
@@ -1004,12 +1027,15 @@ deriving instance (Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.Expres
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d))) => Eq (Statement λ l d s)
 
 deriving instance Data (Abstract.QualifiedName λ) => Typeable (Constructor λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Constructor λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (Abstract.QualifiedName λ)) => Show (Constructor λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
+                   Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (Abstract.QualifiedName λ)) => Eq (Constructor λ l d s)
 
 deriving instance Typeable (Value λ l d s)
