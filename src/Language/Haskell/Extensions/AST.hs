@@ -12,6 +12,7 @@ module Language.Haskell.Extensions.AST (Language(Language),
                                         Statement(..), ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..),
                                         Constructor(..), Value(..),
+                                        CallSafety(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -26,7 +27,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), GuardedExpression(..),
                              FieldDeclaration(..), CaseAlternative(..),
-                             CallingConvention(..), CallSafety(..), Associativity(..),
+                             CallingConvention(..), Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
                              ImportSpecification(..))
 import qualified Rank2.TH
@@ -45,6 +46,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.TupleSections,
    'Extensions.UnboxedSums,
    'Extensions.UnboxedTuples,
+   'Extensions.InterruptibleFFI,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
@@ -96,6 +98,10 @@ instance Abstract.ExtendedWith 'Extensions.UnboxedSums Language where
       Abstract.unboxedSumConstructor = UnboxedSumConstructor (),
       Abstract.unboxedSumExpression = UnboxedSumExpression (),
       Abstract.unboxedSumPattern = UnboxedSumPattern ()}
+
+instance Abstract.ExtendedWith 'Extensions.InterruptibleFFI Language where
+   build = Abstract.InterruptibleFFIConstruction {
+      Abstract.interruptibleCall = InterruptibleCall ()}
 
 instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
    build = Abstract.ImplicitParametersConstruction {
@@ -717,6 +723,8 @@ data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | StringLiteral Text
    | HashLiteral !(Abstract.SupportFor 'Extensions.MagicHash λ) (Value λ l d s)
 
+data CallSafety λ = SafeCall | UnsafeCall | InterruptibleCall !(Abstract.SupportFor 'Extensions.InterruptibleFFI λ)
+
 deriving instance Typeable (Export λ l d s)
 deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Export λ l d s)
@@ -745,6 +753,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
                    Data (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.FunctionalDependency l l d d)),
@@ -765,6 +774,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
                    Show (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.FunctionalDependency l l d d)),
@@ -785,6 +795,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
                    Eq (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
@@ -1043,6 +1054,11 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.MagicHash λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Value λ l d s)
 deriving instance Show (Abstract.SupportFor 'Extensions.MagicHash λ) => Show (Value λ l d s)
 deriving instance Eq (Abstract.SupportFor 'Extensions.MagicHash λ) => Eq (Value λ l d s)
+
+deriving instance Typeable (CallSafety λ)
+deriving instance (Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ), Data λ) => Data (CallSafety λ)
+deriving instance Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ) => Show (CallSafety λ)
+deriving instance Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ) => Eq (CallSafety λ)
 
 
 $(concat <$>

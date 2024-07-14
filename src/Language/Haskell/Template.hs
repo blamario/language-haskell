@@ -309,6 +309,7 @@ declarationTemplates (ForeignImport convention safety identification name t) =
                       (nameTemplate name) (typeTemplate $ extract t))]
    where safetyTemplate SafeCall = Safe
          safetyTemplate UnsafeCall = Unsafe
+         safetyTemplate (InterruptibleCall ()) = Interruptible
 declarationTemplates (ImplicitParameterDeclaration _ name value) =
    [ImplicitParamBindD (nameString name) (expressionTemplate $ extract value)]
 declarationTemplates (InstanceDeclaration _vars context lhs wheres) =
