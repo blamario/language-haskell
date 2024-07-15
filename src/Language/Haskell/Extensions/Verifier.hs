@@ -182,7 +182,13 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
             UnionWith $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
-         _ -> Full.foldMap UnicodeSyntaxAccounting d
+         ExtAST.ForeignExport{} ->
+            UnionWith $ Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
+         ExtAST.ForeignImport convention safety id name ty ->
+            UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
+            <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety)
+         _ -> mempty
+      <> Full.foldMap UnicodeSyntaxAccounting d
 
 instance Accounting l pos s
          `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
@@ -394,6 +400,12 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       of ExtAST.UnboxedTupleConstructor{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
          ExtAST.UnboxedSumConstructor{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
          _ -> mempty
+
+instance Accounting l pos s `Transformation.At` ExtAST.CallSafety l where
+   Accounting $ Compose (_, ((start, _, end), e)) = Const $ UnionWith $
+      (case e
+       of ExtAST.InterruptibleCall{} -> Map.singleton Extensions.InterruptibleFFI [(start, end)]
+          _ -> mempty)
 
 checkKindedTypevar :: (pos, pos) -> ExtAST.TypeVarBinding λ l d s -> Map Extension [(pos, pos)]
 checkKindedTypevar span ExtAST.ExplicitlyKindedTypeVariable{} = Map.singleton Extensions.KindSignatures [span]
