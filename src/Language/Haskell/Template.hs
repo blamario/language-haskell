@@ -24,6 +24,7 @@ import Language.Haskell (Bound, Placed)
 import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
+import qualified Language.Haskell.Extensions.Abstract as Abstract
 import Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.Reformulator as Reformulator
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
@@ -35,7 +36,6 @@ import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
 import Language.Haskell.TH.Syntax (VarBangType)
 
-import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
@@ -481,9 +481,10 @@ freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
 freeContextVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars NoContext = []
 
-conventionTemplate :: CallingConvention l -> Callconv
-conventionTemplate AST.CCall = TH.CCall
-conventionTemplate AST.StdCall = TH.StdCall
+conventionTemplate :: Abstract.ExtendedWith 'Extensions.CApiFFI l => CallingConvention l -> Callconv
+conventionTemplate ExtAST.CCall = TH.CCall
+conventionTemplate ExtAST.StdCall = TH.StdCall
+conventionTemplate (ExtAST.CApiCall ()) = TH.CApi
 conventionTemplate convention = error ("Calling Convention " ++ show convention ++ " is not supported by GHC")
 
 dataConstructorTemplate :: TemplateWrapper f => DataConstructor Language Language f f -> Con

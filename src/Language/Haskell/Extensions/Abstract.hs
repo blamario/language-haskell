@@ -17,6 +17,7 @@ module Language.Haskell.Extensions.Abstract (
               unboxedTupleType, unboxedTupleExpression, unboxedTupleSectionExpression, unboxedTupleConstructor,
               unboxedTuplePattern,
               InterruptibleFFIConstruction, interruptibleCall,
+              CApiFFIConstruction, cApiCall,
               ImplicitParametersConstruction,
               implicitParameterConstraint, implicitParameterDeclaration, implicitParameterExpression,
               BangPatternConstruction, bangPattern,
@@ -128,6 +129,9 @@ data instance Construct 'Extensions.UnboxedSums λ l d s = UnboxedSumsConstructi
 data instance Construct 'Extensions.InterruptibleFFI λ l d s = InterruptibleFFIConstruction {
    interruptibleCall :: CallSafety λ}
 
+data instance Construct 'Extensions.CApiFFI λ l d s = CApiFFIConstruction {
+   cApiCall :: CallingConvention λ}
+
 data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
@@ -205,7 +209,7 @@ class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
                           'Extensions.RecordWildCards, 'Extensions.RecursiveDo,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
-                          'Extensions.InterruptibleFFI,
+                          'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,

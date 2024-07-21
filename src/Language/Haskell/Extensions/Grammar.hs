@@ -167,6 +167,7 @@ extensionMixins =
      (Set.fromList [TupleSections, UnboxedTuples],   [(9, unboxedTupleSectionsMixin)]),
      (Set.fromList [UnboxedSums],                    [(9, unboxedSumsMixin)]),
      (Set.fromList [InterruptibleFFI],               [(9, interruptibleFFIMixin)]),
+     (Set.fromList [CApiFFI],                        [(9, cApiFFIMixin)]),
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
@@ -474,6 +475,13 @@ interruptibleFFIMixin self super = super{
       declarationLevel= (super & report & declarationLevel){
          safety = (super & report & declarationLevel & safety)
                   <|> Abstract.interruptibleCall Abstract.build <$ keyword "interruptible"}}}
+
+cApiFFIMixin :: forall l g t. Abstract.ExtendedWith 'CApiFFI l => ExtensionOverlay l g t
+cApiFFIMixin self super = super{
+   report= (report super){
+      declarationLevel= (super & report & declarationLevel){
+         callingConvention = (super & report & declarationLevel & callingConvention)
+                             <|> Abstract.cApiCall Abstract.build <$ keyword "capi"}}}
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 magicHashMixin self super =

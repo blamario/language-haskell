@@ -12,7 +12,7 @@ module Language.Haskell.Extensions.AST (Language(Language),
                                         Statement(..), ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..),
                                         Constructor(..), Value(..),
-                                        CallSafety(..),
+                                        CallSafety(..), CallingConvention(..),
                                         module Report) where
 
 import Control.Monad (forM)
@@ -27,7 +27,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
 import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), GuardedExpression(..),
                              FieldDeclaration(..), CaseAlternative(..),
-                             CallingConvention(..), Associativity(..),
+                             Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
                              ImportSpecification(..))
 import qualified Rank2.TH
@@ -47,6 +47,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.UnboxedSums,
    'Extensions.UnboxedTuples,
    'Extensions.InterruptibleFFI,
+   'Extensions.CApiFFI,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
@@ -102,6 +103,10 @@ instance Abstract.ExtendedWith 'Extensions.UnboxedSums Language where
 instance Abstract.ExtendedWith 'Extensions.InterruptibleFFI Language where
    build = Abstract.InterruptibleFFIConstruction {
       Abstract.interruptibleCall = InterruptibleCall ()}
+
+instance Abstract.ExtendedWith 'Extensions.CApiFFI Language where
+   build = Abstract.CApiFFIConstruction {
+      Abstract.cApiCall = CApiCall ()}
 
 instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
    build = Abstract.ImplicitParametersConstruction {
@@ -724,6 +729,8 @@ data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | HashLiteral !(Abstract.SupportFor 'Extensions.MagicHash λ) (Value λ l d s)
 
 data CallSafety λ = SafeCall | UnsafeCall | InterruptibleCall !(Abstract.SupportFor 'Extensions.InterruptibleFFI λ)
+data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall
+                         | CApiCall !(Abstract.SupportFor 'Extensions.CApiFFI λ)
 
 deriving instance Typeable (Export λ l d s)
 deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
@@ -754,6 +761,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
+                   Data (Abstract.SupportFor 'Extensions.CApiFFI λ),
                    Data (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Data (s (Abstract.Context l l d d)), Data (s (Abstract.Kind l l d d)),
                    Data (s (Abstract.FunctionalDependency l l d d)),
@@ -775,6 +783,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
+                   Show (Abstract.SupportFor 'Extensions.CApiFFI λ),
                    Show (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Show (s (Abstract.Context l l d d)), Show (s (Abstract.Kind l l d d)),
                    Show (s (Abstract.FunctionalDependency l l d d)),
@@ -796,6 +805,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
+                   Eq (Abstract.SupportFor 'Extensions.CApiFFI λ),
                    Eq (Abstract.SupportFor 'Extensions.PatternSynonyms λ),
                    Eq (s (Abstract.Context l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (s (Abstract.DataConstructor l l d d)), Eq (s (Abstract.GADTConstructor l l d d)),
@@ -1059,6 +1069,11 @@ deriving instance Typeable (CallSafety λ)
 deriving instance (Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ), Data λ) => Data (CallSafety λ)
 deriving instance Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ) => Show (CallSafety λ)
 deriving instance Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ) => Eq (CallSafety λ)
+
+deriving instance Typeable (CallingConvention λ)
+deriving instance (Data (Abstract.SupportFor 'Extensions.CApiFFI λ), Data λ) => Data (CallingConvention λ)
+deriving instance Show (Abstract.SupportFor 'Extensions.CApiFFI λ) => Show (CallingConvention λ)
+deriving instance Eq (Abstract.SupportFor 'Extensions.CApiFFI λ) => Eq (CallingConvention λ)
 
 
 $(concat <$>
