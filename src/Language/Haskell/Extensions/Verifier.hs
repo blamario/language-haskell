@@ -182,10 +182,12 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
             UnionWith $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
-         ExtAST.ForeignExport{} ->
-            UnionWith $ Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
+         ExtAST.ForeignExport convention id name ty ->
+            UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
+            <> getConst (Accounting Transformation.$ (convention <$ d))
          ExtAST.ForeignImport convention safety id name ty ->
             UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
+            <> getConst (Accounting Transformation.$ (convention <$ d))
             <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety)
          _ -> mempty
       <> Full.foldMap UnicodeSyntaxAccounting d
@@ -400,6 +402,12 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       of ExtAST.UnboxedTupleConstructor{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
          ExtAST.UnboxedSumConstructor{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
          _ -> mempty
+
+instance Accounting l pos s `Transformation.At` ExtAST.CallingConvention l where
+   Accounting $ Compose (_, ((start, _, end), e)) = Const $ UnionWith $
+      (case e
+       of ExtAST.CApiCall{} -> Map.singleton Extensions.CApiFFI [(start, end)]
+          _ -> mempty)
 
 instance Accounting l pos s `Transformation.At` ExtAST.CallSafety l where
    Accounting $ Compose (_, ((start, _, end), e)) = Const $ UnionWith $
