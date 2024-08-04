@@ -42,6 +42,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.ParallelListComprehensions,
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
+   'Extensions.QualifiedDo,
    'Extensions.ImplicitParameters,
    'Extensions.TupleSections,
    'Extensions.UnboxedSums,
@@ -80,6 +81,10 @@ instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
    build = Abstract.RecursiveDoConstruction {
       Abstract.mdoExpression' = MDoExpression,
       Abstract.recursiveStatement' = RecursiveStatement}
+
+instance Abstract.ExtendedWith 'Extensions.QualifiedDo Language where
+   build = Abstract.QualifiedDoConstruction {
+      Abstract.qualifiedDoExpression = QualifiedDoExpression ()}
 
 instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
    build = Abstract.TupleSectionConstruction {
@@ -636,6 +641,8 @@ data Expression λ l d s =
    | MultiWayIfExpression [s (Abstract.GuardedExpression l l d d)]
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | MDoExpression (s (Abstract.GuardedExpression l l d d))
+   | QualifiedDoExpression !(Abstract.SupportFor 'Extensions.QualifiedDo λ)
+                           (Abstract.ModuleName λ) (s (Abstract.GuardedExpression l l d d))
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
@@ -954,6 +961,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
 
 deriving instance Typeable (Expression λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Data (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -962,9 +970,10 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
-                   Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
+                   Data (Abstract.QualifiedName λ), Data (Abstract.ModuleName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Show (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -973,8 +982,10 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
-                   Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Expression λ l d s)
+                   Show (Abstract.QualifiedName λ), Show (Abstract.ModuleName λ),
+                   Show (Abstract.Name λ)) => Show (Expression λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Eq (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -983,7 +994,8 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
-                   Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Expression λ l d s)
+                   Eq (Abstract.QualifiedName λ), Eq (Abstract.ModuleName λ),
+                   Eq (Abstract.Name λ)) => Eq (Expression λ l d s)
 
 deriving instance Typeable (FieldBinding λ l d s)
 deriving instance (Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),

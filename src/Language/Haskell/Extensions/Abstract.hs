@@ -9,6 +9,7 @@ module Language.Haskell.Extensions.Abstract (
               MagicHashConstruction, hashLiteral',
               NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
+              QualifiedDoConstruction, qualifiedDoExpression,
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
               UnboxedSumsConstruction,
@@ -102,6 +103,9 @@ data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
 data instance Construct 'Extensions.RecursiveDo λ l d s = RecursiveDoConstruction {
    mdoExpression' :: s (GuardedExpression l l d d) -> Expression λ l d s,
    recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s}
+
+data instance Construct 'Extensions.QualifiedDo λ l d s = QualifiedDoConstruction {
+   qualifiedDoExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
 
 data instance Construct 'Extensions.ParallelListComprehensions λ l d s = ParallelListComprehensionConstruction {
    parallelListComprehension' :: s (Expression l l d d)
@@ -207,7 +211,7 @@ data instance Construct 'Extensions.FunctionalDependencies λ l d s = Functional
 
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
-                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo,
+                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,

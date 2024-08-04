@@ -34,7 +34,7 @@ import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit, TyV
                                                kindedTVSpecified, plainTVSpecified)
 import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
-import Language.Haskell.TH.Syntax (VarBangType)
+import Language.Haskell.TH.Syntax (ModName, VarBangType, mkModName)
 
 import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
@@ -181,6 +181,12 @@ expressionTemplate (LambdaCaseExpression alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
+
+#if MIN_VERSION_template_haskell(2,17,0)
+expressionTemplate (QualifiedDoExpression () m statements) =
+   DoE (Just $ moduleNameTemplate m) (guardedTemplate $ extract statements)
+#endif
+
 expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (nameString name)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
@@ -741,6 +747,9 @@ nameReferenceTemplate :: AST.QualifiedName Language -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
    | not (Text.null local), c <- Text.head local, Char.isUpper c || c == ':' = ConE (qnameTemplate name)
    | otherwise = VarE (qnameTemplate name)
+
+moduleNameTemplate :: AST.ModuleName l -> ModName
+moduleNameTemplate (ModuleName ns) = mkModName $ unpack $ Text.intercalate "." $ map getName $ toList ns
 
 nameTemplate :: AST.Name l -> TH.Name
 nameTemplate (Name s) = mkName (unpack s)

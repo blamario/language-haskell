@@ -570,6 +570,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply t (AST.MultiWayIfExpression alts) = AST.MultiWayIfExpression (translateFully t <$> alts)
    translateDeeply t (AST.DoExpression body) = AST.DoExpression (translateFully t body)
    translateDeeply t (AST.MDoExpression body) = AST.MDoExpression (translateFully t body)
+   translateDeeply t (AST.QualifiedDoExpression sup m body) =
+      AST.QualifiedDoExpression sup m (translateFully t body)
    translateDeeply t (AST.InfixExpression left op right) =
       AST.InfixExpression (translateFully t left) (translateFully t op) (translateFully t right)
    translateDeeply t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression (translateFully t left) op
@@ -690,6 +692,8 @@ instance {-# overlappable #-}
    (NameTranslation t, WrapTranslation t, Functor (Wrap t),
     Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
+    Abstract.SupportFor 'Extensions.QualifiedDo (Origin t)
+    ~ Abstract.SupportFor 'Extensions.QualifiedDo (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t),
     Abstract.SupportFor 'Extensions.UnboxedSums (Origin t)
@@ -705,6 +709,8 @@ instance {-# overlappable #-}
    translate _ (AST.MultiWayIfExpression alts) = AST.MultiWayIfExpression alts
    translate _ (AST.DoExpression statements) = AST.DoExpression statements
    translate _ (AST.MDoExpression statements) = AST.MDoExpression statements
+   translate t (AST.QualifiedDoExpression sup m statements) =
+      AST.QualifiedDoExpression sup (translateModuleName t m) statements
    translate _ (AST.InfixExpression left op right) = AST.InfixExpression left op right
    translate t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression left (translateQualifiedName t op)
    translate _ (AST.LambdaExpression pat body) = AST.LambdaExpression pat body

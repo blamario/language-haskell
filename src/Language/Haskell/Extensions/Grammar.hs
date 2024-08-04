@@ -3,7 +3,6 @@
              TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances #-}
 
 -- | Missing syntax extensions:
--- * @QualifiedDo@ requires TemplateHaskell 2.17
 -- * @TransformListComp@ is not supported by TemplateHaskell
 -- * @OverloadedRecordUpdate@ is not supported by TemplateHaskell
 -- * @Arrows@ is not supported by TemplateHaskell
@@ -135,6 +134,7 @@ extensionMixins =
      (Set.fromList [ParallelListComprehensions],     [(3, parallelListComprehensionsMixin)]),
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
+     (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
      (Set.fromList [TupleSections],                  [(5, tupleSectionsMixin)]),
      (Set.fromList [EmptyCase],                      [(6, emptyCaseMixin)]),
      (Set.fromList [LambdaCase],                     [(7, lambdaCaseMixin)]),
@@ -544,6 +544,20 @@ recursiveDoMixin self super = super{
                                 <$ keyword "rec"
                                 <*> blockOf (self & report & statement)),
       variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (super & report & variableIdentifier)}}
+
+qualifiedDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l, Abstract.ExtendedWith 'QualifiedDo l,
+                                   Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                 => ExtensionOverlay l g t
+qualifiedDoMixin self super = super{
+   report= (report super){
+      closedBlockExpresion = (super & report & closedBlockExpresion)
+         <|> Abstract.qualifiedDoExpression Abstract.build
+            <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
+            <* keyword "do"
+            <*> wrap (self & report & statements),
+       qualifiedVariableSymbol =
+          notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "do")
+          *> (super & report & qualifiedVariableSymbol)}}
 
 parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
