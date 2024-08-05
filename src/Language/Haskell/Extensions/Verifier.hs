@@ -8,9 +8,9 @@ import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
 import Data.Functor.Compose (Compose(..))
 import Data.Maybe (isJust)
+import Data.Monoid (Any(Any, getAny), Ap(Ap, getAp))
 import Data.Monoid.Textual (TextualMonoid, characterPrefix)
 import qualified Data.Monoid.Textual as Textual
-import Data.Semigroup (Any(Any, getAny))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
 import Data.Semigroup.Factorial (Factorial)
 import Data.Semigroup.Union (UnionWith(UnionWith, getUnionWith))
@@ -245,6 +245,13 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
           ExtAST.MDoExpression{} ->
              \ranges-> Map.fromList [(Extensions.RecursiveDo, ranges),
                                      (Extensions.PatternGuards, (negate <$>) <$> ranges)]
+          ExtAST.QualifiedDoExpression{} ->
+             getAp $ foldMap Ap [Map.singleton Extensions.QualifiedDo,
+                                 Map.singleton Extensions.PatternGuards . fmap (negate <$>)]
+          ExtAST.MDoQualifiedExpression{} ->
+             getAp $ foldMap Ap [Map.singleton Extensions.QualifiedDo,
+                                 Map.singleton Extensions.RecursiveDo,
+                                 Map.singleton Extensions.PatternGuards . fmap (negate <$>)]
           ExtAST.ImplicitParameterExpression{} -> Map.singleton Extensions.ImplicitParameters
           ExtAST.ListComprehension{} -> Map.singleton Extensions.PatternGuards . ((negate <$>) <$>)
           ExtAST.ParallelListComprehension{} ->
