@@ -415,7 +415,7 @@ unicodeSyntaxMixin self super = super{
       leftArrow = (super & report & leftArrow) <|> delimiter "←",
       variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (super & report & variableSymbol)}}
 
-unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedTuples l => ExtensionOverlay l g t
+unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
 unboxedTuplesMixin self super = super{
    report= (report super){
       aType = (super & report & aType)
@@ -432,7 +432,7 @@ unboxedTuplesMixin self super = super{
                      <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
-unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedTuples l => ExtensionOverlay l g t
+unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
 unboxedTupleSectionsMixin self super = super{
    report= (report super){
       bareExpression = (super & report & bareExpression)
@@ -441,7 +441,7 @@ unboxedTupleSectionsMixin self super = super{
                                            $ optional (self & report & expression) `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
-unboxedSumsMixin :: forall l g t. Abstract.ExtendedWith 'UnboxedSums l => ExtensionOverlay l g t
+unboxedSumsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedSums ] l => ExtensionOverlay l g t
 unboxedSumsMixin self super = super{
    report= (report super){
       aType = (super & report & aType)
@@ -469,14 +469,14 @@ unboxedSumsMixin self super = super{
                                     <*> (length <$> some (delimiter "|")))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
-interruptibleFFIMixin :: forall l g t. Abstract.ExtendedWith 'InterruptibleFFI l => ExtensionOverlay l g t
+interruptibleFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'InterruptibleFFI ] l => ExtensionOverlay l g t
 interruptibleFFIMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
          safety = (super & report & declarationLevel & safety)
                   <|> Abstract.interruptibleCall Abstract.build <$ keyword "interruptible"}}}
 
-cApiFFIMixin :: forall l g t. Abstract.ExtendedWith 'CApiFFI l => ExtensionOverlay l g t
+cApiFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'CApiFFI ] l => ExtensionOverlay l g t
 cApiFFIMixin self super = super{
    report= (report super){
       declarationLevel= (super & report & declarationLevel){
@@ -530,7 +530,7 @@ magicHashMixin self super =
                        <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
      & negationConstraintMixin prefixMinusFollow self
 
-recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith 'RecursiveDo l,
+recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'RecursiveDo ] l,
                      Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => ExtensionOverlay l g t
 recursiveDoMixin self super = super{
@@ -545,7 +545,7 @@ recursiveDoMixin self super = super{
                                 <*> blockOf (self & report & statement)),
       variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (super & report & variableIdentifier)}}
 
-qualifiedDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l, Abstract.ExtendedWith 'QualifiedDo l,
+qualifiedDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l, Abstract.ExtendedWith '[ 'QualifiedDo ] l,
                                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => ExtensionOverlay l g t
 qualifiedDoMixin self super = super{
@@ -1487,7 +1487,7 @@ namedFieldPunsMixin self super =
          fieldPattern = (super & report & fieldPattern) <|>
             Abstract.punnedFieldPattern <$> (self & report & qualifiedVariable)}}
 
-recordWildCardsMixin :: Abstract.ExtendedWith 'RecordWildCards l => ExtensionOverlay l g t
+recordWildCardsMixin :: Abstract.ExtendedWith '[ 'RecordWildCards ] l => ExtensionOverlay l g t
 recordWildCardsMixin self super =
    super{
       report = (report super){
@@ -1513,7 +1513,7 @@ overloadedRecordDotMixin self super =
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
 
-implicitParametersMixin :: Abstract.ExtendedWith 'ImplicitParameters l => ExtensionOverlay l g t
+implicitParametersMixin :: Abstract.ExtendedWith '[ 'ImplicitParameters ] l => ExtensionOverlay l g t
 implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{declarationLevel, bareExpression}} =
    super{
       implicitParameterConstraint =
@@ -1535,7 +1535,7 @@ implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{de
                  <$ delimiter "?" <*> (self & report & variableIdentifier),
           qualifiedVariableSymbol = notFollowedBy (delimiter "?") *> (super & report & qualifiedVariableSymbol)}}
 
-bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith 'BangPatterns l) => ExtensionOverlay l g t
+bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'BangPatterns ] l) => ExtensionOverlay l g t
 bangPatternsMixin self super =
    super{
       report = (report super){
@@ -1548,7 +1548,7 @@ bangPatternsMixin self super =
                 <* notFollowedBy Report.comment
                 <* lift ([[Token Delimiter "!"]], ())
 
-viewPatternsMixin :: Abstract.ExtendedWith 'ViewPatterns l => ExtensionOverlay l g t
+viewPatternsMixin :: Abstract.ExtendedWith '[ 'ViewPatterns ] l => ExtensionOverlay l g t
 viewPatternsMixin self super =
    super{
       report = (report super){
@@ -1558,7 +1558,7 @@ viewPatternsMixin self super =
                 <* (self & report & rightArrow)
                 <*> wrap (self & report & pPattern)}}
 
-nPlusKPatternsMixin :: Abstract.ExtendedWith 'NPlusKPatterns l => ExtensionOverlay l g t
+nPlusKPatternsMixin :: Abstract.ExtendedWith '[ 'NPlusKPatterns ] l => ExtensionOverlay l g t
 nPlusKPatternsMixin self super =
    super{
       report = (report super){
@@ -1568,7 +1568,7 @@ nPlusKPatternsMixin self super =
                 <* delimiter "+"
                 <*> (self & report & integer)}}
 
-patternSynonymsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'PatternSynonyms l,
+patternSynonymsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'PatternSynonyms ] l,
                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.PatternEquationClause l l),
                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                      => ExtensionOverlay l g t
@@ -1636,7 +1636,7 @@ patternSynonymsMixin self super =
                    <*> (self & report & constructorOperator)
                    <*> wrap (self & report & pattern)
 
-standaloneDerivingMixin :: Abstract.ExtendedWith 'StandaloneDeriving l => ExtensionOverlay l g t
+standaloneDerivingMixin :: Abstract.ExtendedWith '[ 'StandaloneDeriving ] l => ExtensionOverlay l g t
 standaloneDerivingMixin self@ExtendedGrammar{
                            report= HaskellGrammar{
                               declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
@@ -1649,7 +1649,7 @@ standaloneDerivingMixin self@ExtendedGrammar{
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator}}}
 
-derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith 'DerivingStrategies l => ExtensionOverlay l g t
+derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith '[ 'DerivingStrategies ] l => ExtensionOverlay l g t
 derivingStrategiesMixin self@ExtendedGrammar{
                            report= HaskellGrammar{generalConstructor, typeTerm}}
                         super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
@@ -1667,8 +1667,8 @@ derivingStrategiesMixin self@ExtendedGrammar{
                          <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
                          <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}
 
-standaloneDerivingStrategiesMixin :: (Abstract.ExtendedWith 'StandaloneDeriving l,
-                                      Abstract.ExtendedWith 'DerivingStrategies l)
+standaloneDerivingStrategiesMixin :: (Abstract.ExtendedWith '[ 'StandaloneDeriving ] l,
+                                      Abstract.ExtendedWith '[ 'DerivingStrategies ] l)
                                   => ExtensionOverlay l g t
 standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                                      report= HaskellGrammar{
@@ -1685,7 +1685,7 @@ standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
 
-derivingViaMixin :: forall l g t. Abstract.ExtendedWith 'DerivingVia l => ExtensionOverlay l g t
+derivingViaMixin :: forall l g t. Abstract.ExtendedWith '[ 'DerivingVia ] l => ExtensionOverlay l g t
 derivingViaMixin self@ExtendedGrammar{
                     report= HaskellGrammar{generalConstructor, typeTerm}}
                  super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
@@ -1699,9 +1699,9 @@ derivingViaMixin self@ExtendedGrammar{
                        <* keyword "via"
                        <*> wrap typeTerm)}
 
-standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith 'StandaloneDeriving l,
-                                             Abstract.ExtendedWith 'DerivingStrategies l,
-                                             Abstract.ExtendedWith 'DerivingVia l)
+standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith '[ 'StandaloneDeriving ] l,
+                                             Abstract.ExtendedWith '[ 'DerivingStrategies ] l,
+                                             Abstract.ExtendedWith '[ 'DerivingVia ] l)
                            => ExtensionOverlay l g t
 standaloneDerivingViaMixin self@ExtendedGrammar{
                               report= HaskellGrammar{
@@ -1743,7 +1743,7 @@ mptcsMixin
                <|> parens classLHS
                <|> Abstract.simpleTypeLHSApplication <$> wrap classLHS <*> typeVarBinder}}}
 
-functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith 'FunctionalDependencies l,
+functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'FunctionalDependencies ] l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => ExtensionOverlay l g t
 functionalDependenciesMixin
@@ -1790,7 +1790,7 @@ instanceSignaturesMixin
                <|> Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalTypeSignatureContext
                                           <*> wrap typeTerm}}}
 
-defaultSignaturesMixin :: Abstract.ExtendedWith 'DefaultSignatures l => ExtensionOverlay l g t
+defaultSignaturesMixin :: Abstract.ExtendedWith '[ 'DefaultSignatures ] l => ExtensionOverlay l g t
 defaultSignaturesMixin
    self@ExtendedGrammar{
       report= HaskellGrammar{doubleColon, typeTerm, variable,

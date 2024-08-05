@@ -59,38 +59,38 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.DefaultSignatures,
    'Extensions.FunctionalDependencies]
 
-instance Abstract.ExtendedWith 'Extensions.MagicHash Language where
+instance Abstract.ExtendedWith '[ 'Extensions.MagicHash ] Language where
    build = Abstract.MagicHashConstruction {
       Abstract.hashLiteral' = HashLiteral ()}
 
-instance Abstract.ExtendedWith 'Extensions.NamedFieldPuns Language where
+instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] Language where
    build = Abstract.NamedFieldPunsConstruction {
       Abstract.punnedFieldBinding' = PunnedFieldBinding,
       Abstract.punnedFieldPattern' = PunnedFieldPattern}
 
-instance Abstract.ExtendedWith 'Extensions.ParallelListComprehensions Language where
+instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Language where
    build = Abstract.ParallelListComprehensionConstruction {
       Abstract.parallelListComprehension' = ParallelListComprehension}
 
-instance Abstract.ExtendedWith 'Extensions.RecordWildCards Language where
+instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
    build = Abstract.RecordWildCardConstruction {
       Abstract.wildcardRecordExpression' = WildcardRecordExpression (),
       Abstract.wildcardRecordPattern' = WildcardRecordPattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.RecursiveDo Language where
+instance Abstract.ExtendedWith '[ 'Extensions.RecursiveDo ] Language where
    build = Abstract.RecursiveDoConstruction {
       Abstract.mdoExpression' = MDoExpression,
       Abstract.recursiveStatement' = RecursiveStatement}
 
-instance Abstract.ExtendedWith 'Extensions.QualifiedDo Language where
+instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo ] Language where
    build = Abstract.QualifiedDoConstruction {
       Abstract.qualifiedDoExpression = QualifiedDoExpression ()}
 
-instance Abstract.ExtendedWith 'Extensions.TupleSections Language where
+instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
       Abstract.tupleSectionExpression' = TupleSectionExpression}
 
-instance Abstract.ExtendedWith 'Extensions.UnboxedTuples Language where
+instance Abstract.ExtendedWith '[ 'Extensions.UnboxedTuples ] Language where
    build = Abstract.UnboxedTuplesConstruction {
       Abstract.unboxedTupleType = UnboxedTupleType (),
       Abstract.unboxedTupleConstructor = UnboxedTupleConstructor (),
@@ -98,40 +98,40 @@ instance Abstract.ExtendedWith 'Extensions.UnboxedTuples Language where
       Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression (),
       Abstract.unboxedTuplePattern = UnboxedTuplePattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.UnboxedSums Language where
+instance Abstract.ExtendedWith '[ 'Extensions.UnboxedSums ] Language where
    build = Abstract.UnboxedSumsConstruction {
       Abstract.unboxedSumType = UnboxedSumType (),
       Abstract.unboxedSumConstructor = UnboxedSumConstructor (),
       Abstract.unboxedSumExpression = UnboxedSumExpression (),
       Abstract.unboxedSumPattern = UnboxedSumPattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.InterruptibleFFI Language where
+instance Abstract.ExtendedWith '[ 'Extensions.InterruptibleFFI ] Language where
    build = Abstract.InterruptibleFFIConstruction {
       Abstract.interruptibleCall = InterruptibleCall ()}
 
-instance Abstract.ExtendedWith 'Extensions.CApiFFI Language where
+instance Abstract.ExtendedWith '[ 'Extensions.CApiFFI ] Language where
    build = Abstract.CApiFFIConstruction {
       Abstract.cApiCall = CApiCall ()}
 
-instance Abstract.ExtendedWith 'Extensions.ImplicitParameters Language where
+instance Abstract.ExtendedWith '[ 'Extensions.ImplicitParameters ] Language where
    build = Abstract.ImplicitParametersConstruction {
       Abstract.implicitParameterConstraint = ImplicitParameterConstraint (),
       Abstract.implicitParameterDeclaration = ImplicitParameterDeclaration (),
       Abstract.implicitParameterExpression = ImplicitParameterExpression ()}
 
-instance Abstract.ExtendedWith 'Extensions.BangPatterns Language where
+instance Abstract.ExtendedWith '[ 'Extensions.BangPatterns ] Language where
    build = Abstract.BangPatternConstruction {
       Abstract.bangPattern = BangPattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.ViewPatterns Language where
+instance Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] Language where
    build = Abstract.ViewPatternConstruction {
       Abstract.viewPattern = ViewPattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.NPlusKPatterns Language where
+instance Abstract.ExtendedWith '[ 'Extensions.NPlusKPatterns ] Language where
    build = Abstract.NPlusKPatternConstruction {
       Abstract.nPlusKPattern = NPlusKPattern ()}
 
-instance Abstract.ExtendedWith 'Extensions.PatternSynonyms Language where
+instance Abstract.ExtendedWith '[ 'Extensions.PatternSynonyms ] Language where
    build = Abstract.PatternSynonymConstruction {
       Abstract.exportPattern = ExportPattern,
       Abstract.importPattern = ImportPattern,
@@ -147,11 +147,11 @@ instance Abstract.ExtendedWith 'Extensions.PatternSynonyms Language where
       Abstract.explicitPatternSynonym = ExplicitPatternSynonym (),
       Abstract.patternSynonymSignature = PatternSynonymSignature ()}
 
-instance Abstract.ExtendedWith 'Extensions.StandaloneDeriving Language where
+instance Abstract.ExtendedWith '[ 'Extensions.StandaloneDeriving ] Language where
    build = Abstract.StandaloneDerivingConstruction {
       Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration ()}
 
-instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
+instance Abstract.ExtendedWith '[ 'Extensions.DerivingStrategies ] Language where
    build = Abstract.DerivingStrategiesConstruction {
       Abstract.defaultStrategy = Default,
       Abstract.stockStrategy = Stock,
@@ -160,16 +160,16 @@ instance Abstract.ExtendedWith 'Extensions.DerivingStrategies Language where
       Abstract.strategicDerive = StrategicDerive (),
       Abstract.standaloneStrategicDerivingDeclaration = StandaloneStrategicDerivingDeclaration () ()}
 
-instance Abstract.ExtendedWith 'Extensions.DerivingVia Language where
+instance Abstract.ExtendedWith '[ 'Extensions.DerivingVia ] Language where
    build = Abstract.DerivingViaConstruction {
       Abstract.derivingViaStrategy = Via (),
       Abstract.deriveVia = DeriveVia ()}
 
-instance Abstract.ExtendedWith 'Extensions.DefaultSignatures Language where
+instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
    build = Abstract.DefaultSignatureConstruction {
       Abstract.defaultMethodSignature = DefaultMethodSignature ()}
 
-instance Abstract.ExtendedWith 'Extensions.FunctionalDependencies Language where
+instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language where
    build = Abstract.FunctionalDependenciesConstruction {
       Abstract.functionalDependency = FunctionalDependency,
       Abstract.fundepClassDeclaration = FunDepClassDeclaration ()}

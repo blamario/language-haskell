@@ -487,7 +487,7 @@ freeContextVars (TypeConstraint t) = freeTypeVars (extract t)
 freeContextVars (TypeEquality left right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeContextVars NoContext = []
 
-conventionTemplate :: Abstract.ExtendedWith 'Extensions.CApiFFI l => CallingConvention l -> Callconv
+conventionTemplate :: Abstract.ExtendedWith '[ 'Extensions.CApiFFI ] l => CallingConvention l -> Callconv
 conventionTemplate ExtAST.CCall = TH.CCall
 conventionTemplate ExtAST.StdCall = TH.StdCall
 conventionTemplate (ExtAST.CApiCall ()) = TH.CApi

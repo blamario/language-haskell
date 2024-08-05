@@ -104,7 +104,7 @@ type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
   
 
 dropRecordWildCards :: forall l1 l2 node pos s.
-                       (Abstract.Haskell l2, Abstract.ExtendedWith 'Extensions.NamedFieldPuns l2,
+                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
                         SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
                         FullyTranslatable (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s) node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
@@ -115,7 +115,7 @@ dropRecordWildCards =
                                  ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
 dropNPlusKPatterns :: forall l1 l2 node pos s.
-                      (Abstract.Haskell l2, Abstract.ExtendedWith 'Extensions.ViewPatterns l2,
+                      (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
                        SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s l1 l2,
                        FullyTranslatable (ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] l1 l2 pos s) node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
@@ -257,7 +257,7 @@ mapImport (AST.Import True qualified (Just package) modName alias detail) =
    Abstract.safePackageQualifiedImportDeclaration qualified package (mapModuleName modName) (mapModuleName <$> alias) detail
 
 mapFieldBinding :: (Abstract.Haskell λ2,
-                    Abstract.ExtendedWith 'Extensions.NamedFieldPuns λ2,
+                    Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] λ2,
                     Abstract.QualifiedName λ1 ~ AST.QualifiedName λ1,
                     Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
                     Abstract.Name λ1 ~ AST.Name λ1) => AST.FieldBinding λ1 l d s -> Abstract.FieldBinding λ2 l d s

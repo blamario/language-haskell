@@ -56,7 +56,7 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
 
 
-data family Construct (e :: Extension) :: TreeNodeKind
+data family Construct (es :: [Extension]) :: TreeNodeKind
 
 type family ExtensionsSupportedBy λ :: [Extension]
 
@@ -75,81 +75,81 @@ type family SupportsAllOf (es :: [Extension]) l :: Kind.Constraint where
    SupportsAllOf '[] _ = ()
    SupportsAllOf (e ': es) l = (Supports e l, SupportsAllOf es l)
 
-class Supports e λ => ExtendedWith e λ where
-   build :: Construct e λ l d s
+class SupportsAllOf es λ => ExtendedWith es λ where
+   build :: Construct es λ l d s
 
 type family ExtendedWithAllOf (es :: [Extension]) l :: Kind.Constraint where
    ExtendedWithAllOf '[] _ = ()
-   ExtendedWithAllOf (e ': es) l = (ExtendedWith e l, ExtendedWithAllOf es l)
+   ExtendedWithAllOf (e ': es) l = (ExtendedWith '[e] l, ExtendedWithAllOf es l)
 
 -- * 'Construct' instances for language extensions
 
-data instance Construct 'Extensions.RecordWildCards λ l d s = RecordWildCardConstruction {
+data instance Construct '[ 'Extensions.RecordWildCards ] λ l d s = RecordWildCardConstruction {
    wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
    wildcardRecordPattern' :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
-data instance Construct 'Extensions.NamedFieldPuns λ l d s = NamedFieldPunsConstruction {
+data instance Construct '[ 'Extensions.NamedFieldPuns ] λ l d s = NamedFieldPunsConstruction {
    punnedFieldBinding' :: QualifiedName λ -> FieldBinding λ l d s,
    punnedFieldPattern' :: QualifiedName λ -> FieldPattern λ l d s}
 
-data instance Construct 'Extensions.ImplicitParameters λ l d s = ImplicitParametersConstruction {
+data instance Construct '[ 'Extensions.ImplicitParameters ] λ l d s = ImplicitParametersConstruction {
    implicitParameterConstraint :: Name λ -> s (Type l l d d) -> Context λ l d s,
    implicitParameterDeclaration :: Name λ -> s (Expression l l d d) -> Declaration λ l d s,
    implicitParameterExpression :: Name λ -> Expression λ l d s}
 
-data instance Construct 'Extensions.MagicHash λ l d s = MagicHashConstruction {
+data instance Construct '[ 'Extensions.MagicHash ] λ l d s = MagicHashConstruction {
    hashLiteral' :: Value λ l d s -> Value λ l d s}
 
-data instance Construct 'Extensions.RecursiveDo λ l d s = RecursiveDoConstruction {
+data instance Construct '[ 'Extensions.RecursiveDo ] λ l d s = RecursiveDoConstruction {
    mdoExpression' :: s (GuardedExpression l l d d) -> Expression λ l d s,
    recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s}
 
-data instance Construct 'Extensions.QualifiedDo λ l d s = QualifiedDoConstruction {
+data instance Construct '[ 'Extensions.QualifiedDo ] λ l d s = QualifiedDoConstruction {
    qualifiedDoExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
 
-data instance Construct 'Extensions.ParallelListComprehensions λ l d s = ParallelListComprehensionConstruction {
+data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = ParallelListComprehensionConstruction {
    parallelListComprehension' :: s (Expression l l d d)
                               -> NonEmpty (s (Statement l l d d))
                               -> NonEmpty (s (Statement l l d d))
                               -> [NonEmpty (s (Statement l l d d))]
                               -> Expression λ l d s}
 
-data instance Construct 'Extensions.TupleSections λ l d s = TupleSectionConstruction {
+data instance Construct '[ 'Extensions.TupleSections ] λ l d s = TupleSectionConstruction {
    tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
-data instance Construct 'Extensions.UnboxedTuples λ l d s = UnboxedTuplesConstruction {
+data instance Construct '[ 'Extensions.UnboxedTuples ] λ l d s = UnboxedTuplesConstruction {
    unboxedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
    unboxedTupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s,
    unboxedTupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s,
    unboxedTupleConstructor :: Int -> Constructor λ l d s,
    unboxedTuplePattern :: NonEmpty (s (Pattern l l d d)) -> Pattern λ l d s}
 
-data instance Construct 'Extensions.UnboxedSums λ l d s = UnboxedSumsConstruction {
+data instance Construct '[ 'Extensions.UnboxedSums ] λ l d s = UnboxedSumsConstruction {
    unboxedSumType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
    unboxedSumConstructor :: Int -> Constructor λ l d s,
    unboxedSumExpression :: Int -> s (Expression l l d d) -> Int -> Expression λ l d s,
    unboxedSumPattern :: Int -> s (Pattern l l d d) -> Int -> Pattern λ l d s}
 
-data instance Construct 'Extensions.InterruptibleFFI λ l d s = InterruptibleFFIConstruction {
+data instance Construct '[ 'Extensions.InterruptibleFFI ] λ l d s = InterruptibleFFIConstruction {
    interruptibleCall :: CallSafety λ}
 
-data instance Construct 'Extensions.CApiFFI λ l d s = CApiFFIConstruction {
+data instance Construct '[ 'Extensions.CApiFFI ] λ l d s = CApiFFIConstruction {
    cApiCall :: CallingConvention λ}
 
-data instance Construct 'Extensions.BangPatterns λ l d s = BangPatternConstruction {
+data instance Construct '[ 'Extensions.BangPatterns ] λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
-data instance Construct 'Extensions.ViewPatterns λ l d s = ViewPatternConstruction {
+data instance Construct '[ 'Extensions.ViewPatterns ] λ l d s = ViewPatternConstruction {
    viewPattern :: s (Expression l l d d) -> s (Pattern l l d d) -> Pattern λ l d s}
 
-data instance Construct 'Extensions.NPlusKPatterns λ l d s = NPlusKPatternConstruction {
+data instance Construct '[ 'Extensions.NPlusKPatterns ] λ l d s = NPlusKPatternConstruction {
    nPlusKPattern :: Name λ -> Integer -> Pattern λ l d s}
 
 type family PatternLHS λ :: TreeNodeSubKind
 type family PatternEquationLHS λ :: TreeNodeSubKind
 type family PatternEquationClause λ :: TreeNodeSubKind
 
-data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymConstruction {
+data instance Construct '[ 'Extensions.PatternSynonyms ] λ l d s = PatternSynonymConstruction {
    exportPattern :: QualifiedName λ -> Export λ l d s,
    importPattern :: Name λ -> ImportItem λ l d s,
    allMembersPlus :: [Name λ] -> Members λ,
@@ -178,12 +178,12 @@ data instance Construct 'Extensions.PatternSynonyms λ l d s = PatternSynonymCon
                            -> s (Type l l d d)
                            -> Declaration λ l d s}
 
-data instance Construct 'Extensions.StandaloneDeriving λ l d s = StandaloneDerivingConstruction {
+data instance Construct '[ 'Extensions.StandaloneDeriving ] λ l d s = StandaloneDerivingConstruction {
    standaloneDerivingDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> Declaration λ l d s}
 
 type family DerivingStrategy λ :: TreeNodeSubKind
 
-data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrategiesConstruction {
+data instance Construct '[ 'Extensions.DerivingStrategies ] λ l d s = DerivingStrategiesConstruction {
    defaultStrategy :: DerivingStrategy λ l d s,
    stockStrategy :: DerivingStrategy λ l d s,
    newtypeStrategy :: DerivingStrategy λ l d s,
@@ -195,16 +195,16 @@ data instance Construct 'Extensions.DerivingStrategies λ l d s = DerivingStrate
                                           -> s (ClassInstanceLHS l l d d)
                                           -> Declaration λ l d s}
 
-data instance Construct 'Extensions.DerivingVia λ l d s = DerivingViaConstruction {
+data instance Construct '[ 'Extensions.DerivingVia ] λ l d s = DerivingViaConstruction {
    deriveVia :: [s (Type l l d d)] -> s (Type l l d d) -> DerivingClause λ l d s,
    derivingViaStrategy :: s (Type l l d d) -> DerivingStrategy λ l d s}
 
-data instance Construct 'Extensions.DefaultSignatures λ l d s = DefaultSignatureConstruction {
+data instance Construct '[ 'Extensions.DefaultSignatures ] λ l d s = DefaultSignatureConstruction {
    defaultMethodSignature :: Name λ -> s (Context l l d d) -> s (Type l l d d) -> Declaration λ l d s}
 
 type family FunctionalDependency λ :: TreeNodeSubKind
 
-data instance Construct 'Extensions.FunctionalDependencies λ l d s = FunctionalDependenciesConstruction {
+data instance Construct '[ 'Extensions.FunctionalDependencies ] λ l d s = FunctionalDependenciesConstruction {
    functionalDependency :: [Name λ] -> [Name λ] -> FunctionalDependency λ l d s,
    fundepClassDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (FunctionalDependency l l d d)]
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
