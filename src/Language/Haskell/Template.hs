@@ -185,6 +185,8 @@ expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract 
 #if MIN_VERSION_template_haskell(2,17,0)
 expressionTemplate (QualifiedDoExpression () m statements) =
    DoE (Just $ moduleNameTemplate m) (guardedTemplate $ extract statements)
+expressionTemplate (MDoQualifiedExpression () () m statements) =
+   MDoE (Just $ moduleNameTemplate m) (guardedTemplate $ extract statements)
 #endif
 
 expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (nameString name)

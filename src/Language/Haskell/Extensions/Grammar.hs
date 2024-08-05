@@ -135,6 +135,7 @@ extensionMixins =
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
      (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
+     (Set.fromList [QualifiedDo, RecursiveDo],       [(4, qualifiedRecursiveDoMixin)]),
      (Set.fromList [TupleSections],                  [(5, tupleSectionsMixin)]),
      (Set.fromList [EmptyCase],                      [(6, emptyCaseMixin)]),
      (Set.fromList [LambdaCase],                     [(7, lambdaCaseMixin)]),
@@ -557,6 +558,21 @@ qualifiedDoMixin self super = super{
             <*> wrap (self & report & statements),
        qualifiedVariableSymbol =
           notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "do")
+          *> (super & report & qualifiedVariableSymbol)}}
+
+qualifiedRecursiveDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l,
+                                            Abstract.ExtendedWith '[ 'QualifiedDo, 'RecursiveDo ] l,
+                                            Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                          => ExtensionOverlay l g t
+qualifiedRecursiveDoMixin self super = super{
+   report= (report super){
+      closedBlockExpresion = (super & report & closedBlockExpresion)
+         <|> Abstract.mdoQualifiedExpression Abstract.build
+            <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
+            <* keyword "mdo"
+            <*> wrap (self & report & statements),
+       qualifiedVariableSymbol =
+          notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "mdo")
           *> (super & report & qualifiedVariableSymbol)}}
 
 parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t

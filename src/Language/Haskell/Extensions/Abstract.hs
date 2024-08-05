@@ -10,6 +10,7 @@ module Language.Haskell.Extensions.Abstract (
               NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               QualifiedDoConstruction, qualifiedDoExpression,
+              QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
               ParallelListComprehensionConstruction, parallelListComprehension',
               TupleSectionConstruction, tupleSectionExpression',
               UnboxedSumsConstruction,
@@ -106,6 +107,10 @@ data instance Construct '[ 'Extensions.RecursiveDo ] λ l d s = RecursiveDoConst
 
 data instance Construct '[ 'Extensions.QualifiedDo ] λ l d s = QualifiedDoConstruction {
    qualifiedDoExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
+
+data instance Construct '[ 'Extensions.QualifiedDo,
+                           'Extensions.RecursiveDo ] λ l d s = QualifiedRecursiveDoConstruction {
+   mdoQualifiedExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
 
 data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = ParallelListComprehensionConstruction {
    parallelListComprehension' :: s (Expression l l d d)
@@ -218,7 +223,8 @@ class (Haskell λ,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
-                          'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ) =>
+                          'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ,
+       ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ

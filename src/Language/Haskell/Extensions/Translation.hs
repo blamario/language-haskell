@@ -572,6 +572,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply t (AST.MDoExpression body) = AST.MDoExpression (translateFully t body)
    translateDeeply t (AST.QualifiedDoExpression sup m body) =
       AST.QualifiedDoExpression sup m (translateFully t body)
+   translateDeeply t (AST.MDoQualifiedExpression sup1 sup2 m body) =
+      AST.MDoQualifiedExpression sup1 sup2 m (translateFully t body)
    translateDeeply t (AST.InfixExpression left op right) =
       AST.InfixExpression (translateFully t left) (translateFully t op) (translateFully t right)
    translateDeeply t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression (translateFully t left) op
@@ -694,6 +696,8 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
     Abstract.SupportFor 'Extensions.QualifiedDo (Origin t)
     ~ Abstract.SupportFor 'Extensions.QualifiedDo (Target t),
+    Abstract.SupportFor 'Extensions.RecursiveDo (Origin t)
+    ~ Abstract.SupportFor 'Extensions.RecursiveDo (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t),
     Abstract.SupportFor 'Extensions.UnboxedSums (Origin t)
@@ -711,6 +715,8 @@ instance {-# overlappable #-}
    translate _ (AST.MDoExpression statements) = AST.MDoExpression statements
    translate t (AST.QualifiedDoExpression sup m statements) =
       AST.QualifiedDoExpression sup (translateModuleName t m) statements
+   translate t (AST.MDoQualifiedExpression sup1 sup2 m statements) =
+      AST.MDoQualifiedExpression sup1 sup2 (translateModuleName t m) statements
    translate _ (AST.InfixExpression left op right) = AST.InfixExpression left op right
    translate t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression left (translateQualifiedName t op)
    translate _ (AST.LambdaExpression pat body) = AST.LambdaExpression pat body
