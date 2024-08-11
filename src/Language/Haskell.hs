@@ -100,7 +100,7 @@ checkAllBound m = if unbounds == mempty then pure m
 checkRestrictions :: Map Extension Bool
                   -> Bound (AST.Module AST.Language AST.Language Bound Bound)
                   -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))
-checkRestrictions extensions m = case Verifier.verifyModule extensions m of
+checkRestrictions extensions m = case Verifier.verify extensions m of
    [] -> pure m
    errors -> Left mempty{errorAlternatives= show <$> errors}
 

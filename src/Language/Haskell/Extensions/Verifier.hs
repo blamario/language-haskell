@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification), verifyModule) where
+module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification), verify) where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Trans.Accum (Accum, accum, evalAccum)
 import qualified Data.Char as Char
 import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
@@ -43,11 +44,12 @@ data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
 data Verification l pos s = Verification
 
 type Accounted pos = Const (UnionWith (Map Extension) [(pos, pos)])
-type Verified pos = Const (Map Extension Bool -> [Error pos])
+type Verified pos = Const (Ap (Accum (Map Extension Bool)) [Error pos])
 
 data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
                | UndeclaredExtensionUse Extension [(pos, pos)]
                | UnusedExtension Extension
+               | StrictTypeDataFields [(pos, pos)]
                  deriving (Show)
 
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
@@ -64,18 +66,26 @@ instance Transformation.Transformation (Verification l pos s) where
     type Domain (Verification l pos s) = Wrap l pos s
     type Codomain (Verification l pos s) = Verified pos
 
-verifyModule :: forall l pos s. (TextualMonoid s, Num pos, Ord pos, Show pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
-                                 Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
-                                 Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+verify :: forall w l pos s g. (w ~ Wrap l pos s, Full.Foldable (Verification l pos s) g) =>
                 Map Extension Bool
-             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
+             -> w (g w w)
              -> [Error pos]
-verifyModule extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitches m)))) =
-   (if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
-   <> (UnusedExtension
-       <$> toList (Map.keysSet (Map.filter id localExtensions)
-                   Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
-   <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions))
+verify extensions node = evalAccum (getAp $ Full.foldMap (Verification :: Verification l pos s) node) extensions
+
+verifyModuleExtensions :: forall l pos s. (TextualMonoid s, Num pos, Ord pos, Show pos, Show s,
+                                           Abstract.DeeplyFoldable (Accounting l pos s) l,
+                                           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
+                                           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+                          Map Extension Bool
+                       -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
+                       -> ([Error pos], Map Extension Bool)
+verifyModuleExtensions extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitches m)))) =
+   ((if null contradictions then mempty else [ContradictoryExtensionSwitches contradictions])
+    <> (UnusedExtension
+        <$> toList (Map.keysSet (Map.filter id localExtensions)
+                    Set.\\ usedExtensionsWithPremises Set.\\ Extensions.languageVersions))
+    <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions)),
+    declaredExtensions)
    where usedExtensions :: Map Extension [(pos, pos)]
          usedExtensions = filterExtensions $ getUnionWith $ Full.foldMap (Accounting :: Accounting l pos s) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
@@ -83,10 +93,11 @@ verifyModule extensions (Compose (_, (_, (AST.ExtendedModule localExtensionSwitc
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
          usedExtensionsWithPremises = Map.foldMapWithKey extensionAndPremises usedExtensions
          extensionAndPremises x _ = Set.singleton x <> Map.findWithDefault mempty x Extensions.inverseImplications
-verifyModule extensions m =
-   uncurry UndeclaredExtensionUse
-   <$> Map.toList (filterExtensions $
-                   getUnionWith (Full.foldMap (Accounting :: Accounting l pos s) m) Map.\\ declaredExtensions)
+verifyModuleExtensions extensions m =
+   (uncurry UndeclaredExtensionUse
+    <$> Map.toList (filterExtensions $
+                    getUnionWith (Full.foldMap (Accounting :: Accounting l pos s) m) Map.\\ declaredExtensions),
+    declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
 
@@ -107,20 +118,35 @@ instance {-# overlappable #-} Accounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    Accounting $ _ = mempty
 
-instance {-# overlappable #-} Deep.Foldable (Accounting l pos s) g =>
+instance {-# overlappable #-}
          Verification l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
-   Verification $ Compose (_, (_, m)) = Const $ \extensions->
-      uncurry UndeclaredExtensionUse
-      <$> Map.toList (getUnionWith (Deep.foldMap (Accounting :: Accounting l pos s) m)
-                      Map.\\ withImplications extensions)
+   Verification $ _ = mempty
 
-instance (TextualMonoid s, Num pos, Ord pos, Show pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
+instance (TextualMonoid s, Num pos, Ord pos, Show pos, Show s, Abstract.DeeplyFoldable (Accounting l pos s) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
+          Abstract.DeeplyFoldable (Accounting l pos s) l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Verification l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
-   Verification $ m = Const $ flip verifyModule m
+   Verification $ m = Const $ Ap $ accum $ flip verifyModuleExtensions m
+
+instance (Show pos, Abstract.DataConstructor l l ~ ExtAST.DataConstructor l l,
+          Full.Foldable (Accounting l pos s) (ExtAST.DataConstructor l l)) =>
+         Verification l pos s
+         `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
+   Verification $ Compose (_, (_, ExtAST.TypeDataDeclaration _sup _lhs _kind constructors)) =
+      Const
+      . Ap
+      . accum
+      . (,)
+      . Map.foldMapWithKey (\k v-> if k == Extensions.BangDataFields
+                                   then [StrictTypeDataFields v]
+                                   else [])
+      . getUnionWith
+      . foldMap (Full.foldMap Accounting)
+      $ constructors
+   Verification $ _ = mempty
 
 instance (TextualMonoid s, Abstract.Module l l ~ AST.Module l l, Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Accounting l pos s
@@ -447,6 +473,11 @@ instance (Eq s, IsString s) =>
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]
+
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Verification l pos s) g,
+          Transformation.At (Verification l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (Verification l pos s) g where
+   foldMap = Full.foldMapDownDefault
 
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>

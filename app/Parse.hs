@@ -7,7 +7,7 @@ import Language.Haskell (Bound, Input, Placed)
 import qualified Language.Haskell as Haskell
 import qualified Language.Haskell.Extensions as Extensions
 import Language.Haskell.Extensions.AST (Language)
-import qualified Language.Haskell.Abstract as Abstract
+import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Extensions.Grammar as Grammar
@@ -98,6 +98,7 @@ main' Opts{..} = do
    let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
               e ~ Binder.WithEnvironment Language w,
+              Abstract.ExtendedHaskell l,
               Abstract.QualifiedName l ~ AST.QualifiedName l,
               Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
               Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
@@ -126,6 +127,7 @@ main' Opts{..} = do
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
               Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
+              Deep.Foldable (Verifier.Verification l Int Text) (g l l),
               Deep.Foldable
                  (Transformation.Folded
                     ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
@@ -138,6 +140,7 @@ main' Opts{..} = do
                  (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                   a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
                   e ~ Binder.WithEnvironment Language w,
+                  Abstract.ExtendedHaskell l,
                   Abstract.QualifiedName l ~ AST.QualifiedName l,
                   Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
                   Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
@@ -166,6 +169,7 @@ main' Opts{..} = do
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
                   Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
+                  Deep.Foldable (Verifier.Verification l Int Text) (g l l),
                   Deep.Foldable
                      (Transformation.Folded
                         ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
@@ -193,7 +197,7 @@ main' Opts{..} = do
              Resolved -> putStrLn $ reprTreeString resolved
              Verified -> verifyBefore (putStrLn . reprTreeString)
           where verifyBefore :: (a -> IO ()) -> IO ()
-                verifyBefore action = case getConst (t Transformation.$ resolved) mempty of
+                verifyBefore action = case Verifier.verify mempty resolved of
                    [] -> let unbounds = Binder.unboundNames resolved
                          in if unbounds == mempty then action resolved
                             else print unbounds
@@ -219,6 +223,10 @@ main' Opts{..} = do
             ModuleMode     -> go parseModule "<stdin>"
             ExpressionMode -> go parseExpression "<stdin>"
    where
+      parseModule :: (Abstract.ExtendedHaskell l,
+                      Abstract.DeeplyFoldable (Reserializer.Serialization (Down Int) Input) l,
+                      w ~ Grammar.NodeWrap Input)
+                  => Input -> ParseResults Input [w (Abstract.Module l l w w)]
       parseModule = Grammar.parseModule defaultExtensions
       parseExpression t = getCompose
                           $ snd <$> getCompose (Grammar.expression . Grammar.report

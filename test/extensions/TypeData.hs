@@ -1,4 +1,4 @@
-{-# language Haskell2010, TypeData #-}
+{-# LANGUAGE Haskell2010, TypeData #-}
 
 type data Foo
 
