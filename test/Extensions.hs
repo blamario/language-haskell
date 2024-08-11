@@ -37,7 +37,7 @@ testDir predefinedModules preludeBindings ancestry path = do
    isDir <- doesDirectoryExist fullPath
    if isDir
       then (:[]) . testGroup path . concat
-           <$> (listDirectory fullPath >>= mapM (testDir predefinedModules preludeBindings fullPath))
+           <$> (listDirectory fullPath >>= mapM (testDir predefinedModules preludeBindings fullPath) . List.sort)
       else return . (:[]) . testCase path $ testModule predefinedModules preludeBindings fullPath
 
 testModule :: Binder.ModuleEnvironment Language -> Binder.Environment Language -> FilePath -> Assertion
@@ -45,7 +45,7 @@ testModule predefinedModules preludeBindings path = do
    moduleSource <- readFile path
    let Just (extensions, rest) = (Text.unlines <$>) <$> List.uncons (Text.lines moduleSource)
        inverse w
-          | w `elem` ["{-#", "LANGUAGE", "#-}"] = w
+          | w `elem` ["{-#", "LANGUAGE", "Haskell2010,", "#-}"] = w
           | Just rest <- Text.stripPrefix "No" w = rest
           | otherwise = "No" <> w
    assertCompiles predefinedModules preludeBindings moduleSource
