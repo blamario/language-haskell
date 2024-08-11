@@ -49,6 +49,7 @@ type Verified pos = Const (Ap (Accum (Map Extension Bool)) [Error pos])
 data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
                | UndeclaredExtensionUse Extension [(pos, pos)]
                | UnusedExtension Extension
+               | RecordTypeDataFields [(pos, pos)]
                | StrictTypeDataFields [(pos, pos)]
                  deriving (Show)
 
@@ -72,7 +73,7 @@ verify :: forall w l pos s g. (w ~ Wrap l pos s, Full.Foldable (Verification l p
              -> [Error pos]
 verify extensions node = evalAccum (getAp $ Full.foldMap (Verification :: Verification l pos s) node) extensions
 
-verifyModuleExtensions :: forall l pos s. (TextualMonoid s, Num pos, Ord pos, Show pos, Show s,
+verifyModuleExtensions :: forall l pos s. (TextualMonoid s, Num pos, Ord pos,
                                            Abstract.DeeplyFoldable (Accounting l pos s) l,
                                            Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
                                            Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
@@ -101,7 +102,7 @@ verifyModuleExtensions extensions m =
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
 
-filterExtensions :: (Num pos, Ord pos, Show pos) => Map Extension [(pos, pos)] -> Map Extension [(pos, pos)]
+filterExtensions :: (Num pos, Ord pos) => Map Extension [(pos, pos)] -> Map Extension [(pos, pos)]
 filterExtensions = Map.mapMaybeWithKey filterPatternGuards
    where filterPatternGuards Extensions.PatternGuards ranges =
             case filterActive ranges
@@ -123,7 +124,7 @@ instance {-# overlappable #-}
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    Verification $ _ = mempty
 
-instance (TextualMonoid s, Num pos, Ord pos, Show pos, Show s, Abstract.DeeplyFoldable (Accounting l pos s) l,
+instance (TextualMonoid s, Num pos, Ord pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
           Abstract.DeeplyFoldable (Accounting l pos s) l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
@@ -131,22 +132,25 @@ instance (TextualMonoid s, Num pos, Ord pos, Show pos, Show s, Abstract.DeeplyFo
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
    Verification $ m = Const $ Ap $ accum $ flip verifyModuleExtensions m
 
-instance (Show pos, Abstract.DataConstructor l l ~ ExtAST.DataConstructor l l,
-          Full.Foldable (Accounting l pos s) (ExtAST.DataConstructor l l)) =>
+instance (Full.Foldable (Accounting l pos s) (Abstract.DataConstructor l l),
+          Full.Foldable (Accounting l pos s) (Abstract.GADTConstructor l l)) =>
          Verification l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
-   Verification $ Compose (_, (_, ExtAST.TypeDataDeclaration _sup _lhs _kind constructors)) =
-      Const
-      . Ap
-      . accum
-      . (,)
-      . Map.foldMapWithKey (\k v-> if k == Extensions.BangDataFields
-                                   then [StrictTypeDataFields v]
-                                   else [])
-      . getUnionWith
-      . foldMap (Full.foldMap Accounting)
-      $ constructors
-   Verification $ _ = mempty
+   Verification $ Compose (_, (_, d))
+     | ExtAST.TypeDataDeclaration _sup _lhs _kind constructors <- d = verifyTypeData constructors
+     | ExtAST.TypeGADTDeclaration _sup1 _sup2 _lhs _kind constructors <- d = verifyTypeData constructors
+     | otherwise = mempty
+     where verifyTypeData :: (w ~ Wrap l pos s, Full.Foldable (Accounting l pos s) g) => [w (g w w)] -> Verified pos x
+           verifyTypeData =
+              Const
+              . Ap
+              . accum
+              . (,)
+              . Map.foldMapWithKey (\k v-> case k of Extensions.BangDataFields -> [StrictTypeDataFields v]
+                                                     Extensions.TraditionalRecordSyntax -> [RecordTypeDataFields v]
+                                                     _ -> [])
+              . getUnionWith
+              . foldMap (Full.foldMap Accounting)
 
 instance (TextualMonoid s, Abstract.Module l l ~ AST.Module l l, Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Accounting l pos s
