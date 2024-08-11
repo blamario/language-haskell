@@ -12,6 +12,8 @@ module Language.Haskell.Extensions.Abstract (
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
               ParallelListComprehensionConstruction, parallelListComprehension',
+              TypeDataConstruction, typeDataDeclaration,
+              TypeGADTConstruction, typeGADTDeclaration,
               TupleSectionConstruction, tupleSectionExpression',
               UnboxedSumsConstruction,
               unboxedSumType, unboxedSumConstructor, unboxedSumExpression, unboxedSumPattern,
@@ -122,6 +124,15 @@ data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = P
 data instance Construct '[ 'Extensions.TupleSections ] λ l d s = TupleSectionConstruction {
    tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
+data instance Construct '[ 'Extensions.TypeData ] λ l d s = TypeDataConstruction {
+   typeDataDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)]
+                       -> Declaration λ l d s}
+
+data instance Construct '[ 'Extensions.GADTs,
+                           'Extensions.TypeData ] λ l d s = TypeGADTConstruction {
+   typeGADTDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (GADTConstructor l l d d)]
+                       -> Declaration λ l d s}
+
 data instance Construct '[ 'Extensions.UnboxedTuples ] λ l d s = UnboxedTuplesConstruction {
    unboxedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s,
    unboxedTupleExpression :: NonEmpty (s (Expression l l d d)) -> Expression λ l d s,
@@ -223,7 +234,8 @@ class (Haskell λ,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
-                          'Extensions.DefaultSignatures, 'Extensions.FunctionalDependencies] λ,
+                          'Extensions.DefaultSignatures, 'Extensions.TypeData, 'Extensions.FunctionalDependencies] λ,
+       ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] λ,
        ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ

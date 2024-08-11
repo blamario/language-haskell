@@ -162,6 +162,12 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.GADTDeclaration lhs kind constructors derivings) =
       AST.GADTDeclaration (translateFully t lhs) (translateFully t <$> kind)
                           (translateFully t <$> constructors) (translateFully t <$> derivings)
+   translateDeeply t (AST.TypeDataDeclaration sup lhs kind constructors) =
+      AST.TypeDataDeclaration sup (translateFully t lhs) (translateFully t <$> kind)
+                              (translateFully t <$> constructors)
+   translateDeeply t (AST.TypeGADTDeclaration sup1 sup2 lhs kind constructors) =
+      AST.TypeGADTDeclaration sup1 sup2 (translateFully t lhs) (translateFully t <$> kind)
+                              (translateFully t <$> constructors)
    translateDeeply t (AST.DefaultDeclaration types) = AST.DefaultDeclaration (translateFully t <$> types)
    translateDeeply t (AST.EquationDeclaration lhs rhs wheres) =
       AST.EquationDeclaration (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)

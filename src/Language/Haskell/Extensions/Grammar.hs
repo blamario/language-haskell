@@ -157,6 +157,8 @@ extensionMixins =
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
      (Set.fromList [TypeFamilyDependencies],         [(9, typeFamilyDependenciesMixin)]),
      (Set.fromList [DataKinds],                      [(9, dataKindsMixin)]),
+     (Set.fromList [TypeData],                       [(9, typeDataMixin)]),
+     (Set.fromList [GADTs, TypeData],                [(9, typeDataGADTMixin)]),
      (Set.fromList [StandaloneKindSignatures],       [(7, kindSignaturesBaseMixin),
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
@@ -1175,6 +1177,28 @@ dataKindsTypeOperatorsMixin self super = super{
           <* terminator "'"
           <*> (self & report & qualifiedOperator)
           <*> wrap (cType self)}
+
+typeDataMixin :: Abstract.ExtendedWith '[ 'TypeData ] l => ExtensionOverlay l g t
+typeDataMixin self super = super{
+   report = (super & report){
+      declarationLevel= (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+            <|> Abstract.typeDataDeclaration Abstract.build <$ keyword "type" <* keyword "data"
+                <*> wrap (self & report & declarationLevel & simpleType)
+                <*> optional (wrap $ kindSignature self)
+                <*> (delimiter "=" *> (self & report & declarationLevel & declaredConstructors) <|> pure [])}}}
+
+typeDataGADTMixin :: (OutlineMonoid t,
+                      Abstract.ExtendedWith '[ 'GADTs, 'TypeData ] l,
+                      Abstract.DeeplyFoldable (Serialization (Down Int) t) l) => ExtensionOverlay l g t
+typeDataGADTMixin self super = super{
+   report = (super & report){
+      declarationLevel= (super & report & declarationLevel){
+         topLevelDeclaration = (super & report & declarationLevel & topLevelDeclaration)
+            <|> Abstract.typeGADTDeclaration Abstract.build <$ keyword "type" <* keyword "data"
+                <*> wrap (self & report & declarationLevel & simpleType)
+                <*> optional (wrap $ kindSignature self) <* keyword "where"
+                <*> blockOf (gadtConstructors self)}}}
 
 visibleDependentKindQualificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 visibleDependentKindQualificationMixin self super = super{

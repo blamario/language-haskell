@@ -57,6 +57,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.DerivingStrategies,
    'Extensions.DerivingVia,
    'Extensions.DefaultSignatures,
+   'Extensions.GADTs,
+   'Extensions.TypeData,
    'Extensions.FunctionalDependencies]
 
 instance Abstract.ExtendedWith '[ 'Extensions.MagicHash ] Language where
@@ -172,6 +174,14 @@ instance Abstract.ExtendedWith '[ 'Extensions.DerivingVia ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
    build = Abstract.DefaultSignatureConstruction {
       Abstract.defaultMethodSignature = DefaultMethodSignature ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.TypeData ] Language where
+   build = Abstract.TypeDataConstruction {
+      Abstract.typeDataDeclaration = TypeDataDeclaration ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] Language where
+   build = Abstract.TypeGADTConstruction {
+      Abstract.typeGADTDeclaration = TypeGADTDeclaration () ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language where
    build = Abstract.FunctionalDependenciesConstruction {
@@ -477,6 +487,13 @@ data Declaration λ l d s =
                      [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
    | GADTDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                      [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
+   | TypeDataDeclaration !(Abstract.SupportFor 'Extensions.TypeData λ)
+                         (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+                         [s (Abstract.DataConstructor l l d d)]
+   | TypeGADTDeclaration !(Abstract.SupportFor 'Extensions.GADTs λ)
+                         !(Abstract.SupportFor 'Extensions.TypeData λ)
+                         (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+                         [s (Abstract.GADTConstructor l l d d)]
    | DefaultDeclaration [s (Abstract.Type l l d d)]
    | DefaultMethodSignature !(Abstract.SupportFor 'Extensions.DefaultSignatures λ)
                              (Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
@@ -772,6 +789,8 @@ deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Data (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Data (Abstract.SupportFor 'Extensions.TypeData λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
@@ -794,6 +813,8 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
 deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Show (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Show (Abstract.SupportFor 'Extensions.TypeData λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
@@ -816,6 +837,8 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
 deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
+                   Eq (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Eq (Abstract.SupportFor 'Extensions.TypeData λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),

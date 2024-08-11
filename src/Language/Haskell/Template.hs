@@ -278,6 +278,16 @@ declarationTemplates (GADTDeclaration lhs kind constructors derivings)
      [DataD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
             (gadtConstructorTemplate . extract <$> constructors)
             (derivingsTemplate $ extract <$> derivings)]
+#if MIN_VERSION_template_haskell(2,20,0)
+declarationTemplates (TypeDataDeclaration () lhs kind constructors)
+   | (con, vars) <- extractSimpleTypeLHS lhs =
+     [TypeDataD (nameTemplate con) vars
+            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> constructors)]
+declarationTemplates (TypeGADTDeclaration () () lhs kind constructors)
+   | (con, vars) <- extractSimpleTypeLHS lhs =
+     [TypeDataD (nameTemplate con) vars (typeTemplate . extract <$> kind)
+            (gadtConstructorTemplate . extract <$> constructors)]
+#endif
 declarationTemplates (DefaultDeclaration types) =
 #if MIN_VERSION_template_haskell(2,19,0)
    [DefaultD (typeTemplate . extract <$> types)]

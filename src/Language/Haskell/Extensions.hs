@@ -151,6 +151,7 @@ data Extension = AllowAmbiguousTypes
                | Trustworthy
                | TupleSections
                | TypeApplications
+               | TypeData
                | TypeFamilies
                | TypeFamilyDependencies
                | TypeInType
@@ -435,6 +436,7 @@ byName = Map.fromList [
   ("Trustworthy", Trustworthy),
   ("TupleSections", TupleSections),
   ("TypeApplications", TypeApplications),
+  ("TypeData", TypeData),
   ("TypeFamilies", TypeFamilies),
   ("TypeFamilyDependencies", TypeFamilyDependencies),
   ("TypeInType", TypeInType),
