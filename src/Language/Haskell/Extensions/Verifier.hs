@@ -178,6 +178,14 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             (Full.foldMap UnicodeSyntaxAccounting d)
          ExtAST.GADTDeclaration context _lhs constructors _derivings ->
             UnionWith $ Map.singleton Extensions.GADTSyntax [(start, end)]
+         ExtAST.TypeDataDeclaration _sup _lhs _kind constructors ->
+            (if null constructors
+             then UnionWith $ Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
+             else mempty)
+            <> UnionWith (Map.singleton Extensions.TypeData [(start, end)])
+         ExtAST.TypeGADTDeclaration{} ->
+            UnionWith $ (Map.singleton Extensions.GADTSyntax [(start, end)]
+                         <> Map.singleton Extensions.TypeData [(start, end)])
          ExtAST.ImplicitParameterDeclaration{} ->
             UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
