@@ -28,6 +28,7 @@ data Extension = AllowAmbiguousTypes
                | ApplicativeDo
                | Arrows
                | AutoDeriveTypeable
+               | BangDataFields -- active but unnamed in GHC and Report
                | BangPatterns
                | BinaryLiterals
                | BlockArguments
@@ -189,7 +190,7 @@ allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
 
 includedByDefault :: Set Extension
-includedByDefault = Set.fromList [ConstraintsAreTypes,
+includedByDefault = Set.fromList [BangDataFields, ConstraintsAreTypes,
                                   DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   FieldSelectors, ForeignFunctionInterface,
                                   GratuitouslyParenthesizedTypes, IdentifierSyntax,
@@ -310,6 +311,7 @@ byName = Map.fromList [
   ("ApplicativeDo", ApplicativeDo),
   ("Arrows", Arrows),
   ("AutoDeriveTypeable", AutoDeriveTypeable),
+  ("BangDataFields", BangDataFields),
   ("BangPatterns", BangPatterns),
   ("BinaryLiterals", BinaryLiterals),
   ("BlockArguments", BlockArguments),

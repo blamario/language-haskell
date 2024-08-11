@@ -402,6 +402,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
             Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
          ExtAST.GroundTypeKind{} -> Map.singleton Extensions.StarIsType [(start, end)]
+         ExtAST.StrictType{} -> Map.singleton Extensions.BangDataFields [(start, end)]
          ExtAST.TypeWildcard{} -> Map.singleton Extensions.PartialTypeSignatures [(start, end)]
          ExtAST.UnboxedSumType{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
          ExtAST.UnboxedTupleType{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
