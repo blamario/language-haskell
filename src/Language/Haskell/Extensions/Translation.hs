@@ -392,6 +392,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.TypeLHS, DeeplyTranslatabl
    translateDeeply t (AST.SimpleTypeLHS name vars) = AST.SimpleTypeLHS name (translateDeeply t <$> vars)
    translateDeeply t (AST.SimpleTypeLHSApplication left var) =
       AST.SimpleTypeLHSApplication (translateFully t left) (translateDeeply t var)
+   translateDeeply t (AST.TypeLHSTypeApplication support left var) =
+      AST.TypeLHSTypeApplication support (translateFully t left) (translateDeeply t var)
 
 instance (WrapTranslation t, WrappedTranslation t AST.ClassInstanceLHS,
           FullyTranslatable t AST.Type, DeeplyTranslatable t AST.TypeVarBinding,
@@ -514,7 +516,9 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
           Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
           Abstract.FieldPattern (Target t) ~ AST.FieldPattern (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t),
+          Abstract.Kind (Origin t) ~ AST.Type (Origin t),
           Abstract.Type (Target t) ~ AST.Type (Target t),
+          Abstract.Kind (Target t) ~ AST.Type (Target t),
           Abstract.Value (Origin t) ~ AST.Value (Origin t),
           Abstract.Value (Target t) ~ AST.Value (Target t)) =>
          DeeplyTranslatable t AST.Pattern where
@@ -539,6 +543,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
    translateDeeply t (AST.UnboxedSumPattern support before branch after) =
       AST.UnboxedSumPattern support before (translateFully t branch) after
    translateDeeply t (AST.TypedPattern p ty) = AST.TypedPattern (translateFully t p) (translateFully t ty)
+   translateDeeply t (AST.InvisibleTypePattern support ty) = AST.InvisibleTypePattern support (translateFully t ty)
    translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
    translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
 

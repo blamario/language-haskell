@@ -30,7 +30,9 @@ import qualified Language.Haskell.Extensions.Reformulator as Reformulator
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
 import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit, TyVarBndrVis,
-                                               kindedTV, plainTV, kindedTVInferred, plainTVInferred,
+                                               kindedTV, plainTV,
+                                               kindedTVInferred, plainTVInferred,
+                                               kindedTVInvis, plainTVInvis,
                                                kindedTVSpecified, plainTVSpecified)
 import Language.Haskell.TH.PprLib ((<+>), ($$))
 import Language.Haskell.TH.Ppr as Ppr (ppr)
@@ -597,6 +599,7 @@ patternTemplate (UnboxedSumPattern () before branch after) =
    UnboxedSumP (patternTemplate $ extract branch) (before + 1) (before + after + 1)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate (TypedPattern p t) = SigP (patternTemplate $ extract p) (typeTemplate $ extract t)
+patternTemplate (InvisibleTypePattern () t) = InvisP (typeTemplate $ extract t)
 patternTemplate WildcardPattern = WildP
 
 rhsTemplate :: TemplateWrapper f => EquationRHS Language Language f f -> Body
@@ -738,6 +741,11 @@ typeVarBindingVisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingVisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
 
+typeVarBindingInvisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
+typeVarBindingInvisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
+   kindedTVInvis (nameTemplate name) (typeTemplate $ extract kind)
+typeVarBindingInvisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTVInvis (nameTemplate name)
+
 typeVarBindingSpecTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrSpec
 typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable False name kind) =
    kindedTVSpecified (nameTemplate name) (typeTemplate $ extract kind)
@@ -775,13 +783,15 @@ baseName :: AST.QualifiedName Language -> AST.Name Language
 baseName (QualifiedName _ name) = name
 
 extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l,
-                                 Abstract.Type l ~ ExtAST.Type l, l ~ Language, TemplateWrapper f)
+                                     Abstract.Type l ~ ExtAST.Type l, l ~ Language, TemplateWrapper f)
                => f (ExtAST.TypeLHS l l f f) -> (AST.Name l, [TyVarBndrVis])
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrVis])
          fromTypeLHS (SimpleTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
          fromTypeLHS (SimpleTypeLHSApplication t var)
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingVisibleTemplate var])
+         fromTypeLHS (TypeLHSTypeApplication () t var)
+            | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingInvisibleTemplate var])
 
 nameText :: AST.Name λ -> Text
 nameText (Name s) = s

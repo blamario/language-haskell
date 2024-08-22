@@ -242,6 +242,7 @@ instance {-# OVERLAPS #-}
             getPatternVariables (ExtAST.WildcardRecordPattern _ _ fields) =
                foldMap (foldMap getFieldPatternVariables . flip getCompose mempty) fields
             getPatternVariables (ExtAST.TypedPattern p _) = foldMap getPatternVariables (getCompose p mempty)
+            getPatternVariables (ExtAST.InvisibleTypePattern _ _ty) = []
             getPatternVariables (ExtAST.BangPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
             getPatternVariables (ExtAST.TuplePattern items) =
                foldMap (foldMap getPatternVariables . flip getCompose mempty) items
@@ -255,6 +256,7 @@ instance {-# OVERLAPS #-}
             getFieldPatternVariables ExtAST.PunnedFieldPattern{} = []
             getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
             getTypeName (ExtAST.SimpleTypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
+            getTypeName (ExtAST.TypeLHSTypeApplication _support lhs _) = foldMap getTypeName (getCompose lhs mempty)
             bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
             bequeath _ = Di.inh atts
             bequest = foldMap bequeath node

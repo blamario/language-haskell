@@ -384,6 +384,9 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
                 else mempty)
                <> foldMap (checkKindedTypevar (start, end)) vars
          ExtAST.SimpleTypeLHSApplication _ var -> checkKindedTypevar (start, end) var
+         ExtAST.TypeLHSTypeApplication _sup _ var ->
+            Map.singleton Extensions.TypeOperators [(start, end)]
+            <> checkKindedTypevar (start, end) var
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
@@ -410,6 +413,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
                 ExtAST.ViewPattern {} -> Map.singleton Extensions.ViewPatterns [(start, end)]
                 ExtAST.UnboxedSumPattern{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
                 ExtAST.UnboxedTuplePattern{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
+                ExtAST.InvisibleTypePattern {} -> Map.singleton Extensions.TypeAbstractions [(start, end)]
                 ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
 

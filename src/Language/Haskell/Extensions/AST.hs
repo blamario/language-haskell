@@ -58,6 +58,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.DerivingVia,
    'Extensions.DefaultSignatures,
    'Extensions.GADTs,
+   'Extensions.TypeAbstractions,
    'Extensions.TypeData,
    'Extensions.FunctionalDependencies]
 
@@ -182,6 +183,11 @@ instance Abstract.ExtendedWith '[ 'Extensions.TypeData ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] Language where
    build = Abstract.TypeGADTConstruction {
       Abstract.typeGADTDeclaration = TypeGADTDeclaration () ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.TypeAbstractions ] Language where
+   build = Abstract.TypeAbstractionConstruction {
+      Abstract.typeLHSTypeApplication = TypeLHSTypeApplication (),
+      Abstract.invisibleTypePattern = InvisibleTypePattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language where
    build = Abstract.FunctionalDependenciesConstruction {
@@ -644,6 +650,9 @@ data TypeVarBinding λ l d s =
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [TypeVarBinding λ l d s]
    | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
+   | TypeLHSTypeApplication !(Abstract.SupportFor 'Extensions.TypeAbstractions λ)
+                            (s (Abstract.TypeLHS l l d d))
+                            (TypeVarBinding λ l d s)
 
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
@@ -717,6 +726,7 @@ data Pattern λ l d s =
                             (Abstract.QualifiedName λ)
                             [s (Abstract.FieldPattern l l d d)]
    | TypedPattern (s (Abstract.Pattern l l d d)) (s (Abstract.Type l l d d))
+   | InvisibleTypePattern !(Abstract.SupportFor 'Extensions.TypeAbstractions λ) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
@@ -958,14 +968,17 @@ deriving instance (Show (s (Abstract.Kind l l d d)), Show (Abstract.Name λ)) =>
 deriving instance (Eq (s (Abstract.Kind l l d d)), Eq (Abstract.Name λ)) => Eq (TypeVarBinding λ l d s)
 
 deriving instance Typeable (TypeLHS λ l d s)
-deriving instance (Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
+                   Data (s (Abstract.Type l l d d)), Data (s (Abstract.TypeLHS l l d d)),
                    Data (s (Abstract.Kind l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (TypeLHS λ l d s)
-deriving instance (Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
+deriving instance (Show (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
+                   Show (s (Abstract.Type l l d d)), Show (s (Abstract.TypeLHS l l d d)),
                    Show (s (Abstract.Kind l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (TypeLHS λ l d s)
-deriving instance (Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
+                   Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.TypeLHS l l d d)), Eq (s (Abstract.Kind l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (TypeLHS λ l d s)
 
 deriving instance Typeable (ClassInstanceLHS λ l d s)
@@ -1045,6 +1058,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
+                   Data (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Expression l l d d)),
                    Data (s (Abstract.FieldPattern l l d d)), Data (s (Abstract.Pattern l l d d)),
                    Data (s (Abstract.Value l l d d)), Data (s (Abstract.Type l l d d)),
@@ -1056,6 +1070,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
+                   Show (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Expression l l d d)),
                    Show (s (Abstract.FieldPattern l l d d)), Show (s (Abstract.Pattern l l d d)),
                    Show (s (Abstract.Value l l d d)), Show (s (Abstract.Type l l d d)),
@@ -1066,6 +1081,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
+                   Eq (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Expression l l d d)),
                    Eq (s (Abstract.FieldPattern l l d d)), Eq (s (Abstract.Pattern l l d d)),
                    Eq (s (Abstract.Value l l d d)), Eq (s (Abstract.Type l l d d)),

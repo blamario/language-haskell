@@ -92,6 +92,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
+   conArgPattern :: p (Abstract.Pattern l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
    return_type, base_return_type, arg_type :: p (Abstract.Type l l f f),
    binary :: p t}
@@ -163,6 +164,7 @@ extensionMixins =
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
+     (Set.fromList [TypeAbstractions],               [(9, typeAbstractionsMixin)]),
      (Set.fromList [InferredTypeVariables],          [(9, inferredTypeVariablesMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
      (Set.fromList [RoleAnnotations],                [(9, roleAnnotationsMixin)]),
@@ -292,6 +294,15 @@ reportGrammar g@ExtendedGrammar{report= r} =
               <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
               <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
         pattern = nonTerminal infixPattern,
+        lPattern = nonTerminal (Report.aPattern . report)
+                   <|> Abstract.literalPattern
+                       <$ delimiter "-"
+                       <*> wrap ((Abstract.integerLiteral . negate) <$> nonTerminal (Report.integer . report)
+                                 <|> (Abstract.floatingLiteral . negate) <$> nonTerminal (Report.float . report))
+                   <|> Abstract.constructorPattern
+                       <$> wrap (nonTerminal $ Report.generalConstructor .report)
+                       <*> some (wrap $ nonTerminal conArgPattern),
+        aPattern = nonTerminal conArgPattern,
         aType = Report.aType r'
                 <|> Abstract.typeWildcard <$ keyword "_"
                 <|> Abstract.groundType <$ nonTerminal groundTypeKind,
@@ -388,6 +399,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
                       <*> wrap (nonTerminal arg_type)
                    <|> nonTerminal base_return_type,
      base_return_type = Abstract.constructorType <$> wrap (nonTerminal $ Report.generalConstructor . report),
+     conArgPattern = Report.aPattern r',
      arg_type = nonTerminal (Report.aType . report),
      binary = empty}
    where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
@@ -522,7 +534,7 @@ magicHashMixin self super =
                        <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float')
                    <|> Abstract.constructorPattern
                        <$> wrap (self & report & generalConstructor)
-                       <*> some (wrap $ self & report & aPattern),
+                       <*> some (wrap $ self & conArgPattern),
          literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
                    <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
                    <|> Abstract.hashLiteral
@@ -1270,8 +1282,7 @@ typeApplicationsMixin self super = super{
          <|> Abstract.constructorPatternWithTypeApplications
              <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
              <*> some (typeApplicationDelimiter *> wrap (self & report & aType))
-             <*> many (wrap $ self & report & aPattern)
-      },
+             <*> many (wrap $ self & conArgPattern)},
    return_type = (super & return_type)
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
@@ -1288,6 +1299,23 @@ typeApplicationsMixin self super = super{
           <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (self & report & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
+
+typeAbstractionsMixin :: (Abstract.ExtendedWith '[ 'TypeAbstractions ] l,
+                          SpaceMonoid t) => ExtensionOverlay l g t
+typeAbstractionsMixin self super = super{
+   report = (report super){
+      declarationLevel = (super & report & declarationLevel){
+         simpleType = (super & report & declarationLevel & simpleType)
+            <|> Abstract.typeLHSTypeApplication Abstract.build
+                   <$> wrap (self & report & declarationLevel & simpleType)
+                   <* delimiter "@"
+                   <*> (self & typeVarBinder)},
+      aPattern =
+         Abstract.invisibleTypePattern Abstract.build
+            <$ (filter precededByOpenSpace getInput *> delimiter "@")
+            <*> wrap (self & report & aType)
+         <|> notFollowedBy ((self & report & variable) *> filter precededByOpenSpace getInput *> delimiter "@")
+             *> (super & report & aPattern)}}
 
 linearTypesMixin :: (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
 linearTypesMixin self super = super{
