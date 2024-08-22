@@ -164,6 +164,8 @@ extensionMixins =
                                                       (9, standaloneKindSignaturesMixin)]),
      (Set.fromList [StarIsType],                     [(9, starIsTypeMixin)]),
      (Set.fromList [TypeApplications],               [(9, typeApplicationsMixin)]),
+     (Set.fromList [TypeAbstractionsOrApplicationsInConstructorPatterns],
+                                                     [(9, typeAbstractionsOrApplicationsMixin)]),
      (Set.fromList [TypeAbstractions],               [(9, typeAbstractionsMixin)]),
      (Set.fromList [InferredTypeVariables],          [(9, inferredTypeVariablesMixin)]),
      (Set.fromList [LinearTypes],                    [(9, linearTypesMixin)]),
@@ -1277,12 +1279,7 @@ typeApplicationsMixin self super = super{
          <|> Abstract.visibleTypeApplication
              <$> filter whiteSpaceTrailing (self & report & aExpression)
              <* typeApplicationDelimiter
-             <*> wrap (self & report & aType),
-      lPattern = (super & report & lPattern)
-         <|> Abstract.constructorPatternWithTypeApplications
-             <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
-             <*> some (typeApplicationDelimiter *> wrap (self & report & aType))
-             <*> many (wrap $ self & conArgPattern)},
+             <*> wrap (self & report & aType)},
    return_type = (super & return_type)
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
@@ -1298,6 +1295,19 @@ typeApplicationsMixin self super = super{
           <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
           <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (self & report & aType))}
+   where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
+
+
+typeAbstractionsOrApplicationsMixin :: (Abstract.ExtendedHaskell l, SpaceMonoid t,
+                                        Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                                    => ExtensionOverlay l g t
+typeAbstractionsOrApplicationsMixin self super = super{
+   report = (report super){
+      lPattern = (super & report & lPattern)
+         <|> Abstract.constructorPatternWithTypeApplications
+             <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
+             <*> some (typeApplicationDelimiter *> wrap (self & report & aType))
+             <*> many (wrap $ self & conArgPattern)}}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 typeAbstractionsMixin :: (Abstract.ExtendedWith '[ 'TypeAbstractions ] l,

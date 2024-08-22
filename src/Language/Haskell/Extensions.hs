@@ -152,6 +152,7 @@ data Extension = AllowAmbiguousTypes
                | Trustworthy
                | TupleSections
                | TypeAbstractions
+               | TypeAbstractionsOrApplicationsInConstructorPatterns -- nameless
                | TypeApplications
                | TypeData
                | TypeFamilies
@@ -268,7 +269,8 @@ directImplications = Map.fromList <$> Map.fromList [
   (Strict, [(StrictData, True)]),
   (TemplateHaskell, [(TemplateHaskellQuotes, True)]),
   (Trustworthy, [(SafeImports, True)]),
-  (TypeApplications, [(InferredTypeVariables, True)]),
+  (TypeAbstractions, [(TypeAbstractionsOrApplicationsInConstructorPatterns, True)]),
+  (TypeApplications, [(InferredTypeVariables, True), (TypeAbstractionsOrApplicationsInConstructorPatterns, True)]),
   (TypeFamilies, [(EqualityConstraints, True), (ExplicitNamespaces, True),
                   (KindSignatures, True), (MonoLocalBinds, True)]),
   (TypeFamilyDependencies, [(TypeFamilies, True)]),
