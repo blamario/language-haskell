@@ -281,8 +281,8 @@ class (Haskell λ,
                                          -> Maybe (s (ImportSpecification l l d d))
                                          -> Import λ l d s
    infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
-   simpleInfixTypeLHSApplication :: TypeVarBinding λ l d s -> Name λ -> TypeVarBinding λ l d s -> TypeLHS λ l d s
-   simpleTypeLHSApplication :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s -> TypeLHS λ l d s
+   infixTypeLHSApplication :: TypeVarBinding λ l d s -> Name λ -> TypeVarBinding λ l d s -> TypeLHS λ l d s
+   typeLHSApplication :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s -> TypeLHS λ l d s
    simpleKindedTypeLHS :: Name λ -> [TypeVarBinding λ l d s] -> TypeLHS λ l d s
    existentialConstructor :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (DataConstructor l l d d)
                           -> DataConstructor λ l d s

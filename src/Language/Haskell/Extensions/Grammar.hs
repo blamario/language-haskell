@@ -278,7 +278,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
         declarationLevel= (declarationLevel r'){
            simpleType =
               Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
-              <|> Abstract.simpleTypeLHSApplication
+              <|> Abstract.typeLHSApplication
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
            classLHS = Abstract.simpleKindedTypeLHS
@@ -862,12 +862,12 @@ typeOperatorsMixin self super =
          declarationLevel= (super & report & declarationLevel){
             typeClass = (super & report & declarationLevel & typeClass) <|> parens anyOperator,
             classLHS = (super & report & declarationLevel & classLHS)
-               <|> Abstract.simpleInfixTypeLHSApplication
+               <|> Abstract.infixTypeLHSApplication
                    <$> typeVarBinder self
                    <*> anyOperator
                    <*> typeVarBinder self,
             simpleType = (super & report & declarationLevel & simpleType)
-               <|> Abstract.simpleInfixTypeLHSApplication
+               <|> Abstract.infixTypeLHSApplication
                             <$> typeVarBinder self
                             <*> anyOperator
                             <*> typeVarBinder self
@@ -1812,14 +1812,14 @@ mptcsMixin
          declarationLevel= (super & report & declarationLevel){
             classLHS = (super & report & declarationLevel & Report.classLHS)
                <|> Abstract.simpleTypeLHS <$> typeClass <*> pure [] <* notFollowedBy (void typeVarBinder)
-               <|> Abstract.simpleInfixTypeLHSApplication
+               <|> Abstract.infixTypeLHSApplication
                    <$> typeVarBinder
                    <* terminator "`"
                    <*> typeClass
                    <* terminator "`"
                    <*> typeVarBinder
                <|> parens classLHS
-               <|> Abstract.simpleTypeLHSApplication <$> wrap classLHS <*> typeVarBinder}}}
+               <|> Abstract.typeLHSApplication <$> wrap classLHS <*> typeVarBinder}}}
 
 functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'FunctionalDependencies ] l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))

@@ -383,7 +383,7 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
                 then Map.singleton Extensions.TypeOperators [(start, end)]
                 else mempty)
                <> foldMap (checkKindedTypevar (start, end)) vars
-         ExtAST.SimpleTypeLHSApplication _ var -> checkKindedTypevar (start, end) var
+         ExtAST.TypeLHSApplication _ var -> checkKindedTypevar (start, end) var
          ExtAST.TypeLHSTypeApplication _sup _ var ->
             Map.singleton Extensions.TypeOperators [(start, end)]
             <> checkKindedTypevar (start, end) var

@@ -788,7 +788,7 @@ extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.Type
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrVis])
          fromTypeLHS (SimpleTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
-         fromTypeLHS (SimpleTypeLHSApplication t var)
+         fromTypeLHS (TypeLHSApplication t var)
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingVisibleTemplate var])
          fromTypeLHS (TypeLHSTypeApplication () t var)
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingInvisibleTemplate var])

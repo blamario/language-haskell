@@ -255,7 +255,7 @@ instance {-# OVERLAPS #-}
             getFieldPatternVariables (ExtAST.FieldPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
             getFieldPatternVariables ExtAST.PunnedFieldPattern{} = []
             getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
-            getTypeName (ExtAST.SimpleTypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
+            getTypeName (ExtAST.TypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
             getTypeName (ExtAST.TypeLHSTypeApplication _support lhs _) = foldMap getTypeName (getCompose lhs mempty)
             bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
             bequeath _ = Di.inh atts

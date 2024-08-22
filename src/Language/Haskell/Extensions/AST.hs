@@ -213,8 +213,8 @@ instance Abstract.ExtendedHaskell Language where
    safePackageQualifiedImportDeclaration q p = Import True q (Just p)
    infixTypeApplication = InfixTypeApplication
    simpleKindedTypeLHS = SimpleTypeLHS
-   simpleInfixTypeLHSApplication left op right = SimpleTypeLHS op [left, right]
-   simpleTypeLHSApplication = SimpleTypeLHSApplication
+   infixTypeLHSApplication left op right = SimpleTypeLHS op [left, right]
+   typeLHSApplication = TypeLHSApplication
    visibleDependentType = VisibleDependentType
    existentialConstructor = ExistentialConstructor
    explicitlyScopedInstanceDeclaration = InstanceDeclaration
@@ -649,7 +649,7 @@ data TypeVarBinding λ l d s =
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [TypeVarBinding λ l d s]
-   | SimpleTypeLHSApplication (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
+   | TypeLHSApplication (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
    | TypeLHSTypeApplication !(Abstract.SupportFor 'Extensions.TypeAbstractions λ)
                             (s (Abstract.TypeLHS l l d d))
                             (TypeVarBinding λ l d s)

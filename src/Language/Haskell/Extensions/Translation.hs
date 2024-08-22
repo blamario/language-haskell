@@ -390,8 +390,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.TypeLHS, DeeplyTranslatabl
           Abstract.TypeVarBinding (Target t) ~ AST.TypeVarBinding (Target t)) =>
          DeeplyTranslatable t AST.TypeLHS where
    translateDeeply t (AST.SimpleTypeLHS name vars) = AST.SimpleTypeLHS name (translateDeeply t <$> vars)
-   translateDeeply t (AST.SimpleTypeLHSApplication left var) =
-      AST.SimpleTypeLHSApplication (translateFully t left) (translateDeeply t var)
+   translateDeeply t (AST.TypeLHSApplication left var) =
+      AST.TypeLHSApplication (translateFully t left) (translateDeeply t var)
    translateDeeply t (AST.TypeLHSTypeApplication support left var) =
       AST.TypeLHSTypeApplication support (translateFully t left) (translateDeeply t var)
 
