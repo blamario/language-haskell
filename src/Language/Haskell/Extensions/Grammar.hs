@@ -434,6 +434,9 @@ unicodeSyntaxMixin self super = super{
 
 unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
 unboxedTuplesMixin self super = super{
+  conArgPattern = (super & conArgPattern)
+                  <|> Abstract.unboxedTuplePattern Abstract.build
+                      <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma),
    report= (report super){
       aType = (super & report & aType)
               <|> Abstract.unboxedTupleType Abstract.build
@@ -443,10 +446,7 @@ unboxedTuplesMixin self super = super{
                                <$> hashParens (many comma),
       bareExpression = (super & report & bareExpression)
                        <|> Abstract.unboxedTupleExpression Abstract.build
-                           <$> hashParens ((self & report & expression) `sepByNonEmpty` comma),
-      aPattern = (super & report & aPattern)
-                 <|> Abstract.unboxedTuplePattern Abstract.build
-                     <$> hashParens (wrap (self & report & pPattern) `sepByNonEmpty` comma)}}
+                           <$> hashParens ((self & report & expression) `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
@@ -460,6 +460,14 @@ unboxedTupleSectionsMixin self super = super{
 
 unboxedSumsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedSums ] l => ExtensionOverlay l g t
 unboxedSumsMixin self super = super{
+   conArgPattern = (super & conArgPattern)
+                   <|> hashParens (Abstract.unboxedSumPattern Abstract.build
+                                      <$> (length <$> some (delimiter "|"))
+                                      <*> wrap (self & report & pPattern)
+                                      <*> (length <$> many (delimiter "|"))
+                                   <|> Abstract.unboxedSumPattern Abstract.build 0
+                                      <$> wrap (self & report & pPattern)
+                                      <*> (length <$> some (delimiter "|"))),
    report= (report super){
       aType = (super & report & aType)
               <|> Abstract.unboxedSumType Abstract.build
@@ -475,15 +483,7 @@ unboxedSumsMixin self super = super{
                                           <*> (length <$> many (delimiter "|"))
                                        <|> Abstract.unboxedSumExpression Abstract.build 0
                                           <$> (self & report & expression)
-                                          <*> (length <$> some (delimiter "|"))),
-      aPattern = (super & report & aPattern)
-                 <|> hashParens (Abstract.unboxedSumPattern Abstract.build
-                                    <$> (length <$> some (delimiter "|"))
-                                    <*> wrap (self & report & pPattern)
-                                    <*> (length <$> many (delimiter "|"))
-                                 <|> Abstract.unboxedSumPattern Abstract.build 0
-                                    <$> wrap (self & report & pPattern)
-                                    <*> (length <$> some (delimiter "|")))}}
+                                          <*> (length <$> some (delimiter "|")))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 interruptibleFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'InterruptibleFFI ] l => ExtensionOverlay l g t
@@ -742,9 +742,9 @@ blockArgumentsMixin self super = super{
 
 spaceSensitiveOperatorsMixin :: SpaceMonoid t => ExtensionOverlay l g t
 spaceSensitiveOperatorsMixin self super = super{
+   conArgPattern = Abstract.variablePattern <$> (super & report & variable) <* lookAhead unreservedSymbolLexeme
+                   <<|> notFollowedBy unreservedSymbolLexeme *> (super & conArgPattern),
    report= (report super){
-      aPattern = Abstract.variablePattern <$> (super & report & variable) <* lookAhead unreservedSymbolLexeme
-                 <<|> notFollowedBy unreservedSymbolLexeme *> (super & report & aPattern),
       variableSymbol = (super & report & variableSymbol) <|> Report.nameToken unreservedSymbolLexeme}}
 
 unreservedSymbolLexeme :: (Rank2.Apply g, Ord t, SpaceMonoid t) => Parser g t t
@@ -1568,13 +1568,13 @@ namedFieldPunsMixin self super =
 recordWildCardsMixin :: Abstract.ExtendedWith '[ 'RecordWildCards ] l => ExtensionOverlay l g t
 recordWildCardsMixin self super =
    super{
+     conArgPattern = (super & conArgPattern)
+        <|> Abstract.wildcardRecordPattern' Abstract.build <$> (self & report & qualifiedConstructor)
+            <*> braces (wrap (self & report & fieldPattern) `endBy` comma <* delimiter ".."),
       report = (report super){
          bareExpression = (super & report & bareExpression)
             <|> Abstract.wildcardRecordExpression' Abstract.build <$> (self & report & qualifiedConstructor)
-                <*> braces (wrap (self & report & fieldBinding) `endBy` comma <* delimiter ".."),
-         aPattern = (super & report & aPattern)
-            <|> Abstract.wildcardRecordPattern' Abstract.build <$> (self & report & qualifiedConstructor)
-                <*> braces (wrap (self & report & fieldPattern) `endBy` comma <* delimiter "..")}}
+                <*> braces (wrap (self & report & fieldBinding) `endBy` comma <* delimiter "..")}}
 
 overloadedRecordDotMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 overloadedRecordDotMixin self super =
@@ -1616,9 +1616,9 @@ implicitParametersMixin self super@ExtendedGrammar{report= rep@HaskellGrammar{de
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'BangPatterns ] l) => ExtensionOverlay l g t
 bangPatternsMixin self super =
    super{
+      conArgPattern = (super & conArgPattern)
+         <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap (self & conArgPattern),
       report = (report super){
-         aPattern = (super & report & aPattern)
-            <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap (self & report & aPattern),
          variableOperator = notFollowedBy bang *> (super & report & variableOperator)}}
    where bang = filter precededByOpenSpace getInput
                 *> string "!"
