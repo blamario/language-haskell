@@ -9,7 +9,7 @@ import Data.Foldable (toList)
 import Data.Functor.Const (Const(Const, getConst))
 import Data.Functor.Compose (Compose(..))
 import Data.Maybe (isJust)
-import Data.Monoid (Any(Any, getAny), Ap(Ap, getAp))
+import Data.Monoid (Any(Any, getAny), Sum(Sum), Ap(Ap, getAp))
 import Data.Monoid.Textual (TextualMonoid, characterPrefix)
 import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf, stripPrefix))
@@ -40,6 +40,7 @@ import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
 data Accounting l pos s = Accounting
+data MPTCAccounting l pos s = MPTCAccounting
 data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
 data Verification l pos s = Verification
 
@@ -58,6 +59,10 @@ type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 instance Transformation.Transformation (Accounting l pos s) where
     type Domain (Accounting l pos s) = Wrap l pos s
     type Codomain (Accounting l pos s) = Accounted pos
+
+instance Transformation.Transformation (MPTCAccounting l pos s) where
+    type Domain (MPTCAccounting l pos s) = Wrap l pos s
+    type Codomain (MPTCAccounting l pos s) = Const (Sum Int)
 
 instance Transformation.Transformation (UnicodeSyntaxAccounting l pos s) where
     type Domain (UnicodeSyntaxAccounting l pos s) = Wrap l pos s
@@ -191,7 +196,8 @@ instance (Eq s, IsString s) =>
    Accounting $ _ = mempty
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
-          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l) =>
+          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l,
+          Full.Foldable (MPTCAccounting l pos s) (Abstract.TypeLHS l l)) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $
@@ -227,6 +233,10 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
             <> getConst (Accounting Transformation.$ (convention <$ d))
             <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety)
+         ExtAST.ClassDeclaration _ lhs _ -> case Full.foldMap MPTCAccounting lhs of
+            Sum 1 -> mempty
+            _ -> UnionWith $ Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
+         ExtAST.FunDepClassDeclaration{} -> UnionWith $ Map.singleton Extensions.FunctionalDependencies [(start, end)]
          _ -> mempty
       <> Full.foldMap UnicodeSyntaxAccounting d
 
@@ -472,6 +482,16 @@ checkKindedTypevar _ ExtAST.ImplicitlyKindedTypeVariable{} = mempty
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
 
+instance {-# OVERLAPS #-} MPTCAccounting l pos s
+                          `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
+   MPTCAccounting $ Compose (_, (_, node)) = Const $ Sum $ case node of
+      ExtAST.SimpleTypeLHS _ args -> length args
+      ExtAST.TypeLHSApplication{} -> 1
+      ExtAST.TypeLHSTypeApplication{} -> 0
+
+instance MPTCAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
+  MPTCAccounting $ _ = mempty
+
 instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
@@ -490,6 +510,12 @@ instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Verification l pos s
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Accounting l pos s) g,
           Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (Accounting l pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (MPTCAccounting l pos s) g,
+          Transformation.At (MPTCAccounting l pos s)
+                            (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (MPTCAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
