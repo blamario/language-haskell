@@ -190,7 +190,6 @@ extensionMixins =
                     DerivingStrategies],             [(9, standaloneDerivingStrategiesMixin)]),
      (Set.fromList [StandaloneDeriving,
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
-     (Set.fromList [MultiParamTypeClasses],          [(9, mptcsMixin)]),
      (Set.fromList [FunctionalDependencies],         [(9, functionalDependenciesMixin)]),
      (Set.fromList [FlexibleInstances],              [(9, flexibleInstancesMixin)]),
      (Set.fromList [InstanceSigs],                   [(9, instanceSignaturesMixin)]),
@@ -276,14 +275,18 @@ reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.E
 reportGrammar g@ExtendedGrammar{report= r} =
    g{report= r'{
         declarationLevel= (declarationLevel r'){
+           classLHS = nonTerminal (Report.simpleType . declarationLevel . report),
            simpleType =
               Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+              <|> Abstract.infixTypeLHSApplication
+                  <$> nonTerminal typeVarBinder
+                  <* terminator "`"
+                  <*> nonTerminal (Report.typeClass . declarationLevel . report)
+                  <* terminator "`"
+                  <*> nonTerminal typeVarBinder
               <|> Abstract.typeLHSApplication
                   <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
                   <*> nonTerminal typeVarBinder,
-           classLHS = Abstract.simpleKindedTypeLHS
-                         <$> nonTerminal (Report.typeClass . declarationLevel . report)
-                         <*> ((:[]) <$> nonTerminal typeVarBinder),
            optionalTypeSignatureContext = pure Abstract.noContext,
            context =
               nonTerminal (Report.constraint . declarationLevel . report)
@@ -861,17 +864,11 @@ typeOperatorsMixin self super =
                    <*> (Just <$> (self & report & moduleLevel & members))},
          declarationLevel= (super & report & declarationLevel){
             typeClass = (super & report & declarationLevel & typeClass) <|> parens anyOperator,
-            classLHS = (super & report & declarationLevel & classLHS)
-               <|> Abstract.infixTypeLHSApplication
-                   <$> typeVarBinder self
-                   <*> anyOperator
-                   <*> typeVarBinder self,
             simpleType = (super & report & declarationLevel & simpleType)
                <|> Abstract.infixTypeLHSApplication
                             <$> typeVarBinder self
-                            <*> anyOperator
-                            <*> typeVarBinder self
-               <|> parens ((self & report & declarationLevel & simpleType))},
+                            <*> (notFollowedBy (string "`") *> anyOperator)
+                            <*> typeVarBinder self},
          typeConstructor = (self & report & constructorIdentifier) <|> parens anyOperator},
       equalityConstraint = empty,
       cType = (super & cType)
@@ -940,12 +937,13 @@ gratuitouslyParenthesizedTypesMixin self super = super{
    report= (report super){
       declarationLevel = (super & report & declarationLevel){
          qualifiedTypeClass = (super & report & declarationLevel & qualifiedTypeClass) <|> parens qtc,
-         typeVarApplications =
-            (self & report & generalTypeConstructor)
+         typeVarApplications = (self & report & generalTypeConstructor)
             <|> Abstract.typeApplication
                 <$> wrap ((self & report & declarationLevel & typeVarApplications)
                           <|> parens (self & report & declarationLevel & typeVarApplications))
                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
+         simpleType = (super & report & declarationLevel & simpleType)
+            <|> parens ((self & report & declarationLevel & simpleType)),
          instanceDesignator = (super & report & declarationLevel & instanceDesignator)
             <|> parens (self & report & declarationLevel & instanceDesignator)}},
    gadtConstructors = (super & gadtConstructors)
@@ -1797,29 +1795,6 @@ standaloneDerivingViaMixin self@ExtendedGrammar{
                       <*> wrap instanceDesignator}}}
    where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
                        <*> wrap (self & report & typeTerm)
-
-mptcsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
-                             Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
-           => ExtensionOverlay l g t
-mptcsMixin
-   self@ExtendedGrammar{
-     typeVarBinder,
-     report= HaskellGrammar{
-        declarationLevel= DeclarationGrammar{typeClass, classLHS}}}
-   super =
-   super{
-      report= (report super){
-         declarationLevel= (super & report & declarationLevel){
-            classLHS = (super & report & declarationLevel & Report.classLHS)
-               <|> Abstract.simpleTypeLHS <$> typeClass <*> pure [] <* notFollowedBy (void typeVarBinder)
-               <|> Abstract.infixTypeLHSApplication
-                   <$> typeVarBinder
-                   <* terminator "`"
-                   <*> typeClass
-                   <* terminator "`"
-                   <*> typeVarBinder
-               <|> parens classLHS
-               <|> Abstract.typeLHSApplication <$> wrap classLHS <*> typeVarBinder}}}
 
 functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'FunctionalDependencies ] l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
