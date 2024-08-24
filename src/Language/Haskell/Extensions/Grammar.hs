@@ -1287,11 +1287,6 @@ typeApplicationsMixin self super = super{
       <|> Abstract.classInstanceLHSKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & flexibleInstanceDesignator)
           <* typeApplicationDelimiter
-          <*> wrap (Abstract.typeKind <$> wrap (self & report & aType)),
-   familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
-      <|> Abstract.classInstanceLHSKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
-          <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (self & report & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
@@ -1305,7 +1300,12 @@ typeAbstractionsOrApplicationsMixin self super = super{
          <|> Abstract.constructorPatternWithTypeApplications
              <$> filter whiteSpaceTrailing (wrap $ self & report & generalConstructor)
              <*> some (typeApplicationDelimiter *> wrap (self & report & aType))
-             <*> many (wrap $ self & conArgPattern)}}
+             <*> many (wrap $ self & conArgPattern)},
+   familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
+      <|> Abstract.classInstanceLHSKindApplication
+          <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
+          <* typeApplicationDelimiter
+          <*> wrap (Abstract.typeKind <$> wrap (self & report & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 typeAbstractionsMixin :: (Abstract.ExtendedWith '[ 'TypeAbstractions ] l,
