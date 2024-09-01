@@ -512,10 +512,13 @@ data Declaration λ l d s =
    | InstanceDeclaration [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                          (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.Declaration l l d d)]
    | StandaloneDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
-                                   (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
+                                   [TypeVarBinding λ l d s]
+                                   (s (Abstract.Context l l d d))
+                                   (s (Abstract.ClassInstanceLHS l l d d))
    | StandaloneStrategicDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
                                             !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
                                             (s (Abstract.DerivingStrategy l l d d))
+                                            [TypeVarBinding λ l d s]
                                             (s (Abstract.Context l l d d))
                                             (s (Abstract.ClassInstanceLHS l l d d))
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))

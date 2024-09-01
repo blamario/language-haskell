@@ -1722,6 +1722,7 @@ standaloneDerivingMixin self@ExtendedGrammar{
          declarationLevel= declarationLevel{
             topLevelDeclaration = (declarationLevel & topLevelDeclaration)
                <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
+                   <*> optionalForall self
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator}}}
 
@@ -1758,6 +1759,7 @@ standaloneDerivingStrategiesMixin self@ExtendedGrammar{
                       <$ keyword "deriving"
                       <*> wrap (self & derivingStrategy)
                       <* keyword "instance"
+                      <*> optionalForall self
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
 
@@ -1791,6 +1793,7 @@ standaloneDerivingViaMixin self@ExtendedGrammar{
                       <$ keyword "deriving"
                       <*> wrap derivingVia
                       <* keyword "instance"
+                      <*> optionalForall self
                       <*> wrap optionalContext
                       <*> wrap instanceDesignator}}}
    where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"

@@ -220,11 +220,14 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.DefaultMethodSignature support name context ty) =
       AST.DefaultMethodSignature support name (translateFully t context) (translateFully t ty)
    translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
-   translateDeeply t (AST.StandaloneDerivingDeclaration support context lhs) =
-      AST.StandaloneDerivingDeclaration support (translateFully t context) (translateFully t lhs)
-   translateDeeply t (AST.StandaloneStrategicDerivingDeclaration support1 support2 strategy context lhs) =
+   translateDeeply t (AST.StandaloneDerivingDeclaration support vars context lhs) =
+      AST.StandaloneDerivingDeclaration support (translateDeeply t <$> vars)
+                                        (translateFully t context) (translateFully t lhs)
+   translateDeeply t (AST.StandaloneStrategicDerivingDeclaration support1 support2 strategy vars context lhs) =
       AST.StandaloneStrategicDerivingDeclaration support1 support2 (translateFully t strategy)
-                                                 (translateFully t context) (translateFully t lhs)
+                                                 (translateDeeply t <$> vars)
+                                                 (translateFully t context)
+                                                 (translateFully t lhs)
    translateDeeply t (AST.ImplicitParameterDeclaration support name value) =
       AST.ImplicitParameterDeclaration support name (translateFully t value)
    translateDeeply t (AST.ImplicitPatternSynonym support lhs rhs) =

@@ -200,7 +200,10 @@ data instance Construct '[ 'Extensions.PatternSynonyms ] λ l d s = PatternSynon
                            -> Declaration λ l d s}
 
 data instance Construct '[ 'Extensions.StandaloneDeriving ] λ l d s = StandaloneDerivingConstruction {
-   standaloneDerivingDeclaration :: s (Context l l d d) -> s (ClassInstanceLHS l l d d) -> Declaration λ l d s}
+   standaloneDerivingDeclaration :: [TypeVarBinding λ l d s]
+                                 -> s (Context l l d d)
+                                 -> s (ClassInstanceLHS l l d d)
+                                 -> Declaration λ l d s}
 
 type family DerivingStrategy λ :: TreeNodeSubKind
 
@@ -212,6 +215,7 @@ data instance Construct '[ 'Extensions.DerivingStrategies ] λ l d s = DerivingS
    strategicDerive :: s (DerivingStrategy l l d d) -> [s (Type l l d d)] -> DerivingClause λ l d s,
    standaloneStrategicDerivingDeclaration :: Supports 'Extensions.StandaloneDeriving λ
                                           => s (DerivingStrategy l l d d)
+                                          -> [TypeVarBinding λ l d s]
                                           -> s (Context l l d d)
                                           -> s (ClassInstanceLHS l l d d)
                                           -> Declaration λ l d s}

@@ -409,9 +409,9 @@ declarationTemplates (TypeRoleDeclaration name roles) =
          roleTemplate RepresentationalRole = RepresentationalR
          roleTemplate PhantomRole = PhantomR
          roleTemplate InferredRole = InferR
-declarationTemplates (StandaloneDerivingDeclaration () context lhs) =
+declarationTemplates (StandaloneDerivingDeclaration () _vars context lhs) =
    [StandaloneDerivD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)]
-declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy context lhs) =
+declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy _vars context lhs) =
    [StandaloneDerivD (strategyTemplate $ extract strategy) (contextTemplate $ extract context)
                      (lhsTypeTemplate $ extract lhs)]
 
