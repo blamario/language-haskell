@@ -94,7 +94,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
    conArgPattern :: p (Abstract.Pattern l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
-   return_type, base_return_type, arg_type :: p (Abstract.Type l l f f),
+   return_type, arg_type :: p (Abstract.Type l l f f),
    binary :: p t}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
@@ -402,8 +402,7 @@ reportGrammar g@ExtendedGrammar{report= r} =
      return_type = Abstract.typeApplication
                       <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
                       <*> wrap (nonTerminal arg_type)
-                   <|> nonTerminal base_return_type,
-     base_return_type = Abstract.constructorType <$> wrap (nonTerminal $ Report.generalConstructor . report),
+                   <|> nonTerminal (Report.generalTypeConstructor . report),
      conArgPattern = Report.aPattern r',
      arg_type = nonTerminal (Report.aType . report),
      binary = empty}
