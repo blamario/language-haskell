@@ -262,151 +262,157 @@ extendedGrammar extensions = memoize extendWith mixinKeys
    where mixinKeys :: [Set Extension]
          mixinKeys =  filter (all (`Set.member` extensions)) $ toList $ Map.keysSet $ extensionMixins @l @_ @t
          extendWith :: [Set Extension] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-         extendWith = overlay reportGrammar . map snd . reverse . List.sortOn fst . fold . map (extensionMixins Map.!)
+         extendWith = overlay extendedReport . reverse
+                      . (initialOverlay :) . map snd . List.sortOn fst . fold . map (extensionMixins Map.!)
+         extendedReport g@ExtendedGrammar{report = r} = g{report = Report.grammar r}
 
-reportGrammar :: forall l g t. (g ~ ExtendedGrammar l t (NodeWrap t), Abstract.ExtendedHaskell l,
-                                LexicalParsing (Parser g t), Ord t, Show t, OutlineMonoid t,
-                                Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
-                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
-                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
-                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
-                                Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
-              => GrammarBuilder g g (ParserT ((,) [[Lexeme t]])) t
-reportGrammar g@ExtendedGrammar{report= r} =
-   g{report= r'{
-        declarationLevel= (declarationLevel r'){
-           classLHS = nonTerminal (Report.simpleType . declarationLevel . report),
+-- | Reorganize the grammar to make it more extensible, without adding any extensions
+initialOverlay :: forall l g t. (Abstract.ExtendedHaskell l,
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
+                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
+               => ExtensionOverlay l g t
+initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{declarationLevel = selfDeclarations}}
+               super@ExtendedGrammar{report = superReport} =
+   super{report= superReport{
+        declarationLevel= (declarationLevel superReport){
+           classLHS = selfDeclarations & simpleType,
            simpleType =
-              Abstract.simpleTypeLHS <$> nonTerminal (Report.typeConstructor . report) <*> pure []
+              Abstract.simpleTypeLHS <$> (self & report & typeConstructor) <*> pure []
               <|> Abstract.infixTypeLHSApplication
-                  <$> nonTerminal typeVarBinder
+                  <$> (self & typeVarBinder)
                   <* terminator "`"
-                  <*> nonTerminal (Report.typeClass . declarationLevel . report)
+                  <*> (selfDeclarations & typeClass)
                   <* terminator "`"
-                  <*> nonTerminal typeVarBinder
+                  <*> (self & typeVarBinder)
               <|> Abstract.typeLHSApplication
-                  <$> wrap (nonTerminal $ Report.simpleType . declarationLevel . report)
-                  <*> nonTerminal typeVarBinder,
+                  <$> wrap (selfDeclarations & simpleType)
+                  <*> (self & typeVarBinder),
            optionalTypeSignatureContext = pure Abstract.noContext,
            context =
-              nonTerminal (Report.constraint . declarationLevel . report)
-              <|> nonTerminal equalityConstraint
-              <|> Abstract.constraints <$> parens (wrap (nonTerminal (Report.constraint . declarationLevel . report)
-                                                         <|> nonTerminal equalityConstraint
-                                                         <|> nonTerminal implicitParameterConstraint) `sepBy` comma),
+              (selfDeclarations & constraint)
+              <|> (self & equalityConstraint)
+              <|> Abstract.constraints <$> parens (wrap ((selfDeclarations & constraint)
+                                                         <|> (self & equalityConstraint)
+                                                         <|> (self & implicitParameterConstraint)) `sepBy` comma),
            instanceTypeDesignator =
-              nonTerminal (Report.generalTypeConstructor . report)
-              <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-              <|> parens (nonTerminal instanceTypeDesignatorInsideParens)},
-        pattern = nonTerminal infixPattern,
-        lPattern = nonTerminal (Report.aPattern . report)
+              (selfReport & generalTypeConstructor)
+              <|> Abstract.listType <$> brackets (wrap $ (self & optionallyKindedAndParenthesizedTypeVar))
+              <|> parens (self & instanceTypeDesignatorInsideParens)},
+        pattern = self & infixPattern,
+        lPattern = (selfReport & aPattern)
                    <|> Abstract.literalPattern
                        <$ delimiter "-"
-                       <*> wrap ((Abstract.integerLiteral . negate) <$> nonTerminal (Report.integer . report)
-                                 <|> (Abstract.floatingLiteral . negate) <$> nonTerminal (Report.float . report))
+                       <*> wrap ((Abstract.integerLiteral . negate) <$> (selfReport & integer)
+                                 <|> (Abstract.floatingLiteral . negate) <$> (selfReport & float))
                    <|> Abstract.constructorPattern
-                       <$> wrap (nonTerminal $ Report.generalConstructor .report)
-                       <*> some (wrap $ nonTerminal conArgPattern),
-        aPattern = nonTerminal conArgPattern,
-        aType = Report.aType r'
+                       <$> wrap (selfReport & generalConstructor)
+                       <*> some (wrap $ conArgPattern self),
+        aPattern = self & conArgPattern,
+        aType = aType superReport
                 <|> Abstract.typeWildcard <$ keyword "_"
-                <|> Abstract.groundType <$ nonTerminal groundTypeKind,
-        typeTerm = nonTerminal arrowType},
+                <|> Abstract.groundType <$ (self & groundTypeKind),
+        typeTerm = self & arrowType},
      keywordForall = keyword "forall",
      kindSignature = empty,
      groundTypeKind = empty,
      derivingStrategy = empty,
-     arrowType = nonTerminal cType
-        <|> Abstract.functionType <$> wrap (nonTerminal cType)
-                                  <* nonTerminal (Report.rightArrow . report)
-                                  <*> wrap (nonTerminal arrowType)
-        <|> Abstract.constrainedType <$> wrap (nonTerminal $ Report.context . declarationLevel . report)
-                                     <* nonTerminal (Report.rightDoubleArrow . report)
-                                     <*> wrap (nonTerminal arrowType),
-     cType = nonTerminal (Report.bType . report),
+     arrowType = (self & cType)
+        <|> Abstract.functionType <$> wrap (self & cType)
+                                  <* (selfReport & rightArrow)
+                                  <*> wrap (self & arrowType)
+        <|> Abstract.constrainedType <$> wrap (selfDeclarations & context)
+                                     <* (selfReport & rightDoubleArrow)
+                                     <*> wrap (self & arrowType),
+     cType = selfReport & bType,
      equalityConstraint = empty,
      implicitParameterConstraint = empty,
-     infixPattern = Report.pattern r',
+     infixPattern = pattern superReport,
      promotedLiteral =
-        Abstract.promotedIntegerLiteral <$> nonTerminal (Report.integer . report)
-        <|> Abstract.promotedCharLiteral <$> nonTerminal (Report.charLiteral . report)
-        <|> Abstract.promotedStringLiteral <$> nonTerminal (Report.stringLiteral . report),
+        Abstract.promotedIntegerLiteral <$> (selfReport & integer)
+        <|> Abstract.promotedCharLiteral <$> (selfReport & charLiteral)
+        <|> Abstract.promotedStringLiteral <$> (selfReport & stringLiteral),
      namespacedMember =
-        Abstract.defaultMember <$> nonTerminal (cname . Report.moduleLevel . report)
-        <|> Abstract.typeMember <$ keyword "type" <*> nonTerminal (cname . Report.moduleLevel . report),
+        Abstract.defaultMember <$> (selfReport & moduleLevel & cname)
+        <|> Abstract.typeMember <$ keyword "type" <*> (selfReport & moduleLevel & cname),
      inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignatorBase =
-        Abstract.classReferenceInstanceLHS <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
-        <|> parens (nonTerminal familyInstanceDesignator),
+        Abstract.classReferenceInstanceLHS <$> (selfDeclarations & qualifiedTypeClass)
+        <|> parens (self & familyInstanceDesignator),
      familyInstanceDesignatorApplications =
-        nonTerminal familyInstanceDesignatorBase
+        (self & familyInstanceDesignatorBase)
         <|> Abstract.classInstanceLHSApplication
-            <$> wrap (nonTerminal familyInstanceDesignatorApplications)
-            <*> wrap (nonTerminal (Report.aType . report)),
-     familyInstanceDesignator = nonTerminal familyInstanceDesignatorApplications,
+            <$> wrap (self & familyInstanceDesignatorApplications)
+            <*> wrap (selfReport & aType),
+     familyInstanceDesignator = self & familyInstanceDesignatorApplications,
      flexibleInstanceDesignator =
         Abstract.typeClassInstanceLHS
-           <$> nonTerminal (Report.qualifiedTypeClass . declarationLevel . report)
-           <*> wrap (nonTerminal $ Report.aType . report)
-        <|> parens (nonTerminal flexibleInstanceDesignator),
+           <$> (selfDeclarations & qualifiedTypeClass)
+           <*> wrap (self & report & aType)
+        <|> parens (self & flexibleInstanceDesignator),
      instanceTypeDesignatorInsideParens =
-        nonTerminal (Report.typeVarApplications . declarationLevel . report)
-        <|> Abstract.listType <$> brackets (wrap $ nonTerminal optionallyKindedAndParenthesizedTypeVar)
-        <|> Abstract.tupleType <$> typeVarTuple
+        (selfDeclarations & typeVarApplications)
+        <|> Abstract.listType <$> brackets (wrap $ (self & optionallyKindedAndParenthesizedTypeVar))
+        <|> Abstract.tupleType <$> (selfDeclarations & typeVarTuple)
         <|> Abstract.functionType
-            <$> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar)
-            <* nonTerminal (Report.rightArrow . report)
-            <*> wrap (nonTerminal optionallyKindedAndParenthesizedTypeVar),
+            <$> wrap (self & optionallyKindedAndParenthesizedTypeVar)
+            <* (selfReport & rightArrow)
+            <*> wrap (self & optionallyKindedAndParenthesizedTypeVar),
      optionalForall = pure [],
-     optionallyParenthesizedTypeVar = nonTerminal (Report.typeVar . report),
-     optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> nonTerminal optionallyParenthesizedTypeVar,
+     optionallyParenthesizedTypeVar = selfReport & typeVar,
+     optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar),
      optionallyKindedTypeVar = empty,
-     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> nonTerminal (Report.typeVar . report),
+     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> (selfReport & typeVar),
      gadtConstructors =
-        Abstract.gadtConstructors <$> nonTerminal constructorIDs <* nonTerminal (Report.doubleColon . report)
-                                  <*> nonTerminal optionalForall
-                                  <*> wrap optionalContext
-                                  <*> wrap (nonTerminal gadtBody),
+        Abstract.gadtConstructors <$> (self & constructorIDs)
+                                  <* (selfReport & doubleColon)
+                                  <*> (self & optionalForall)
+                                  <*> wrap (selfDeclarations & optionalContext)
+                                  <*> wrap (self & gadtBody),
      gadtNewConstructor =
-        Abstract.gadtConstructors <$> ((:|[]) <$> constructor) <* nonTerminal (Report.doubleColon . report)
-                                  <*> nonTerminal optionalForall
+        Abstract.gadtConstructors <$> ((:|[]) <$> (self & report & constructor)) <* (selfReport & doubleColon)
+                                  <*> (self & optionalForall)
                                   <*> wrap (pure Abstract.noContext
-                                            <|> context *> rightDoubleArrow
+                                            <|> (selfDeclarations & context)
+                                                *> (self & report & rightDoubleArrow)
                                                 *> fail "No context allowed on GADT newtype")
-                                  <*> wrap (nonTerminal gadtNewBody),
-     constructorIDs = constructor `sepByNonEmpty` comma,
+                                  <*> wrap (self & gadtNewBody),
+     constructorIDs = (self & report & constructor) `sepByNonEmpty` comma,
      gadtNewBody =
-        parens (nonTerminal gadtNewBody)
+        parens (self & gadtNewBody)
         <|> Abstract.functionType
-            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType)
-            <* nonTerminal (Report.rightArrow . report)
-            <*> wrap (nonTerminal return_type)
+            <$> wrap ((self & report & bType)
+                      <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+            <* (selfReport & rightArrow)
+            <*> wrap (self & return_type)
         <|> Abstract.recordFunctionType
-            <$> braces ((:[]) <$> wrap (nonTerminal $ Report.fieldDeclaration . declarationLevel . report))
-            <* nonTerminal (Report.rightArrow . report)
-            <*> wrap (nonTerminal return_type),
-     gadtBody = nonTerminal prefix_gadt_body <|> nonTerminal record_gadt_body,
+            <$> braces ((:[]) <$> wrap (selfDeclarations & fieldDeclaration))
+            <* (selfReport & rightArrow)
+            <*> wrap (self & return_type),
+     gadtBody = prefix_gadt_body self <|> record_gadt_body self,
      prefix_gadt_body =
-        parens (nonTerminal prefix_gadt_body)
-        <|> nonTerminal return_type
+        parens (self & prefix_gadt_body)
+        <|> (self & return_type)
         <|> Abstract.functionType
-            <$> wrap (bType <|> Abstract.strictType <$ delimiter "!" <*> wrap bType)
-            <* nonTerminal (Report.rightArrow . report)
-            <*> wrap (nonTerminal prefix_gadt_body),
+            <$> wrap ((self & report & bType)
+                      <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+            <* (selfReport & rightArrow)
+            <*> wrap (self & prefix_gadt_body),
      record_gadt_body =
-        parens (nonTerminal record_gadt_body)
+        parens (self & record_gadt_body)
         <|> Abstract.recordFunctionType
-            <$> braces (wrap (nonTerminal $ Report.fieldDeclaration . declarationLevel . report) `sepBy` comma)
-            <* nonTerminal (Report.rightArrow . report)
-            <*> wrap (nonTerminal return_type),
+            <$> braces (wrap (selfDeclarations & fieldDeclaration) `sepBy` comma)
+            <* (selfReport & rightArrow)
+            <*> wrap (self & return_type),
      return_type = Abstract.typeApplication
-                      <$> wrap (nonTerminal return_type <|> parens (nonTerminal return_type))
-                      <*> wrap (nonTerminal arg_type)
-                   <|> nonTerminal (Report.generalTypeConstructor . report),
-     conArgPattern = Report.aPattern r',
-     arg_type = nonTerminal (Report.aType . report),
+                      <$> wrap (return_type self <|> parens (self & return_type))
+                      <*> wrap (self & arg_type)
+                   <|> (selfReport & generalTypeConstructor),
+     conArgPattern = aPattern superReport,
+     arg_type = selfReport & aType,
      binary = empty}
-   where r'@HaskellGrammar{declarationLevel= DeclarationGrammar{..}, ..} = Report.grammar r
 
 identifierSyntaxMixin :: ExtensionOverlay l g t
 identifierSyntaxMixin self super = super{
@@ -946,7 +952,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
          instanceDesignator = (super & report & declarationLevel & instanceDesignator)
             <|> parens (self & report & declarationLevel & instanceDesignator)}},
    gadtConstructors = (super & gadtConstructors)
-      <|> Abstract.gadtConstructors <$> nonTerminal constructorIDs
+      <|> Abstract.gadtConstructors <$> (self & constructorIDs)
                                     <* (self & report & doubleColon)
                                     <**> pure uncurry3
                                     <*> (parens forallAndContextAndBody <|> forallAndParenContextBody),
@@ -1536,8 +1542,8 @@ gadtSyntaxTypeOperatorsMixin self super = super{
                           <$> wrap (self & cType)
                           <*> (self & report & qualifiedOperator)
                           <*> wrap (self & report & bType))
-             <* nonTerminal (Report.rightArrow . report)
-             <*> wrap (nonTerminal prefix_gadt_body),
+             <* (self & (Report.rightArrow . report))
+             <*> wrap (self & prefix_gadt_body),
    return_type = return_type super <|>
        Abstract.infixTypeApplication <$> wrap (arg_type self)
                                      <*> (self & report & qualifiedOperator)
