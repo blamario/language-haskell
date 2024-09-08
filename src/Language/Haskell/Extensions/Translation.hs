@@ -172,6 +172,10 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.EquationDeclaration lhs rhs wheres) =
       AST.EquationDeclaration (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
    translateDeeply _ (AST.FixityDeclaration assoc prec names) = AST.FixityDeclaration assoc prec names
+   translateDeeply _ (AST.ExplicitTypeFixityDeclaration sup assoc prec names) =
+      AST.ExplicitTypeFixityDeclaration sup assoc prec names
+   translateDeeply _ (AST.ExplicitDataFixityDeclaration sup assoc prec names) =
+      AST.ExplicitDataFixityDeclaration sup assoc prec names
    translateDeeply t (AST.ForeignExport convention extName varName ty) =
       AST.ForeignExport convention extName varName (translateFully t ty)
    translateDeeply t (AST.ForeignImport convention safety extName varName ty) =
@@ -547,6 +551,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
       AST.UnboxedSumPattern support before (translateFully t branch) after
    translateDeeply t (AST.TypedPattern p ty) = AST.TypedPattern (translateFully t p) (translateFully t ty)
    translateDeeply t (AST.InvisibleTypePattern support ty) = AST.InvisibleTypePattern support (translateFully t ty)
+   translateDeeply t (AST.ExplicitTypePattern support ty) = AST.ExplicitTypePattern support (translateFully t ty)
    translateDeeply _ (AST.VariablePattern name) = AST.VariablePattern name
    translateDeeply _ AST.WildcardPattern = AST.WildcardPattern
 
@@ -623,6 +628,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
       AST.TypedExpression (translateFully t x) (translateFully t signature)
    translateDeeply t (AST.VisibleTypeApplication x ty) =
       AST.VisibleTypeApplication (translateFully t x) (translateFully t ty)
+   translateDeeply t (AST.ExplicitTypeExpression sup ty) =
+      AST.ExplicitTypeExpression sup (translateFully t ty)
    translateDeeply _ (AST.OverloadedLabel l) = AST.OverloadedLabel l
    translateDeeply _ (AST.ImplicitParameterExpression sup name) = AST.ImplicitParameterExpression sup name
    translateDeeply t (AST.GetField record name) = AST.GetField (translateFully t record) name
@@ -706,6 +713,8 @@ instance {-# overlappable #-} (NameTranslation t, WrapTranslation t, Functor (Wr
 
 instance {-# overlappable #-}
    (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+    Abstract.SupportFor 'Extensions.ExplicitNamespaces (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t),
     Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
     Abstract.SupportFor 'Extensions.QualifiedDo (Origin t)
@@ -753,6 +762,7 @@ instance {-# overlappable #-}
       AST.UnboxedSumExpression support before branch after
    translate _ (AST.TypedExpression x signature) = AST.TypedExpression x signature
    translate _ (AST.VisibleTypeApplication x ty) = AST.VisibleTypeApplication x ty
+   translate _ (AST.ExplicitTypeExpression sup ty) = AST.ExplicitTypeExpression sup ty
    translate _ (AST.OverloadedLabel l) = AST.OverloadedLabel l
    translate t (AST.ImplicitParameterExpression support name) =
       AST.ImplicitParameterExpression support (translateName t name)

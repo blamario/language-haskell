@@ -5,7 +5,11 @@ module Language.Haskell.Extensions.Abstract (
    ExtendedHaskell(..),
    ExtendedWith (build),
    ExtendedWithAllOf,
-   Construct (RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
+   Construct (ExplicitNamespacesConstruction,
+              explicitlyNamespacedMemberList, defaultMember, patternMember, typeMember,
+              explicitTypeFixityDeclaration, explicitDataFixityDeclaration,
+              explicitTypeExpression, explicitTypePattern,
+              RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
               MagicHashConstruction, hashLiteral',
               NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
@@ -87,6 +91,14 @@ type family ExtendedWithAllOf (es :: [Extension]) l :: Kind.Constraint where
    ExtendedWithAllOf (e ': es) l = (ExtendedWith '[e] l, ExtendedWithAllOf es l)
 
 -- * 'Construct' instances for language extensions
+
+data instance Construct '[ 'Extensions.ExplicitNamespaces ] λ l d s = ExplicitNamespacesConstruction {
+   explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ,
+   defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ,
+   explicitTypeFixityDeclaration :: Associativity λ -> Maybe Int -> NonEmpty (Name λ) -> Declaration λ l d s,
+   explicitDataFixityDeclaration :: Associativity λ -> Maybe Int -> NonEmpty (Name λ) -> Declaration λ l d s,
+   explicitTypeExpression :: s (Type l l d d) -> Expression λ l d s,
+   explicitTypePattern :: s (Type l l d d) -> Pattern λ l d s}
 
 data instance Construct '[ 'Extensions.RecordWildCards ] λ l d s = RecordWildCardConstruction {
    wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
@@ -235,8 +247,9 @@ data instance Construct '[ 'Extensions.FunctionalDependencies ] λ l d s = Funct
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
 
 class (Haskell λ,
-       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.NamedFieldPuns,
-                          'Extensions.RecordWildCards, 'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
+       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
+                          'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards,
+                          'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
@@ -358,9 +371,6 @@ class (Haskell λ,
    typeEquality :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
    typeConstraint :: s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s
-
-   explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ
-   defaultMember, patternMember, typeMember :: Name λ -> ModuleMember λ
 
    inferredRole :: TypeRole λ
    nominalRole :: TypeRole λ

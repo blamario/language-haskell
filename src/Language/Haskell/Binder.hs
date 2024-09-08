@@ -243,6 +243,7 @@ instance {-# OVERLAPS #-}
                foldMap (foldMap getFieldPatternVariables . flip getCompose mempty) fields
             getPatternVariables (ExtAST.TypedPattern p _) = foldMap getPatternVariables (getCompose p mempty)
             getPatternVariables (ExtAST.InvisibleTypePattern _ _ty) = []
+            getPatternVariables (ExtAST.ExplicitTypePattern _ _ty) = []
             getPatternVariables (ExtAST.BangPattern _ p) = foldMap getPatternVariables (getCompose p mempty)
             getPatternVariables (ExtAST.TuplePattern items) =
                foldMap (foldMap getPatternVariables . flip getCompose mempty) items
@@ -664,7 +665,7 @@ instance BindingMembers ExtAST.Language where
   filterMembers ExtAST.AllMembers env = env
   filterMembers ExtAST.AllMembersPlus{} env = env
   filterMembers (ExtAST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
-  filterMembers (ExtAST.ExplicitlyNamespacedMemberList members) env = foldMap memberImport members
+  filterMembers (ExtAST.ExplicitlyNamespacedMemberList _support members) env = foldMap memberImport members
      where memberImport (ExtAST.DefaultMember name) = onMap (`Map.restrictKeys` Set.singleton name) env
            memberImport (ExtAST.PatternMember name) = onMap (Map.filterWithKey namedPattern) env
               where namedPattern name' PatternBinding{} = name == name'

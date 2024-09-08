@@ -136,7 +136,7 @@ instance PrettyViaTH (ImportItem Language Language f f) where
 
 instance PrettyViaTH (Members Language) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
-   prettyViaTH (ExplicitlyNamespacedMemberList members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
+   prettyViaTH (ExplicitlyNamespacedMemberList () members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
    prettyViaTH AllMembers = Ppr.text ".."
    prettyViaTH (AllMembersPlus extras) = Ppr.sep $ Ppr.punctuate Ppr.comma $ Ppr.text ".." : (prettyViaTH <$> extras)
 
@@ -235,6 +235,7 @@ expressionTemplate (UnboxedSumExpression () before branch after) =
    UnboxedSumE (expressionTemplate $ extract branch) (before + 1) (before + after + 1)
 expressionTemplate (TypedExpression e signature) = SigE (wrappedExpressionTemplate e) (typeTemplate $ extract signature)
 expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTemplate e) (typeTemplate $ extract t)
+expressionTemplate (ExplicitTypeExpression () t) = TypeE (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
 expressionTemplate (OverloadedLabel l) = LabelE (Text.unpack l)
 expressionTemplate (FieldProjection fields) = ProjectionE (nameString <$> fields)
@@ -312,14 +313,16 @@ declarationTemplates (EquationDeclaration lhs rhs wheres) = case extract lhs of
          declarations = foldMap (declarationTemplates . extract) wheres
 declarationTemplates (FixityDeclaration fixity precedence names) =
    infixD . nameTemplate <$> toList names
-   where fixityTemplate NonAssociative = InfixN
-         fixityTemplate LeftAssociative = InfixL
-         fixityTemplate RightAssociative = InfixR
-         fixityTH = Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)
 #if MIN_VERSION_template_haskell(2,22,0)
-         infixD = InfixD fixityTH NoNamespaceSpecifier
+   where infixD = InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) NoNamespaceSpecifier
+declarationTemplates (ExplicitTypeFixityDeclaration () fixity precedence names) =
+   InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) TypeNamespaceSpecifier . nameTemplate
+   <$> toList names
+declarationTemplates (ExplicitDataFixityDeclaration () fixity precedence names) =
+   InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity)) DataNamespaceSpecifier . nameTemplate
+   <$> toList names
 #else
-         infixD = InfixD fixityTH
+   where infixD = InfixD (Fixity (fromMaybe 9 precedence) (fixityTemplate fixity))
 #endif
 declarationTemplates (ForeignExport convention identification name t) =
    [ForeignD (ExportF (conventionTemplate convention) (foldMap unpack identification) (nameTemplate name)
@@ -436,6 +439,11 @@ declarationTemplates (PatternSynonymSignature () names vars1 ctx1 vars2 ctx2 arg
     ForallT (typeVarBindingSpecTemplate <$> vars2) (contextTemplate $ extract ctx2) $
     foldr (TH.AppT . TH.AppT TH.ArrowT . typeTemplate . extract) (typeTemplate $ extract result) args
    | name <- toList names]
+
+fixityTemplate :: Associativity l -> TH.FixityDirection
+fixityTemplate NonAssociative = InfixN
+fixityTemplate LeftAssociative = InfixL
+fixityTemplate RightAssociative = InfixR
 
 lhsPatternTemplate :: ExtAST.PatternLHS Language Language f f -> (TH.Name, TH.PatSynArgs)
 lhsPatternTemplate (PrefixPatternLHS name args) = (nameTemplate name, TH.PrefixPatSyn $ nameTemplate <$> args)
@@ -599,6 +607,7 @@ patternTemplate (UnboxedSumPattern () before branch after) =
    UnboxedSumP (patternTemplate $ extract branch) (before + 1) (before + after + 1)
 patternTemplate (VariablePattern name) = VarP (nameTemplate name)
 patternTemplate (TypedPattern p t) = SigP (patternTemplate $ extract p) (typeTemplate $ extract t)
+patternTemplate (ExplicitTypePattern () t) = TypeP (typeTemplate $ extract t)
 patternTemplate (InvisibleTypePattern () t) = InvisP (typeTemplate $ extract t)
 patternTemplate WildcardPattern = WildP
 

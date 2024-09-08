@@ -84,7 +84,6 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
-   namespacedMember :: p (Abstract.ModuleMember l),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
    familyInstanceDesignator, familyInstanceDesignatorApplications,
    familyInstanceDesignatorBase, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
@@ -334,9 +333,6 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
         Abstract.promotedIntegerLiteral <$> (selfReport & integer)
         <|> Abstract.promotedCharLiteral <$> (selfReport & charLiteral)
         <|> Abstract.promotedStringLiteral <$> (selfReport & stringLiteral),
-     namespacedMember =
-        Abstract.defaultMember <$> (selfReport & moduleLevel & cname)
-        <|> Abstract.typeMember <$ keyword "type" <*> (selfReport & moduleLevel & cname),
      inClassOrInstanceTypeFamilyDeclaration = empty,
      familyInstanceDesignatorBase =
         Abstract.classReferenceInstanceLHS <$> (selfDeclarations & qualifiedTypeClass)
@@ -729,7 +725,7 @@ safePackageImportsQualifiedPostMixin self@ExtendedGrammar{report = selfReport}
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ selfReport & moduleLevel & importSpecification)}}}
 
-explicitNamespacesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+explicitNamespacesMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
 explicitNamespacesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
       moduleLevel= (superReport & moduleLevel){
@@ -742,8 +738,27 @@ explicitNamespacesMixin self@ExtendedGrammar{report = selfReport} super@Extended
                 <*> parens ((selfReport & variableSymbol) <|> (selfReport & constructorSymbol))
                 <*> optional (selfReport & moduleLevel & members),
          members = parens (Abstract.allMembers <$ delimiter ".."
-                           <|> Abstract.explicitlyNamespacedMemberList
-                               <$> namespacedMember self `sepEndBy` comma)}}}
+                           <|> Abstract.explicitlyNamespacedMemberList Abstract.build
+                            <$> (Abstract.defaultMember Abstract.build <$> (selfReport & moduleLevel & cname)
+                                 <|> Abstract.typeMember Abstract.build <$ keyword "type"
+                                     <*> (selfReport & moduleLevel & cname))
+                               `sepEndBy` comma)},
+      declarationLevel = (superReport & declarationLevel) {
+         generalDeclaration = (superReport & declarationLevel & generalDeclaration)
+            <|> Abstract.explicitTypeFixityDeclaration Abstract.build
+                   <$> (selfReport & declarationLevel & fixity)
+                   <*> optional (fromIntegral <$> integer selfReport)
+                   <* keyword "type"
+                   <*> (operator selfReport `sepByNonEmpty` comma)
+            <|> Abstract.explicitDataFixityDeclaration Abstract.build
+                   <$> (selfReport & declarationLevel & fixity)
+                   <*> optional (fromIntegral <$> integer selfReport)
+                   <* keyword "data"
+                   <*> (operator selfReport `sepByNonEmpty` comma)},
+      expression = (superReport & expression)
+         <|> wrap (Abstract.explicitTypeExpression Abstract.build <$ keyword "type" <*> wrap (typeTerm selfReport)),
+      pPattern = (superReport & pPattern)
+         <|> Abstract.explicitTypePattern Abstract.build <$ keyword "type" <*> wrap (typeTerm selfReport)}}
 
 blockArgumentsMixin :: ExtensionOverlay l g t
 blockArgumentsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{

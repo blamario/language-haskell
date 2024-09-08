@@ -200,45 +200,45 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Full.Foldable (MPTCAccounting l pos s) (Abstract.TypeLHS l l)) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
-   Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $
+   Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $ UnionWith $
       case dec
       of ExtAST.DataDeclaration context _lhs _kind constructors _derivings ->
             (if null constructors
-             then UnionWith $ Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
+             then Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
              else mempty)
             <>
             (case snd . snd . getCompose $ context
              of ExtAST.NoContext -> mempty
-                _ -> UnionWith $ Map.singleton Extensions.DatatypeContexts [(start, end)])
-            <>
-            (Full.foldMap UnicodeSyntaxAccounting d)
+                _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
          ExtAST.GADTDeclaration context _lhs constructors _derivings ->
-            UnionWith $ Map.singleton Extensions.GADTSyntax [(start, end)]
+            Map.singleton Extensions.GADTSyntax [(start, end)]
          ExtAST.TypeDataDeclaration _sup _lhs _kind constructors ->
             (if null constructors
-             then UnionWith $ Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
+             then Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
              else mempty)
-            <> UnionWith (Map.singleton Extensions.TypeData [(start, end)])
+            <> Map.singleton Extensions.TypeData [(start, end)]
          ExtAST.TypeGADTDeclaration{} ->
-            UnionWith $ (Map.singleton Extensions.GADTSyntax [(start, end)]
+            (Map.singleton Extensions.GADTSyntax [(start, end)]
                          <> Map.singleton Extensions.TypeData [(start, end)])
          ExtAST.ImplicitParameterDeclaration{} ->
-            UnionWith $ Map.singleton Extensions.ImplicitParameters [(start, end)]
+            Map.singleton Extensions.ImplicitParameters [(start, end)]
          ExtAST.StandaloneDerivingDeclaration{} ->
-            UnionWith $ Map.singleton Extensions.StandaloneDeriving [(start, end)]
+            Map.singleton Extensions.StandaloneDeriving [(start, end)]
          ExtAST.ForeignExport convention id name ty ->
-            UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
-            <> getConst (Accounting Transformation.$ (convention <$ d))
+            Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
+            <> getUnionWith (getConst $ Accounting Transformation.$ (convention <$ d))
          ExtAST.ForeignImport convention safety id name ty ->
-            UnionWith (Map.singleton Extensions.ForeignFunctionInterface [(start, end)])
-            <> getConst (Accounting Transformation.$ (convention <$ d))
-            <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety)
+            Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
+            <> getUnionWith (getConst (Accounting Transformation.$ (convention <$ d))
+                             <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety))
          ExtAST.ClassDeclaration _ lhs _ -> case Full.foldMap MPTCAccounting lhs of
             Sum 1 -> mempty
-            _ -> UnionWith $ Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
-         ExtAST.FunDepClassDeclaration{} -> UnionWith $ Map.singleton Extensions.FunctionalDependencies [(start, end)]
+            _ -> Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
+         ExtAST.FunDepClassDeclaration{} -> Map.singleton Extensions.FunctionalDependencies [(start, end)]
+         ExtAST.ExplicitTypeFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
+         ExtAST.ExplicitDataFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
          _ -> mempty
-      <> Full.foldMap UnicodeSyntaxAccounting d
+      <> getUnionWith (Full.foldMap UnicodeSyntaxAccounting d)
 
 instance Accounting l pos s
          `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
@@ -315,6 +315,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
           ExtAST.UnboxedTupleSectionExpression{} ->
              \ranges-> Map.fromList [(Extensions.TupleSections, ranges), (Extensions.UnboxedTuples, ranges)]
           ExtAST.WildcardRecordExpression{} -> Map.singleton Extensions.RecordWildCards
+          ExtAST.ExplicitTypeExpression{} -> Map.singleton Extensions.ExplicitNamespaces
           _ -> mempty)
       where isBlock ExtAST.CaseExpression{} = True
             isBlock ExtAST.ConditionalExpression{} = True
@@ -424,6 +425,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
                 ExtAST.UnboxedSumPattern{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
                 ExtAST.UnboxedTuplePattern{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
                 ExtAST.InvisibleTypePattern {} -> Map.singleton Extensions.TypeAbstractions [(start, end)]
+                ExtAST.ExplicitTypePattern{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
                 ExtAST.WildcardRecordPattern {} -> Map.singleton Extensions.RecordWildCards [(start, end)]
                 _ -> mempty
 

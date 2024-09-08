@@ -37,6 +37,7 @@ import qualified Transformation.Shallow.TH
 data Language = Language deriving (Data, Eq, Show)
 
 type instance Abstract.ExtensionsSupportedBy Language = '[
+   'Extensions.ExplicitNamespaces,
    'Extensions.MagicHash,
    'Extensions.NamedFieldPuns,
    'Extensions.ParallelListComprehensions,
@@ -61,6 +62,17 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.TypeAbstractions,
    'Extensions.TypeData,
    'Extensions.FunctionalDependencies]
+
+instance Abstract.ExtendedWith '[ 'Extensions.ExplicitNamespaces ] Language where
+   build = Abstract.ExplicitNamespacesConstruction {
+      Abstract.explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList (),
+      Abstract.defaultMember = DefaultMember,
+      Abstract.patternMember = PatternMember,
+      Abstract.typeMember = TypeMember,
+      Abstract.explicitTypeFixityDeclaration = ExplicitTypeFixityDeclaration (),
+      Abstract.explicitDataFixityDeclaration = ExplicitDataFixityDeclaration (),
+      Abstract.explicitTypeExpression = ExplicitTypeExpression (),
+      Abstract.explicitTypePattern = ExplicitTypePattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.MagicHash ] Language where
    build = Abstract.MagicHashConstruction {
@@ -242,11 +254,6 @@ instance Abstract.ExtendedHaskell Language where
    promotedCharLiteral = PromotedCharLiteral
    promotedStringLiteral = PromotedStringLiteral
    promotedInfixTypeApplication = PromotedInfixTypeApplication
-
-   explicitlyNamespacedMemberList = ExplicitlyNamespacedMemberList
-   defaultMember = DefaultMember
-   patternMember = PatternMember
-   typeMember = TypeMember
 
    typeRoleDeclaration = TypeRoleDeclaration
    inferredRole = InferredRole
@@ -470,8 +477,8 @@ data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type)
 data Members λ = AllMembers
                | AllMembersPlus [Name λ]
                | MemberList [Name λ]
-               | ExplicitlyNamespacedMemberList [ModuleMember λ]
-               deriving (Data, Eq, Show)
+               | ExplicitlyNamespacedMemberList !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)
+                                                [ModuleMember λ]
 
 data ModuleMember λ = DefaultMember (Name λ)
                     | PatternMember (Name λ)
@@ -506,6 +513,10 @@ data Declaration λ l d s =
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
                          [s (Abstract.Declaration l l d d)]
    | FixityDeclaration (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
+   | ExplicitTypeFixityDeclaration !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)
+                                   (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
+   | ExplicitDataFixityDeclaration !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)
+                                   (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
@@ -705,6 +716,7 @@ data Expression λ l d s =
                                    (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
+   | ExplicitTypeExpression !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
    | OverloadedLabel Text
    | ImplicitParameterExpression !(Abstract.SupportFor 'Extensions.ImplicitParameters λ) (Abstract.Name λ)
    | GetField (s (Abstract.Expression l l d d)) (Abstract.Name λ)
@@ -730,6 +742,7 @@ data Pattern λ l d s =
                             [s (Abstract.FieldPattern l l d d)]
    | TypedPattern (s (Abstract.Pattern l l d d)) (s (Abstract.Type l l d d))
    | InvisibleTypePattern !(Abstract.SupportFor 'Extensions.TypeAbstractions λ) (s (Abstract.Type l l d d))
+   | ExplicitTypePattern !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
@@ -798,8 +811,13 @@ deriving instance (Data (Abstract.Members λ), Data (Abstract.Name λ),
 deriving instance (Show (Abstract.Members λ), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
 deriving instance (Eq (Abstract.Members λ), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
 
+deriving instance (Data λ, Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Data (Members λ)
+deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Show (Members λ)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Eq (Members λ)
+
 deriving instance Typeable (Declaration λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.GADTs λ),
@@ -823,7 +841,8 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Data (Abstract.TypeVarBinding λ l d s),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ), Data (Abstract.TypeRole λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Declaration λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.GADTs λ),
@@ -847,7 +866,8 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Show (Abstract.TypeVarBinding λ l d s),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ),
                    Show (Abstract.TypeRole λ)) => Show (Declaration λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Eq (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.GADTs λ),
@@ -1006,7 +1026,8 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Context λ l d s)
 
 deriving instance Typeable (Expression λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
@@ -1019,7 +1040,8 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.ModuleName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
@@ -1032,7 +1054,8 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.ModuleName λ),
                    Show (Abstract.Name λ)) => Show (Expression λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Eq (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
@@ -1055,7 +1078,8 @@ deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedN
                   Eq (FieldBinding λ l d s)
 
 deriving instance Typeable (Pattern λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
@@ -1067,7 +1091,8 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (s (Abstract.Value l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Pattern λ l d s)
-deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
@@ -1078,7 +1103,8 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (s (Abstract.FieldPattern l l d d)), Show (s (Abstract.Pattern l l d d)),
                    Show (s (Abstract.Value l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.Name λ)) => Show (Pattern λ l d s)
-deriving instance (Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+                   Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
