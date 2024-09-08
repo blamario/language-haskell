@@ -205,7 +205,9 @@ extensionMixins =
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
-     (Set.fromList [PolyKinds, ExplicitForAll],      [(9, visibleDependentKindQualificationMixin)]),
+     (Set.fromList [VisibleDependedentQuantification],
+                                                     [(9, visibleDependentQuantificationMixin)]),
+     (Set.fromList [RequiredTypeArguments],          [(9, requiredTypeArgumentsMixin)]),
      (Set.fromList [ConstraintsAreTypes],            [(9, constraintsAreTypesMixin)]),
      (Set.fromList [SpaceSensitiveOperators],        [(9, spaceSensitiveOperatorsMixin)])]
 
@@ -314,7 +316,7 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
                 <|> Abstract.typeWildcard <$ keyword "_"
                 <|> Abstract.groundType <$ (self & groundTypeKind),
         typeTerm = self & arrowType},
-     keywordForall = keyword "forall",
+     keywordForall = empty,
      kindSignature = empty,
      groundTypeKind = empty,
      derivingStrategy = empty,
@@ -1243,15 +1245,19 @@ typeDataGADTMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramma
                 <*> optional (wrap $ kindSignature self) <* keyword "where"
                 <*> blockOf (gadtConstructors self)}}}
 
-visibleDependentKindQualificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-visibleDependentKindQualificationMixin self@ExtendedGrammar{report = selfReport}
-                                       super@ExtendedGrammar{report = superReport} = super{
+visibleDependentQuantificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+visibleDependentQuantificationMixin self@ExtendedGrammar{report = selfReport}
+                                    super@ExtendedGrammar{report = superReport} = super{
    arrowType = arrowType super
       <|> Abstract.visibleDependentType
           <$ keywordForall self
           <*> many (typeVarBinder self)
           <* (selfReport & rightArrow)
           <*> wrap (arrowType self)}
+
+requiredTypeArgumentsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+requiredTypeArgumentsMixin self@ExtendedGrammar{report = selfReport}
+                           super@ExtendedGrammar{report = superReport} = super
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
@@ -1543,6 +1549,7 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap (arrowType self),
+      keywordForall = keyword "forall",
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <<|> pure []}
 
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,

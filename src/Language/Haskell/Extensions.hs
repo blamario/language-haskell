@@ -134,6 +134,7 @@ data Extension = AllowAmbiguousTypes
                | RecursiveDo
                | RelaxedLayout
                | RelaxedPolyRec
+               | RequiredTypeArguments
                | RoleAnnotations
                | Safe
                | SafeImports
@@ -171,6 +172,7 @@ data Extension = AllowAmbiguousTypes
                | UnliftedNewtypes
                | Unsafe
                | ViewPatterns
+               | VisibleDependedentQuantification -- nameless
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
 newtype ExtensionSwitch = ExtensionSwitch (Extension, Bool)
@@ -259,11 +261,12 @@ directImplications = Map.fromList <$> Map.fromList [
   (MultiParamTypeClasses, [(ConstrainedClassMethods, True), (MultiParameterConstraints, True)]),
   (ParallelArrays, [(ParallelListComprehensions, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
-  (PolyKinds, [(KindSignatures, True)]),
+  (PolyKinds, [(KindSignatures, True), (VisibleDependedentQuantification, True)]),
   (QuantifiedConstraints, [(ExplicitForAll, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
   (RebindableSyntax, [(ImplicitPrelude, False)]),
   (RecordWildCards, [(DisambiguateRecordFields, True)]),
+  (RequiredTypeArguments, [(VisibleDependedentQuantification, True)]),
   (Safe, [(SafeImports, True)]),
   (ScopedTypeVariables, [(ExplicitForAll, True)]),
   (StandaloneKindSignatures, [(CUSKs, False)]),
@@ -425,6 +428,7 @@ byName = Map.fromList [
   ("RecursiveDo", RecursiveDo),
   ("RelaxedLayout", RelaxedLayout),
   ("RelaxedPolyRec", RelaxedPolyRec),
+  ("RequiredTypeArguments", RequiredTypeArguments),
   ("RoleAnnotations", RoleAnnotations),
   ("Safe", Safe),
   ("ScopedTypeVariables", ScopedTypeVariables),
