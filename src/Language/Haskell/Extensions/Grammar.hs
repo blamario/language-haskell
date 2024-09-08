@@ -1255,9 +1255,12 @@ visibleDependentQuantificationMixin self@ExtendedGrammar{report = selfReport}
           <* (selfReport & rightArrow)
           <*> wrap (arrowType self)}
 
-requiredTypeArgumentsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+requiredTypeArgumentsMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
 requiredTypeArgumentsMixin self@ExtendedGrammar{report = selfReport}
-                           super@ExtendedGrammar{report = superReport} = super
+                           super@ExtendedGrammar{report = superReport} = super{
+   report = superReport {
+      aExpression = (superReport & aExpression)
+                    <<|> wrap (Abstract.explicitTypeExpression Abstract.build <$> wrap (aType selfReport))}}
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 kindSignaturesBaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
