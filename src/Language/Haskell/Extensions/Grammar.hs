@@ -1670,7 +1670,7 @@ bangPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramma
          variableOperator = notFollowedBy bang *> (superReport & variableOperator)}}
    where bang = filter precededByOpenSpace getInput
                 *> string "!"
-                <* notSatisfyChar Char.isSpace
+                <* notSatisfyChar (\c-> Char.isSpace c || isSymbol c)
                 <* notFollowedBy Report.comment
                 <* lift ([[Token Delimiter "!"]], ())
 
