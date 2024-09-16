@@ -26,6 +26,7 @@ import qualified Rank2
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+import qualified Transformation.Shallow as Shallow
 import qualified Transformation.AG.Dimorphic as AG.Di
 import Text.Grampa (Ambiguous(..))
 
@@ -41,6 +42,9 @@ import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(.
 
 data Accounting l pos s = Accounting
 data MPTCAccounting l pos s = MPTCAccounting
+data FlexibleInstanceHeadAccounting l pos s = FlexibleInstanceHeadAccounting
+data FlexibleInstanceTypeAccounting l pos s = FlexibleInstanceTypeAccounting
+data FlexibleInstanceTypeArgAccounting l pos s = FlexibleInstanceTypeArgAccounting
 data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
 data Verification l pos s = Verification
 
@@ -63,6 +67,18 @@ instance Transformation.Transformation (Accounting l pos s) where
 instance Transformation.Transformation (MPTCAccounting l pos s) where
     type Domain (MPTCAccounting l pos s) = Wrap l pos s
     type Codomain (MPTCAccounting l pos s) = Const (Sum Int)
+
+instance Transformation.Transformation (FlexibleInstanceHeadAccounting l pos s) where
+    type Domain (FlexibleInstanceHeadAccounting l pos s) = Wrap l pos s
+    type Codomain (FlexibleInstanceHeadAccounting l pos s) = Accounted pos
+
+instance Transformation.Transformation (FlexibleInstanceTypeAccounting l pos s) where
+    type Domain (FlexibleInstanceTypeAccounting l pos s) = Wrap l pos s
+    type Codomain (FlexibleInstanceTypeAccounting l pos s) = Accounted pos
+
+instance Transformation.Transformation (FlexibleInstanceTypeArgAccounting l pos s) where
+    type Domain (FlexibleInstanceTypeArgAccounting l pos s) = Wrap l pos s
+    type Codomain (FlexibleInstanceTypeArgAccounting l pos s) = Accounted pos
 
 instance Transformation.Transformation (UnicodeSyntaxAccounting l pos s) where
     type Domain (UnicodeSyntaxAccounting l pos s) = Wrap l pos s
@@ -197,6 +213,8 @@ instance (Eq s, IsString s) =>
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l,
+          FlexibleInstanceHeadAccounting l pos s
+          `Transformation.At` Abstract.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s),
           Full.Foldable (MPTCAccounting l pos s) (Abstract.TypeLHS l l)) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
@@ -235,6 +253,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
             Sum 1 -> mempty
             _ -> Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
          ExtAST.FunDepClassDeclaration{} -> Map.singleton Extensions.FunctionalDependencies [(start, end)]
+         ExtAST.InstanceDeclaration _vars _context lhs _methods ->
+            getUnionWith (getConst $ FlexibleInstanceHeadAccounting Transformation.$ lhs)
          ExtAST.ExplicitTypeFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
          ExtAST.ExplicitDataFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
          _ -> mempty
@@ -494,6 +514,40 @@ instance {-# OVERLAPS #-} MPTCAccounting l pos s
 instance MPTCAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
   MPTCAccounting $ _ = mempty
 
+instance {-# OVERLAPS #-}
+   (Abstract.UniversallyApplicable (FlexibleInstanceHeadAccounting l pos s) l (Wrap l pos s),
+    Abstract.UniversallyApplicable (FlexibleInstanceTypeAccounting l pos s) l (Wrap l pos s))
+   => FlexibleInstanceHeadAccounting l pos s
+      `Transformation.At` ExtAST.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s) where
+   FlexibleInstanceHeadAccounting $ Compose (_, (_, node)) = case node of
+      ExtAST.ClassInstanceLHSKindApplication inst _kind ->
+         Const $ getConst $ FlexibleInstanceHeadAccounting Transformation.$ inst
+      inst -> Const (Shallow.foldMap FlexibleInstanceHeadAccounting inst
+                     <> Shallow.foldMap FlexibleInstanceTypeAccounting inst)
+
+instance FlexibleInstanceHeadAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
+  FlexibleInstanceHeadAccounting $ _ = mempty
+
+instance {-# OVERLAPS #-}
+   Abstract.UniversallyApplicable (FlexibleInstanceTypeArgAccounting l pos s) l (Wrap l pos s)
+   => FlexibleInstanceTypeAccounting l pos s `Transformation.At` ExtAST.Type l l (Wrap l pos s) (Wrap l pos s) where
+   FlexibleInstanceTypeAccounting $ Compose (_, (_, node)) = Const $ Shallow.foldMap FlexibleInstanceTypeArgAccounting node
+
+instance FlexibleInstanceTypeAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
+  FlexibleInstanceTypeAccounting $ _ = mempty
+
+instance {-# OVERLAPS #-}
+   FlexibleInstanceTypeArgAccounting l pos s `Transformation.At` Abstract.Type l l (Wrap l pos s) (Wrap l pos s)
+   => FlexibleInstanceTypeArgAccounting l pos s `Transformation.At` ExtAST.Type l l (Wrap l pos s) (Wrap l pos s) where
+   FlexibleInstanceTypeArgAccounting $ Compose (_, ((start, _, end), node)) = case node of
+      ExtAST.TypeVariable{} -> mempty
+      ExtAST.TypeWildcard -> mempty
+      ExtAST.KindedType t k -> Const $ getConst $ FlexibleInstanceTypeArgAccounting Transformation.$ t
+      _ -> Const $ UnionWith $ Map.singleton Extensions.FlexibleInstances [(start, end)]
+
+instance FlexibleInstanceTypeArgAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
+  FlexibleInstanceTypeArgAccounting $ _ = mempty
+
 instance (Eq s, IsString s) =>
          UnicodeSyntaxAccounting l pos s
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
@@ -518,6 +572,24 @@ instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (MPTCAccounting l pos
           Transformation.At (MPTCAccounting l pos s)
                             (g (Wrap l pos s) (Wrap l pos s))) =>
          Full.Foldable (MPTCAccounting l pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceHeadAccounting l pos s) g,
+          Transformation.At (FlexibleInstanceHeadAccounting l pos s)
+                            (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (FlexibleInstanceHeadAccounting l pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceTypeAccounting l pos s) g,
+          Transformation.At (FlexibleInstanceTypeAccounting l pos s)
+                            (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (FlexibleInstanceTypeAccounting l pos s) g where
+   foldMap = Full.foldMapDownDefault
+
+instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceTypeArgAccounting l pos s) g,
+          Transformation.At (FlexibleInstanceTypeArgAccounting l pos s)
+                            (g (Wrap l pos s) (Wrap l pos s))) =>
+         Full.Foldable (FlexibleInstanceTypeArgAccounting l pos s) g where
    foldMap = Full.foldMapDownDefault
 
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,

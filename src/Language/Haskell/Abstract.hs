@@ -6,6 +6,7 @@ import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import qualified Rank2
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 
 import Language.Haskell.Extensions (ExtensionSwitch)
@@ -181,6 +182,31 @@ class Haskell λ where
 
    cCall, cppCall, dotNetCall, jvmCall, stdCall :: CallingConvention λ
    safeCall, unsafeCall :: CallSafety λ
+
+type UniversallyApplicable t l d = (Transformation.At t (Module l l d d),
+                                    Transformation.At t (Declaration l l d d),
+                                    Transformation.At t (Expression l l d d),
+                                    Transformation.At t (Type l l d d),
+                                    Transformation.At t (EquationLHS l l d d),
+                                    Transformation.At t (EquationRHS l l d d),
+                                    Transformation.At t (GuardedExpression l l d d),
+                                    Transformation.At t (Pattern l l d d),
+                                    Transformation.At t (Statement l l d d),
+                                    Transformation.At t (ClassInstanceLHS l l d d),
+                                    Transformation.At t (TypeLHS l l d d),
+                                    Transformation.At t (Import l l d d),
+                                    Transformation.At t (ImportSpecification l l d d),
+                                    Transformation.At t (ImportItem l l d d),
+                                    Transformation.At t (Export l l d d),
+                                    Transformation.At t (Context l l d d),
+                                    Transformation.At t (DataConstructor l l d d),
+                                    Transformation.At t (DerivingClause l l d d),
+                                    Transformation.At t (FieldDeclaration l l d d),
+                                    Transformation.At t (FieldBinding l l d d),
+                                    Transformation.At t (FieldPattern l l d d),
+                                    Transformation.At t (CaseAlternative l l d d),
+                                    Transformation.At t (Constructor l l d d),
+                                    Transformation.At t (Value l l d d))
 
 type DeeplyFunctor t l = (Deep.Functor t (Module l l),
                           Deep.Functor t (Declaration l l),

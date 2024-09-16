@@ -45,7 +45,7 @@ module Language.Haskell.Extensions.Abstract (
               DefaultSignatureConstruction, defaultMethodSignature,
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
-   DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+   UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
    DerivingStrategy, FunctionalDependency, PatternLHS, PatternEquationClause, PatternEquationLHS,
    module Language.Haskell.Abstract) where
 
@@ -56,9 +56,10 @@ import Data.Type.Bool (If)
 import Data.Void (Void)
 import GHC.TypeError (ErrorMessage ((:<>:)))
 import qualified GHC.TypeError as TypeError
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 
-import Language.Haskell.Abstract hiding (DeeplyFunctor, DeeplyFoldable, DeeplyTraversable)
+import Language.Haskell.Abstract hiding (UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable)
 import qualified Language.Haskell.Abstract as Report
 import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
@@ -394,6 +395,15 @@ class (Haskell λ,
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
    wildcardRecordPattern = wildcardRecordPattern' build
 
+type UniversallyApplicable t l d = (Transformation.At t (GADTConstructor l l d d),
+                                    Transformation.At t (Kind l l d d),
+                                    Transformation.At t (TypeVarBinding l l d d),
+                                    Transformation.At t (DerivingStrategy l l d d),
+                                    Transformation.At t (FunctionalDependency l l d d),
+                                    Transformation.At t (PatternLHS l l d d),
+                                    Transformation.At t (PatternEquationLHS l l d d),
+                                    Transformation.At t (PatternEquationClause l l d d),
+                                    Report.UniversallyApplicable t l d)
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
                           Deep.Functor t (FunctionalDependency l l),
