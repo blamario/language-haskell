@@ -1552,7 +1552,7 @@ explicitForAllMixin
          <|> Abstract.forallType <$ keywordForall self
              <*> many (typeVarBinder self) <* delimiter "."
              <*> wrap (arrowType self),
-      keywordForall = keyword "forall",
+      keywordForall = keywordForall super <|> keyword "forall",
       optionalForall = keywordForall self *> many (typeVarBinder self) <* delimiter "." <<|> pure []}
 
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
