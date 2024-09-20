@@ -1400,9 +1400,7 @@ kindSignaturesMixin
                       <*> wrap (kindSignature self)
                       <* delimiter "="
                       <*> wrap newConstructor
-                      <*> moptional derivingClause,
-            typeVarTuple = (:|) <$> wrap (optionallyKindedTypeVar self)
-                                <*> some (comma *> wrap (optionallyKindedTypeVar self))},
+                      <*> moptional derivingClause},
          typeTerm = (superReport & typeTerm) <|>
             Abstract.kindedType <$> wrap (selfReport & typeTerm) <*> wrap (kindSignature self)},
       optionallyKindedAndParenthesizedTypeVar =
