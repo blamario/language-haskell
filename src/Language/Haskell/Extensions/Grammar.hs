@@ -78,15 +78,13 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    groundTypeKind :: p (),
    cType, arrowType :: p (Abstract.Type l l f f),
    promotedLiteral :: p (Abstract.Type l l f f),
-   instanceTypeDesignatorInsideParens :: p (Abstract.Type l l f f),
    equalityConstraint, implicitParameterConstraint :: p (Abstract.Context  l l f f),
    infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
-   familyInstanceDesignator, familyInstanceDesignatorApplications,
-   familyInstanceDesignatorBase, flexibleInstanceDesignator :: p (Abstract.ClassInstanceLHS l l f f),
+   instanceDesignatorApplications, instanceDesignatorBase :: p (Abstract.ClassInstanceLHS l l f f),
    optionalForall :: p [Abstract.TypeVarBinding l l f f],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
@@ -117,6 +115,7 @@ extensionMixins =
      (Set.fromList [BinaryLiterals],                 [(1, binaryLiteralsMixin)]),
      (Set.fromList [HexFloatLiterals],               [(1, hexFloatLiteralsMixin)]),
      (Set.fromList [NumericUnderscores],             [(1, numericUnderscoresMixin)]),
+     (Set.fromList [MultiParameterConstraints],      [(1, multiParameterConstraintsMixin)]),
      (Set.fromList [BinaryLiterals,
                     NumericUnderscores],             [(9, binaryUnderscoresMixin)]),
      (Set.fromList [PackageImports,
@@ -143,11 +142,8 @@ extensionMixins =
      (Set.fromList [EqualityConstraints],            [(7, equalityConstraintsMixin)]),
      (Set.fromList [MultiWayIf],                     [(8, multiWayIfMixin)]),
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
-     (Set.fromList [MultiParameterConstraints],      [(8, multiParameterConstraintsMixin)]),
      (Set.fromList [ParenthesizedTypeOperators],     [(8, parenthesizedTypeOperatorsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
-     (Set.fromList [MultiParamTypeClasses,
-                    TypeOperators],                  [(9, multiParamClassesTypeOperatorsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
@@ -190,7 +186,6 @@ extensionMixins =
      (Set.fromList [StandaloneDeriving,
                     DerivingVia],                    [(9, standaloneDerivingViaMixin)]),
      (Set.fromList [FunctionalDependencies],         [(9, functionalDependenciesMixin)]),
-     (Set.fromList [FlexibleInstances],              [(9, flexibleInstancesMixin)]),
      (Set.fromList [InstanceSigs],                   [(9, instanceSignaturesMixin)]),
      (Set.fromList [DefaultSignatures],              [(9, defaultSignaturesMixin)]),
      (Set.fromList [NondecreasingIndentation],       [(9, nondecreasingIndentationMixin)]),
@@ -298,10 +293,8 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
               <|> Abstract.constraints <$> parens (wrap ((selfDeclarations & constraint)
                                                          <|> (self & equalityConstraint)
                                                          <|> (self & implicitParameterConstraint)) `sepBy` comma),
-           instanceTypeDesignator =
-              (selfReport & generalTypeConstructor)
-              <|> Abstract.listType <$> brackets (wrap $ (self & optionallyKindedAndParenthesizedTypeVar))
-              <|> parens (self & instanceTypeDesignatorInsideParens)},
+           instanceDesignator = self & instanceDesignatorApplications,
+           instanceTypeDesignator = selfReport & aType},
         pattern = self & infixPattern,
         lPattern = (selfReport & aPattern)
                    <|> Abstract.literalPattern
@@ -336,28 +329,14 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
         <|> Abstract.promotedCharLiteral <$> (selfReport & charLiteral)
         <|> Abstract.promotedStringLiteral <$> (selfReport & stringLiteral),
      inClassOrInstanceTypeFamilyDeclaration = empty,
-     familyInstanceDesignatorBase =
+     instanceDesignatorBase =
         Abstract.classReferenceInstanceLHS <$> (selfDeclarations & qualifiedTypeClass)
-        <|> parens (self & familyInstanceDesignator),
-     familyInstanceDesignatorApplications =
-        (self & familyInstanceDesignatorBase)
+        <|> parens (selfReport & declarationLevel & instanceDesignator),
+     instanceDesignatorApplications =
+        (self & instanceDesignatorBase)
         <|> Abstract.classInstanceLHSApplication
-            <$> wrap (self & familyInstanceDesignatorApplications)
-            <*> wrap (selfReport & aType),
-     familyInstanceDesignator = self & familyInstanceDesignatorApplications,
-     flexibleInstanceDesignator =
-        Abstract.typeClassInstanceLHS
-           <$> (selfDeclarations & qualifiedTypeClass)
-           <*> wrap (self & report & aType)
-        <|> parens (self & flexibleInstanceDesignator),
-     instanceTypeDesignatorInsideParens =
-        (selfDeclarations & typeVarApplications)
-        <|> Abstract.listType <$> brackets (wrap $ (self & optionallyKindedAndParenthesizedTypeVar))
-        <|> Abstract.tupleType <$> (selfDeclarations & typeVarTuple)
-        <|> Abstract.functionType
-            <$> wrap (self & optionallyKindedAndParenthesizedTypeVar)
-            <* (selfReport & rightArrow)
-            <*> wrap (self & optionallyKindedAndParenthesizedTypeVar),
+            <$> wrap (self & instanceDesignatorApplications)
+            <*> wrap (selfReport & declarationLevel & instanceTypeDesignator),
      optionalForall = pure [],
      optionallyParenthesizedTypeVar = selfReport & typeVar,
      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar),
@@ -898,35 +877,21 @@ typeOperatorsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramm
                <|> Abstract.infixTypeLHSApplication
                             <$> typeVarBinder self
                             <*> (notFollowedBy (string "`") *> anyOperator)
-                            <*> typeVarBinder self},
+                            <*> typeVarBinder self,
+            instanceDesignator =
+               (superReport & declarationLevel & instanceDesignator)
+               <|> Abstract.infixTypeClassInstanceLHS
+                   <$> wrap (selfReport & bType)
+                   <*> (selfReport & qualifiedOperator)
+                   <*> wrap (selfReport & bType)},
          typeConstructor = (selfReport & constructorIdentifier) <|> parens anyOperator},
       equalityConstraint = empty,
       cType = (super & cType)
          <|> Abstract.infixTypeApplication
                 <$> wrap (self & cType)
                 <*> (selfReport & qualifiedOperator)
-                <*> wrap (selfReport & bType),
-      instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
-         <|> Abstract.infixTypeApplication
-             <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-             <*> (selfReport & qualifiedOperator)
-             <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
-      familyInstanceDesignator = familyInstanceDesignator super
-         <|> Abstract.infixTypeClassInstanceLHS
-                <$> wrap (superReport & bType)
-                <*> (selfReport & qualifiedOperator)
-                <*> wrap (cType super)}
+                <*> wrap (selfReport & bType)}
    where anyOperator = (selfReport & constructorOperator) <|> (selfReport & variableOperator)
-
-multiParamClassesTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-multiParamClassesTypeOperatorsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      flexibleInstanceDesignator =
-         (super & flexibleInstanceDesignator)
-         <|> Abstract.infixTypeClassInstanceLHS
-             <$> wrap (superReport & bType)
-             <*> (selfReport & qualifiedOperator)
-             <*> wrap (cType super)}
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 equalityConstraintsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
@@ -946,19 +911,7 @@ multiParameterConstraintsMixin self@ExtendedGrammar{report = selfReport}
             *> (pure <$> wrap (parens (Abstract.strategicDerive Abstract.build
                                        <$> wrap (pure $ Abstract.defaultStrategy @l Abstract.build)
                                        <*> wrap (selfReport & typeTerm) `sepBy` comma)
-                               <<|> Abstract.simpleDerive <$> (selfReport & declarationLevel & qualifiedTypeClass))),
-         instanceDesignator =
-            Abstract.classReferenceInstanceLHS <$> (selfReport & declarationLevel & qualifiedTypeClass)
-            <|> Abstract.classInstanceLHSApplication
-                <$> wrap (selfReport & declarationLevel & instanceDesignator)
-                <*> wrap ((selfReport & declarationLevel & instanceTypeDesignator)
-                          <|> Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar))}},
-   flexibleInstanceDesignator =
-      Abstract.classReferenceInstanceLHS <$> (selfReport & declarationLevel & qualifiedTypeClass)
-      <|> Abstract.classInstanceLHSApplication
-          <$> wrap (self & flexibleInstanceDesignator)
-          <*> wrap (selfReport & aType)
-      <|> parens (self & flexibleInstanceDesignator)}
+                               <<|> Abstract.simpleDerive <$> (selfReport & declarationLevel & qualifiedTypeClass)))}}}
 
 gratuitouslyParenthesizedTypesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -975,9 +928,7 @@ gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
                           <|> parens (selfReport & declarationLevel & typeVarApplications))
                 <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
          simpleType = (superReport & declarationLevel & simpleType)
-            <|> parens ((selfReport & declarationLevel & simpleType)),
-         instanceDesignator = (superReport & declarationLevel & instanceDesignator)
-            <|> parens (selfReport & declarationLevel & instanceDesignator)}},
+            <|> parens (selfReport & declarationLevel & simpleType)}},
    gadtConstructors = (super & gadtConstructors)
       <|> Abstract.gadtConstructors <$> (self & constructorIDs)
                                     <* (selfReport & doubleColon)
@@ -1003,8 +954,6 @@ gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
           <$> braces (wrap (selfReport & declarationLevel & fieldDeclaration) `sepBy` comma)
           <* (selfReport & Report.rightArrow)
           <*> wrap paren_return_type,
-   instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
-      <|> parens (self & instanceTypeDesignatorInsideParens),
    optionallyParenthesizedTypeVar = (selfReport & typeVar)
                                     <|> parens (optionallyParenthesizedTypeVar self),
    typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> optionallyParenthesizedTypeVar self}
@@ -1043,12 +992,6 @@ gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
             <|> parens forallAndNewBody
          uncurry3 f (a, b, c) = f a b c
 
-flexibleInstancesMixin :: ExtensionOverlay l g t
-flexibleInstancesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-             declarationLevel= (superReport & declarationLevel){
-                instanceDesignator = flexibleInstanceDesignator self}}}
-
 typeFamiliesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
@@ -1070,40 +1013,40 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self) <* keyword "where"
                 <*> blockOf (Abstract.typeFamilyInstance
                              <$> optionalForall self
-                             <*> wrap (familyInstanceDesignator self) <* delimiter "="
+                             <*> wrap (selfReport & declarationLevel & instanceDesignator) <* delimiter "="
                              <*> wrap (selfReport & typeTerm))
             <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <*> moptional (delimiter "=" *> declaredConstructors)
                 <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* delimiter "="
                 <*> wrap newConstructor
                 <*> moptional derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> optionalForall self
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> blockOf (gadtConstructors self)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> wrap (gadtNewConstructor self)
                 <*> moptional derivingClause
             <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
                 <*> optionalForall self
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <* delimiter "="
                 <*> wrap (selfReport & typeTerm),
          inClassDeclaration = (superReport & declarationLevel & inClassDeclaration)
@@ -1116,28 +1059,28 @@ typeFamiliesMixin self@ExtendedGrammar
             <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <*> moptional (delimiter "=" *> declaredConstructors)
                 <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
                 <*> optionalForall self
                 <*> wrap optionalContext
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* delimiter "="
                 <*> wrap newConstructor
                 <*> moptional derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
                 <*> optionalForall self
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> blockOf (gadtConstructors self)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
                 <*> optionalForall self
-                <*> wrap (familyInstanceDesignator self)
+                <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
                 <*> wrap (gadtNewConstructor self)
@@ -1146,7 +1089,7 @@ typeFamiliesMixin self@ExtendedGrammar
     inClassOrInstanceTypeFamilyDeclaration =
        Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
            <*> optionalForall self
-           <*> wrap (familyInstanceDesignator self)
+           <*> wrap (selfReport & declarationLevel & instanceDesignator)
            <* delimiter "="
            <*> wrap (selfReport & typeTerm)}
 
@@ -1172,7 +1115,7 @@ typeFamilyDependenciesMixin
                 <* keyword "where"
                 <*> blockOf (Abstract.typeFamilyInstance
                              <$> optionalForall self
-                             <*> wrap (familyInstanceDesignator self) <* delimiter "="
+                             <*> wrap (selfReport & declarationLevel & instanceDesignator) <* delimiter "="
                              <*> wrap (selfReport & typeTerm)),
          inClassDeclaration = (superReport & declarationLevel & inClassDeclaration)
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
@@ -1196,32 +1139,17 @@ dataKindsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{r
              <$> brackets ((:) <$> wrap (selfReport & typeTerm) <* comma
                                <*> wrap (selfReport & typeTerm) `sepBy1` comma),
       generalTypeConstructor = (superReport & generalTypeConstructor)
-         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (selfReport & generalConstructor),
-      declarationLevel= (superReport & declarationLevel){
-         instanceTypeDesignator = (superReport & declarationLevel & instanceTypeDesignator)
-            <|> promotedLiteral self}}}
+         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (selfReport & generalConstructor)}}
 
 dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsTypeOperatorsMixin self@ExtendedGrammar{report = selfReport}
                             super@ExtendedGrammar{report = superReport} = super{
-   instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
-      <|> Abstract.promotedInfixTypeApplication
-          <$> wrap (optionallyKindedAndParenthesizedTypeVar self)
-          <* terminator "'"
-          <*> (selfReport & qualifiedOperator)
-          <*> wrap (optionallyKindedAndParenthesizedTypeVar self),
    cType = (super & cType)
       <|> Abstract.promotedInfixTypeApplication
           <$> wrap (cType self)
           <* terminator "'"
           <*> (selfReport & qualifiedOperator)
-          <*> wrap (selfReport & bType),
-   familyInstanceDesignator = familyInstanceDesignator super
-      <|> Abstract.infixTypeClassInstanceLHS
-          <$> wrap (selfReport & bType)
-          <* terminator "'"
-          <*> (selfReport & qualifiedOperator)
-          <*> wrap (cType self)}
+          <*> wrap (selfReport & bType)}
 
 typeDataMixin :: Abstract.ExtendedWith '[ 'TypeData ] l => ExtensionOverlay l g t
 typeDataMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
@@ -1324,11 +1252,6 @@ typeApplicationsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGr
       <|> Abstract.visibleKindApplication
           <$> filter whiteSpaceTrailing (wrap $ self & return_type)
           <* typeApplicationDelimiter
-          <*> wrap (Abstract.typeKind <$> wrap (selfReport & aType)),
-   flexibleInstanceDesignator = flexibleInstanceDesignator super
-      <|> Abstract.classInstanceLHSKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & flexibleInstanceDesignator)
-          <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (selfReport & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
@@ -1344,9 +1267,9 @@ typeAbstractionsOrApplicationsMixin self@ExtendedGrammar{report = selfReport}
              <$> filter whiteSpaceTrailing (wrap $ selfReport & generalConstructor)
              <*> some (typeApplicationDelimiter *> wrap (selfReport & aType))
              <*> many (wrap $ self & conArgPattern)},
-   familyInstanceDesignatorApplications = familyInstanceDesignatorApplications super
+   instanceDesignatorApplications = (super & instanceDesignatorApplications)
       <|> Abstract.classInstanceLHSKindApplication
-          <$> filter whiteSpaceTrailing (wrap $ self & familyInstanceDesignatorApplications)
+          <$> filter whiteSpaceTrailing (wrap $ self & instanceDesignatorApplications)
           <* typeApplicationDelimiter
           <*> wrap (Abstract.typeKind <$> wrap (selfReport & aType))}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
@@ -1482,10 +1405,6 @@ kindSignaturesMixin
                                 <*> some (comma *> wrap (optionallyKindedTypeVar self))},
          typeTerm = (superReport & typeTerm) <|>
             Abstract.kindedType <$> wrap (selfReport & typeTerm) <*> wrap (kindSignature self)},
-      instanceTypeDesignatorInsideParens = (super & instanceTypeDesignatorInsideParens)
-         <|> Abstract.kindedType
-             <$> wrap (self & instanceTypeDesignatorInsideParens)
-             <*> wrap (kindSignature self),
       optionallyKindedAndParenthesizedTypeVar =
          Abstract.typeVariable <$> optionallyParenthesizedTypeVar self
          <|> parens (Abstract.kindedType
