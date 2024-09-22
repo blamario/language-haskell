@@ -43,9 +43,23 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
 pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
-           FullyTranslatable (Reformulator.ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] Language Language pos s) node,
-           FullyTranslatable (Reformulator.ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] Language Language pos s) node) => a -> String
-pprint = render . Ppr.to_HPJ_Doc . prettyViaTH . Reformulator.dropRecordWildCards . Reformulator.dropNPlusKPatterns
+           FullyTranslatable
+              (Reformulator.ReformulationOf
+                  (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns ]
+                  Language Language pos s)
+              node,
+           FullyTranslatable
+              (Reformulator.ReformulationOf
+                  (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns ]
+                  Language Language pos s)
+              node,
+           FullyTranslatable
+              (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language pos s)
+              node) => a -> String
+pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
+         . Reformulator.dropRecordWildCards
+         . Reformulator.dropNPlusKPatterns
+         . Reformulator.dropNoListTuplePuns
 
 doE, mdoE :: [Stmt] -> Exp
 #if MIN_VERSION_template_haskell(2,17,0)

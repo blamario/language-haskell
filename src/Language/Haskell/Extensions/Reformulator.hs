@@ -5,6 +5,7 @@
 module Language.Haskell.Extensions.Reformulator where
 
 import qualified Data.Foldable1 as Foldable1
+import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.List as List
 import qualified Data.Map.Lazy as Map
@@ -18,7 +19,7 @@ import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.Full as Full
 
 import Language.Haskell.Extensions.Abstract (DeeplyFunctor, ExtendedWithAllOf)
-import Language.Haskell.Extensions (Extension)
+import Language.Haskell.Extensions (Extension, ExtensionSwitch (ExtensionSwitch), On, Off)
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
@@ -45,7 +46,8 @@ type Reformulator xs ys λ c f = ExtendedWithAllOf xs λ =>
 
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 
-data ReformulationOf (e :: Extension) (es :: [Extension]) λ l pos s = Reformulation Extension [Extension] -- e es
+data ReformulationOf (e :: ExtensionSwitch) (es :: [ExtensionSwitch]) λ l pos s
+   = Reformulation ExtensionSwitch [ExtensionSwitch] -- e es
 
 instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.ModuleName λ ~ AST.ModuleName λ,
@@ -101,29 +103,44 @@ type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
    Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
    Abstract.Value l1 ~ AST.Value l1,
    Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2)
-  
+
+dropNoListTuplePuns :: forall l1 l2 node pos s.
+                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
+                        FullyTranslatable
+                           (ReformulationOf (Off 'Extensions.ListTuplePuns) '[ ] l1 l2 pos s)
+                           node)
+                    => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                    -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropNoListTuplePuns =
+   Translation.translateFully
+      (Reformulation (Extensions.off Extensions.ListTuplePuns) []
+       :: ReformulationOf (Off 'Extensions.ListTuplePuns) '[ ] l1 l2 pos s)
 
 dropRecordWildCards :: forall l1 l2 node pos s.
                        (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
                         SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
-                        FullyTranslatable (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s) node)
+                        FullyTranslatable
+                           (ReformulationOf (On 'Extensions.RecordWildCards) '[ On 'Extensions.NamedFieldPuns ] l1 l2 pos s)
+                           node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropRecordWildCards =
-   Translation.translateFully (Reformulation Extensions.RecordWildCards [Extensions.NamedFieldPuns]
-                               ::
-                                 ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] l1 l2 pos s)
+   Translation.translateFully
+      (Reformulation (Extensions.on Extensions.RecordWildCards) [Extensions.on Extensions.NamedFieldPuns]
+       :: ReformulationOf (On 'Extensions.RecordWildCards) '[ On 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
 dropNPlusKPatterns :: forall l1 l2 node pos s.
                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
                        SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s l1 l2,
-                       FullyTranslatable (ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] l1 l2 pos s) node)
+                       FullyTranslatable
+                          (ReformulationOf (On 'Extensions.NPlusKPatterns) '[ On 'Extensions.ViewPatterns ] l1 l2 pos s)
+                          node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropNPlusKPatterns =
-   Translation.translateFully (Reformulation Extensions.NPlusKPatterns [Extensions.ViewPatterns]
-                               ::
-                                 ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] l1 l2 pos s)
+   Translation.translateFully
+      (Reformulation (Extensions.on Extensions.NPlusKPatterns) [Extensions.on Extensions.ViewPatterns]
+       :: ReformulationOf (On 'Extensions.NPlusKPatterns) '[ On 'Extensions.ViewPatterns ] l1 l2 pos s)
 
 -- Generic instance to adjust the LANGUAGE pragma
 
@@ -138,12 +155,12 @@ instance (TextualMonoid s,
           Abstract.Module l1 ~ AST.Module l1,
           Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
   where
-   translate t@(Reformulation e es) (AST.ExtendedModule oldExts m)
-      | Map.notMember e (getUnionWith $ Full.foldMap (Accounting :: Accounting l1 pos s) m) =
-         AST.ExtendedModule oldExts m
-      | otherwise = case List.union (Extensions.on <$> es) $ List.delete (Extensions.on e) oldExts of
-         [] -> Translation.translate t (Foldable1.head m)
-         newExts -> AST.ExtendedModule newExts m
+   translate t@(Reformulation e@(ExtensionSwitch (e', _)) es) (AST.ExtendedModule oldExts m)
+      | Map.notMember e' (getUnionWith $ Full.foldMap (Accounting :: Accounting l1 pos s) m)
+      = withExtensions (List.delete e oldExts)
+      | otherwise = withExtensions (List.union es $ List.delete e oldExts)
+      where withExtensions [] = Translation.translate t (Foldable1.head m)
+            withExtensions exts = AST.ExtendedModule exts m
    translate t (AST.NamedModule name exports imports declarations) =
       AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
    translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
@@ -157,7 +174,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
           Abstract.Name l2 ~ AST.Name l2) =>
    WrappedTranslation
-      (ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l2 pos s)
+      (ReformulationOf (On 'Extensions.RecordWildCards) '[On 'Extensions.NamedFieldPuns] λ l2 pos s)
       AST.Pattern
   where
    translateWrapped
@@ -184,7 +201,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Name l ~ AST.Name l) =>
-   ReformulationOf 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] λ l pos s
+   ReformulationOf (On 'Extensions.RecordWildCards) '[On 'Extensions.NamedFieldPuns] λ l pos s
    `WrappedTranslation` AST.Expression
   where
    _ `translateWrapped` Compose (env@(Di.Atts inherited _),
@@ -215,7 +232,7 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
           Abstract.Name l2 ~ AST.Name l2) =>
    WrappedTranslation
-      (ReformulationOf 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] λ l2 pos s)
+      (ReformulationOf (On 'Extensions.NPlusKPatterns) '[On 'Extensions.ViewPatterns] λ l2 pos s)
       AST.Pattern
   where
    translateWrapped

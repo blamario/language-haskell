@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleInstances, OverloadedStrings, TypeFamilies, TypeOperators #-}
+{-# Language DataKinds, DeriveDataTypeable, FlexibleInstances, OverloadedStrings, TypeFamilies, TypeOperators #-}
 
 -- | Missing syntax extensions:
 -- * @QualifiedDo@ requires TemplateHaskell 2.17
@@ -7,7 +7,7 @@
 -- * @LexicalNegation@ awaits
 
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
-                                    on, off,
+                                    On, Off, on, off,
                                     allExtensions, byName, includedByDefault, implications, inverseImplications,
                                     languageVersions, partitionContradictory, switchesByName, withImplications) where
 
@@ -190,6 +190,9 @@ off, on :: Extension -> ExtensionSwitch
 off x = ExtensionSwitch (x, False)
 -- | The on-switch for an extension
 on x = ExtensionSwitch (x, True)
+
+type On (e :: Extension) = 'ExtensionSwitch '( e, 'True) :: ExtensionSwitch
+type Off (e :: Extension) = 'ExtensionSwitch '( e, 'False) :: ExtensionSwitch
 
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]

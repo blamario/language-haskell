@@ -110,11 +110,16 @@ main' Opts{..} = do
               Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
               FullyTranslatable
                  (ReformulationOf
-                     'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
+                     (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns]
+                     Language Language Int Text)
                  g,
               FullyTranslatable
                  (ReformulationOf
-                     'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns] Language Language Int Text)
+                     (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns]
+                     Language Language Int Text)
+                 g,
+              FullyTranslatable
+                 (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
@@ -152,11 +157,16 @@ main' Opts{..} = do
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
-                         'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns] Language Language Int Text)
+                         (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns]
+                         Language Language Int Text)
                      g,
                   FullyTranslatable
                      (ReformulationOf
-                         'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns] Language Language Int Text)
+                         (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns]
+                         Language Language Int Text)
+                     g,
+                  FullyTranslatable
+                     (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                      g,
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
