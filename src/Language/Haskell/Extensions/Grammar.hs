@@ -77,7 +77,7 @@ data ExtendedGrammar l t f p = ExtendedGrammar {
    kindSignature :: p (Abstract.Kind l l f f),
    groundTypeKind :: p (),
    cType, arrowType :: p (Abstract.Type l l f f),
-   promotedLiteral :: p (Abstract.Type l l f f),
+   promotedLiteral, promotedStructure :: p (Abstract.Type l l f f),
    equalityConstraint, implicitParameterConstraint :: p (Abstract.Context  l l f f),
    infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
@@ -144,6 +144,14 @@ extensionMixins =
      (Set.fromList [KindSignatures],                 [(7, kindSignaturesBaseMixin), (8, kindSignaturesMixin)]),
      (Set.fromList [ParenthesizedTypeOperators],     [(8, parenthesizedTypeOperatorsMixin)]),
      (Set.fromList [TypeOperators],                  [(8, typeOperatorsMixin)]),
+     (Set.fromList [DataKinds],                      [(8, dataKindsMixin)]),
+     (Set.fromList [DataKinds,
+                    ListTuplePuns],                  [(9, dataKindsListTuplePunsMixin)]),
+     (Set.fromList [ListTuplePuns],                  [(9, listTuplePunsMixin)]),
+     (Set.fromList [ListTuplePuns,
+                    UnboxedTuples],                  [(9, unboxedListTuplePunsMixin)]),
+     (Set.fromList [ListTuplePuns,
+                    UnboxedSums],                    [(9, unboxedSumPunsMixin)]),
      (Set.fromList [ExplicitNamespaces],             [(9, explicitNamespacesMixin)]),
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
@@ -152,7 +160,6 @@ extensionMixins =
      (Set.fromList [GADTSyntax],                     [(9, gadtSyntaxMixin)]),
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
      (Set.fromList [TypeFamilyDependencies],         [(9, typeFamilyDependenciesMixin)]),
-     (Set.fromList [DataKinds],                      [(9, dataKindsMixin)]),
      (Set.fromList [TypeData],                       [(9, typeDataMixin)]),
      (Set.fromList [GADTs, TypeData],                [(9, typeDataGADTMixin)]),
      (Set.fromList [StandaloneKindSignatures],       [(7, kindSignaturesBaseMixin),
@@ -271,125 +278,129 @@ initialOverlay :: forall l g t. (Abstract.ExtendedHaskell l,
                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
                => ExtensionOverlay l g t
 initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{declarationLevel = selfDeclarations}}
-               super@ExtendedGrammar{report = superReport} =
-   super{report= superReport{
-        declarationLevel= (declarationLevel superReport){
-           classLHS = selfDeclarations & simpleType,
-           simpleType =
-              Abstract.simpleTypeLHS <$> (self & report & typeConstructor) <*> pure []
-              <|> Abstract.infixTypeLHSApplication
-                  <$> (self & typeVarBinder)
-                  <* terminator "`"
-                  <*> (selfDeclarations & typeClass)
-                  <* terminator "`"
-                  <*> (self & typeVarBinder)
-              <|> Abstract.typeLHSApplication
-                  <$> wrap (selfDeclarations & simpleType)
-                  <*> (self & typeVarBinder),
-           optionalTypeSignatureContext = pure Abstract.noContext,
-           context =
-              (selfDeclarations & constraint)
-              <|> (self & equalityConstraint)
-              <|> Abstract.constraints <$> parens (wrap ((selfDeclarations & constraint)
-                                                         <|> (self & equalityConstraint)
-                                                         <|> (self & implicitParameterConstraint)) `sepBy` comma),
-           instanceDesignator = self & instanceDesignatorApplications,
-           instanceTypeDesignator = selfReport & aType},
-        pattern = self & infixPattern,
-        lPattern = (selfReport & aPattern)
-                   <|> Abstract.literalPattern
-                       <$ delimiter "-"
-                       <*> wrap ((Abstract.integerLiteral . negate) <$> (selfReport & integer)
-                                 <|> (Abstract.floatingLiteral . negate) <$> (selfReport & float))
-                   <|> Abstract.constructorPattern
-                       <$> wrap (selfReport & generalConstructor)
-                       <*> some (wrap $ conArgPattern self),
-        aPattern = self & conArgPattern,
-        aType = aType superReport
-                <|> Abstract.typeWildcard <$ keyword "_"
-                <|> Abstract.groundType <$ (self & groundTypeKind),
-        typeTerm = self & arrowType},
-     keywordForall = empty,
-     kindSignature = empty,
-     groundTypeKind = empty,
-     derivingStrategy = empty,
-     arrowType = (self & cType)
-        <|> Abstract.functionType <$> wrap (self & cType)
-                                  <* (selfReport & rightArrow)
-                                  <*> wrap (self & arrowType)
-        <|> Abstract.constrainedType <$> wrap (selfDeclarations & context)
-                                     <* (selfReport & rightDoubleArrow)
-                                     <*> wrap (self & arrowType),
-     cType = selfReport & bType,
-     equalityConstraint = empty,
-     implicitParameterConstraint = empty,
-     infixPattern = pattern superReport,
-     promotedLiteral =
-        Abstract.promotedIntegerLiteral <$> (selfReport & integer)
-        <|> Abstract.promotedCharLiteral <$> (selfReport & charLiteral)
-        <|> Abstract.promotedStringLiteral <$> (selfReport & stringLiteral),
-     inClassOrInstanceTypeFamilyDeclaration = empty,
-     instanceDesignatorBase =
-        Abstract.classReferenceInstanceLHS <$> (selfDeclarations & qualifiedTypeClass)
-        <|> parens (selfReport & declarationLevel & instanceDesignator),
-     instanceDesignatorApplications =
-        (self & instanceDesignatorBase)
-        <|> Abstract.classInstanceLHSApplication
-            <$> wrap (self & instanceDesignatorApplications)
-            <*> wrap (selfReport & declarationLevel & instanceTypeDesignator),
-     optionalForall = pure [],
-     optionallyParenthesizedTypeVar = selfReport & typeVar,
-     optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar),
-     optionallyKindedTypeVar = empty,
-     typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> (selfReport & typeVar),
-     gadtConstructors =
-        Abstract.gadtConstructors <$> (self & constructorIDs)
-                                  <* (selfReport & doubleColon)
-                                  <*> (self & optionalForall)
-                                  <*> wrap (selfDeclarations & optionalContext)
-                                  <*> wrap (self & gadtBody),
-     gadtNewConstructor =
-        Abstract.gadtConstructors <$> ((:|[]) <$> (self & report & constructor)) <* (selfReport & doubleColon)
-                                  <*> (self & optionalForall)
-                                  <*> wrap (pure Abstract.noContext
-                                            <|> (selfDeclarations & context)
-                                                *> (self & report & rightDoubleArrow)
-                                                *> fail "No context allowed on GADT newtype")
-                                  <*> wrap (self & gadtNewBody),
-     constructorIDs = (self & report & constructor) `sepByNonEmpty` comma,
-     gadtNewBody =
-        parens (self & gadtNewBody)
-        <|> Abstract.functionType
-            <$> wrap ((self & report & bType)
-                      <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
-            <* (selfReport & rightArrow)
-            <*> wrap (self & return_type)
-        <|> Abstract.recordFunctionType
-            <$> braces ((:[]) <$> wrap (selfDeclarations & fieldDeclaration))
-            <* (selfReport & rightArrow)
-            <*> wrap (self & return_type),
-     gadtBody = prefix_gadt_body self <|> record_gadt_body self,
-     prefix_gadt_body =
-        parens (self & prefix_gadt_body)
-        <|> (self & return_type)
-        <|> Abstract.functionType
-            <$> wrap ((self & report & bType)
-                      <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
-            <* (selfReport & rightArrow)
-            <*> wrap (self & prefix_gadt_body),
-     record_gadt_body =
-        parens (self & record_gadt_body)
-        <|> Abstract.recordFunctionType
-            <$> braces (wrap (selfDeclarations & fieldDeclaration) `sepBy` comma)
-            <* (selfReport & rightArrow)
-            <*> wrap (self & return_type),
-     return_type = Abstract.typeApplication
-                      <$> wrap (return_type self <|> parens (self & return_type))
-                      <*> wrap (self & arg_type)
-                   <|> (selfReport & generalTypeConstructor),
-     conArgPattern = aPattern superReport,
-     arg_type = selfReport & aType,
-     binary = empty}
+               super@ExtendedGrammar{report = superReport} = super{
+   report= superReport{
+      declarationLevel= (declarationLevel superReport){
+         classLHS = selfDeclarations & simpleType,
+         simpleType =
+            Abstract.simpleTypeLHS <$> (self & report & typeConstructor) <*> pure []
+            <|> Abstract.infixTypeLHSApplication
+                <$> (self & typeVarBinder)
+                <* terminator "`"
+                <*> (selfDeclarations & typeClass)
+                <* terminator "`"
+                <*> (self & typeVarBinder)
+            <|> Abstract.typeLHSApplication
+                <$> wrap (selfDeclarations & simpleType)
+                <*> (self & typeVarBinder),
+         optionalTypeSignatureContext = pure Abstract.noContext,
+         context =
+            (selfDeclarations & constraint)
+            <|> (self & equalityConstraint)
+            <|> Abstract.constraints <$> parens (wrap ((selfDeclarations & constraint)
+                                                       <|> (self & equalityConstraint)
+                                                       <|> (self & implicitParameterConstraint)) `sepBy` comma),
+         instanceDesignator = self & instanceDesignatorApplications,
+         instanceTypeDesignator = selfReport & aType},
+      pattern = self & infixPattern,
+      lPattern = (selfReport & aPattern)
+                 <|> Abstract.literalPattern
+                     <$ delimiter "-"
+                     <*> wrap ((Abstract.integerLiteral . negate) <$> (selfReport & integer)
+                               <|> (Abstract.floatingLiteral . negate) <$> (selfReport & float))
+                 <|> Abstract.constructorPattern
+                     <$> wrap (selfReport & generalConstructor)
+                     <*> some (wrap $ conArgPattern self),
+      aPattern = self & conArgPattern,
+      -- NoListTuplePuns
+      aType = generalTypeConstructor selfReport
+              <|> Abstract.typeVariable <$> typeVar selfReport
+              <|> parens (typeTerm selfReport)
+              <|> Abstract.typeWildcard <$ keyword "_"
+              <|> Abstract.groundType <$ (self & groundTypeKind),
+      generalTypeConstructor =
+         Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedConstructor selfReport)
+         <|> Abstract.functionConstructorType <$ parens (rightArrow selfReport),
+      typeTerm = self & arrowType},
+   keywordForall = empty,
+   kindSignature = empty,
+   groundTypeKind = empty,
+   derivingStrategy = empty,
+   arrowType = (self & cType)
+      <|> Abstract.functionType <$> wrap (self & cType)
+                                <* (selfReport & rightArrow)
+                                <*> wrap (self & arrowType)
+      <|> Abstract.constrainedType <$> wrap (selfDeclarations & context)
+                                   <* (selfReport & rightDoubleArrow)
+                                   <*> wrap (self & arrowType),
+   cType = selfReport & bType,
+   equalityConstraint = empty,
+   implicitParameterConstraint = empty,
+   infixPattern = pattern superReport,
+   promotedLiteral = empty,
+   promotedStructure = empty,
+   inClassOrInstanceTypeFamilyDeclaration = empty,
+   instanceDesignatorBase =
+      Abstract.classReferenceInstanceLHS <$> (selfDeclarations & qualifiedTypeClass)
+      <|> parens (selfReport & declarationLevel & instanceDesignator),
+   instanceDesignatorApplications =
+      (self & instanceDesignatorBase)
+      <|> Abstract.classInstanceLHSApplication
+          <$> wrap (self & instanceDesignatorApplications)
+          <*> wrap (selfReport & declarationLevel & instanceTypeDesignator),
+   optionalForall = pure [],
+   optionallyParenthesizedTypeVar = selfReport & typeVar,
+   optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> (self & optionallyParenthesizedTypeVar),
+   optionallyKindedTypeVar = empty,
+   typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> (selfReport & typeVar),
+   gadtConstructors =
+      Abstract.gadtConstructors <$> (self & constructorIDs)
+                                <* (selfReport & doubleColon)
+                                <*> (self & optionalForall)
+                                <*> wrap (selfDeclarations & optionalContext)
+                                <*> wrap (self & gadtBody),
+   gadtNewConstructor =
+      Abstract.gadtConstructors <$> ((:|[]) <$> (self & report & constructor)) <* (selfReport & doubleColon)
+                                <*> (self & optionalForall)
+                                <*> wrap (pure Abstract.noContext
+                                          <|> (selfDeclarations & context)
+                                              *> (self & report & rightDoubleArrow)
+                                              *> fail "No context allowed on GADT newtype")
+                                <*> wrap (self & gadtNewBody),
+   constructorIDs = (self & report & constructor) `sepByNonEmpty` comma,
+   gadtNewBody =
+      parens (self & gadtNewBody)
+      <|> Abstract.functionType
+          <$> wrap ((self & report & bType)
+                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+          <* (selfReport & rightArrow)
+          <*> wrap (self & return_type)
+      <|> Abstract.recordFunctionType
+          <$> braces ((:[]) <$> wrap (selfDeclarations & fieldDeclaration))
+          <* (selfReport & rightArrow)
+          <*> wrap (self & return_type),
+   gadtBody = prefix_gadt_body self <|> record_gadt_body self,
+   prefix_gadt_body =
+      parens (self & prefix_gadt_body)
+      <|> (self & return_type)
+      <|> Abstract.functionType
+          <$> wrap ((self & report & bType)
+                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+          <* (selfReport & rightArrow)
+          <*> wrap (self & prefix_gadt_body),
+   record_gadt_body =
+      parens (self & record_gadt_body)
+      <|> Abstract.recordFunctionType
+          <$> braces (wrap (selfDeclarations & fieldDeclaration) `sepBy` comma)
+          <* (selfReport & rightArrow)
+          <*> wrap (self & return_type),
+   return_type = Abstract.typeApplication
+                    <$> wrap (return_type self <|> parens (self & return_type))
+                    <*> wrap (self & arg_type)
+                 <|> (selfReport & generalTypeConstructor),
+   conArgPattern = aPattern superReport,
+   arg_type = selfReport & aType,
+   binary = empty}
 
 identifierSyntaxMixin :: ExtensionOverlay l g t
 identifierSyntaxMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
@@ -417,21 +428,43 @@ unicodeSyntaxMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramm
       leftArrow = (superReport & leftArrow) <|> delimiter "←",
       variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> (superReport & variableSymbol)}}
 
-unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedTuplesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-  conArgPattern = (super & conArgPattern)
-                  <|> Abstract.unboxedTuplePattern Abstract.build
-                      <$> hashParens (wrap (selfReport & pPattern) `sepByNonEmpty` comma),
+listTuplePunsMixin :: forall l g t. ExtensionOverlay l g t
+listTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
       aType = (superReport & aType)
-              <|> Abstract.unboxedTupleType Abstract.build
-                  <$> hashParens (wrap (selfReport & typeTerm) `sepByNonEmpty` comma),
+              <|> Abstract.tupleType <$> parens ((:|) <$> wrap (selfReport & typeTerm)
+                                                      <*> some (comma *> wrap (selfReport & typeTerm)))
+              <|> Abstract.listType <$> brackets (wrap (selfReport & typeTerm)),
+      generalTypeConstructor = (superReport & generalTypeConstructor)
+                               <|> Abstract.constructorType
+                                   <$> wrap (Abstract.unitConstructor <$ terminator "(" <* terminator ")"
+                                             <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
+                                             <|> Abstract.tupleConstructor . succ . length <$> parens (some comma))}}
+
+unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
+unboxedTuplesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   conArgPattern = (super & conArgPattern)
+                   <|> Abstract.unboxedTuplePattern Abstract.build
+                       <$> hashParens (wrap (selfReport & pPattern) `sepByNonEmpty` comma),
+   report= superReport{
       generalConstructor = (superReport & generalConstructor)
                            <|> Abstract.unboxedTupleConstructor Abstract.build . succ . length
                                <$> hashParens (many comma),
       bareExpression = (superReport & bareExpression)
                        <|> Abstract.unboxedTupleExpression Abstract.build
                            <$> hashParens ((selfReport & expression) `sepByNonEmpty` comma)}}
+   where hashParens p = delimiter "(#" *> p <* terminator "#)"
+
+unboxedListTuplePunsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
+unboxedListTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   report= superReport{
+      aType = (superReport & aType)
+              <|> Abstract.unboxedTupleType Abstract.build
+                  <$> hashParens (wrap (selfReport & typeTerm) `sepByNonEmpty` comma),
+      generalTypeConstructor = (superReport & generalTypeConstructor)
+                               <|> Abstract.constructorType
+                                   <$> wrap (Abstract.unboxedTupleConstructor Abstract.build . succ . length
+                                             <$> hashParens (many comma))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
@@ -454,10 +487,6 @@ unboxedSumsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar
                                       <$> wrap (selfReport & pPattern)
                                       <*> (length <$> some (delimiter "|"))),
    report= superReport{
-      aType = (superReport & aType)
-              <|> Abstract.unboxedSumType Abstract.build
-                  <$> hashParens ((:|) <$> wrap (selfReport & typeTerm)
-                                       <*> some (delimiter "|" *> wrap (selfReport & typeTerm))),
       generalConstructor = (superReport & generalConstructor)
                            <|> Abstract.unboxedSumConstructor Abstract.build . succ . length
                                <$> hashParens (some $ delimiter "|"),
@@ -469,6 +498,19 @@ unboxedSumsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar
                                        <|> Abstract.unboxedSumExpression Abstract.build 0
                                           <$> (selfReport & expression)
                                           <*> (length <$> some (delimiter "|")))}}
+   where hashParens p = delimiter "(#" *> p <* terminator "#)"
+
+unboxedSumPunsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedSums ] l => ExtensionOverlay l g t
+unboxedSumPunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   report= superReport{
+      aType = (superReport & aType)
+              <|> Abstract.unboxedSumType Abstract.build
+                  <$> hashParens ((:|) <$> wrap (selfReport & typeTerm)
+                                       <*> some (delimiter "|" *> wrap (selfReport & typeTerm))),
+      generalTypeConstructor = (superReport & generalTypeConstructor)
+                               <|> Abstract.constructorType
+                                   <$> wrap (Abstract.unboxedSumConstructor Abstract.build . succ . length
+                                             <$> hashParens (some $ delimiter "|"))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 interruptibleFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'InterruptibleFFI ] l => ExtensionOverlay l g t
@@ -1130,16 +1172,28 @@ dataKindsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{r
    report= superReport{
       aType = (superReport & aType)
          <|> promotedLiteral self
-         <|> Abstract.promotedTupleType <$ terminator "'"
-             <*> parens ((:|) <$> wrap (selfReport & typeTerm)
-                              <*> some (comma *> wrap (selfReport & typeTerm)))
-         <|> Abstract.promotedListType <$ terminator "'"
-                                       <*> brackets (wrap (selfReport & typeTerm) `sepBy1` comma)
-         <|> Abstract.promotedListType
-             <$> brackets ((:) <$> wrap (selfReport & typeTerm) <* comma
-                               <*> wrap (selfReport & typeTerm) `sepBy1` comma),
+         <|> promotedStructure self,
       generalTypeConstructor = (superReport & generalTypeConstructor)
-         <|> Abstract.promotedConstructorType <$ terminator "'" <*> wrap (selfReport & generalConstructor)}}
+         <|> Abstract.promotedConstructorType
+             <$ terminator "'"
+             <*> wrap (Abstract.constructorReference <$> qualifiedConstructor selfReport)},
+   promotedLiteral =
+      Abstract.promotedIntegerLiteral <$> (selfReport & integer)
+      <|> Abstract.promotedCharLiteral <$> (selfReport & charLiteral)
+      <|> Abstract.promotedStringLiteral <$> (selfReport & stringLiteral),
+   promotedStructure =
+      Abstract.promotedTupleType <$> parens (pure []
+                                             <|> (:) <$> wrap (selfReport & typeTerm)
+                                                     <*> some (comma *> wrap (selfReport & typeTerm)))
+      <|> Abstract.promotedListType <$> brackets (wrap (selfReport & typeTerm) `sepBy` comma)}
+
+dataKindsListTuplePunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
+dataKindsListTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   promotedStructure =
+      Abstract.promotedTupleType <$ terminator "'" <*> parens (wrap (selfReport & typeTerm) `sepBy` comma)
+      <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap (selfReport & typeTerm) `sepBy` comma)
+      <|> Abstract.promotedListType <$> brackets ((:) <$> wrap (selfReport & typeTerm)
+                                                      <*> some (comma *> wrap (selfReport & typeTerm)))}
 
 dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 dataKindsTypeOperatorsMixin self@ExtendedGrammar{report = selfReport}

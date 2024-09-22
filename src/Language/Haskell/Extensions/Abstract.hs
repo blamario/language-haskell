@@ -379,7 +379,7 @@ class (Haskell λ,
    phantomRole :: TypeRole λ
 
    promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
-   promotedTupleType :: NonEmpty (s (Type l l d d)) -> Type λ l d s
+   promotedTupleType :: [s (Type l l d d)] -> Type λ l d s
    promotedListType :: [s (Type l l d d)] -> Type λ l d s
    promotedIntegerLiteral :: Integer -> Type λ l d s
    promotedCharLiteral :: Char -> Type λ l d s

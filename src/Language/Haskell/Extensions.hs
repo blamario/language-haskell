@@ -91,6 +91,7 @@ data Extension = AllowAmbiguousTypes
                | LexicalNegation
                | LiberalTypeSynonyms
                | LinearTypes
+               | ListTuplePuns
                | MagicHash
                | MonadComprehensions
                | MonadFailDesugaring
@@ -197,7 +198,7 @@ includedByDefault :: Set Extension
 includedByDefault = Set.fromList [BangDataFields, ConstraintsAreTypes,
                                   DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
                                   FieldSelectors, ForeignFunctionInterface,
-                                  GratuitouslyParenthesizedTypes, IdentifierSyntax,
+                                  GratuitouslyParenthesizedTypes, IdentifierSyntax, ListTuplePuns,
                                   MultiParameterConstraints, ParenthesizedTypeOperators, PatternGuards,
                                   RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
@@ -383,6 +384,7 @@ byName = Map.fromList [
   ("LexicalNegation", LexicalNegation),
   ("LiberalTypeSynonyms", LiberalTypeSynonyms),
   ("LinearTypes", LinearTypes),
+  ("ListTuplePuns", ListTuplePuns),
   ("MagicHash", MagicHash),
   ("MonadComprehensions", MonadComprehensions),
   ("MonadFailDesugaring", MonadFailDesugaring),

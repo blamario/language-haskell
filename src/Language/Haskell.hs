@@ -9,7 +9,7 @@ module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings,
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
-import Language.Haskell.Extensions (Extension)
+import Language.Haskell.Extensions as Extensions (Extension, includedByDefault)
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Extensions.Verifier as Verifier
@@ -121,8 +121,9 @@ unqualifiedPreludeBindings = do
    moduleFileNames <- filter (List.isSuffixOf ".hs") <$> listDirectory preludeModuleDir
    moduleTexts <- mapM (unsafeInterleaveIO . Text.IO.readFile . combine preludeModuleDir) moduleFileNames
    let Just moduleNames = traverse (Text.stripSuffix ".hs" . Text.pack) moduleFileNames
-       parsedModules = assertSuccess . parseModule mempty moduleEnv mempty False <$> moduleTexts
+       parsedModules = assertSuccess . parseModule defaultExtensions moduleEnv mempty False <$> moduleTexts
        assertSuccess ~(Right ~[parsed]) = parsed
        moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
        Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
+       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
    pure prelude

@@ -649,7 +649,7 @@ data Type λ l d s =
    | GroundTypeKind
    | VisibleDependentType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
    | PromotedConstructorType (s (Abstract.Constructor l l d d))
-   | PromotedTupleType (NonEmpty (s (Abstract.Type l l d d)))
+   | PromotedTupleType [s (Abstract.Type l l d d)]
    | PromotedListType [s (Abstract.Type l l d d)]
    | PromotedIntegerLiteral Integer
    | PromotedCharLiteral Char
