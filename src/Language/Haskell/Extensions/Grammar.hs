@@ -529,49 +529,21 @@ cApiFFIMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{rep
 
 magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 magicHashMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-  let integer', integerHash, integerHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Integer
-      float', floatHash, floatHash2 :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Rational
-      charLiteral', charHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Char
-      stringLiteral', stringHashLiteral :: (LexicalParsing (Parser g t), Show t, TextualMonoid t) => Parser g t Text
-
-      integer' = token ((selfReport & integerLexeme) <* notFollowedBy (string "#"))
-      float' = token ((selfReport & floatLexeme) <* notFollowedBy (string "#"))
-      charLiteral' = token ((selfReport & charLexeme) <* notFollowedBy (string "#"))
-      stringLiteral' = token ((selfReport & stringLexeme) <* notFollowedBy (string "#")) <?> "string literal"
-
-      unsignedIntegerLexeme = notSatisfyChar (== '-') *> (selfReport & integerLexeme)
-      unsignedFloatLexeme = notSatisfyChar (== '-') *> (selfReport & floatLexeme)
-      signedIntegerLexeme = unsignedIntegerLexeme <|> negate <$ string "-" <*> unsignedIntegerLexeme
-      signedFloatLexeme = unsignedFloatLexeme <|> negate <$ string "-" <*> unsignedFloatLexeme
-      integerHash = token (signedIntegerLexeme <* string "#" <* notFollowedBy (string "#"))
-      floatHash = token (signedFloatLexeme <* string "#" <* notFollowedBy (string "#"))
-      integerHash2 = token (signedIntegerLexeme <* string "##")
-      floatHash2 = token (signedFloatLexeme <* string "##")
-      charHashLiteral = token ((selfReport & charLexeme) <* string "#")
-      stringHashLiteral = token ((selfReport & stringLexeme) <* string "#")
-      prefixMinusFollow = takeCharsWhile1 Char.isDigit *> takeCharsWhile isNumChar *> string "#"
+  let prefixMinusFollow = takeCharsWhile1 Char.isDigit *> takeCharsWhile isNumChar *> string "#"
       isNumChar c = Char.isDigit c || c `elem` ("eE.bBoOxX_" :: String)
   in super{report= superReport{
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
         constructorIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (constructorLexeme <> concatAll (string "#"))),
-        lPattern = (selfReport & aPattern)
-                   <|> Abstract.literalPattern
-                       <$> wrap ((Abstract.integerLiteral . negate) <$ delimiter "-" <*> integer')
-                   <|> Abstract.literalPattern
-                       <$> wrap ((Abstract.floatingLiteral . negate) <$ delimiter "-" <*> float')
-                   <|> Abstract.constructorPattern
-                       <$> wrap (selfReport & generalConstructor)
-                       <*> some (wrap $ self & conArgPattern),
-         literal = Abstract.integerLiteral <$> integer' <|> Abstract.floatingLiteral <$> float'
-                   <|> Abstract.charLiteral <$> charLiteral' <|> Abstract.stringLiteral <$> stringLiteral'
-                   <|> Abstract.hashLiteral
-                       <$> (Abstract.integerLiteral <$> integerHash <|> Abstract.floatingLiteral <$> floatHash
-                            <|> Abstract.charLiteral <$> charHashLiteral
-                            <|> Abstract.stringLiteral <$> stringHashLiteral)
-                   <|> Abstract.hashLiteral . Abstract.hashLiteral
-                       <$> (Abstract.integerLiteral <$> integerHash2 <|> Abstract.floatingLiteral <$> floatHash2)}}
+        literalLexeme = (superReport & literalLexeme)
+                        <**> (Abstract.hashLiteral . Abstract.hashLiteral <$ string "##"
+                              <<|> Abstract.hashLiteral <$ string "#"
+                              <<|> pure id),
+        integerLexeme = (superReport & integerLexeme)
+                        <<|> negate <$ string "-" <*> (superReport & integerLexeme) <* lookAhead (string "#"),
+        floatLexeme = (superReport & floatLexeme)
+                      <<|> negate <$ string "-" <*> (superReport & floatLexeme) <* lookAhead (string "#")}}
      & negationConstraintMixin prefixMinusFollow self
 
 recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'RecursiveDo ] l,

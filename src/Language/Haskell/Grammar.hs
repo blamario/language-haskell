@@ -74,7 +74,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
       qualifiedVariableIdentifier, qualifiedVariableSymbol :: p (Abstract.QualifiedName l),
    constructorIdentifier, constructorSymbol,
    typeConstructor, typeVar, variableIdentifier, variableSymbol :: p (Abstract.Name l),
-   literal :: p (Abstract.Value l l f f),
+   literal, literalLexeme :: p (Abstract.Value l l f f),
    doubleColon, rightDoubleArrow, rightArrow, leftArrow :: p (),
    integer, integerLexeme :: p Integer,
    float, floatLexeme :: p Rational,
@@ -627,8 +627,9 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 
 -- Lexical Syntax
 
-   literal = Abstract.integerLiteral <$> integer <|> Abstract.floatingLiteral <$> float
-             <|> Abstract.charLiteral <$> charLiteral <|> Abstract.stringLiteral <$> stringLiteral,
+   literal = token literalLexeme,
+   literalLexeme = Abstract.integerLiteral <$> integerLexeme <|> Abstract.floatingLiteral <$> floatLexeme
+                   <|> Abstract.charLiteral <$> charLexeme <|> Abstract.stringLiteral <$> stringLexeme,
 
    doubleColon = delimiter "::",
    rightDoubleArrow = delimiter "=>",
