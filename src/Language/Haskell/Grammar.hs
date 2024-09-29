@@ -12,7 +12,6 @@ import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(Compose))
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.List.NonEmpty as NonEmpty
 import Data.Ord (Down)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -27,7 +26,7 @@ import Numeric (readOct, readDec, readHex, readFloat)
 import Witherable (filter, mapMaybe)
 import qualified Text.Grampa
 import Text.Grampa hiding (keyword)
-import Text.Grampa.Combinators (moptional)
+import Text.Grampa.Combinators (moptional, someNonEmpty)
 import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (ParserT, autochain, lift, tmap)
 import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, sepBy, sepBy1, sepByNonEmpty, sepEndBy, try)
@@ -375,7 +374,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    -- fatype 	→ 	qtycon atype1 … atypek 	    (k  ≥  0)
 
       functionLHS = Abstract.prefixLHS <$> wrap (Abstract.variableLHS <$> variable <|> parens functionLHS)
-                                       <*> (NonEmpty.fromList <$> some (wrap aPattern))
+                                       <*> someNonEmpty (wrap aPattern)
                     <|> Abstract.infixLHS <$> wrap pattern <*> variableOperator <*> wrap pattern,
    -- funlhs 	→ 	var apat { apat }
    -- 	| 	pat varop pat
@@ -411,8 +410,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- 	| 	(,{,}) 	    (tupling constructors)
 
    rhs = Abstract.normalRHS <$ delimiter "=" <*> expression
-         <|> Abstract.guardedRHS . NonEmpty.fromList
-             <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
+         <|> Abstract.guardedRHS
+             <$> someNonEmpty (wrap $ Abstract.guardedExpression . toList <$> guards <* delimiter "=" <*> expression),
    guards = delimiter "|" *> wrap guard `sepByNonEmpty` comma,
    guard = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> infixExpression
            <|> Abstract.letStatement <$ keyword "let" <*> declarations
@@ -484,9 +483,9 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                   <?> "non-empty case alternatives",
    alternative = Abstract.caseAlternative <$> wrap pattern
                  <*> wrap (Abstract.normalRHS <$ rightArrow <*> expression
-                           <|> Abstract.guardedRHS . NonEmpty.fromList
-                               <$> some (wrap $ Abstract.guardedExpression . toList <$> guards <* rightArrow
-                                                                                    <*> expression))
+                           <|> Abstract.guardedRHS
+                               <$> someNonEmpty (wrap $ Abstract.guardedExpression . toList <$> guards <* rightArrow
+                                                                                            <*> expression))
                  <*> whereClauses,
    statements = blockOf statement >>= verifyStatements,
    statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
