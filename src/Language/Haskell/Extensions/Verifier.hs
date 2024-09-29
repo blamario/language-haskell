@@ -389,6 +389,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       <>
       (case literal
        of ExtAST.HashLiteral{} -> Map.singleton Extensions.MagicHash [(start, end)]
+          ExtAST.ExtendedLiteral{} -> Map.singleton Extensions.ExtendedLiterals [(start, end)]
           _ -> mempty)
       where hashless (ExtAST.HashLiteral _ l) = hashless l
             hashless l = l
