@@ -25,6 +25,7 @@ module Language.Haskell.Extensions.Abstract (
               UnboxedTuplesConstruction,
               unboxedTupleType, unboxedTupleExpression, unboxedTupleSectionExpression, unboxedTupleConstructor,
               unboxedTuplePattern,
+              ExtendedLiteralsConstruction, extendedLiteral,
               InterruptibleFFIConstruction, interruptibleCall,
               CApiFFIConstruction, cApiCall,
               ImplicitParametersConstruction,
@@ -164,6 +165,9 @@ data instance Construct '[ 'Extensions.UnboxedSums ] λ l d s = UnboxedSumsConst
    unboxedSumExpression :: Int -> s (Expression l l d d) -> Int -> Expression λ l d s,
    unboxedSumPattern :: Int -> s (Pattern l l d d) -> Int -> Pattern λ l d s}
 
+data instance Construct '[ 'Extensions.ExtendedLiterals ] λ l d s = ExtendedLiteralsConstruction {
+   extendedLiteral :: Integer -> Name λ -> Value λ l d s}
+
 data instance Construct '[ 'Extensions.InterruptibleFFI ] λ l d s = InterruptibleFFIConstruction {
    interruptibleCall :: CallSafety λ}
 
@@ -248,7 +252,8 @@ data instance Construct '[ 'Extensions.FunctionalDependencies ] λ l d s = Funct
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
 
 class (Haskell λ,
-       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
+       ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
+                          'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
                           'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards,
                           'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,

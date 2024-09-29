@@ -685,6 +685,7 @@ instance WrapTranslation t => DeeplyTranslatable t AST.Value where
    translateDeeply _ (AST.IntegerLiteral l)  = AST.IntegerLiteral l
    translateDeeply _ (AST.StringLiteral l)   = AST.StringLiteral l
    translateDeeply t (AST.HashLiteral sup l) = AST.HashLiteral sup (translateDeeply t l)
+   translateDeeply _ (AST.ExtendedLiteral sup n ty) = AST.ExtendedLiteral sup n ty
 
 -- Default overlappable Translation instances
 
@@ -773,6 +774,10 @@ instance {-# overlappable #-}
 
 instance {-# overlappable #-}
    (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+    Abstract.Name (Origin t) ~ AST.Name (Origin t),
+    Abstract.Name (Target t) ~ AST.Name (Target t),
+    Abstract.SupportFor 'Extensions.ExtendedLiterals (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ExtendedLiterals (Target t),
     Abstract.SupportFor 'Extensions.MagicHash (Origin t) ~ Abstract.SupportFor 'Extensions.MagicHash (Target t)) =>
    Translation t AST.Value where
    translate _ (AST.CharLiteral l)     = AST.CharLiteral l
@@ -780,3 +785,4 @@ instance {-# overlappable #-}
    translate _ (AST.IntegerLiteral l)  = AST.IntegerLiteral l
    translate _ (AST.StringLiteral l)   = AST.StringLiteral l
    translate t (AST.HashLiteral sup l) = AST.HashLiteral sup (translate t l)
+   translate t (AST.ExtendedLiteral sup n ty) = AST.ExtendedLiteral sup n (translateName t ty)

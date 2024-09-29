@@ -23,7 +23,7 @@ import Data.Function.Memoize (memoize)
 import Data.Monoid (Endo(..))
 import Data.Monoid.Cancellative (RightReductive, isPrefixOf, isSuffixOf)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
-import Data.Monoid.Instances.PrefixMemory (Shadowed (prefix))
+import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
 import Data.Monoid.Textual (TextualMonoid, toString)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -43,7 +43,7 @@ import Text.Grampa
 import Text.Grampa.Combinators (moptional, someNonEmpty)
 import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (autochain, ParserT, lift)
 import qualified Transformation.Deep as Deep
-import Witherable (filter)
+import Witherable (filter, mapMaybe)
 
 import Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     on, partitionContradictory, switchesByName, withImplications)
@@ -53,15 +53,17 @@ import Language.Haskell.Grammar (HaskellGrammar(..), ModuleLevelGrammar(..), Dec
                                  Parser, OutlineMonoid, NodeWrap,
                                  blockOf, delimiter, terminator, inputColumn, isSymbol,
                                  moduleId, nameQualifier,
-                                 oneExtendedLine, rewrap, startSepEndBy, wrap, unwrap, whiteSpace)
+                                 oneExtendedLine, rewrap, startSepEndBy, storeToken, wrap, unwrap, whiteSpace)
 import Language.Haskell.Reserializer (Lexeme(..), Serialization, TokenType(..), lexemes)
 
 import Prelude hiding (exponent, filter)
 
 class TextualMonoid t => SpaceMonoid t where
+   precededByString :: t -> t -> Bool
    precededByOpenSpace :: t -> Bool
 
 instance (Eq t, Factorial.StableFactorial t, RightReductive t, TextualMonoid t) => SpaceMonoid (Shadowed t) where
+   precededByString s t = content s `isSuffixOf` prefix t
    precededByOpenSpace t = Textual.any isOpenOrSpace (Factorial.primeSuffix $ prefix t) || "-}" `isSuffixOf` prefix t
       where isOpenOrSpace c = Char.isSpace c || c `elem` ("([{,;" :: [Char])
 
@@ -131,6 +133,7 @@ extensionMixins =
      (Set.fromList [LexicalNegation],                [(3, lexicalNegationMixin)]),
      (Set.fromList [MagicHash],                      [(3, magicHashMixin)]),
      (Set.fromList [ParallelListComprehensions],     [(3, parallelListComprehensionsMixin)]),
+     (Set.fromList [ExtendedLiterals],               [(4, extendedLiteralsMixin)]),
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
      (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
@@ -527,10 +530,21 @@ cApiFFIMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{rep
          callingConvention = (superReport & declarationLevel & callingConvention)
                              <|> Abstract.cApiCall Abstract.build <$ keyword "capi"}}}
 
-magicHashMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+extendedLiteralsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'ExtendedLiterals ] l) => ExtensionOverlay l g t
+extendedLiteralsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   report = superReport{
+      literalLexeme = (superReport & literalLexeme)
+                      <* notFollowedBy ((filter (precededByString "#") getInput <|> string "#")
+                                        *> void (Text.Parser.Char.satisfy Char.isUpper))
+                      <|> Abstract.extendedLiteral Abstract.build
+                          <$> storeToken (selfReport & integerLexeme)
+                          <*> hashType}}
+   where hashType = storeToken (string "#") *> typeConstructor selfReport
+
+magicHashMixin :: forall l g t. (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
 magicHashMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
   let prefixMinusFollow = takeCharsWhile1 Char.isDigit *> takeCharsWhile isNumChar *> string "#"
-      isNumChar c = Char.isDigit c || c `elem` ("eE.bBoOxX_" :: String)
+      isNumChar c = Char.isHexDigit c || c `elem` ("eE.bBoOxX_" :: String)
   in super{report= superReport{
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
@@ -1854,11 +1868,7 @@ defaultSignaturesMixin
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: Parser g t t -> ExtensionOverlay l g t
-negationConstraintMixin prefixMinusFollow
-                        self@ExtendedGrammar{
-                           report= HaskellGrammar{
-                              dExpression, infixExpression, leftInfixExpression, qualifiedOperator}}
-                        super@ExtendedGrammar{report = superReport} = super{
+negationConstraintMixin prefixMinusFollow self super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
       variableSymbol = negationGuard *> (superReport & variableSymbol),
       qualifiedVariableSymbol = negationGuard *> (superReport & qualifiedVariableSymbol),

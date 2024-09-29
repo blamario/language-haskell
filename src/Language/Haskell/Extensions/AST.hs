@@ -38,6 +38,7 @@ data Language = Language deriving (Data, Eq, Show)
 
 type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.ExplicitNamespaces,
+   'Extensions.ExtendedLiterals,
    'Extensions.MagicHash,
    'Extensions.NamedFieldPuns,
    'Extensions.ParallelListComprehensions,
@@ -123,6 +124,10 @@ instance Abstract.ExtendedWith '[ 'Extensions.UnboxedSums ] Language where
       Abstract.unboxedSumConstructor = UnboxedSumConstructor (),
       Abstract.unboxedSumExpression = UnboxedSumExpression (),
       Abstract.unboxedSumPattern = UnboxedSumPattern ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.ExtendedLiterals ] Language where
+   build = Abstract.ExtendedLiteralsConstruction {
+      Abstract.extendedLiteral = ExtendedLiteral ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.InterruptibleFFI ] Language where
    build = Abstract.InterruptibleFFIConstruction {
@@ -784,6 +789,7 @@ data Value λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | IntegerLiteral Integer
    | StringLiteral Text
    | HashLiteral !(Abstract.SupportFor 'Extensions.MagicHash λ) (Value λ l d s)
+   | ExtendedLiteral !(Abstract.SupportFor 'Extensions.ExtendedLiterals λ) Integer (Name λ)
 
 data CallSafety λ = SafeCall | UnsafeCall | InterruptibleCall !(Abstract.SupportFor 'Extensions.InterruptibleFFI λ)
 data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall
@@ -1150,10 +1156,13 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.QualifiedName λ)) => Eq (Constructor λ l d s)
 
 deriving instance Typeable (Value λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.MagicHash λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.ExtendedLiterals λ),
+                   Data (Abstract.SupportFor 'Extensions.MagicHash λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Value λ l d s)
-deriving instance Show (Abstract.SupportFor 'Extensions.MagicHash λ) => Show (Value λ l d s)
-deriving instance Eq (Abstract.SupportFor 'Extensions.MagicHash λ) => Eq (Value λ l d s)
+deriving instance (Show (Abstract.SupportFor 'Extensions.ExtendedLiterals λ),
+                   Show (Abstract.SupportFor 'Extensions.MagicHash λ)) => Show (Value λ l d s)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.ExtendedLiterals λ),
+                   Eq (Abstract.SupportFor 'Extensions.MagicHash λ)) => Eq (Value λ l d s)
 
 deriving instance Typeable (CallSafety λ)
 deriving instance (Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ), Data λ) => Data (CallSafety λ)

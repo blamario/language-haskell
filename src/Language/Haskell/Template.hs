@@ -586,6 +586,8 @@ literalTemplate (HashLiteral _ (HashLiteral _ (IntegerLiteral n))) = WordPrimL n
 literalTemplate (HashLiteral _ (StringLiteral s))
   | Text.all ((< 256) . Char.ord) s = StringPrimL (ByteString.unpack $ ByteString.Char8.pack $ Text.unpack s)
 literalTemplate (HashLiteral _ _) = error "Unexpected HashLiteral"
+-- TODO: TemplateHaskell doesn't support ExtendedLiterals
+literalTemplate (ExtendedLiteral _ n ty) = IntPrimL n
 
 patternTemplate :: TemplateWrapper f => Pattern Language Language f f -> Pat
 patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate $ extract pat)

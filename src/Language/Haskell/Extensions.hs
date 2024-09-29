@@ -62,6 +62,7 @@ data Extension = AllowAmbiguousTypes
                | ExplicitForAll
                | ExplicitNamespaces
                | ExtendedDefaultRules
+               | ExtendedLiterals
                | FieldSelectors
                | FlexibleContexts
                | FlexibleInstances
@@ -356,6 +357,7 @@ byName = Map.fromList [
   ("ExplicitForAll", ExplicitForAll),
   ("ExplicitNamespaces", ExplicitNamespaces),
   ("ExtendedDefaultRules", ExtendedDefaultRules),
+  ("ExtendedLiterals", ExtendedLiterals),
   ("FieldSelectors", FieldSelectors),
   ("FlexibleContexts", FlexibleContexts),
   ("FlexibleInstances", FlexibleInstances),
