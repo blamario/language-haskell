@@ -568,9 +568,9 @@ recursiveDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar
       closedBlockExpresion = (superReport & closedBlockExpresion)
          <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap (selfReport & statements),
       statement = (superReport & statement)
-                  <|> Deep.InL
-                      <$> wrap (Abstract.recursiveStatement' Abstract.build
-                                . (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap <$>)
+                  <|> wrap (Deep.InL
+                            <$> Abstract.recursiveStatement' Abstract.build
+                                . map Report.expressionToStatement
                                 <$ keyword "rec"
                                 <*> blockOf (selfReport & statement)),
       variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> (superReport & variableIdentifier)}}
@@ -633,7 +633,7 @@ emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                => ExtensionOverlay l g t
 emptyCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      alternatives = blockOf (alternative $ report super)}}
+      alternatives = blockOf (wrap (alternative $ report super))}}
 
 multiWayIfMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
@@ -643,8 +643,8 @@ multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, 
    report= superReport{
       closedBlockExpresion = (superReport & closedBlockExpresion)
          <|> Abstract.multiWayIfExpression <$ keyword "if"
-             <*> blockOf' (Abstract.guardedExpression . toList
-                           <$> guards <* rightArrow <*> expression)}}
+             <*> blockOf' (wrap (Abstract.guardedExpression . toList
+                                 <$> guards <* rightArrow <*> expression))}}
 
 packageImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 packageImportsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
@@ -1039,7 +1039,8 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self)
             <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap $ kindSignature self) <* keyword "where"
-                <*> blockOf (Abstract.typeFamilyInstance
+                <*> blockOf (wrap
+                             $ Abstract.typeFamilyInstance
                              <$> optionalForall self
                              <*> wrap (selfReport & declarationLevel & instanceDesignator) <* delimiter "="
                              <*> wrap (selfReport & typeTerm))
@@ -1063,7 +1064,7 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
-                <*> blockOf (gadtConstructors self)
+                <*> blockOf (wrap $ gadtConstructors self)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> optionalForall self
@@ -1104,7 +1105,7 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> wrap (selfReport & declarationLevel & instanceDesignator)
                 <*> optional (wrap $ kindSignature self)
                 <* keyword "where"
-                <*> blockOf (gadtConstructors self)
+                <*> blockOf (wrap $ gadtConstructors self)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
                 <*> optionalForall self
@@ -1141,7 +1142,7 @@ typeFamilyDependenciesMixin
                 <*> typeVarBinder self
                 <*> optional dependencies
                 <* keyword "where"
-                <*> blockOf (Abstract.typeFamilyInstance
+                <*> blockOf (wrap $ Abstract.typeFamilyInstance
                              <$> optionalForall self
                              <*> wrap (selfReport & declarationLevel & instanceDesignator) <* delimiter "="
                              <*> wrap (selfReport & typeTerm)),
@@ -1211,7 +1212,7 @@ typeDataGADTMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramma
             <|> Abstract.typeGADTDeclaration Abstract.build <$ keyword "type" <* keyword "data"
                 <*> wrap (selfReport & declarationLevel & simpleType)
                 <*> optional (wrap $ kindSignature self) <* keyword "where"
-                <*> blockOf (gadtConstructors self)}}}
+                <*> blockOf (wrap $ gadtConstructors self)}}}
 
 visibleDependentQuantificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 visibleDependentQuantificationMixin self@ExtendedGrammar{report = selfReport}
@@ -1502,7 +1503,7 @@ explicitForAllMixin
                    <*> wrap optionalContext
                    <*> wrap instanceDesignator
                    <*> (keyword "where"
-                        *> blockOf (selfReport & declarationLevel & inInstanceDeclaration)
+                        *> blockOf (wrap (selfReport & declarationLevel & inInstanceDeclaration))
                         <|> pure [])},
          typeVar = notFollowedBy (keywordForall self) *> (superReport & typeVar)},
       arrowType = arrowType super
@@ -1524,7 +1525,7 @@ gadtSyntaxMixin
                <|> Abstract.gadtDeclaration <$ keyword "data"
                    <*> wrap simpleType
                    <*> optional (wrap $ kindSignature self) <* keyword "where"
-                   <*> blockOf (gadtConstructors self)
+                   <*> blockOf (wrap $ gadtConstructors self)
                    <*> moptional derivingClause
                <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
                    <*> wrap simpleType
@@ -1705,7 +1706,7 @@ patternSynonymsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGra
             <|> Abstract.recordPatternLHS Abstract.build
                    <$> (selfReport & constructor)
                    <*> braces ((selfReport & variable) `sepBy` comma)
-         patternClauses = keyword "where" *> blockOf patternClause
+         patternClauses = keyword "where" *> blockOf (wrap patternClause)
          patternClause = Abstract.patternEquationClause @l Abstract.build
                          <$> wrap patternClauseLHS
                          <*> wrap (selfReport & rhs)
@@ -1828,7 +1829,7 @@ functionalDependenciesMixin
                       <*> wrap (Abstract.functionalDependency Abstract.build
                                    <$> many typeVar <* rightArrow <*> many typeVar)
                          `sepBy` comma
-                      <*> moptional (keyword "where" *> blockOf inClassDeclaration)}}}
+                      <*> moptional (keyword "where" *> blockOf (wrap inClassDeclaration))}}}
 
 constraintsAreTypesMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 constraintsAreTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
@@ -1911,12 +1912,12 @@ rewrap2 f node1@((start, _, _), _) node2@((_, _, end), _) = ((start, mempty, end
 
 blockOf' :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, LexicalParsing (Parser g t),
              Deep.Foldable (Serialization (Down Int) t) node)
-         => Parser g t (node (NodeWrap t) (NodeWrap t))
+         => Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
          -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockOf' p = braces (many (many semi *> wrap p) <* many semi) <|> (inputColumn >>= alignedBlock pure)
+blockOf' p = braces (many (many semi *> p) <* many semi) <|> (inputColumn >>= alignedBlock pure)
    where alignedBlock cont indent =
             do rest <- getInput
-               item <- filter (oneExtendedLine indent rest) (wrap p)
+               item <- filter (oneExtendedLine indent rest) p
                -- don't stop at a higher indent unless there's a terminator
                void (filter (indent >=) inputColumn)
                   <<|> lookAhead (void (Text.Parser.Char.satisfy (`elem` terminators))

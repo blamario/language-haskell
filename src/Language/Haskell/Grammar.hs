@@ -61,7 +61,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    alternatives :: p [f (Abstract.CaseAlternative l l f f)],
    alternative :: p (Abstract.CaseAlternative l l f f),
    statements :: p (Abstract.GuardedExpression l l f f),
-   statement :: p (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f),
+   statement :: p (f (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) f f)),
    fieldBinding :: p (Abstract.FieldBinding l l f f),
    pattern, lPattern, aPattern, pPattern :: p (Abstract.Pattern l l f f),
    fieldPattern :: p (Abstract.FieldPattern l l f f),
@@ -160,11 +160,12 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    body = let ordered impdecs
                  | null rightImports = Just (leftImports, rightDeclarations)
                  | otherwise = Nothing
-                 where (prefix, rest) = span isLeft (Deep.eitherFromSum . unwrap <$> impdecs)
+                 where (prefix, rest) = span isLeft (expose <$> impdecs)
                        leftImports = lefts prefix
                        (rightImports, rightDeclarations) = partitionEithers rest
-          in mapMaybe ordered (blockOf (Deep.InL <$> wrap importDeclaration
-                                        <|> Deep.InR <$> wrap topLevelDeclaration))
+                       expose (w, Deep.InL imp) = Left (w, imp)
+                       expose (w, Deep.InR dec) = Right (w, dec)
+          in mapMaybe ordered (blockOf (wrap (Deep.InL <$> importDeclaration <|> Deep.InR <$> topLevelDeclaration)))
              <?> "imports followed by declarations",
 
 -- module 	→ 	module modid [exports] where body 
@@ -216,16 +217,16 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
          <|> Abstract.classDeclaration <$ keyword "class"
              <*> wrap optionalContext
              <*> wrap classLHS
-             <*> (keyword "where" *> blockOf inClassDeclaration <|> pure [])
+             <*> (keyword "where" *> blockOf (wrap inClassDeclaration) <|> pure [])
          <|> Abstract.instanceDeclaration <$ keyword "instance"
              <*> wrap optionalContext
              <*> wrap instanceDesignator
-             <*> (keyword "where" *> blockOf inInstanceDeclaration <|> pure [])
+             <*> (keyword "where" *> blockOf (wrap inInstanceDeclaration) <|> pure [])
          <|> Abstract.defaultDeclaration <$ keyword "default" <*> parens (wrap typeTerm `sepBy` comma)
          <|> keyword "foreign" *> foreignDeclaration
          <|> declaration,
 
-      declarations = blockOf declaration,
+      declarations = blockOf (wrap declaration),
       declaration = generalDeclaration
                     <|> Abstract.equationDeclaration <$> wrap (functionLHS <|> Abstract.patternLHS <$> wrap pattern)
                                                      <*> wrap rhs <*> whereClauses,
@@ -476,7 +477,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                <|> Abstract.letStatement <$ keyword "let" <*> declarations
                <|> Abstract.expressionStatement <$> expression,
-   alternatives = let blockOfAlternatives = blockWith oneExtendedLine alternativeTerminatorKeyword alternative
+   alternatives = let blockOfAlternatives = blockWith oneExtendedLine alternativeTerminatorKeyword (wrap alternative)
                       alternativeTerminatorKeyword = (string "else" <|> string "in" <|> string "of")
                                                      *> notSatisfyChar isNameTailChar
                   in filter (not . null) blockOfAlternatives
@@ -488,9 +489,9 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                                                                                             <*> expression))
                  <*> whereClauses,
    statements = blockOf statement >>= verifyStatements,
-   statement = Deep.InL <$> wrap (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
-                                  <|> Abstract.letStatement <$ keyword "let" <*> declarations)
-               <|> Deep.InR <$> expression,
+   statement = wrap (Deep.InL <$> (Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
+                                   <|> Abstract.letStatement <$ keyword "let" <*> declarations))
+               <|> fmap Deep.InR <$> expression,
    fieldBinding = Abstract.fieldBinding <$> qualifiedVariable <* delimiter "=" <*> expression,
                 
 -- exp 	→ 	infixexp :: [context =>] type 	    (expression type signature)
@@ -906,26 +907,34 @@ verifyStatements :: (Abstract.Haskell l, Rank2.Apply g, Ord t) =>
    [NodeWrap t (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) (NodeWrap t) (NodeWrap t))]
    -> Parser g t (Abstract.GuardedExpression l l (NodeWrap t) (NodeWrap t))
 verifyStatements [] = fail "empty do block"
-verifyStatements stats = Abstract.guardedExpression
-                            (either id (rewrap Abstract.expressionStatement) . Deep.eitherFromSum . unwrap
-                             <$> init stats)
-                         <$> either (const $ fail "do block must end with an expression") pure
-                                    (Deep.eitherFromSum $ unwrap $ last stats)
+verifyStatements stats =
+   Abstract.guardedExpression (expressionToStatement <$> init stats)
+   <$> (traverse (either (const $ fail "do block must end with an expression") pure)
+        $ Deep.eitherFromSum <$> last stats)
+
+expressionToStatement
+   :: Abstract.Haskell l
+   => NodeWrap t (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) (NodeWrap t) (NodeWrap t))
+   -> NodeWrap t (Abstract.Statement l l (NodeWrap t) (NodeWrap t))
+expressionToStatement se = case unwrap se of
+   Deep.InL s -> s <$ se
+   Deep.InR e -> rewrap Abstract.expressionStatement (e <$ se)
 
 blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
-        => Parser g t (node (NodeWrap t) (NodeWrap t)) -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
+        => Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
+        -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf = blockWith oneExtendedLine blockTerminatorKeyword
 
 blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
           => (Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool)
           -> Parser g t ()
-          -> Parser g t (node (NodeWrap t) (NodeWrap t))
+          -> Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
           -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockWith lineFilter terminatorKeyword p =
-   braces (wrap p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
+   braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
    where alignedBlock opt cont indent =
             do rest <- getInput
-               maybeItem <- opt (filter (lineFilter indent rest) $ wrap p)
+               maybeItem <- opt (filter (lineFilter indent rest) p)
                case maybeItem of
                   Nothing -> cont []
                   Just item -> do
