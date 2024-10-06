@@ -15,6 +15,7 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
+              LambdaCaseConstruction, lambdaCaseExpression, lambdaCasesExpression,
               ParallelListComprehensionConstruction, parallelListComprehension',
               TypeDataConstruction, typeDataDeclaration,
               TypeGADTConstruction, typeGADTDeclaration,
@@ -128,6 +129,10 @@ data instance Construct '[ 'Extensions.QualifiedDo ] λ l d s = QualifiedDoConst
 data instance Construct '[ 'Extensions.QualifiedDo,
                            'Extensions.RecursiveDo ] λ l d s = QualifiedRecursiveDoConstruction {
    mdoQualifiedExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
+
+data instance Construct '[ 'Extensions.LambdaCase ] λ l d s = LambdaCaseConstruction {
+   lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s,
+   lambdaCasesExpression :: [([s (Pattern l l d d)], s (EquationRHS l l d d))] -> Expression λ l d s}
 
 data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = ParallelListComprehensionConstruction {
    parallelListComprehension' :: s (Expression l l d d)
@@ -256,6 +261,7 @@ class (Haskell λ,
                           'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
                           'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards,
                           'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
+                          'Extensions.LambdaCase,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
@@ -285,7 +291,6 @@ class (Haskell λ,
    tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s
    tupleSectionExpression = tupleSectionExpression' build
 
-   lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s
    multiWayIfExpression :: [s (GuardedExpression l l d d)] -> Expression λ l d s
    overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s

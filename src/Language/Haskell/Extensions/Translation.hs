@@ -574,6 +574,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
           Abstract.GuardedExpression (Target t) ~ AST.GuardedExpression (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
           Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
+          Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
           Abstract.Statement (Origin t) ~ AST.Statement (Origin t),
           Abstract.Statement (Target t) ~ AST.Statement (Target t),
           Abstract.Type (Origin t) ~ AST.Type (Origin t), Abstract.Type (Target t) ~ AST.Type (Target t),
@@ -585,7 +587,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply t (AST.ConstructorExpression con) = AST.ConstructorExpression (translateFully t con)
    translateDeeply t (AST.CaseExpression scrutinee alts) =
       AST.CaseExpression (translateFully t scrutinee) (translateFully t <$> alts)
-   translateDeeply t (AST.LambdaCaseExpression alts) = AST.LambdaCaseExpression (translateFully t <$> alts)
+   translateDeeply t (AST.LambdaCaseExpression sup alts) = AST.LambdaCaseExpression sup (translateFully t <$> alts)
+   translateDeeply t (AST.LambdaCasesExpression sup alts) = AST.LambdaCasesExpression sup (translateDeeply t <$> alts)
    translateDeeply t (AST.MultiWayIfExpression alts) = AST.MultiWayIfExpression (translateFully t <$> alts)
    translateDeeply t (AST.DoExpression body) = AST.DoExpression (translateFully t body)
    translateDeeply t (AST.MDoExpression body) = AST.MDoExpression (translateFully t body)
@@ -636,6 +639,16 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply _ (AST.FieldProjection fields) = AST.FieldProjection fields
    translateDeeply t (AST.WildcardRecordExpression sup con fields) =
       AST.WildcardRecordExpression sup con (translateFully t <$> fields)
+
+instance (WrapTranslation t,
+          FullyTranslatable t AST.Pattern, FullyTranslatable t AST.EquationRHS,
+          Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
+          Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
+          Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t)) =>
+         DeeplyTranslatable t AST.LambdaCasesAlternative where
+   translateDeeply t (AST.LambdaCasesAlternative lhs rhs) =
+      AST.LambdaCasesAlternative (translateFully t <$> lhs) (translateFully t rhs)
 
 instance (WrapTranslation t,
           FullyTranslatable t AST.Expression, FullyTranslatable t AST.Statement,
@@ -718,6 +731,8 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t),
     Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
+    Abstract.SupportFor 'Extensions.LambdaCase (Origin t)
+    ~ Abstract.SupportFor 'Extensions.LambdaCase (Target t),
     Abstract.SupportFor 'Extensions.QualifiedDo (Origin t)
     ~ Abstract.SupportFor 'Extensions.QualifiedDo (Target t),
     Abstract.SupportFor 'Extensions.RecursiveDo (Origin t)
@@ -733,7 +748,8 @@ instance {-# overlappable #-}
    translate _ (AST.ConditionalExpression cond true false) = AST.ConditionalExpression cond true false
    translate _ (AST.ConstructorExpression con) = AST.ConstructorExpression con
    translate _ (AST.CaseExpression scrutinee alts) = AST.CaseExpression scrutinee alts
-   translate _ (AST.LambdaCaseExpression alts) = AST.LambdaCaseExpression alts
+   translate _ (AST.LambdaCaseExpression sup alts) = AST.LambdaCaseExpression sup alts
+   translate t (AST.LambdaCasesExpression sup alts) = AST.LambdaCasesExpression sup (translate t <$> alts)
    translate _ (AST.MultiWayIfExpression alts) = AST.MultiWayIfExpression alts
    translate _ (AST.DoExpression statements) = AST.DoExpression statements
    translate _ (AST.MDoExpression statements) = AST.MDoExpression statements

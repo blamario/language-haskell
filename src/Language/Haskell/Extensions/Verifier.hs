@@ -213,6 +213,7 @@ instance (Eq s, IsString s) =>
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l,
+          Deep.Foldable (UnicodeSyntaxAccounting l pos s) (ExtAST.Declaration l l),
           FlexibleInstanceHeadAccounting l pos s
           `Transformation.At` Abstract.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s),
           Full.Foldable (MPTCAccounting l pos s) (Abstract.TypeLHS l l)) =>

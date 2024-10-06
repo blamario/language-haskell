@@ -9,7 +9,8 @@ module Language.Haskell.Extensions.AST (Language(Language),
                                         DerivingClause(..), DerivingStrategy(..),
                                         Expression(..), Pattern(..), PatternLHS(..), PatternEquationLHS(..),
                                         FieldBinding(..), FieldPattern(..),
-                                        Statement(..), ClassInstanceLHS(..), Context(..),
+                                        Statement(..), LambdaCasesAlternative(..),
+                                        ClassInstanceLHS(..), Context(..),
                                         Type(..), TypeLHS(..), TypeVarBinding(..), TypeRole(..),
                                         Constructor(..), Value(..),
                                         CallSafety(..), CallingConvention(..),
@@ -31,6 +32,7 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), Guard
                              Name(..), ModuleName(..), QualifiedName(..),
                              ImportSpecification(..))
 import qualified Rank2.TH
+import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
@@ -45,6 +47,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
    'Extensions.QualifiedDo,
+   'Extensions.LambdaCase,
    'Extensions.ImplicitParameters,
    'Extensions.TupleSections,
    'Extensions.UnboxedSums,
@@ -105,6 +108,12 @@ instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] Language where
    build = Abstract.QualifiedRecursiveDoConstruction {
       Abstract.mdoQualifiedExpression = MDoQualifiedExpression () ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
+   build = Abstract.LambdaCaseConstruction {
+      Abstract.lambdaCaseExpression = LambdaCaseExpression (),
+      Abstract.lambdaCasesExpression =
+         \pairs-> LambdaCasesExpression () (uncurry LambdaCasesAlternative <$> pairs)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
@@ -223,7 +232,6 @@ instance Abstract.ExtendedHaskell Language where
    type TypeVarBinding Language = TypeVarBinding Language
    type ModuleMember Language = ModuleMember Language
    type TypeRole Language = TypeRole Language
-   lambdaCaseExpression = LambdaCaseExpression
    multiWayIfExpression = MultiWayIfExpression
    safeImportDeclaration q = Import True q Nothing 
    packageQualifiedImportDeclaration q p = Import False q (Just p)
@@ -686,7 +694,8 @@ data Expression λ l d s =
                            (s (Abstract.Expression l l d d))
    | ConstructorExpression (s (Abstract.Constructor l l d d))
    | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
-   | LambdaCaseExpression [s (Abstract.CaseAlternative l l d d)]
+   | LambdaCaseExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) [s (Abstract.CaseAlternative l l d d)]
+   | LambdaCasesExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) [LambdaCasesAlternative λ l d s]
    | MultiWayIfExpression [s (Abstract.GuardedExpression l l d d)]
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | MDoExpression (s (Abstract.GuardedExpression l l d d))
@@ -729,6 +738,9 @@ data Expression λ l d s =
    | WildcardRecordExpression !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
                                (Abstract.QualifiedName λ)
                                [s (Abstract.FieldBinding l l d d)]
+
+data LambdaCasesAlternative λ l d s =
+   LambdaCasesAlternative [s (Abstract.Pattern l l d d)] (s (Abstract.EquationRHS l l d d))
 
 data FieldBinding λ l d s =
    FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -1032,10 +1044,12 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Context λ l d s)
 
 deriving instance Typeable (Expression λ l d s)
-deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
+deriving instance (Typeable (Abstract.Pattern l), Typeable (Abstract.EquationRHS l),
+                   Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Data (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -1043,6 +1057,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
+                   Data (s (Abstract.EquationRHS l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.ModuleName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
@@ -1050,6 +1065,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Show (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -1057,6 +1073,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
+                   Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.ModuleName λ),
                    Show (Abstract.Name λ)) => Show (Expression λ l d s)
@@ -1064,6 +1081,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Eq (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Eq (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
@@ -1071,6 +1089,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
+                   Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.ModuleName λ),
                    Eq (Abstract.Name λ)) => Eq (Expression λ l d s)
@@ -1082,6 +1101,14 @@ deriving instance (Show (s (Abstract.Expression l l d d)), Show (Abstract.Qualif
                   Show (FieldBinding λ l d s)
 deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedName λ)) =>
                   Eq (FieldBinding λ l d s)
+
+deriving instance Typeable (LambdaCasesAlternative λ l d s)
+deriving instance (Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+                   Data λ, Typeable l, Typeable d, Typeable s) => Data (LambdaCasesAlternative λ l d s)
+deriving instance (Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.EquationRHS l l d d))) =>
+                  Show (LambdaCasesAlternative λ l d s)
+deriving instance (Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.EquationRHS l l d d))) =>
+                  Eq (LambdaCasesAlternative λ l d s)
 
 deriving instance Typeable (Pattern λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
@@ -1183,5 +1210,6 @@ $(concat <$>
               ''Declaration, ''FunctionalDependency, ''DataConstructor, ''GADTConstructor,
               ''PatternEquationClause, ''DerivingClause, ''DerivingStrategy,
               ''Type, ''TypeLHS, ''TypeVarBinding, ''ClassInstanceLHS, ''Context,
-              ''Expression, ''FieldBinding, ''Pattern, ''PatternLHS, ''PatternEquationLHS, ''FieldPattern,
+              ''Expression, ''FieldBinding, ''LambdaCasesAlternative,
+              ''Pattern, ''PatternLHS, ''PatternEquationLHS, ''FieldPattern,
               ''Statement, ''Constructor, ''Value]))

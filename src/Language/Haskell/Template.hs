@@ -193,8 +193,12 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
 expressionTemplate (CaseExpression scrutinee alternatives) =
    CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTemplatePair . extract <$> alternatives)
-expressionTemplate (LambdaCaseExpression alternatives) =
+expressionTemplate (LambdaCaseExpression () alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
+expressionTemplate (LambdaCasesExpression () alternatives) =
+   LamCasesE (casesAlternativeTemplate <$> alternatives)
+   where casesAlternativeTemplate (LambdaCasesAlternative lhs rhs) =
+            Clause (patternTemplate . extract <$> lhs) (rhsTemplate $ extract rhs) []
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
 

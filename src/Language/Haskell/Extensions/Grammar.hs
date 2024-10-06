@@ -621,12 +621,20 @@ tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}}
              <$> parens (filter (\l-> any isJust l && any isNothing l)
                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
 
-lambdaCaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+lambdaCaseMixin :: Abstract.ExtendedWith '[ 'LambdaCase ] l => ExtensionOverlay l g t
 lambdaCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
       closedBlockExpresion = (superReport & closedBlockExpresion)
-         <|> Abstract.lambdaCaseExpression <$ (delimiter "\\" *> keyword "case")
-             <*> (selfReport & alternatives)}}
+         <|> Abstract.lambdaCaseExpression Abstract.build <$ (delimiter "\\" *> keyword "case")
+             <*> (selfReport & alternatives)
+         <|> Abstract.lambdaCasesExpression Abstract.build <$ (delimiter "\\" *> keyword "cases")
+             <*> many ((,) <$> many (wrap (selfReport & aPattern))
+                           <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression selfReport
+                                     <|> Abstract.guardedRHS
+                                         <$> someNonEmpty (wrap $ Abstract.guardedExpression . toList
+                                                                  <$> (selfReport & guards)
+                                                                  <* delimiter "->"
+                                                                  <*> (selfReport & expression))))}}
 
 emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                    Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))
