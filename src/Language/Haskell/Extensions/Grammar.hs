@@ -40,7 +40,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (eof, endBy, sepBy, sepBy1, sepByNonEmpty, sepEndBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
-import Text.Grampa.Combinators (moptional, someNonEmpty)
+import Text.Grampa.Combinators (moptional, someNonEmpty, takeSomeNonEmpty)
 import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (autochain, ParserT, lift)
 import qualified Transformation.Deep as Deep
 import Witherable (filter, mapMaybe)
@@ -621,20 +621,23 @@ tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}}
              <$> parens (filter (\l-> any isJust l && any isNothing l)
                          $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
 
-lambdaCaseMixin :: Abstract.ExtendedWith '[ 'LambdaCase ] l => ExtensionOverlay l g t
+lambdaCaseMixin :: forall l g t. (Abstract.ExtendedWith '[ 'LambdaCase ] l, OutlineMonoid t,
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.LambdaCasesAlternative l l))
+                => ExtensionOverlay l g t
 lambdaCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
       closedBlockExpresion = (superReport & closedBlockExpresion)
          <|> Abstract.lambdaCaseExpression Abstract.build <$ (delimiter "\\" *> keyword "case")
              <*> (selfReport & alternatives)
          <|> Abstract.lambdaCasesExpression Abstract.build <$ (delimiter "\\" *> keyword "cases")
-             <*> many ((,) <$> many (wrap (selfReport & aPattern))
-                           <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression selfReport
-                                     <|> Abstract.guardedRHS
-                                         <$> someNonEmpty (wrap $ Abstract.guardedExpression . toList
-                                                                  <$> (selfReport & guards)
-                                                                  <* delimiter "->"
-                                                                  <*> (selfReport & expression))))}}
+             <*> blockOf (wrap $ Abstract.lambdaCasesAlternative @l Abstract.build
+                                     <$> many (wrap (selfReport & aPattern))
+                                     <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression selfReport
+                                               <|> Abstract.guardedRHS
+                                                   <$> takeSomeNonEmpty (wrap $ Abstract.guardedExpression . toList
+                                                                                <$> (selfReport & guards)
+                                                                                <* delimiter "->"
+                                                                                <*> (selfReport & expression))))}}
 
 emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                    Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))

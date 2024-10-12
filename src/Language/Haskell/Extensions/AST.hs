@@ -112,8 +112,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.Recursive
 instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
    build = Abstract.LambdaCaseConstruction {
       Abstract.lambdaCaseExpression = LambdaCaseExpression (),
-      Abstract.lambdaCasesExpression =
-         \pairs-> LambdaCasesExpression () (uncurry LambdaCasesAlternative <$> pairs)}
+      Abstract.lambdaCasesExpression = LambdaCasesExpression (),
+      Abstract.lambdaCasesAlternative = LambdaCasesAlternative ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
@@ -221,6 +221,7 @@ instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language 
       Abstract.fundepClassDeclaration = FunDepClassDeclaration ()}
 
 type instance Abstract.FunctionalDependency Language = FunctionalDependency Language
+type instance Abstract.LambdaCasesAlternative Language = LambdaCasesAlternative Language
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 type instance Abstract.PatternLHS Language = PatternLHS Language
 type instance Abstract.PatternEquationLHS Language = PatternEquationLHS Language
@@ -695,7 +696,8 @@ data Expression λ l d s =
    | ConstructorExpression (s (Abstract.Constructor l l d d))
    | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
    | LambdaCaseExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) [s (Abstract.CaseAlternative l l d d)]
-   | LambdaCasesExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) [LambdaCasesAlternative λ l d s]
+   | LambdaCasesExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ)
+                           [s (Abstract.LambdaCasesAlternative l l d d)]
    | MultiWayIfExpression [s (Abstract.GuardedExpression l l d d)]
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | MDoExpression (s (Abstract.GuardedExpression l l d d))
@@ -740,7 +742,8 @@ data Expression λ l d s =
                                [s (Abstract.FieldBinding l l d d)]
 
 data LambdaCasesAlternative λ l d s =
-   LambdaCasesAlternative [s (Abstract.Pattern l l d d)] (s (Abstract.EquationRHS l l d d))
+   LambdaCasesAlternative !(Abstract.SupportFor 'Extensions.LambdaCase λ)
+                          [s (Abstract.Pattern l l d d)] (s (Abstract.EquationRHS l l d d))
 
 data FieldBinding λ l d s =
    FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -1057,7 +1060,7 @@ deriving instance (Typeable (Abstract.Pattern l), Typeable (Abstract.EquationRHS
                    Data (s (Abstract.Expression l l d d)), Data (s (Abstract.GuardedExpression l l d d)),
                    Data (s (Abstract.Declaration l l d d)), Data (s (Abstract.FieldBinding l l d d)),
                    Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.Statement l l d d)),
-                   Data (s (Abstract.EquationRHS l l d d)),
+                   Data (s (Abstract.LambdaCasesAlternative l l d d)),
                    Data (s (Abstract.Type l l d d)), Data (s (Abstract.Value l l d d)),
                    Data (Abstract.QualifiedName λ), Data (Abstract.ModuleName λ), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
@@ -1073,6 +1076,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (s (Abstract.Expression l l d d)), Show (s (Abstract.GuardedExpression l l d d)),
                    Show (s (Abstract.Declaration l l d d)), Show (s (Abstract.FieldBinding l l d d)),
                    Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.Statement l l d d)),
+                   Show (s (Abstract.LambdaCasesAlternative l l d d)),
                    Show (s (Abstract.EquationRHS l l d d)),
                    Show (s (Abstract.Type l l d d)), Show (s (Abstract.Value l l d d)),
                    Show (Abstract.QualifiedName λ), Show (Abstract.ModuleName λ),
@@ -1089,6 +1093,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (s (Abstract.Expression l l d d)), Eq (s (Abstract.GuardedExpression l l d d)),
                    Eq (s (Abstract.Declaration l l d d)), Eq (s (Abstract.FieldBinding l l d d)),
                    Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.Statement l l d d)),
+                   Eq (s (Abstract.LambdaCasesAlternative l l d d)),
                    Eq (s (Abstract.EquationRHS l l d d)),
                    Eq (s (Abstract.Type l l d d)), Eq (s (Abstract.Value l l d d)),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.ModuleName λ),
@@ -1103,11 +1108,14 @@ deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedN
                   Eq (FieldBinding λ l d s)
 
 deriving instance Typeable (LambdaCasesAlternative λ l d s)
-deriving instance (Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.EquationRHS l l d d)),
+deriving instance (Data (Abstract.SupportFor 'Extensions.LambdaCase λ),
+                   Data (s (Abstract.Pattern l l d d)), Data (s (Abstract.EquationRHS l l d d)),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (LambdaCasesAlternative λ l d s)
-deriving instance (Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.EquationRHS l l d d))) =>
+deriving instance (Show (Abstract.SupportFor 'Extensions.LambdaCase λ),
+                   Show (s (Abstract.Pattern l l d d)), Show (s (Abstract.EquationRHS l l d d))) =>
                   Show (LambdaCasesAlternative λ l d s)
-deriving instance (Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.EquationRHS l l d d))) =>
+deriving instance (Eq (Abstract.SupportFor 'Extensions.LambdaCase λ),
+                   Eq (s (Abstract.Pattern l l d d)), Eq (s (Abstract.EquationRHS l l d d))) =>
                   Eq (LambdaCasesAlternative λ l d s)
 
 deriving instance Typeable (Pattern λ l d s)

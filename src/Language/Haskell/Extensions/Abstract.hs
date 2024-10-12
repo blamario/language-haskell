@@ -15,7 +15,7 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
-              LambdaCaseConstruction, lambdaCaseExpression, lambdaCasesExpression,
+              LambdaCaseConstruction, lambdaCaseExpression, lambdaCasesExpression, lambdaCasesAlternative,
               ParallelListComprehensionConstruction, parallelListComprehension',
               TypeDataConstruction, typeDataDeclaration,
               TypeGADTConstruction, typeGADTDeclaration,
@@ -48,7 +48,8 @@ module Language.Haskell.Extensions.Abstract (
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
    ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
-   DerivingStrategy, FunctionalDependency, PatternLHS, PatternEquationClause, PatternEquationLHS,
+   DerivingStrategy, FunctionalDependency, LambdaCasesAlternative,
+   PatternLHS, PatternEquationClause, PatternEquationLHS,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
@@ -130,9 +131,12 @@ data instance Construct '[ 'Extensions.QualifiedDo,
                            'Extensions.RecursiveDo ] λ l d s = QualifiedRecursiveDoConstruction {
    mdoQualifiedExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
 
+type family LambdaCasesAlternative λ :: TreeNodeSubKind
+
 data instance Construct '[ 'Extensions.LambdaCase ] λ l d s = LambdaCaseConstruction {
    lambdaCaseExpression :: [s (CaseAlternative l l d d)] -> Expression λ l d s,
-   lambdaCasesExpression :: [([s (Pattern l l d d)], s (EquationRHS l l d d))] -> Expression λ l d s}
+   lambdaCasesExpression :: [s (LambdaCasesAlternative l l d d)] -> Expression λ l d s,
+   lambdaCasesAlternative :: [s (Pattern l l d d)] -> s (EquationRHS l l d d) -> LambdaCasesAlternative λ l d s}
 
 data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = ParallelListComprehensionConstruction {
    parallelListComprehension' :: s (Expression l l d d)
@@ -423,6 +427,7 @@ type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
                            Deep.Foldable t (TypeVarBinding l l), Deep.Foldable t (DerivingStrategy l l),
                            Deep.Foldable t (FunctionalDependency l l),
+                           Deep.Foldable t (LambdaCasesAlternative l l),
                            Deep.Foldable t (PatternLHS l l), Deep.Foldable t (PatternEquationLHS l l),
                            Deep.Foldable t (PatternEquationClause l l),
                            Report.DeeplyFoldable t l)

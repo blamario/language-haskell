@@ -196,8 +196,8 @@ expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTempla
 expressionTemplate (LambdaCaseExpression () alternatives) =
    LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
 expressionTemplate (LambdaCasesExpression () alternatives) =
-   LamCasesE (casesAlternativeTemplate <$> alternatives)
-   where casesAlternativeTemplate (LambdaCasesAlternative lhs rhs) =
+   LamCasesE (casesAlternativeTemplate . extract <$> alternatives)
+   where casesAlternativeTemplate (LambdaCasesAlternative () lhs rhs) =
             Clause (patternTemplate . extract <$> lhs) (rhsTemplate $ extract rhs) []
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
