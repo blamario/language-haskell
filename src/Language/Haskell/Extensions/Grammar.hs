@@ -565,7 +565,7 @@ recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'RecursiveDo ] l,
                  => ExtensionOverlay l g t
 recursiveDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      closedBlockExpresion = (superReport & closedBlockExpresion)
+      closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap (selfReport & statements),
       statement = (superReport & statement)
                   <|> wrap (Deep.InL
@@ -580,7 +580,7 @@ qualifiedDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l, Abstract
                  => ExtensionOverlay l g t
 qualifiedDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      closedBlockExpresion = (superReport & closedBlockExpresion)
+      closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.qualifiedDoExpression Abstract.build
             <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
             <* keyword "do"
@@ -595,7 +595,7 @@ qualifiedRecursiveDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l,
                           => ExtensionOverlay l g t
 qualifiedRecursiveDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      closedBlockExpresion = (superReport & closedBlockExpresion)
+      closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.mdoQualifiedExpression Abstract.build
             <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
             <* keyword "mdo"
@@ -626,7 +626,8 @@ lambdaCaseMixin :: forall l g t. (Abstract.ExtendedWith '[ 'LambdaCase ] l, Outl
                 => ExtensionOverlay l g t
 lambdaCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      closedBlockExpresion = (superReport & closedBlockExpresion)
+      openBlockExpression = notFollowedBy (delimiter "\\" *> keyword "cases") *> (superReport & openBlockExpression),
+      closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.lambdaCaseExpression Abstract.build <$ (delimiter "\\" *> keyword "case")
              <*> (selfReport & alternatives)
          <|> Abstract.lambdaCasesExpression Abstract.build <$ (delimiter "\\" *> keyword "cases")
@@ -652,7 +653,7 @@ multiWayIfMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
 multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, rightArrow}}
                 super@ExtendedGrammar{report = superReport} = super{
    report= superReport{
-      closedBlockExpresion = (superReport & closedBlockExpresion)
+      closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.multiWayIfExpression <$ keyword "if"
              <*> blockOf' (wrap (Abstract.guardedExpression . toList
                                  <$> guards <* rightArrow <*> expression))}}
@@ -787,7 +788,7 @@ blockArgumentsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGram
          <|> wrap (Abstract.applyExpression <$> (selfReport & fExpression)
                                             <*> wrap (selfReport & openBlockExpression)),
       dExpression = (selfReport & fExpression),
-      bareExpression = (superReport & bareExpression) <|> (selfReport & closedBlockExpresion)}}
+      bareExpression = (superReport & bareExpression) <|> (selfReport & closedBlockExpression)}}
 
 spaceSensitiveOperatorsMixin :: SpaceMonoid t => ExtensionOverlay l g t
 spaceSensitiveOperatorsMixin self@ExtendedGrammar{report = selfReport}
