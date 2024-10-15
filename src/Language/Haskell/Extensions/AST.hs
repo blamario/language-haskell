@@ -54,6 +54,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.UnboxedTuples,
    'Extensions.InterruptibleFFI,
    'Extensions.CApiFFI,
+   'Extensions.StrictData,
+   'Extensions.Strict,
    'Extensions.BangPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
@@ -151,6 +153,14 @@ instance Abstract.ExtendedWith '[ 'Extensions.ImplicitParameters ] Language wher
       Abstract.implicitParameterConstraint = ImplicitParameterConstraint (),
       Abstract.implicitParameterDeclaration = ImplicitParameterDeclaration (),
       Abstract.implicitParameterExpression = ImplicitParameterExpression ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.StrictData ] Language where
+   build = Abstract.StrictDataConstruction {
+      Abstract.lazyType = LazyType ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.Strict ] Language where
+   build = Abstract.StrictConstruction {
+      Abstract.lazyPattern = LazyPattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.BangPatterns ] Language where
    build = Abstract.BangPatternConstruction {
@@ -648,6 +658,7 @@ data Type λ l d s =
    | RecordFunctionType [s (Abstract.FieldDeclaration l l d d)] (s (Abstract.Type l l d d))
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))
+   | LazyType !(Abstract.SupportFor 'Extensions.StrictData λ) (s (Abstract.Type l l d d))
    | TupleType (NonEmpty (s (Abstract.Type l l d d)))
    | UnboxedTupleType !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (NonEmpty (s (Abstract.Type l l d d)))
    | UnboxedSumType !(Abstract.SupportFor 'Extensions.UnboxedSums λ) (NonEmpty (s (Abstract.Type l l d d)))
@@ -764,6 +775,7 @@ data Pattern λ l d s =
    | InvisibleTypePattern !(Abstract.SupportFor 'Extensions.TypeAbstractions λ) (s (Abstract.Type l l d d))
    | ExplicitTypePattern !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
+   | LazyPattern !(Abstract.SupportFor 'Extensions.Strict λ) (s (Abstract.Pattern l l d d))
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
                   (s (Abstract.Pattern l l d d))
@@ -987,6 +999,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.DerivingVia λ),
 deriving instance Typeable (Type λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Data (Abstract.SupportFor 'Extensions.StrictData λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)),
@@ -994,12 +1007,14 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Type λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Show (Abstract.SupportFor 'Extensions.StrictData λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)),
                    Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) => Show (Type λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Eq (Abstract.SupportFor 'Extensions.StrictData λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
                    Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)),
@@ -1123,6 +1138,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Data (Abstract.SupportFor 'Extensions.Strict λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
@@ -1136,6 +1152,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Show (Abstract.SupportFor 'Extensions.Strict λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
@@ -1148,6 +1165,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
+                   Eq (Abstract.SupportFor 'Extensions.Strict λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),

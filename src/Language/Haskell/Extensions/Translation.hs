@@ -450,6 +450,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.RecordFunctionType domain codomain) =
       AST.RecordFunctionType (translateFully t <$> domain) (translateFully t codomain)
    translateDeeply t (AST.ListType item) = AST.ListType (translateFully t item)
+   translateDeeply t (AST.LazyType support body) = AST.LazyType support (translateFully t body)
    translateDeeply t (AST.StrictType body) = AST.StrictType (translateFully t body)
    translateDeeply t (AST.TupleType items) = AST.TupleType (translateFully t <$> items)
    translateDeeply t (AST.UnboxedTupleType support items) = AST.UnboxedTupleType support (translateFully t <$> items)
@@ -539,6 +540,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
    translateDeeply t (AST.InfixPattern left con right) =
       AST.InfixPattern (translateFully t left) con (translateFully t right)
    translateDeeply t (AST.IrrefutablePattern body) = AST.IrrefutablePattern (translateFully t body)
+   translateDeeply t (AST.LazyPattern support body) = AST.LazyPattern support (translateFully t body)
    translateDeeply t (AST.ListPattern items) = AST.ListPattern (translateFully t <$> items)
    translateDeeply t (AST.LiteralPattern value) = AST.LiteralPattern (translateFully t value)
    translateDeeply t (AST.RecordPattern con fields) = AST.RecordPattern con (translateFully t <$> fields)

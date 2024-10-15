@@ -184,6 +184,7 @@ extensionMixins =
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [ImplicitParameters],             [(9, implicitParametersMixin)]),
+     (Set.fromList [StrictData],                     [(9, strictDataMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
      (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
@@ -374,8 +375,7 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
    gadtNewBody =
       parens (self & gadtNewBody)
       <|> Abstract.functionType
-          <$> wrap ((self & report & bType)
-                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+          <$> wrap (self & report & bType)
           <* (selfReport & rightArrow)
           <*> wrap (self & return_type)
       <|> Abstract.recordFunctionType
@@ -387,8 +387,7 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
       parens (self & prefix_gadt_body)
       <|> (self & return_type)
       <|> Abstract.functionType
-          <$> wrap ((self & report & bType)
-                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (self & report & bType))
+          <$> wrap ((self & report & bType) <|> (selfReport & declarationLevel & strictType))
           <* (selfReport & rightArrow)
           <*> wrap (self & prefix_gadt_body),
    record_gadt_body =
@@ -981,8 +980,7 @@ gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
                                     <*> parens forallAndNewBody,
    gadtNewBody = (super & gadtNewBody)
       <|> Abstract.functionType
-          <$> wrap ((selfReport & bType)
-                    <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+          <$> wrap (selfReport & bType)
           <* (selfReport & Report.rightArrow)
           <*> wrap paren_return_type
       <|> Abstract.recordFunctionType
@@ -1369,13 +1367,13 @@ gadtLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 gadtLinearTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
   prefix_gadt_body = (super & prefix_gadt_body)
     <|> Abstract.linearFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap ((selfReport & bType) <|> (selfReport & declarationLevel & strictType))
         <* delimiter "%"
         <* keyword "1"
         <* (selfReport & rightArrow)
         <*> wrap (self & prefix_gadt_body)
     <|> Abstract.multiplicityFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap ((selfReport & bType) <|> (selfReport & declarationLevel & strictType))
         <* delimiter "%"
         <* notFollowedBy (keyword "1")
         <*> wrap (selfReport & aType)
@@ -1383,13 +1381,13 @@ gadtLinearTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGra
         <*> wrap (self & prefix_gadt_body),
   gadtNewBody = (super & gadtNewBody)
     <|> Abstract.linearFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap (selfReport & bType)
         <* delimiter "%"
         <* keyword "1"
         <* (selfReport & rightArrow)
         <*> wrap (self & return_type)
     <|> Abstract.multiplicityFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap ((selfReport & bType) <|> (selfReport & declarationLevel & strictType))
         <* delimiter "%"
         <* notFollowedBy (keyword "1")
         <*> wrap (selfReport & aType)
@@ -1409,12 +1407,12 @@ gadtUnicodeLinearTypesMixin self@ExtendedGrammar{report = selfReport}
                             super@ExtendedGrammar{report = superReport} = super{
   prefix_gadt_body = (super & prefix_gadt_body)
     <|> Abstract.linearFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap ((selfReport & bType) <|> (selfReport & declarationLevel & strictType))
         <* delimiter "⊸"
         <*> wrap (self & prefix_gadt_body),
   gadtNewBody = (super & gadtNewBody)
     <|> Abstract.linearFunctionType
-        <$> wrap ((selfReport & bType) <|> Abstract.strictType <$ delimiter "!" <*> wrap (selfReport & bType))
+        <$> wrap (selfReport & bType)
         <* delimiter "⊸"
         <*> wrap (self & return_type)}
 
@@ -1630,6 +1628,14 @@ implicitParametersMixin self@ExtendedGrammar{report = selfReport}
              <|> Abstract.implicitParameterExpression Abstract.build
                  <$ delimiter "?" <*> (selfReport & variableIdentifier),
           qualifiedVariableSymbol = notFollowedBy (delimiter "?") *> (superReport & qualifiedVariableSymbol)}}
+
+strictDataMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'StrictData ] l) => ExtensionOverlay l g t
+strictDataMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
+   super{
+      report = superReport{
+         declarationLevel = (superReport & declarationLevel){
+            strictType = (superReport & declarationLevel & strictType)
+               <|> Abstract.lazyType Abstract.build <$ delimiter "~" <*> wrap (selfReport & aType)}}}
 
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'BangPatterns ] l) => ExtensionOverlay l g t
 bangPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =

@@ -563,6 +563,7 @@ gadtConstructorTemplate (GADTConstructors names vars context t)
 
 fieldTypeTemplate :: TemplateWrapper f => FieldDeclaration Language Language f f -> [VarBangType]
 fieldTypeTemplate (ConstructorFields names t)
+   | LazyType{} <- extract t = varBang SourceLazy t <$> toList names
    | StrictType{} <- extract t = varBang SourceStrict t <$> toList names
    | otherwise = varBang NoSourceStrictness t <$> toList names
    where varBang strictness t name = (nameTemplate name, Bang NoSourceUnpackedness strictness, typeTemplate $ extract t)
@@ -610,6 +611,7 @@ patternTemplate (ConstructorPattern con typeApps args) = case (extract con) of
 patternTemplate (InfixPattern left op right) =
    InfixP (patternTemplate $ extract left) (qnameTemplate op) (patternTemplate $ extract right)
 patternTemplate (IrrefutablePattern pat) = TildeP (patternTemplate $ extract pat)
+patternTemplate (LazyPattern () pat) = TildeP (patternTemplate $ extract pat)
 patternTemplate (BangPattern () pat) = BangP (patternTemplate $ extract pat)
 patternTemplate (ViewPattern () view pat) = ViewP (wrappedExpressionTemplate view) (patternTemplate $ extract pat)
 patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> items)
@@ -666,6 +668,7 @@ typeTemplate (MultiplicityFunctionType from mult to) =
    MulArrowT `AppT` typeTemplate (extract mult) `AppT` typeTemplate (extract from) `AppT` typeTemplate (extract to)
 #endif
 typeTemplate (ListType itemType) = AppT ListT (typeTemplate $ extract itemType)
+typeTemplate (LazyType () t) = typeTemplate (extract t)
 typeTemplate (StrictType t) = typeTemplate (extract t)
 typeTemplate (TupleType items) = foldl' AppT (TupleT $! length items) (typeTemplate . extract <$> items)
 typeTemplate (UnboxedTupleType () items) =
@@ -736,6 +739,7 @@ freeTypeVars (LinearFunctionType from to) = nub (freeTypeVars (extract from) <> 
 freeTypeVars (MultiplicityFunctionType from mult to) =
    nub (freeTypeVars (extract from) <> freeTypeVars (extract mult) <> freeTypeVars (extract to))
 freeTypeVars (ListType itemType) = freeTypeVars (extract itemType)
+freeTypeVars (LazyType () t) = freeTypeVars (extract t)
 freeTypeVars (StrictType t) = freeTypeVars (extract t)
 freeTypeVars (TupleType items) = nub (foldMap (freeTypeVars . extract) items)
 freeTypeVars (UnboxedTupleType () items) = nub (foldMap (freeTypeVars . extract) items)

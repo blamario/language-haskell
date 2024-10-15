@@ -106,6 +106,7 @@ data DeclarationGrammar l f p = DeclarationGrammar {
    declaredConstructors :: p [f (Abstract.DataConstructor l l f f)],
    declaredConstructor :: p (Abstract.DataConstructor l l f f),
    infixConstructorArgType :: p (Abstract.Type l l f f),
+   strictType :: p (Abstract.Type l l f f),
    newConstructor :: p (Abstract.DataConstructor l l f f),
    fieldDeclaration :: p (Abstract.FieldDeclaration l l f f),
    optionalContext, optionalTypeSignatureContext, context, constraint :: p (Abstract.Context l l f f),
@@ -274,21 +275,20 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 
       declaredConstructors = wrap declaredConstructor `sepBy1` delimiter "|",
       declaredConstructor = Abstract.constructor <$> constructor
-                                                 <*> many (wrap
-                                                           $ aType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType)
+                                                 <*> many (wrap $ aType <|> strictType)
                             <|> wrap infixConstructorArgType
                                 <**> (constructorOperator
                                       <**> (wrap infixConstructorArgType
                                             <**> (pure $ \right op left-> Abstract.constructor op [left, right])))
                             <|> Abstract.recordConstructor <$> constructor
                                                            <*> braces (wrap fieldDeclaration `sepBy` comma),
-      infixConstructorArgType = bType <|> Abstract.strictType <$ delimiter "!" <*> wrap aType,
+      infixConstructorArgType = bType <|> strictType,
       newConstructor = Abstract.constructor <$> constructor <*> ((:[]) <$> wrap aType)
                        <|> Abstract.recordConstructor <$> constructor
                            <*> braces ((:[]) <$> wrap (Abstract.constructorFields <$> ((:|[]) <$> variable)
                                                        <* doubleColon <*> wrap typeTerm)),
-      fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon
-                         <*> wrap (typeTerm <|> Abstract.strictType <$ delimiter "!" <*> wrap aType),
+      fieldDeclaration = Abstract.constructorFields <$> variables <* doubleColon <*> wrap (typeTerm <|> strictType),
+      strictType = Abstract.strictType <$ delimiter "!" <*> wrap aType,
 
    -- constrs 	→ 	constr1 | … | constrn 	    (n ≥ 1)
    -- constr 	→ 	con [!] atype1 … [!] atypek 	    (arity con  =  k, k ≥ 0)

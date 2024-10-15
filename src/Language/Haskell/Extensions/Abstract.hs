@@ -31,6 +31,8 @@ module Language.Haskell.Extensions.Abstract (
               CApiFFIConstruction, cApiCall,
               ImplicitParametersConstruction,
               implicitParameterConstraint, implicitParameterDeclaration, implicitParameterExpression,
+              StrictDataConstruction, lazyType,
+              StrictConstruction, lazyPattern,
               BangPatternConstruction, bangPattern,
               ViewPatternConstruction, viewPattern,
               NPlusKPatternConstruction, nPlusKPattern,
@@ -183,6 +185,12 @@ data instance Construct '[ 'Extensions.InterruptibleFFI ] λ l d s = Interruptib
 data instance Construct '[ 'Extensions.CApiFFI ] λ l d s = CApiFFIConstruction {
    cApiCall :: CallingConvention λ}
 
+data instance Construct '[ 'Extensions.StrictData ] λ l d s = StrictDataConstruction {
+   lazyType :: s (Type l l d d) -> Type λ l d s}
+
+data instance Construct '[ 'Extensions.Strict ] λ l d s = StrictConstruction {
+   lazyPattern :: s (Pattern l l d d) -> Pattern λ l d s}
+
 data instance Construct '[ 'Extensions.BangPatterns ] λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
@@ -268,6 +276,7 @@ class (Haskell λ,
                           'Extensions.LambdaCase,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
+                          'Extensions.StrictData, 'Extensions.Strict,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,
