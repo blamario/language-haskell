@@ -185,6 +185,7 @@ extensionMixins =
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
      (Set.fromList [ImplicitParameters],             [(9, implicitParametersMixin)]),
      (Set.fromList [StrictData],                     [(9, strictDataMixin)]),
+     (Set.fromList [Strict],                         [(9, strictMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
      (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
@@ -1636,6 +1637,19 @@ strictDataMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{
          declarationLevel = (superReport & declarationLevel){
             strictType = (superReport & declarationLevel & strictType)
                <|> Abstract.lazyType Abstract.build <$ delimiter "~" <*> wrap (selfReport & aType)}}}
+
+strictMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'Strict ] l) => ExtensionOverlay l g t
+strictMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
+   super{
+      report = superReport{
+         aPattern =
+            Abstract.irrefutablePattern
+               <$ delimiter "~"
+               <*> parens (wrap (Abstract.lazyPattern Abstract.build
+                                    <$ delimiter "~"
+                                    <*> wrap (selfReport & aPattern)))
+            <<|> Abstract.lazyPattern Abstract.build <$ delimiter "~" <*> wrap (selfReport & aPattern)
+            <<|> (superReport & aPattern)}}
 
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'BangPatterns ] l) => ExtensionOverlay l g t
 bangPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
