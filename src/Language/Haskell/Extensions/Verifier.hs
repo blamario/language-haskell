@@ -231,6 +231,8 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
                 _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
          ExtAST.GADTDeclaration context _lhs constructors _derivings ->
             Map.singleton Extensions.GADTSyntax [(start, end)]
+         ExtAST.NamedDefaultDeclaration{} ->
+            Map.singleton Extensions.NamedDefaults [(start, end)]
          ExtAST.TypeDataDeclaration _sup _lhs _kind constructors ->
             (if null constructors
              then Map.singleton Extensions.EmptyDataDeclarations [(start, end)]

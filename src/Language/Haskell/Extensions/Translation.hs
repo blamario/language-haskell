@@ -245,6 +245,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
                                   (translateDeeply t <$> vars1) (translateFully t context1)
                                   (translateDeeply t <$> vars2) (translateFully t context2)
                                   (translateFully t <$> args) (translateFully t result)
+   translateDeeply t (AST.NamedDefaultDeclaration support name types) =
+      AST.NamedDefaultDeclaration support name (translateFully t <$> types)
 
 instance (WrapTranslation t,
           FullyTranslatable t AST.PatternEquationLHS, FullyTranslatable t AST.EquationRHS,

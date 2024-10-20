@@ -315,6 +315,12 @@ declarationTemplates (DefaultDeclaration types) =
 #else
    error "Template Haskell <2.19 can't represent a default declaration"
 #endif
+declarationTemplates (NamedDefaultDeclaration () name types) =
+#if MIN_VERSION_template_haskell(2,19,0)
+   [DefaultD (typeTemplate . extract <$> types)]
+#else
+   error "Template Haskell <2.19 can't represent a default declaration"
+#endif
 declarationTemplates (EquationDeclaration lhs rhs wheres) = case extract lhs of
    VariableLHS name -> [ValD (VarP $ nameTemplate name) rhs' declarations]
    PatternLHS pat -> [ValD (patternTemplate $ extract pat) rhs' declarations]

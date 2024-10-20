@@ -60,6 +60,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
    'Extensions.PatternSynonyms,
+   'Extensions.NamedDefaults,
    'Extensions.StandaloneDeriving,
    'Extensions.DerivingStrategies,
    'Extensions.DerivingVia,
@@ -189,6 +190,10 @@ instance Abstract.ExtendedWith '[ 'Extensions.PatternSynonyms ] Language where
       Abstract.unidirectionalPatternSynonym = UnidirectionalPatternSynonym (),
       Abstract.explicitPatternSynonym = ExplicitPatternSynonym (),
       Abstract.patternSynonymSignature = PatternSynonymSignature ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.NamedDefaults ] Language where
+   build = Abstract.NamedDefaultsConstruction {
+      Abstract.namedDefaultDeclaration = NamedDefaultDeclaration ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.StandaloneDeriving ] Language where
    build = Abstract.StandaloneDerivingConstruction {
@@ -532,6 +537,8 @@ data Declaration λ l d s =
                          (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                          [s (Abstract.GADTConstructor l l d d)]
    | DefaultDeclaration [s (Abstract.Type l l d d)]
+   | NamedDefaultDeclaration !(Abstract.SupportFor 'Extensions.NamedDefaults λ)
+                             (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
    | DefaultMethodSignature !(Abstract.SupportFor 'Extensions.DefaultSignatures λ)
                              (Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
@@ -854,6 +861,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Data (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Data (Abstract.SupportFor 'Extensions.TypeData λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
@@ -879,6 +887,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Show (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Show (Abstract.SupportFor 'Extensions.TypeData λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
@@ -904,6 +913,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.DerivingStrategies λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.GADTs λ),
+                   Eq (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Eq (Abstract.SupportFor 'Extensions.TypeData λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),

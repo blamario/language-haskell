@@ -103,6 +103,7 @@ data Extension = AllowAmbiguousTypes
                | MultiParameterConstraints -- active unnamed in GHC
                | MultiWayIf
                | NPlusKPatterns
+               | NamedDefaults
                | NamedFieldPuns
                | NamedWildCards
                | NegativeLiterals
@@ -400,6 +401,7 @@ byName = Map.fromList [
   ("MultiParamTypeClasses", MultiParamTypeClasses),
   ("MultiWayIf", MultiWayIf),
   ("NPlusKPatterns", NPlusKPatterns),
+  ("NamedDefaults", NamedDefaults),
   ("NamedFieldPuns", NamedFieldPuns),
   ("NamedWildCards", NamedWildCards),
   ("NegativeLiterals", NegativeLiterals),

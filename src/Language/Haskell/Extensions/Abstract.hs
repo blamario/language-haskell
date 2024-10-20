@@ -41,6 +41,7 @@ module Language.Haskell.Extensions.Abstract (
               prefixPatternLHS, infixPatternLHS, recordPatternLHS, prefixPatternEquationLHS, infixPatternEquationLHS,
               patternEquationClause,
               implicitPatternSynonym, unidirectionalPatternSynonym, explicitPatternSynonym, patternSynonymSignature,
+              NamedDefaultsConstruction, namedDefaultDeclaration,
               StandaloneDerivingConstruction, standaloneDerivingDeclaration,
               DerivingStrategiesConstruction,
               defaultStrategy, stockStrategy, newtypeStrategy, anyClassStrategy,
@@ -233,6 +234,9 @@ data instance Construct '[ 'Extensions.PatternSynonyms ] λ l d s = PatternSynon
                            -> s (Type l l d d)
                            -> Declaration λ l d s}
 
+data instance Construct '[ 'Extensions.NamedDefaults ] λ l d s = NamedDefaultsConstruction {
+   namedDefaultDeclaration :: QualifiedName λ -> [s (Type l l d d)] -> Declaration λ l d s}
+
 data instance Construct '[ 'Extensions.StandaloneDeriving ] λ l d s = StandaloneDerivingConstruction {
    standaloneDerivingDeclaration :: [TypeVarBinding λ l d s]
                                  -> s (Context l l d d)
@@ -278,6 +282,7 @@ class (Haskell λ,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.StrictData, 'Extensions.Strict,
                           'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
+                          'Extensions.NamedDefaults,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,

@@ -129,6 +129,7 @@ extensionMixins =
      (Set.fromList [PackageImports,
                     SafeImports,
                     ImportQualifiedPost],            [(9, safePackageImportsQualifiedPostMixin)]),
+     (Set.fromList [NamedDefaults],                  [(9, namedDefaultsMixin)]),
      (Set.fromList [NegativeLiterals],               [(2, negativeLiteralsMixin)]),
      (Set.fromList [LexicalNegation],                [(3, lexicalNegationMixin)]),
      (Set.fromList [MagicHash],                      [(3, magicHashMixin)]),
@@ -459,7 +460,7 @@ unboxedTuplesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramm
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedListTuplePunsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedListTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unboxedListTuplePunsMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
    report= superReport{
       aType = (superReport & aType)
               <|> Abstract.unboxedTupleType Abstract.build
@@ -471,7 +472,7 @@ unboxedListTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@Extend
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedTupleSectionsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unboxedTupleSectionsMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
    report= superReport{
       bareExpression = (superReport & bareExpression)
                        <|> Abstract.unboxedTupleSectionExpression Abstract.build
@@ -593,7 +594,7 @@ qualifiedRecursiveDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l,
                                             Abstract.ExtendedWith '[ 'QualifiedDo, 'RecursiveDo ] l,
                                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                           => ExtensionOverlay l g t
-qualifiedRecursiveDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+qualifiedRecursiveDoMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
    report= superReport{
       closedBlockExpression = (superReport & closedBlockExpression)
          <|> Abstract.mdoQualifiedExpression Abstract.build
@@ -745,6 +746,15 @@ safePackageImportsQualifiedPostMixin self@ExtendedGrammar{report = selfReport}
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
                                  <*> optional (wrap $ selfReport & moduleLevel & importSpecification)}}}
+
+namedDefaultsMixin :: Abstract.ExtendedWith '[ 'NamedDefaults ] l => ExtensionOverlay l g t
+namedDefaultsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+   report= superReport{
+      declarationLevel= (superReport & declarationLevel){
+         topLevelDeclaration = (superReport & declarationLevel & topLevelDeclaration)
+            <|> Abstract.namedDefaultDeclaration Abstract.build <$ keyword "default"
+                               <*> (selfReport & qualifiedConstructor)
+                               <*> parens (wrap (selfReport & typeTerm) `sepBy` comma)}}}
 
 explicitNamespacesMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
 explicitNamespacesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
