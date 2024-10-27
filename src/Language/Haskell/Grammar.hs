@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, OverloadedStrings,
+{-# Language FlexibleContexts, FlexibleInstances, NoFieldSelectors, OverloadedStrings,
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeOperators, TypeSynonymInstances #-}
 

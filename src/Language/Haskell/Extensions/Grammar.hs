@@ -1,4 +1,5 @@
-{-# Language DataKinds, FlexibleContexts, FlexibleInstances, NamedFieldPuns, OverloadedRecordDot, OverloadedStrings,
+{-# Language DataKinds, FlexibleContexts, FlexibleInstances,
+             NamedFieldPuns, NoFieldSelectors, OverloadedRecordDot, OverloadedStrings,
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances #-}
 
@@ -7,7 +8,7 @@
 -- * @OverloadedRecordUpdate@ is not supported by TemplateHaskell
 -- * @Arrows@ is not supported by TemplateHaskell
 
-module Language.Haskell.Extensions.Grammar (extendedGrammar, parseModule, report, module Report) where
+module Language.Haskell.Extensions.Grammar (ExtendedGrammar(report), extendedGrammar, parseModule, module Report) where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -257,7 +258,7 @@ parseModule extensions source = case moduleExtensions of
       | let (contradictions, extensionMap) = partitionContradictory (Set.fromList extensions') ->
         if Set.null contradictions then
            (if List.null extensions' then id else fmap $ fmap $ rewrap $ Abstract.withLanguagePragma extensions')
-           $ parseResults $ Report.haskellModule $ report
+           $ parseResults $ (.report.haskellModule)
            $ parseComplete (extendedGrammar $ positiveKeys $ withImplications $ extensionMap <> extensions) source
         else Left mempty{errorAlternatives= ["Contradictory extension switches " <> show (toList contradictions)]}
    Right extensionses -> error ("Ambiguous extensions: " <> show extensionses)
@@ -652,7 +653,7 @@ emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                => ExtensionOverlay l g t
 emptyCaseMixin self super = super{
    report= super.report{
-      alternatives = blockOf (wrap (alternative $ report super))}}
+      alternatives = blockOf (wrap super.report.alternative)}}
 
 multiWayIfMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))

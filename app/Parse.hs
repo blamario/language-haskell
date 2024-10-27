@@ -1,5 +1,5 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables,
-             TypeFamilies, TypeOperators #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, OverloadedRecordDot, RankNTypes, RecordWildCards,
+             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators #-}
 
 module Main where
 
@@ -26,6 +26,7 @@ import qualified Transformation.Full as Full
 
 import Control.Monad
 import Data.Data (Data)
+import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid.Instances.PrefixMemory (content)
 import Data.Monoid.Textual (fromText)
@@ -238,9 +239,13 @@ main' Opts{..} = do
                       w ~ Grammar.NodeWrap Input)
                   => Input -> ParseResults Input [w (Abstract.Module l l w w)]
       parseModule = Grammar.parseModule defaultExtensions
-      parseExpression t = getCompose
-                          $ snd <$> getCompose (Grammar.expression . Grammar.report
-                                                $ parseComplete (Grammar.extendedGrammar Extensions.allExtensions) t)
+      parseExpression :: forall l w. (Abstract.ExtendedHaskell l,
+                                      Abstract.DeeplyFoldable (Reserializer.Serialization (Down Int) Input) l,
+                                      w ~ Grammar.NodeWrap Input)
+                      => Input -> ParseResults Input [w (Abstract.Expression l l w w)]
+      parseExpression t =
+        ((parseComplete (Grammar.extendedGrammar @l Extensions.allExtensions) t).report.expression.getCompose
+         <&> snd).getCompose
       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
 
 type NodeWrap = ((,) Int)
