@@ -277,7 +277,7 @@ extendedGrammar extensions = memoize extendWith mixinKeys
          extendWith :: [Set Extension] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
          extendWith = overlay extendedReport . reverse
                       . (initialOverlay :) . map snd . List.sortOn fst . fold . map (extensionMixins Map.!)
-         extendedReport g@ExtendedGrammar{report = r} = g{report = Report.grammar r}
+         extendedReport g = g{report = Report.grammar g.report}
 
 -- | Reorganize the grammar to make it more extensible, without adding any extensions
 initialOverlay :: forall l g t. (Abstract.ExtendedHaskell l,
@@ -287,50 +287,49 @@ initialOverlay :: forall l g t. (Abstract.ExtendedHaskell l,
                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Import l l),
                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l))
                => ExtensionOverlay l g t
-initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{declarationLevel = selfDeclarations}}
-               super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= (declarationLevel superReport){
-         classLHS = selfDeclarations.simpleType,
+initialOverlay self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         classLHS = self.report.declarationLevel.simpleType,
          simpleType =
-            Abstract.simpleTypeLHS <$> selfReport.typeConstructor <*> pure []
+            Abstract.simpleTypeLHS <$> self.report.typeConstructor <*> pure []
             <|> Abstract.infixTypeLHSApplication
                 <$> self.extensions.typeVarBinder
                 <* terminator "`"
-                <*> selfDeclarations.typeClass
+                <*> self.report.declarationLevel.typeClass
                 <* terminator "`"
                 <*> self.extensions.typeVarBinder
             <|> Abstract.typeLHSApplication
-                <$> wrap selfDeclarations.simpleType
+                <$> wrap self.report.declarationLevel.simpleType
                 <*> self.extensions.typeVarBinder,
          optionalTypeSignatureContext = pure Abstract.noContext,
          context =
-            selfDeclarations.constraint
+            self.report.declarationLevel.constraint
             <|> self.extensions.equalityConstraint
-            <|> Abstract.constraints <$> parens (wrap (selfDeclarations.constraint
+            <|> Abstract.constraints <$> parens (wrap (self.report.declarationLevel.constraint
                                                        <|> self.extensions.equalityConstraint
                                                        <|> self.extensions.implicitParameterConstraint) `sepBy` comma),
          instanceDesignator = self.extensions.instanceDesignatorApplications,
-         instanceTypeDesignator = selfReport.aType},
+         instanceTypeDesignator = self.report.aType},
       pattern = self.extensions.infixPattern,
-      lPattern = selfReport.aPattern
+      lPattern = self.report.aPattern
                  <|> Abstract.literalPattern
                      <$ delimiter "-"
-                     <*> wrap ((Abstract.integerLiteral . negate) <$> selfReport.integer
-                               <|> (Abstract.floatingLiteral . negate) <$> selfReport.float)
+                     <*> wrap ((Abstract.integerLiteral . negate) <$> self.report.integer
+                               <|> (Abstract.floatingLiteral . negate) <$> self.report.float)
                  <|> Abstract.constructorPattern
-                     <$> wrap selfReport.generalConstructor
+                     <$> wrap self.report.generalConstructor
                      <*> some (wrap self.extensions.conArgPattern),
       aPattern = self.extensions.conArgPattern,
       -- NoListTuplePuns
-      aType = generalTypeConstructor selfReport
-              <|> Abstract.typeVariable <$> typeVar selfReport
-              <|> parens (typeTerm selfReport)
+      aType = self.report.generalTypeConstructor
+              <|> Abstract.typeVariable <$> self.report.typeVar
+              <|> parens self.report.typeTerm
               <|> Abstract.typeWildcard <$ keyword "_"
               <|> Abstract.groundType <$ self.extensions.groundTypeKind,
       generalTypeConstructor =
-         Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedConstructor selfReport)
-         <|> Abstract.functionConstructorType <$ parens (rightArrow selfReport),
+         Abstract.constructorType <$> wrap (Abstract.constructorReference <$> self.report.qualifiedConstructor)
+         <|> Abstract.functionConstructorType <$ parens self.report.rightArrow,
       typeTerm = self.extensions.arrowType},
    extensions = super.extensions{
       keywordForall = empty,
@@ -339,483 +338,479 @@ initialOverlay self@ExtendedGrammar{report = selfReport@Report.HaskellGrammar{de
       derivingStrategy = empty,
       arrowType = self.extensions.cType
          <|> Abstract.functionType <$> wrap self.extensions.cType
-                                   <* selfReport.rightArrow
+                                   <* self.report.rightArrow
                                    <*> wrap self.extensions.arrowType
-         <|> Abstract.constrainedType <$> wrap selfDeclarations.context
-                                      <* selfReport.rightDoubleArrow
+         <|> Abstract.constrainedType <$> wrap self.report.declarationLevel.context
+                                      <* self.report.rightDoubleArrow
                                       <*> wrap self.extensions.arrowType,
-      cType = selfReport.bType,
+      cType = self.report.bType,
       equalityConstraint = empty,
       implicitParameterConstraint = empty,
-      infixPattern = pattern superReport,
+      infixPattern = super.report.pattern,
       promotedLiteral = empty,
       promotedStructure = empty,
       inClassOrInstanceTypeFamilyDeclaration = empty,
       instanceDesignatorBase =
-         Abstract.classReferenceInstanceLHS <$> selfDeclarations.qualifiedTypeClass
-         <|> parens selfReport.declarationLevel.instanceDesignator,
+         Abstract.classReferenceInstanceLHS <$> self.report.declarationLevel.qualifiedTypeClass
+         <|> parens self.report.declarationLevel.instanceDesignator,
       instanceDesignatorApplications =
          self.extensions.instanceDesignatorBase
          <|> Abstract.classInstanceLHSApplication
              <$> wrap self.extensions.instanceDesignatorApplications
-             <*> wrap selfReport.declarationLevel.instanceTypeDesignator,
+             <*> wrap self.report.declarationLevel.instanceTypeDesignator,
       optionalForall = pure [],
-      optionallyParenthesizedTypeVar = selfReport.typeVar,
+      optionallyParenthesizedTypeVar = self.report.typeVar,
       optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar,
       optionallyKindedTypeVar = empty,
-      typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> selfReport.typeVar,
+      typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> self.report.typeVar,
       gadtConstructors =
          Abstract.gadtConstructors <$> self.extensions.constructorIDs
-                                   <* selfReport.doubleColon
+                                   <* self.report.doubleColon
                                    <*> self.extensions.optionalForall
-                                   <*> wrap selfDeclarations.optionalContext
+                                   <*> wrap self.report.declarationLevel.optionalContext
                                    <*> wrap self.extensions.gadtBody,
       gadtNewConstructor =
-         Abstract.gadtConstructors <$> ((:|[]) <$> selfReport.constructor) <* selfReport.doubleColon
+         Abstract.gadtConstructors <$> ((:|[]) <$> self.report.constructor) <* self.report.doubleColon
                                    <*> self.extensions.optionalForall
                                    <*> wrap (pure Abstract.noContext
-                                             <|> selfDeclarations.context
-                                                 *> selfReport.rightDoubleArrow
+                                             <|> self.report.declarationLevel.context
+                                                 *> self.report.rightDoubleArrow
                                                  *> fail "No context allowed on GADT newtype")
                                    <*> wrap self.extensions.gadtNewBody,
-      constructorIDs = selfReport.constructor `sepByNonEmpty` comma,
+      constructorIDs = self.report.constructor `sepByNonEmpty` comma,
       gadtNewBody =
          parens self.extensions.gadtNewBody
          <|> Abstract.functionType
-             <$> wrap selfReport.bType
-             <* selfReport.rightArrow
+             <$> wrap self.report.bType
+             <* self.report.rightArrow
              <*> wrap (self.extensions.return_type)
          <|> Abstract.recordFunctionType
-             <$> braces ((:[]) <$> wrap selfDeclarations.fieldDeclaration)
-             <* selfReport.rightArrow
+             <$> braces ((:[]) <$> wrap self.report.declarationLevel.fieldDeclaration)
+             <* self.report.rightArrow
              <*> wrap (self.extensions.return_type),
       gadtBody = (self.extensions.prefix_gadt_body) <|> (self.extensions.record_gadt_body),
       prefix_gadt_body =
          parens (self.extensions.prefix_gadt_body)
          <|> (self.extensions.return_type)
          <|> Abstract.functionType
-             <$> wrap (selfReport.bType <|> selfReport.declarationLevel.strictType)
-             <* selfReport.rightArrow
+             <$> wrap (self.report.bType <|> self.report.declarationLevel.strictType)
+             <* self.report.rightArrow
              <*> wrap (self.extensions.prefix_gadt_body),
       record_gadt_body =
          parens (self.extensions.record_gadt_body)
          <|> Abstract.recordFunctionType
-             <$> braces (wrap selfDeclarations.fieldDeclaration `sepBy` comma)
-             <* selfReport.rightArrow
+             <$> braces (wrap self.report.declarationLevel.fieldDeclaration `sepBy` comma)
+             <* self.report.rightArrow
              <*> wrap (self.extensions.return_type),
       return_type = Abstract.typeApplication
                        <$> wrap ((self.extensions.return_type) <|> parens (self.extensions.return_type))
                        <*> wrap (self.extensions.arg_type)
-                    <|> selfReport.generalTypeConstructor,
-      conArgPattern = aPattern superReport,
-      arg_type = selfReport.aType,
+                    <|> self.report.generalTypeConstructor,
+      conArgPattern = super.report.aPattern,
+      arg_type = self.report.aType,
       binary = empty}}
 
 identifierSyntaxMixin :: ExtensionOverlay l g t
-identifierSyntaxMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
+identifierSyntaxMixin self super = super{
+   report= super.report{
       variableIdentifier = token (Abstract.name . Text.pack . toString mempty <$> variableLexeme),
       constructorIdentifier = token (Abstract.name . Text.pack . toString mempty <$> constructorLexeme),
       variableSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.variableSymbolLexeme),
       constructorSymbol = token (Abstract.name . Text.pack . toString mempty <$> Report.constructorSymbolLexeme)}}
 
 overloadedLabelsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-overloadedLabelsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      bareExpression = superReport.bareExpression
+overloadedLabelsMixin self super = super{
+   report= super.report{
+      bareExpression = super.report.bareExpression
                        <|> Abstract.overloadedLabel . Text.pack . toString mempty
                            <$> token (string "#" *> variableLexeme),
-      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> superReport.variableSymbol}}
+      variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> super.report.variableSymbol}}
 
 unicodeSyntaxMixin :: ExtensionOverlay l g t
-unicodeSyntaxMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unicodeSyntaxMixin self super = super{
    extensions = super.extensions{
       keywordForall = super.extensions.keywordForall <|> delimiter "∀"},
-   report= superReport{
-      doubleColon = superReport.doubleColon <|> delimiter "∷",
-      rightDoubleArrow = superReport.rightDoubleArrow <|> delimiter "⇒",
-      rightArrow = superReport.rightArrow <|> delimiter "→",
-      leftArrow = superReport.leftArrow <|> delimiter "←",
-      variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> superReport.variableSymbol}}
+   report= super.report{
+      doubleColon = super.report.doubleColon <|> delimiter "∷",
+      rightDoubleArrow = super.report.rightDoubleArrow <|> delimiter "⇒",
+      rightArrow = super.report.rightArrow <|> delimiter "→",
+      leftArrow = super.report.leftArrow <|> delimiter "←",
+      variableSymbol = notSatisfyChar (`elem` ("∀←→⇒∷★" :: [Char])) *> super.report.variableSymbol}}
 
 listTuplePunsMixin :: forall l g t. ExtensionOverlay l g t
-listTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      aType = superReport.aType
-              <|> Abstract.tupleType <$> parens ((:|) <$> wrap selfReport.typeTerm
-                                                      <*> some (comma *> wrap selfReport.typeTerm))
-              <|> Abstract.listType <$> brackets (wrap selfReport.typeTerm),
-      generalTypeConstructor = superReport.generalTypeConstructor
+listTuplePunsMixin self super = super{
+   report= super.report{
+      aType = super.report.aType
+              <|> Abstract.tupleType <$> parens ((:|) <$> wrap self.report.typeTerm
+                                                      <*> some (comma *> wrap self.report.typeTerm))
+              <|> Abstract.listType <$> brackets (wrap self.report.typeTerm),
+      generalTypeConstructor = super.report.generalTypeConstructor
                                <|> Abstract.constructorType
                                    <$> wrap (Abstract.unitConstructor <$ terminator "(" <* terminator ")"
                                              <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
                                              <|> Abstract.tupleConstructor . succ . length <$> parens (some comma))}}
 
 unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedTuplesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unboxedTuplesMixin self super = super{
    extensions = super.extensions{
       conArgPattern = super.extensions.conArgPattern
                       <|> Abstract.unboxedTuplePattern Abstract.build
-                          <$> hashParens (wrap selfReport.pPattern `sepByNonEmpty` comma)},
-   report= superReport{
-      generalConstructor = superReport.generalConstructor
+                          <$> hashParens (wrap self.report.pPattern `sepByNonEmpty` comma)},
+   report= super.report{
+      generalConstructor = super.report.generalConstructor
                            <|> Abstract.unboxedTupleConstructor Abstract.build . succ . length
                                <$> hashParens (many comma),
-      bareExpression = superReport.bareExpression
+      bareExpression = super.report.bareExpression
                        <|> Abstract.unboxedTupleExpression Abstract.build
-                           <$> hashParens (selfReport.expression `sepByNonEmpty` comma)}}
+                           <$> hashParens (self.report.expression `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedListTuplePunsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedListTuplePunsMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
-   report= superReport{
-      aType = superReport.aType
+unboxedListTuplePunsMixin self super = super{
+   report= super.report{
+      aType = super.report.aType
               <|> Abstract.unboxedTupleType Abstract.build
-                  <$> hashParens (wrap selfReport.typeTerm `sepByNonEmpty` comma),
-      generalTypeConstructor = superReport.generalTypeConstructor
+                  <$> hashParens (wrap self.report.typeTerm `sepByNonEmpty` comma),
+      generalTypeConstructor = super.report.generalTypeConstructor
                                <|> Abstract.constructorType
                                    <$> wrap (Abstract.unboxedTupleConstructor Abstract.build . succ . length
                                              <$> hashParens (many comma))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedTupleSectionsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
-unboxedTupleSectionsMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
-   report= superReport{
-      bareExpression = superReport.bareExpression
+unboxedTupleSectionsMixin self super = super{
+   report= super.report{
+      bareExpression = super.report.bareExpression
                        <|> Abstract.unboxedTupleSectionExpression Abstract.build
                            <$> hashParens (filter (\l-> any isJust l && any isNothing l)
-                                           $ optional selfReport.expression `sepByNonEmpty` comma)}}
+                                           $ optional self.report.expression `sepByNonEmpty` comma)}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedSumsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedSums ] l => ExtensionOverlay l g t
-unboxedSumsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unboxedSumsMixin self super = super{
    extensions = super.extensions{
       conArgPattern = super.extensions.conArgPattern
                       <|> hashParens (Abstract.unboxedSumPattern Abstract.build
                                          <$> (length <$> some (delimiter "|"))
-                                         <*> wrap selfReport.pPattern
+                                         <*> wrap self.report.pPattern
                                          <*> (length <$> many (delimiter "|"))
                                       <|> Abstract.unboxedSumPattern Abstract.build 0
-                                         <$> wrap selfReport.pPattern
+                                         <$> wrap self.report.pPattern
                                          <*> (length <$> some (delimiter "|")))},
-   report= superReport{
-      generalConstructor = superReport.generalConstructor
+   report= super.report{
+      generalConstructor = super.report.generalConstructor
                            <|> Abstract.unboxedSumConstructor Abstract.build . succ . length
                                <$> hashParens (some $ delimiter "|"),
-      bareExpression = superReport.bareExpression
+      bareExpression = super.report.bareExpression
                        <|> hashParens (Abstract.unboxedSumExpression Abstract.build
                                           <$> (length <$> some (delimiter "|")) 
-                                          <*> selfReport.expression
+                                          <*> self.report.expression
                                           <*> (length <$> many (delimiter "|"))
                                        <|> Abstract.unboxedSumExpression Abstract.build 0
-                                          <$> selfReport.expression
+                                          <$> self.report.expression
                                           <*> (length <$> some (delimiter "|")))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 unboxedSumPunsMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedSums ] l => ExtensionOverlay l g t
-unboxedSumPunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      aType = superReport.aType
+unboxedSumPunsMixin self super = super{
+   report= super.report{
+      aType = super.report.aType
               <|> Abstract.unboxedSumType Abstract.build
-                  <$> hashParens ((:|) <$> wrap selfReport.typeTerm
-                                       <*> some (delimiter "|" *> wrap selfReport.typeTerm)),
-      generalTypeConstructor = superReport.generalTypeConstructor
+                  <$> hashParens ((:|) <$> wrap self.report.typeTerm
+                                       <*> some (delimiter "|" *> wrap self.report.typeTerm)),
+      generalTypeConstructor = super.report.generalTypeConstructor
                                <|> Abstract.constructorType
                                    <$> wrap (Abstract.unboxedSumConstructor Abstract.build . succ . length
                                              <$> hashParens (some $ delimiter "|"))}}
    where hashParens p = delimiter "(#" *> p <* terminator "#)"
 
 interruptibleFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'InterruptibleFFI ] l => ExtensionOverlay l g t
-interruptibleFFIMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         safety = superReport.declarationLevel.safety
+interruptibleFFIMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         safety = super.report.declarationLevel.safety
                   <|> Abstract.interruptibleCall Abstract.build <$ keyword "interruptible"}}}
 
 cApiFFIMixin :: forall l g t. Abstract.ExtendedWith '[ 'CApiFFI ] l => ExtensionOverlay l g t
-cApiFFIMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         callingConvention = superReport.declarationLevel.callingConvention
+cApiFFIMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         callingConvention = super.report.declarationLevel.callingConvention
                              <|> Abstract.cApiCall Abstract.build <$ keyword "capi"}}}
 
 extendedLiteralsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'ExtendedLiterals ] l) => ExtensionOverlay l g t
-extendedLiteralsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      literalLexeme = superReport.literalLexeme
+extendedLiteralsMixin self super = super{
+   report = super.report{
+      literalLexeme = super.report.literalLexeme
                       <* notFollowedBy ((filter (precededByString "#") getInput <|> string "#")
                                         *> void (Text.Parser.Char.satisfy Char.isUpper))
                       <|> Abstract.extendedLiteral Abstract.build
-                          <$> storeToken selfReport.integerLexeme
+                          <$> storeToken self.report.integerLexeme
                           <*> hashType}}
-   where hashType = storeToken (string "#") *> typeConstructor selfReport
+   where hashType = storeToken (string "#") *> self.report.typeConstructor
 
 magicHashMixin :: forall l g t. (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
-magicHashMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
+magicHashMixin self super =
   let prefixMinusFollow = takeCharsWhile1 Char.isDigit *> takeCharsWhile isNumChar *> string "#"
       isNumChar c = Char.isHexDigit c || c `elem` ("eE.bBoOxX_" :: String)
-  in super{report= superReport{
+  in super{report= super.report{
         variableIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (variableLexeme <> concatAll (string "#"))),
         constructorIdentifier =
            token (Abstract.name . Text.pack . toString mempty <$> (constructorLexeme <> concatAll (string "#"))),
-        literalLexeme = superReport.literalLexeme
+        literalLexeme = super.report.literalLexeme
                         <**> (Abstract.hashLiteral . Abstract.hashLiteral <$ string "##"
                               <<|> Abstract.hashLiteral <$ string "#"
                               <<|> pure id),
-        integerLexeme = superReport.integerLexeme
-                        <<|> negate <$ string "-" <*> superReport.integerLexeme <* lookAhead (string "#"),
-        floatLexeme = superReport.floatLexeme
-                      <<|> negate <$ string "-" <*> superReport.floatLexeme <* lookAhead (string "#")}}
+        integerLexeme = super.report.integerLexeme
+                        <<|> negate <$ string "-" <*> super.report.integerLexeme <* lookAhead (string "#"),
+        floatLexeme = super.report.floatLexeme
+                      <<|> negate <$ string "-" <*> super.report.floatLexeme <* lookAhead (string "#")}}
     & negationConstraintMixin prefixMinusFollow self
 
 recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'RecursiveDo ] l,
                      Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => ExtensionOverlay l g t
-recursiveDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      closedBlockExpression = superReport.closedBlockExpression
-         <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap selfReport.statements,
-      statement = superReport.statement
+recursiveDoMixin self super = super{
+   report= super.report{
+      closedBlockExpression = super.report.closedBlockExpression
+         <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap self.report.statements,
+      statement = super.report.statement
                   <|> wrap (Deep.InL
                             <$> Abstract.recursiveStatement' Abstract.build
                                 . map Report.expressionToStatement
                                 <$ keyword "rec"
-                                <*> blockOf selfReport.statement),
-      variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> superReport.variableIdentifier}}
+                                <*> blockOf self.report.statement),
+      variableIdentifier = notFollowedBy (keyword "mdo" <|> keyword "rec") *> super.report.variableIdentifier}}
 
 qualifiedDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l, Abstract.ExtendedWith '[ 'QualifiedDo ] l,
                                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                  => ExtensionOverlay l g t
-qualifiedDoMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      closedBlockExpression = superReport.closedBlockExpression
+qualifiedDoMixin self super = super{
+   report= super.report{
+      closedBlockExpression = super.report.closedBlockExpression
          <|> Abstract.qualifiedDoExpression Abstract.build
             <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
             <* keyword "do"
-            <*> wrap selfReport.statements,
+            <*> wrap self.report.statements,
        qualifiedVariableSymbol =
           notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "do")
-          *> superReport.qualifiedVariableSymbol}}
+          *> super.report.qualifiedVariableSymbol}}
 
 qualifiedRecursiveDoMixin :: forall g t l. (OutlineMonoid t, Abstract.Haskell l,
                                             Abstract.ExtendedWith '[ 'QualifiedDo, 'RecursiveDo ] l,
                                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                           => ExtensionOverlay l g t
-qualifiedRecursiveDoMixin self@ExtendedGrammar{report= selfReport} super@ExtendedGrammar{report= superReport} = super{
-   report= superReport{
-      closedBlockExpression = superReport.closedBlockExpression
+qualifiedRecursiveDoMixin self super = super{
+   report= super.report{
+      closedBlockExpression = super.report.closedBlockExpression
          <|> Abstract.mdoQualifiedExpression Abstract.build
             <$> Report.storeToken (Abstract.moduleName <$> Report.moduleLexeme <* string ".")
             <* keyword "mdo"
-            <*> wrap selfReport.statements,
+            <*> wrap self.report.statements,
        qualifiedVariableSymbol =
           notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "mdo")
-          *> superReport.qualifiedVariableSymbol}}
+          *> super.report.qualifiedVariableSymbol}}
 
 parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}}
-                                super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      bareExpression = superReport.bareExpression
+parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
+   report= super.report{
+      bareExpression = super.report.bareExpression
                        <|> brackets (Abstract.parallelListComprehension
                                      <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
 tupleSectionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-tupleSectionsMixin self@ExtendedGrammar{report= HaskellGrammar{expression}}
-                   super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      bareExpression = superReport.bareExpression
+tupleSectionsMixin self super = super{
+   report= super.report{
+      bareExpression = super.report.bareExpression
          <|> Abstract.tupleSectionExpression
              <$> parens (filter (\l-> any isJust l && any isNothing l)
-                         $ (:|) <$> optional expression <*> some (comma *> optional expression))}}
+                         $ (:|) <$> optional self.report.expression
+                                <*> some (comma *> optional self.report.expression))}}
 
 lambdaCaseMixin :: forall l g t. (Abstract.ExtendedWith '[ 'LambdaCase ] l, OutlineMonoid t,
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.LambdaCasesAlternative l l))
                 => ExtensionOverlay l g t
-lambdaCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      openBlockExpression = notFollowedBy (delimiter "\\" *> keyword "cases") *> superReport.openBlockExpression,
-      closedBlockExpression = superReport.closedBlockExpression
+lambdaCaseMixin self super = super{
+   report= super.report{
+      openBlockExpression = notFollowedBy (delimiter "\\" *> keyword "cases") *> super.report.openBlockExpression,
+      closedBlockExpression = super.report.closedBlockExpression
          <|> Abstract.lambdaCaseExpression Abstract.build <$ (delimiter "\\" *> keyword "case")
-             <*> selfReport.alternatives
+             <*> self.report.alternatives
          <|> Abstract.lambdaCasesExpression Abstract.build <$ (delimiter "\\" *> keyword "cases")
              <*> blockOf (wrap $ Abstract.lambdaCasesAlternative @l Abstract.build
-                                     <$> many (wrap selfReport.aPattern)
-                                     <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> expression selfReport
+                                     <$> many (wrap self.report.aPattern)
+                                     <*> wrap (Abstract.normalRHS <$ delimiter "->" <*> self.report.expression
                                                <|> Abstract.guardedRHS
                                                    <$> takeSomeNonEmpty (wrap $ Abstract.guardedExpression . toList
-                                                                                <$> selfReport.guards
+                                                                                <$> self.report.guards
                                                                                 <* delimiter "->"
-                                                                                <*> selfReport.expression)))}}
+                                                                                <*> self.report.expression)))}}
 
 emptyCaseMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                    Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l))
                => ExtensionOverlay l g t
-emptyCaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
+emptyCaseMixin self super = super{
+   report= super.report{
       alternatives = blockOf (wrap (alternative $ report super))}}
 
 multiWayIfMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GuardedExpression l l))
                 => ExtensionOverlay l g t
-multiWayIfMixin self@ExtendedGrammar{report= HaskellGrammar{expression, guards, rightArrow}}
-                super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      closedBlockExpression = superReport.closedBlockExpression
+multiWayIfMixin self super = super{
+   report= super.report{
+      closedBlockExpression = super.report.closedBlockExpression
          <|> Abstract.multiWayIfExpression <$ keyword "if"
              <*> blockOf' (wrap (Abstract.guardedExpression . toList
-                                 <$> guards <* rightArrow <*> expression))}}
+                                    <$> self.report.guards
+                                    <*  self.report.rightArrow
+                                    <*> self.report.expression))}}
 
 packageImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-packageImportsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+packageImportsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <*> (True <$ keyword "qualified" <|> pure False)
-                                 <*> selfReport.stringLiteral
+                                 <*> self.report.stringLiteral
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 safeImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-safeImportsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+safeImportsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 importQualifiedPostMixin :: ExtensionOverlay l g t
-importQualifiedPostMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+importQualifiedPostMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> flip Abstract.importDeclaration <$ keyword "import"
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified")
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 safePackageImportsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-safePackageImportsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+safePackageImportsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> (True <$ keyword "qualified" <|> pure False)
-                                 <*> selfReport.stringLiteral
+                                 <*> self.report.stringLiteral
                                  <*> moduleId
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 packageImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-packageImportsQualifiedPostMixin self@ExtendedGrammar{report = selfReport}
-                                 super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+packageImportsQualifiedPostMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> Abstract.packageQualifiedImportDeclaration <$ keyword "import"
                                  <**> pure flip
-                                 <*> selfReport.stringLiteral
+                                 <*> self.report.stringLiteral
                                  <**> pure flip
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 safeImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-safeImportsQualifiedPostMixin self@ExtendedGrammar{report = selfReport}
-                              super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+safeImportsQualifiedPostMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> flip Abstract.safeImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 safePackageImportsQualifiedPostMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-safePackageImportsQualifiedPostMixin self@ExtendedGrammar{report = selfReport}
-                                     super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         importDeclaration = superReport.moduleLevel.importDeclaration
+safePackageImportsQualifiedPostMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importDeclaration = super.report.moduleLevel.importDeclaration
                              <|> Abstract.safePackageQualifiedImportDeclaration <$ keyword "import" <* keyword "safe"
                                  <**> pure flip
-                                 <*> selfReport.stringLiteral
+                                 <*> self.report.stringLiteral
                                  <**> pure flip
                                  <*> moduleId
                                  <*> (True <$ keyword "qualified" <|> pure False)
                                  <*> optional (keyword "as" *> moduleId)
-                                 <*> optional (wrap selfReport.moduleLevel.importSpecification)}}}
+                                 <*> optional (wrap self.report.moduleLevel.importSpecification)}}}
 
 namedDefaultsMixin :: Abstract.ExtendedWith '[ 'NamedDefaults ] l => ExtensionOverlay l g t
-namedDefaultsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+namedDefaultsMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.namedDefaultDeclaration Abstract.build <$ keyword "default"
-                               <*> selfReport.qualifiedConstructor
-                               <*> parens (wrap selfReport.typeTerm `sepBy` comma)}}}
+                               <*> self.report.qualifiedConstructor
+                               <*> parens (wrap self.report.typeTerm `sepBy` comma)}}}
 
 explicitNamespacesMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
-explicitNamespacesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      moduleLevel= superReport.moduleLevel{
-         export = superReport.moduleLevel.export
+explicitNamespacesMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         export = super.report.moduleLevel.export
             <|> Abstract.exportClassOrType <$ keyword "type"
-                <*> parens selfReport.qualifiedVariableSymbol
-                <*> optional selfReport.moduleLevel.members,
-         importItem = superReport.moduleLevel.importItem
+                <*> parens self.report.qualifiedVariableSymbol
+                <*> optional self.report.moduleLevel.members,
+         importItem = super.report.moduleLevel.importItem
             <|> Abstract.importClassOrType <$ keyword "type"
-                <*> parens (selfReport.variableSymbol <|> selfReport.constructorSymbol)
-                <*> optional selfReport.moduleLevel.members,
+                <*> parens (self.report.variableSymbol <|> self.report.constructorSymbol)
+                <*> optional self.report.moduleLevel.members,
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList Abstract.build
-                            <$> (Abstract.defaultMember Abstract.build <$> selfReport.moduleLevel.cname
+                            <$> (Abstract.defaultMember Abstract.build <$> self.report.moduleLevel.cname
                                  <|> Abstract.typeMember Abstract.build <$ keyword "type"
-                                     <*> selfReport.moduleLevel.cname)
+                                     <*> self.report.moduleLevel.cname)
                                `sepEndBy` comma)},
-      declarationLevel = superReport.declarationLevel {
-         generalDeclaration = superReport.declarationLevel.generalDeclaration
+      declarationLevel = super.report.declarationLevel {
+         generalDeclaration = super.report.declarationLevel.generalDeclaration
             <|> Abstract.explicitTypeFixityDeclaration Abstract.build
-                   <$> selfReport.declarationLevel.fixity
-                   <*> optional (fromIntegral <$> integer selfReport)
+                   <$> self.report.declarationLevel.fixity
+                   <*> optional (fromIntegral <$> self.report.integer)
                    <* keyword "type"
-                   <*> (operator selfReport `sepByNonEmpty` comma)
+                   <*> (self.report.operator `sepByNonEmpty` comma)
             <|> Abstract.explicitDataFixityDeclaration Abstract.build
-                   <$> selfReport.declarationLevel.fixity
-                   <*> optional (fromIntegral <$> integer selfReport)
+                   <$> self.report.declarationLevel.fixity
+                   <*> optional (fromIntegral <$> self.report.integer)
                    <* keyword "data"
-                   <*> (operator selfReport `sepByNonEmpty` comma)},
-      expression = superReport.expression
-         <|> wrap (Abstract.explicitTypeExpression Abstract.build <$ keyword "type" <*> wrap (typeTerm selfReport)),
-      pPattern = superReport.pPattern
-         <|> Abstract.explicitTypePattern Abstract.build <$ keyword "type" <*> wrap (typeTerm selfReport)}}
+                   <*> (self.report.operator `sepByNonEmpty` comma)},
+      expression = super.report.expression
+         <|> wrap (Abstract.explicitTypeExpression Abstract.build <$ keyword "type" <*> wrap self.report.typeTerm),
+      pPattern = super.report.pPattern
+         <|> Abstract.explicitTypePattern Abstract.build <$ keyword "type" <*> wrap self.report.typeTerm}}
 
 blockArgumentsMixin :: ExtensionOverlay l g t
-blockArgumentsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      lExpression = superReport.lExpression
-         <|> wrap (Abstract.applyExpression <$> selfReport.fExpression
-                                            <*> wrap selfReport.openBlockExpression),
-      dExpression = selfReport.fExpression,
-      bareExpression = superReport.bareExpression <|> selfReport.closedBlockExpression}}
+blockArgumentsMixin self super = super{
+   report= super.report{
+      lExpression = super.report.lExpression
+         <|> wrap (Abstract.applyExpression <$> self.report.fExpression
+                                            <*> wrap self.report.openBlockExpression),
+      dExpression = self.report.fExpression,
+      bareExpression = super.report.bareExpression <|> self.report.closedBlockExpression}}
 
 spaceSensitiveOperatorsMixin :: SpaceMonoid t => ExtensionOverlay l g t
-spaceSensitiveOperatorsMixin self@ExtendedGrammar{report = selfReport}
-                             super@ExtendedGrammar{report = superReport} = super{
+spaceSensitiveOperatorsMixin self super = super{
    extensions = super.extensions{
-      conArgPattern = Abstract.variablePattern <$> superReport.variable <* lookAhead unreservedSymbolLexeme
+      conArgPattern = Abstract.variablePattern <$> super.report.variable <* lookAhead unreservedSymbolLexeme
                       <<|> notFollowedBy unreservedSymbolLexeme *> super.extensions.conArgPattern},
-   report= superReport{
-      variableSymbol = superReport.variableSymbol <|> Report.nameToken unreservedSymbolLexeme}}
+   report= super.report{
+      variableSymbol = super.report.variableSymbol <|> Report.nameToken unreservedSymbolLexeme}}
 
 unreservedSymbolLexeme :: (Rank2.Apply g, Ord t, SpaceMonoid t) => Parser g t t
 unreservedSymbolLexeme =
@@ -824,18 +819,18 @@ unreservedSymbolLexeme =
    <|> filter (not . precededByOpenSpace) getInput *> string "~"
 
 lexicalNegationMixin :: SpaceMonoid t => ExtensionOverlay l g t
-lexicalNegationMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
+lexicalNegationMixin self super = super{
+   report= super.report{
       qualifiedVariableSymbol = notFollowedBy (filter precededByOpenSpace getInput
                                                *> string "-"
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                                *> token (nameQualifier <*> selfReport.variableSymbol),
+                                *> token (nameQualifier <*> self.report.variableSymbol),
       prefixNegation = empty,
-      bareExpression = superReport.bareExpression
-         <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> selfReport.aExpression
+      bareExpression = super.report.bareExpression
+         <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> self.report.aExpression
          <|> parens (Abstract.rightSectionExpression
-                     <$> (notFollowedBy prefixMinus *> selfReport.qualifiedOperator)
-                     <*> selfReport.infixExpression)}}
+                     <$> (notFollowedBy prefixMinus *> self.report.qualifiedOperator)
+                     <*> self.report.infixExpression)}}
    where prefixMinus = void (filter precededByOpenSpace getInput
                              *> string "-"
                              <* lookAhead (satisfyCharInput $ \c-> Char.isAlphaNum c || c == '(' || c == '[')
@@ -843,35 +838,34 @@ lexicalNegationMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGra
                        <?> "prefix -"
 
 negativeLiteralsMixin :: ExtensionOverlay l g t
-negativeLiteralsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
+negativeLiteralsMixin self super =
    super{
-      report= superReport{
-         integerLexeme = (negate <$ string "-" <|> pure id) <*> superReport.integerLexeme,
-         floatLexeme = (negate <$ string "-" <|> pure id) <*> superReport.floatLexeme}}
+      report= super.report{
+         integerLexeme = (negate <$ string "-" <|> pure id) <*> super.report.integerLexeme,
+         floatLexeme = (negate <$ string "-" <|> pure id) <*> super.report.floatLexeme}}
    & negationConstraintMixin (satisfyCharInput Char.isDigit) self
 
 binaryLiteralsMixin :: ExtensionOverlay l g t
-binaryLiteralsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+binaryLiteralsMixin self super = super{
    extensions = super.extensions{
       binary = (string "0b" <|> string "0B") *> (takeCharsWhile1 (\c-> c == '0' || c == '1') <?> "binary number")},
-   report = superReport{
+   report = super.report{
       integerLexeme = List.foldl' addBinary 0 . toString mempty <$> self.extensions.binary
-                      <<|> superReport.integerLexeme}}
+                      <<|> super.report.integerLexeme}}
    where addBinary n '0' = 2*n
          addBinary n '1' = 2*n + 1
          addBinary _ _ = error "non-binary"
 
 hexFloatLiteralsMixin :: ExtensionOverlay l g t
-hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexadecimal}}
-                      super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
+hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexadecimal}} super = super{
+   report= super.report{
       integerLexeme = notFollowedBy ((string "0x" <|> string "0X")
                                     *> hexadecimal *> satisfyCharInput (`elem` ['.', 'p', 'P']))
-                      *> superReport.integerLexeme,
+                      *> super.report.integerLexeme,
       floatLexeme = (string "0x" <|> string "0X")
                     *> (readHexFloat <$> hexadecimal <* string "." <*> hexadecimal <*> (hexExponent <<|> pure 0)
                        <|> readHexFloat <$> hexadecimal <*> pure mempty <*> hexExponent)
-                    <|> superReport.floatLexeme}}
+                    <|> super.report.floatLexeme}}
    where hexExponent =
            (string "p" <|> string "P")
            *> (id <$ string "+" <|> negate <$ string "-" <|> pure id)
@@ -881,8 +875,8 @@ hexFloatLiteralsMixin self@ExtendedGrammar{report= HaskellGrammar{decimal, hexad
            * 2 ^^ (magnitude - Factorial.length fraction)
 
 numericUnderscoresMixin :: ExtensionOverlay l g t
-numericUnderscoresMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
+numericUnderscoresMixin self super = super{
+   report= super.report{
       decimal = takeCharsWhile1 Char.isDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isDigit)
                 <?> "decimal number",
       octal = takeCharsWhile1 Char.isOctDigit <> concatAll (char '_' *> takeCharsWhile1 Char.isOctDigit)
@@ -891,142 +885,138 @@ numericUnderscoresMixin self@ExtendedGrammar{report = selfReport} super@Extended
                     <?> "hexadecimal number"}}
 
 binaryUnderscoresMixin :: ExtensionOverlay l g t
-binaryUnderscoresMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+binaryUnderscoresMixin self super = super{
    extensions = super.extensions{
       binary = (string "0b" <|> string "0B") *> (binaryDigits <> concatAll (char '_' *> binaryDigits) <?> "binary number")}}
    where binaryDigits = takeCharsWhile1 (\c-> c == '0' || c == '1')
 
 parenthesizedTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-parenthesizedTypeOperatorsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         moduleLevel= superReport.moduleLevel{
-            export = Abstract.exportVar <$> selfReport.qualifiedVariable
-               <|> Abstract.exportClassOrType
-                   <$> (selfReport.qualifiedConstructorIdentifier
-                        <|> parens selfReport.qualifiedConstructorSymbol)
-                   <*> pure Nothing
-               <|> Abstract.exportClassOrType
-                   <$> selfReport.qualifiedTypeConstructor
-                   <*> (Just <$> selfReport.moduleLevel.members)
-               <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId},
-         qualifiedTypeConstructor = selfReport.qualifiedConstructorIdentifier <|> parens anyQualifiedOperator,
-         generalTypeConstructor = superReport.generalTypeConstructor
-           <|> Abstract.constructorType
-               <$> wrap (Abstract.constructorReference <$> parens selfReport.qualifiedVariableSymbol),
-         declarationLevel= superReport.declarationLevel{
-            qualifiedTypeClass =
-               superReport.declarationLevel.qualifiedTypeClass <|> parens anyQualifiedOperator}}}
+parenthesizedTypeOperatorsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         export = Abstract.exportVar <$> self.report.qualifiedVariable
+            <|> Abstract.exportClassOrType
+                <$> (self.report.qualifiedConstructorIdentifier
+                     <|> parens self.report.qualifiedConstructorSymbol)
+                <*> pure Nothing
+            <|> Abstract.exportClassOrType
+                <$> self.report.qualifiedTypeConstructor
+                <*> (Just <$> self.report.moduleLevel.members)
+            <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId},
+      qualifiedTypeConstructor = self.report.qualifiedConstructorIdentifier <|> parens anyQualifiedOperator,
+      generalTypeConstructor = super.report.generalTypeConstructor
+        <|> Abstract.constructorType
+            <$> wrap (Abstract.constructorReference <$> parens self.report.qualifiedVariableSymbol),
+      declarationLevel= super.report.declarationLevel{
+         qualifiedTypeClass =
+            super.report.declarationLevel.qualifiedTypeClass <|> parens anyQualifiedOperator}}}
    where anyQualifiedOperator =
-            selfReport.qualifiedConstructorOperator <|> selfReport.qualifiedVariableOperator
+            self.report.qualifiedConstructorOperator <|> self.report.qualifiedVariableOperator
 
 typeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-typeOperatorsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         moduleLevel= superReport.moduleLevel{
-            importItem = Abstract.importVar <$> selfReport.variable
-               <|> Abstract.importClassOrType
-                   <$> (selfReport.constructorIdentifier <|> parens selfReport.constructorSymbol)
-                   <*> pure Nothing
-               <|> Abstract.importClassOrType
-                   <$> selfReport.typeConstructor
-                   <*> (Just <$> selfReport.moduleLevel.members)},
-         declarationLevel= superReport.declarationLevel{
-            typeClass = superReport.declarationLevel.typeClass <|> parens anyOperator,
-            simpleType = superReport.declarationLevel.simpleType
-               <|> Abstract.infixTypeLHSApplication
-                            <$> self.extensions.typeVarBinder
-                            <*> (notFollowedBy (string "`") *> anyOperator)
-                            <*> self.extensions.typeVarBinder,
-            instanceDesignator =
-               superReport.declarationLevel.instanceDesignator
-               <|> Abstract.infixTypeClassInstanceLHS
-                   <$> wrap selfReport.bType
-                   <*> selfReport.qualifiedOperator
-                   <*> wrap selfReport.bType},
-         typeConstructor = selfReport.constructorIdentifier <|> parens anyOperator},
-      extensions = super.extensions{
-         equalityConstraint = empty,
-         cType = super.extensions.cType
-            <|> Abstract.infixTypeApplication
-                   <$> wrap self.extensions.cType
-                   <*> selfReport.qualifiedOperator
-                   <*> wrap selfReport.bType}}
-   where anyOperator = selfReport.constructorOperator <|> selfReport.variableOperator
+typeOperatorsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         importItem = Abstract.importVar <$> self.report.variable
+            <|> Abstract.importClassOrType
+                <$> (self.report.constructorIdentifier <|> parens self.report.constructorSymbol)
+                <*> pure Nothing
+            <|> Abstract.importClassOrType
+                <$> self.report.typeConstructor
+                <*> (Just <$> self.report.moduleLevel.members)},
+      declarationLevel= super.report.declarationLevel{
+         typeClass = super.report.declarationLevel.typeClass <|> parens anyOperator,
+         simpleType = super.report.declarationLevel.simpleType
+            <|> Abstract.infixTypeLHSApplication
+                         <$> self.extensions.typeVarBinder
+                         <*> (notFollowedBy (string "`") *> anyOperator)
+                         <*> self.extensions.typeVarBinder,
+         instanceDesignator =
+            super.report.declarationLevel.instanceDesignator
+            <|> Abstract.infixTypeClassInstanceLHS
+                <$> wrap self.report.bType
+                <*> self.report.qualifiedOperator
+                <*> wrap self.report.bType},
+      typeConstructor = self.report.constructorIdentifier <|> parens anyOperator},
+   extensions = super.extensions{
+      equalityConstraint = empty,
+      cType = super.extensions.cType
+         <|> Abstract.infixTypeApplication
+                <$> wrap self.extensions.cType
+                <*> self.report.qualifiedOperator
+                <*> wrap self.report.bType}}
+   where anyOperator = self.report.constructorOperator <|> self.report.variableOperator
 
 equalityConstraintsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-equalityConstraintsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+equalityConstraintsMixin self super = super{
    extensions = super.extensions{
       equalityConstraint =
          Abstract.typeEquality
-         <$> wrap selfReport.bType
+         <$> wrap self.report.bType
          <* delimiter "~"
-         <*> wrap (selfReport.bType)}}
+         <*> wrap (self.report.bType)}}
 
 multiParameterConstraintsMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-multiParameterConstraintsMixin self@ExtendedGrammar{report = selfReport}
-                               super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
+multiParameterConstraintsMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
          derivingClause =
             keyword "deriving"
             *> (pure <$> wrap (parens (Abstract.strategicDerive Abstract.build
                                        <$> wrap (pure $ Abstract.defaultStrategy @l Abstract.build)
-                                       <*> wrap selfReport.typeTerm `sepBy` comma)
-                               <<|> Abstract.simpleDerive <$> selfReport.declarationLevel.qualifiedTypeClass))}}}
+                                       <*> wrap self.report.typeTerm `sepBy` comma)
+                               <<|> Abstract.simpleDerive <$> self.report.declarationLevel.qualifiedTypeClass))}}}
 
 gratuitouslyParenthesizedTypesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                         Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                                     => ExtensionOverlay l g t
-gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
-                                    super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel = superReport.declarationLevel{
-         qualifiedTypeClass = superReport.declarationLevel.qualifiedTypeClass <|> parens qtc,
-         typeVarApplications = selfReport.generalTypeConstructor
+gratuitouslyParenthesizedTypesMixin self super = super{
+   report= super.report{
+      declarationLevel = super.report.declarationLevel{
+         qualifiedTypeClass = super.report.declarationLevel.qualifiedTypeClass <|> parens qtc,
+         typeVarApplications = self.report.generalTypeConstructor
             <|> Abstract.typeApplication
-                <$> wrap (selfReport.declarationLevel.typeVarApplications
-                          <|> parens selfReport.declarationLevel.typeVarApplications)
+                <$> wrap (self.report.declarationLevel.typeVarApplications
+                          <|> parens self.report.declarationLevel.typeVarApplications)
                 <*> wrap self.extensions.optionallyKindedAndParenthesizedTypeVar,
-         simpleType = superReport.declarationLevel.simpleType
-            <|> parens selfReport.declarationLevel.simpleType}},
+         simpleType = super.report.declarationLevel.simpleType
+            <|> parens self.report.declarationLevel.simpleType}},
    extensions = super.extensions{
       gadtConstructors = super.extensions.gadtConstructors
          <|> Abstract.gadtConstructors <$> self.extensions.constructorIDs
-                                       <* selfReport.doubleColon
+                                       <* self.report.doubleColon
                                        <**> pure uncurry3
                                        <*> (parens forallAndContextAndBody <|> forallAndParenContextBody),
       gadtNewConstructor = super.extensions.gadtNewConstructor
-         <|> Abstract.gadtConstructors <$> ((:|[]) <$> selfReport.constructor)
-                                       <* selfReport.doubleColon
+         <|> Abstract.gadtConstructors <$> ((:|[]) <$> self.report.constructor)
+                                       <* self.report.doubleColon
                                        <**> pure uncurry3
                                        <*> parens forallAndNewBody,
       gadtNewBody = super.extensions.gadtNewBody
          <|> Abstract.functionType
-             <$> wrap selfReport.bType
-             <* selfReport.rightArrow
+             <$> wrap self.report.bType
+             <* self.report.rightArrow
              <*> wrap paren_return_type
          <|> Abstract.recordFunctionType
-             <$> braces ((:[]) <$> wrap selfReport.declarationLevel.fieldDeclaration)
-             <* selfReport.rightArrow
+             <$> braces ((:[]) <$> wrap self.report.declarationLevel.fieldDeclaration)
+             <* self.report.rightArrow
              <*> wrap paren_return_type,
       record_gadt_body = (super.extensions.record_gadt_body)
          <|> Abstract.recordFunctionType
-             <$> braces (wrap selfReport.declarationLevel.fieldDeclaration `sepBy` comma)
-             <* selfReport.rightArrow
+             <$> braces (wrap self.report.declarationLevel.fieldDeclaration `sepBy` comma)
+             <* self.report.rightArrow
              <*> wrap paren_return_type,
-      optionallyParenthesizedTypeVar = selfReport.typeVar
+      optionallyParenthesizedTypeVar = self.report.typeVar
                                        <|> parens self.extensions.optionallyParenthesizedTypeVar,
       typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> self.extensions.optionallyParenthesizedTypeVar}}
-   where qtc = selfReport.declarationLevel.qualifiedTypeClass
+   where qtc = self.report.declarationLevel.qualifiedTypeClass
          paren_return_type = parens ((self.extensions.return_type) <|> parens paren_return_type)
          optionalContextAndGadtBody =
             contextAndGadtBody <|> (,) <$> wrap (pure Abstract.noContext) <*> wrap self.extensions.gadtBody
          contextAndGadtBody =
-            (,) <$> wrap selfReport.declarationLevel.context
-                <*  selfReport.rightDoubleArrow
+            (,) <$> wrap self.report.declarationLevel.context
+                <*  self.report.rightDoubleArrow
                 <*> wrap self.extensions.gadtBody
             <|> parens contextAndGadtBody
          forallAndContextAndBody =
@@ -1048,8 +1038,8 @@ gratuitouslyParenthesizedTypesMixin self@ExtendedGrammar{report = selfReport}
                  <*> many self.extensions.typeVarBinder
                  <* delimiter "."
                  <*> wrap (pure Abstract.noContext
-                           <|> selfReport.declarationLevel.context
-                               *> selfReport.rightDoubleArrow
+                           <|> self.report.declarationLevel.context
+                               *> self.report.rightDoubleArrow
                                *> fail "No context allowed on GADT newtype")
                  <*> wrap self.extensions.gadtNewBody
             <|> parens forallAndNewBody
@@ -1059,15 +1049,14 @@ typeFamiliesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                   => ExtensionOverlay l g t
-typeFamiliesMixin self@ExtendedGrammar
-                  {report= selfReport@HaskellGrammar{
-                     declarationLevel= DeclarationGrammar{optionalContext, simpleType, derivingClause,
-                                                          declaredConstructors, newConstructor}}}
-                  super@ExtendedGrammar{report = superReport} =
+typeFamiliesMixin self@ExtendedGrammar{
+                     report= HaskellGrammar{
+                        declarationLevel= DeclarationGrammar{optionalContext, simpleType, derivingClause}}}
+                  super =
   super{
-    report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+    report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
@@ -1077,74 +1066,74 @@ typeFamiliesMixin self@ExtendedGrammar
                 <*> blockOf (wrap
                              $ Abstract.typeFamilyInstance
                                <$> self.extensions.optionalForall
-                               <*> wrap selfReport.declarationLevel.instanceDesignator <* delimiter "="
-                               <*> wrap selfReport.typeTerm)
+                               <*> wrap self.report.declarationLevel.instanceDesignator <* delimiter "="
+                               <*> wrap self.report.typeTerm)
             <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
-                <*> moptional (delimiter "=" *> declaredConstructors)
+                <*> moptional (delimiter "=" *> self.report.declarationLevel.declaredConstructors)
                 <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* delimiter "="
-                <*> wrap newConstructor
+                <*> wrap self.report.declarationLevel.newConstructor
                 <*> moptional derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
                 <*> self.extensions.optionalForall
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> blockOf (wrap self.extensions.gadtConstructors)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
                 <*> self.extensions.optionalForall
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> wrap self.extensions.gadtNewConstructor
                 <*> moptional derivingClause
             <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
                 <*> self.extensions.optionalForall
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <* delimiter "="
-                <*> wrap selfReport.typeTerm,
-         inClassDeclaration = superReport.declarationLevel.inClassDeclaration
+                <*> wrap self.report.typeTerm,
+         inClassDeclaration = super.report.declarationLevel.inClassDeclaration
             <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
             <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
             <|> self.extensions.inClassOrInstanceTypeFamilyDeclaration,
-         inInstanceDeclaration = superReport.declarationLevel.inInstanceDeclaration
+         inInstanceDeclaration = super.report.declarationLevel.inInstanceDeclaration
             <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
-                <*> moptional (delimiter "=" *> declaredConstructors)
+                <*> moptional (delimiter "=" *> self.report.declarationLevel.declaredConstructors)
                 <*> moptional derivingClause
             <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* delimiter "="
-                <*> wrap newConstructor
+                <*> wrap self.report.declarationLevel.newConstructor
                 <*> moptional derivingClause
             <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
                 <*> self.extensions.optionalForall
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> blockOf (wrap self.extensions.gadtConstructors)
                 <*> moptional derivingClause
             <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
                 <*> self.extensions.optionalForall
-                <*> wrap selfReport.declarationLevel.instanceDesignator
+                <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> wrap self.extensions.gadtNewConstructor
@@ -1154,153 +1143,147 @@ typeFamiliesMixin self@ExtendedGrammar
     inClassOrInstanceTypeFamilyDeclaration =
        Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
            <*> self.extensions.optionalForall
-           <*> wrap selfReport.declarationLevel.instanceDesignator
+           <*> wrap self.report.declarationLevel.instanceDesignator
            <* delimiter "="
-           <*> wrap selfReport.typeTerm}}
+           <*> wrap self.report.typeTerm}}
 
 typeFamilyDependenciesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                             => ExtensionOverlay l g t
-typeFamilyDependenciesMixin
-  self@ExtendedGrammar{report= selfReport@HaskellGrammar{declarationLevel= DeclarationGrammar{simpleType}}}
-  super@ExtendedGrammar{report = superReport} =
-  super{
-    report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+typeFamilyDependenciesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                <*> wrap simpleType <* delimiter "="
+                <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> optional dependencies
             <|> Abstract.injectiveClosedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
-                <*> wrap simpleType <* delimiter "="
+                <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> optional dependencies
                 <* keyword "where"
                 <*> blockOf (wrap $ Abstract.typeFamilyInstance
                                     <$> self.extensions.optionalForall
-                                    <*> wrap selfReport.declarationLevel.instanceDesignator <* delimiter "="
-                                    <*> wrap selfReport.typeTerm),
-         inClassDeclaration = superReport.declarationLevel.inClassDeclaration
+                                    <*> wrap self.report.declarationLevel.instanceDesignator <* delimiter "="
+                                    <*> wrap self.report.typeTerm),
+         inClassDeclaration = super.report.declarationLevel.inClassDeclaration
             <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
-                <*> wrap simpleType <* delimiter "="
+                <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> (Just <$> dependencies)}}}
-   where dependencies = (,) <$> (delimiter "|" *> selfReport.typeVar) <* selfReport.rightArrow
-                            <*> someNonEmpty selfReport.typeVar
+   where dependencies = (,) <$> (delimiter "|" *> self.report.typeVar) <* self.report.rightArrow
+                            <*> someNonEmpty self.report.typeVar
 
 dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
-dataKindsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      aType = superReport.aType
+dataKindsMixin self super = super{
+   report= super.report{
+      aType = super.report.aType
          <|> self.extensions.promotedLiteral
          <|> self.extensions.promotedStructure,
-      generalTypeConstructor = superReport.generalTypeConstructor
+      generalTypeConstructor = super.report.generalTypeConstructor
          <|> Abstract.promotedConstructorType
              <$ terminator "'"
-             <*> wrap (Abstract.constructorReference <$> qualifiedConstructor selfReport)},
+             <*> wrap (Abstract.constructorReference <$> self.report.qualifiedConstructor)},
    extensions = super.extensions{
       promotedLiteral =
-         Abstract.promotedIntegerLiteral <$> selfReport.integer
-         <|> Abstract.promotedCharLiteral <$> selfReport.charLiteral
-         <|> Abstract.promotedStringLiteral <$> selfReport.stringLiteral,
+         Abstract.promotedIntegerLiteral <$> self.report.integer
+         <|> Abstract.promotedCharLiteral <$> self.report.charLiteral
+         <|> Abstract.promotedStringLiteral <$> self.report.stringLiteral,
       promotedStructure =
          Abstract.promotedTupleType <$> parens (pure []
-                                                <|> (:) <$> wrap selfReport.typeTerm
-                                                        <*> some (comma *> wrap selfReport.typeTerm))
-         <|> Abstract.promotedListType <$> brackets (wrap selfReport.typeTerm `sepBy` comma)}}
+                                                <|> (:) <$> wrap self.report.typeTerm
+                                                        <*> some (comma *> wrap self.report.typeTerm))
+         <|> Abstract.promotedListType <$> brackets (wrap self.report.typeTerm `sepBy` comma)}}
 
 dataKindsListTuplePunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
-dataKindsListTuplePunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+dataKindsListTuplePunsMixin self super = super{
    extensions = super.extensions{
       promotedStructure =
-         Abstract.promotedTupleType <$ terminator "'" <*> parens (wrap selfReport.typeTerm `sepBy` comma)
-         <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap selfReport.typeTerm `sepBy` comma)
-         <|> Abstract.promotedListType <$> brackets ((:) <$> wrap selfReport.typeTerm
-                                                         <*> some (comma *> wrap selfReport.typeTerm))}}
+         Abstract.promotedTupleType <$ terminator "'" <*> parens (wrap self.report.typeTerm `sepBy` comma)
+         <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap self.report.typeTerm `sepBy` comma)
+         <|> Abstract.promotedListType <$> brackets ((:) <$> wrap self.report.typeTerm
+                                                         <*> some (comma *> wrap self.report.typeTerm))}}
 
 dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-dataKindsTypeOperatorsMixin self@ExtendedGrammar{report = selfReport}
-                            super@ExtendedGrammar{report = superReport} = super{
+dataKindsTypeOperatorsMixin self super = super{
    extensions = super.extensions{
       cType = super.extensions.cType
          <|> Abstract.promotedInfixTypeApplication
              <$> wrap self.extensions.cType
              <* terminator "'"
-             <*> selfReport.qualifiedOperator
-             <*> wrap selfReport.bType}}
+             <*> self.report.qualifiedOperator
+             <*> wrap self.report.bType}}
 
 typeDataMixin :: Abstract.ExtendedWith '[ 'TypeData ] l => ExtensionOverlay l g t
-typeDataMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+typeDataMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.typeDataDeclaration Abstract.build <$ keyword "type" <* keyword "data"
-                <*> wrap selfReport.declarationLevel.simpleType
+                <*> wrap self.report.declarationLevel.simpleType
                 <*> optional (wrap self.extensions.kindSignature)
-                <*> (delimiter "=" *> selfReport.declarationLevel.declaredConstructors <|> pure [])}}}
+                <*> (delimiter "=" *> self.report.declarationLevel.declaredConstructors <|> pure [])}}}
 
 typeDataGADTMixin :: (OutlineMonoid t,
                       Abstract.ExtendedWith '[ 'GADTs, 'TypeData ] l,
                       Abstract.DeeplyFoldable (Serialization (Down Int) t) l) => ExtensionOverlay l g t
-typeDataGADTMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+typeDataGADTMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.typeGADTDeclaration Abstract.build <$ keyword "type" <* keyword "data"
-                <*> wrap selfReport.declarationLevel.simpleType
+                <*> wrap self.report.declarationLevel.simpleType
                 <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
                 <*> blockOf (wrap self.extensions.gadtConstructors)}}}
 
 visibleDependentQuantificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-visibleDependentQuantificationMixin self@ExtendedGrammar{report = selfReport}
-                                    super@ExtendedGrammar{report = superReport} = super{
+visibleDependentQuantificationMixin self super = super{
    extensions = super.extensions{
       arrowType = super.extensions.arrowType
          <|> Abstract.visibleDependentType
              <$ self.extensions.keywordForall
              <*> many self.extensions.typeVarBinder
-             <* selfReport.rightArrow
+             <* self.report.rightArrow
              <*> wrap self.extensions.arrowType}}
 
 requiredTypeArgumentsMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
-requiredTypeArgumentsMixin self@ExtendedGrammar{report = selfReport}
-                           super@ExtendedGrammar{report = superReport} = super{
-   report = superReport {
-      aExpression = superReport.aExpression
-                    <<|> wrap (Abstract.explicitTypeExpression Abstract.build <$> wrap (aType selfReport))}}
+requiredTypeArgumentsMixin self super = super{
+   report = super.report{
+      aExpression = super.report.aExpression
+                    <<|> wrap (Abstract.explicitTypeExpression Abstract.build <$> wrap self.report.aType)}}
 
 kindSignaturesBaseMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-kindSignaturesBaseMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+kindSignaturesBaseMixin self super = super{
    extensions = super.extensions{
-      kindSignature = Abstract.typeKind <$ selfReport.doubleColon <*> wrap selfReport.typeTerm}}
+      kindSignature = Abstract.typeKind <$ self.report.doubleColon <*> wrap self.report.typeTerm}}
 
 starIsTypeMixin :: ExtensionOverlay l g t
-starIsTypeMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+starIsTypeMixin self super = super{
    extensions = super.extensions{
       groundTypeKind = super.extensions.groundTypeKind <|> delimiter "*"}}
 
 unicodeStarIsTypeMixin :: ExtensionOverlay l g t
-unicodeStarIsTypeMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unicodeStarIsTypeMixin self super = super{
    extensions = super.extensions{
       groundTypeKind = super.extensions.groundTypeKind <|> delimiter "★"}}
 
 starIsTypeOperatorsMixin :: ExtensionOverlay l g t
-starIsTypeOperatorsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport {
+starIsTypeOperatorsMixin self super = super{
+   report = super.report{
       aType = parens (Abstract.constructorType
                       <$> wrap (Abstract.constructorReference . Abstract.qualifiedName Nothing
                                 <$> token (Report.nameToken $ string "*")))
-              <<|> superReport.aType}}
+              <<|> super.report.aType}}
 
 roleAnnotationsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-roleAnnotationsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport {
-      declarationLevel= superReport.declarationLevel {
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+roleAnnotationsMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel {
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.typeRoleDeclaration <$ keyword "type" <* keyword "role"
-                <*> selfReport.qualifiedTypeConstructor
+                <*> self.report.qualifiedTypeConstructor
                 <*> some (Abstract.nominalRole <$ keyword "nominal"
                           <|> Abstract.representationalRole <$ keyword "representational"
                           <|> Abstract.phantomRole <$ keyword "phantom"
@@ -1310,130 +1293,128 @@ roleAnnotationsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGra
    }
 
 inferredTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-inferredTypeVariablesMixin self@ExtendedGrammar{report = selfReport}
-                           super@ExtendedGrammar{report = superReport} = super{
+inferredTypeVariablesMixin self super = super{
    extensions = super.extensions{
       typeVarBinder = super.extensions.typeVarBinder
-         <|> braces (Abstract.inferredTypeVariable <$> selfReport.typeVar
+         <|> braces (Abstract.inferredTypeVariable <$> self.report.typeVar
                      <|> Abstract.inferredExplicitlyKindedTypeVariable
-                         <$> selfReport.typeVar
+                         <$> self.report.typeVar
                          <*> wrap self.extensions.kindSignature)}}
 
 typeApplicationsMixin :: (Abstract.ExtendedHaskell l, Abstract.DeeplyFoldable (Serialization (Down Int) t) l,
                           SpaceMonoid t) => ExtensionOverlay l g t
-typeApplicationsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      bType = superReport.bType
+typeApplicationsMixin self super = super{
+   report = super.report{
+      bType = super.report.bType
          <|> Abstract.visibleKindApplication
-             <$> filter whiteSpaceTrailing (wrap selfReport.bType)
+             <$> filter whiteSpaceTrailing (wrap self.report.bType)
              <* typeApplicationDelimiter
-             <*> wrap (Abstract.typeKind <$> wrap selfReport.aType),
-      bareExpression = superReport.bareExpression
+             <*> wrap (Abstract.typeKind <$> wrap self.report.aType),
+      bareExpression = super.report.bareExpression
          <|> Abstract.visibleTypeApplication
-             <$> filter whiteSpaceTrailing selfReport.aExpression
+             <$> filter whiteSpaceTrailing self.report.aExpression
              <* typeApplicationDelimiter
-             <*> wrap selfReport.aType},
+             <*> wrap self.report.aType},
    extensions = super.extensions{
       return_type = (super.extensions.return_type)
          <|> Abstract.visibleKindApplication
              <$> filter whiteSpaceTrailing (wrap self.extensions.return_type)
              <* typeApplicationDelimiter
-             <*> wrap (Abstract.typeKind <$> wrap selfReport.aType)}}
+             <*> wrap (Abstract.typeKind <$> wrap self.report.aType)}}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 
 typeAbstractionsOrApplicationsMixin :: (Abstract.ExtendedHaskell l, SpaceMonoid t,
                                         Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
                                     => ExtensionOverlay l g t
-typeAbstractionsOrApplicationsMixin self@ExtendedGrammar{report = selfReport}
-                                    super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      lPattern = superReport.lPattern
+typeAbstractionsOrApplicationsMixin self super = super{
+   report = super.report{
+      lPattern = super.report.lPattern
          <|> Abstract.constructorPatternWithTypeApplications
-             <$> filter whiteSpaceTrailing (wrap selfReport.generalConstructor)
-             <*> some (typeApplicationDelimiter *> wrap selfReport.aType)
+             <$> filter whiteSpaceTrailing (wrap self.report.generalConstructor)
+             <*> some (typeApplicationDelimiter *> wrap self.report.aType)
              <*> many (wrap self.extensions.conArgPattern)},
    extensions = super.extensions{
       instanceDesignatorApplications = super.extensions.instanceDesignatorApplications
          <|> Abstract.classInstanceLHSKindApplication
              <$> filter whiteSpaceTrailing (wrap self.extensions.instanceDesignatorApplications)
              <* typeApplicationDelimiter
-             <*> wrap (Abstract.typeKind <$> wrap selfReport.aType)}}
+             <*> wrap (Abstract.typeKind <$> wrap self.report.aType)}}
    where typeApplicationDelimiter = notFollowedBy unreservedSymbolLexeme *> delimiter "@"
 
 typeAbstractionsMixin :: (Abstract.ExtendedWith '[ 'TypeAbstractions ] l,
                           SpaceMonoid t) => ExtensionOverlay l g t
-typeAbstractionsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report = superReport{
-      declarationLevel = superReport.declarationLevel{
-         simpleType = superReport.declarationLevel.simpleType
+typeAbstractionsMixin self super = super{
+   report = super.report{
+      declarationLevel = super.report.declarationLevel{
+         simpleType = super.report.declarationLevel.simpleType
             <|> Abstract.typeLHSTypeApplication Abstract.build
-                   <$> wrap selfReport.declarationLevel.simpleType
+                   <$> wrap self.report.declarationLevel.simpleType
                    <* delimiter "@"
                    <*> self.extensions.typeVarBinder},
       aPattern =
          Abstract.invisibleTypePattern Abstract.build
             <$ (filter precededByOpenSpace getInput *> delimiter "@")
-            <*> wrap selfReport.aType
-         <|> notFollowedBy (selfReport.variable *> filter precededByOpenSpace getInput *> delimiter "@")
-             *> superReport.aPattern}}
+            <*> wrap self.report.aType
+         <|> notFollowedBy (self.report.variable *> filter precededByOpenSpace getInput *> delimiter "@")
+             *> super.report.aPattern}}
 
 linearTypesMixin :: (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
-linearTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      variableSymbol = notFollowedBy prefixPercent *> superReport.variableSymbol},
+linearTypesMixin self super = super{
+   report= super.report{
+      variableSymbol = notFollowedBy prefixPercent *> super.report.variableSymbol},
    extensions = super.extensions{
       arrowType = super.extensions.arrowType
          <|> Abstract.linearFunctionType
              <$> wrap self.extensions.cType
              <* token prefixPercent
              <* keyword "1"
-             <* selfReport.rightArrow
+             <* self.report.rightArrow
              <*> wrap self.extensions.arrowType
          <|> Abstract.multiplicityFunctionType
              <$> wrap self.extensions.cType
              <* token prefixPercent
              <* notFollowedBy (keyword "1")
-             <*> wrap selfReport.aType
-             <* selfReport.rightArrow
+             <*> wrap self.report.aType
+             <* self.report.rightArrow
              <*> wrap self.extensions.arrowType}}
    where prefixPercent =
             filter precededByOpenSpace getInput *> string "%" <* filter (not . followedByCloseSpace) getInput
 
 gadtLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-gadtLinearTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+gadtLinearTypesMixin self super = super{
    extensions = super.extensions{
       prefix_gadt_body = (super.extensions.prefix_gadt_body)
         <|> Abstract.linearFunctionType
-            <$> wrap (selfReport.bType <|> selfReport.declarationLevel.strictType)
+            <$> wrap (self.report.bType <|> self.report.declarationLevel.strictType)
             <* delimiter "%"
             <* keyword "1"
-            <* selfReport.rightArrow
+            <* self.report.rightArrow
             <*> wrap (self.extensions.prefix_gadt_body)
         <|> Abstract.multiplicityFunctionType
-            <$> wrap (selfReport.bType <|> selfReport.declarationLevel.strictType)
+            <$> wrap (self.report.bType <|> self.report.declarationLevel.strictType)
             <* delimiter "%"
             <* notFollowedBy (keyword "1")
-            <*> wrap selfReport.aType
-            <* selfReport.rightArrow
+            <*> wrap self.report.aType
+            <* self.report.rightArrow
             <*> wrap (self.extensions.prefix_gadt_body),
       gadtNewBody = super.extensions.gadtNewBody
         <|> Abstract.linearFunctionType
-            <$> wrap selfReport.bType
+            <$> wrap self.report.bType
             <* delimiter "%"
             <* keyword "1"
-            <* selfReport.rightArrow
+            <* self.report.rightArrow
             <*> wrap (self.extensions.return_type)
         <|> Abstract.multiplicityFunctionType
-            <$> wrap (selfReport.bType <|> selfReport.declarationLevel.strictType)
+            <$> wrap (self.report.bType <|> self.report.declarationLevel.strictType)
             <* delimiter "%"
             <* notFollowedBy (keyword "1")
-            <*> wrap selfReport.aType
-            <* selfReport.rightArrow
+            <*> wrap self.report.aType
+            <* self.report.rightArrow
             <*> wrap (self.extensions.return_type)}}
 
 unicodeLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-unicodeLinearTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
+unicodeLinearTypesMixin self super = super{
    extensions = super.extensions{
       arrowType = super.extensions.arrowType
         <|> Abstract.linearFunctionType
@@ -1442,58 +1423,50 @@ unicodeLinearTypesMixin self@ExtendedGrammar{report = selfReport} super@Extended
             <*> wrap self.extensions.arrowType}}
 
 gadtUnicodeLinearTypesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-gadtUnicodeLinearTypesMixin self@ExtendedGrammar{report = selfReport}
-                            super@ExtendedGrammar{report = superReport} = super{
+gadtUnicodeLinearTypesMixin self super = super{
    extensions = super.extensions{
       prefix_gadt_body = (super.extensions.prefix_gadt_body)
         <|> Abstract.linearFunctionType
-            <$> wrap (selfReport.bType <|> selfReport.declarationLevel.strictType)
+            <$> wrap (self.report.bType <|> self.report.declarationLevel.strictType)
             <* delimiter "⊸"
             <*> wrap (self.extensions.prefix_gadt_body),
       gadtNewBody = super.extensions.gadtNewBody
         <|> Abstract.linearFunctionType
-            <$> wrap selfReport.bType
+            <$> wrap self.report.bType
             <* delimiter "⊸"
             <*> wrap (self.extensions.return_type)}}
 
 standaloneKindSignaturesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-standaloneKindSignaturesMixin self@ExtendedGrammar{report = selfReport}
-                              super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+standaloneKindSignaturesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.kindSignature <$ keyword "type"
-                  <*> selfReport.typeConstructor
+                  <*> self.report.typeConstructor
                   <*> wrap self.extensions.kindSignature}}}
 
 kindSignaturesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => ExtensionOverlay l g t
-kindSignaturesMixin
-   self@ExtendedGrammar{
-     report= selfReport@HaskellGrammar{
-        declarationLevel= DeclarationGrammar{optionalContext, declaredConstructors, newConstructor,
-                                             simpleType, typeClass, derivingClause, inClassDeclaration}}}
-   super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
-            topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
-               <|> Abstract.kindedDataDeclaration <$ keyword "data"
-                      <*> wrap optionalContext
-                      <*> wrap simpleType
-                      <*> wrap self.extensions.kindSignature
-                      <*> (delimiter "=" *> declaredConstructors <|> pure [])
-                      <*> moptional derivingClause
-               <|> Abstract.kindedNewtypeDeclaration <$ keyword "newtype"
-                      <*> wrap optionalContext
-                      <*> wrap simpleType
-                      <*> wrap self.extensions.kindSignature
-                      <* delimiter "="
-                      <*> wrap newConstructor
-                      <*> moptional derivingClause},
-         typeTerm = superReport.typeTerm <|>
-            Abstract.kindedType <$> wrap selfReport.typeTerm <*> wrap self.extensions.kindSignature},
+kindSignaturesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.kindedDataDeclaration <$ keyword "data"
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.simpleType
+                   <*> wrap self.extensions.kindSignature
+                   <*> (delimiter "=" *> self.report.declarationLevel.declaredConstructors <|> pure [])
+                   <*> moptional self.report.declarationLevel.derivingClause
+            <|> Abstract.kindedNewtypeDeclaration <$ keyword "newtype"
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.simpleType
+                   <*> wrap self.extensions.kindSignature
+                   <* delimiter "="
+                   <*> wrap self.report.declarationLevel.newConstructor
+                   <*> moptional self.report.declarationLevel.derivingClause},
+      typeTerm = super.report.typeTerm <|>
+         Abstract.kindedType <$> wrap self.report.typeTerm <*> wrap self.extensions.kindSignature},
    extensions = super.extensions{
       optionallyKindedAndParenthesizedTypeVar =
          Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar
@@ -1501,62 +1474,57 @@ kindSignaturesMixin
                      <$> wrap (Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar)
                      <*> wrap self.extensions.kindSignature),
       optionallyKindedTypeVar =
-         Abstract.typeVariable <$> selfReport.typeVar
+         Abstract.typeVariable <$> self.report.typeVar
          <|> Abstract.kindedType
-             <$> wrap (Abstract.typeVariable <$> selfReport.typeVar)
+             <$> wrap (Abstract.typeVariable <$> self.report.typeVar)
              <*> wrap self.extensions.kindSignature,
       typeVarBinder = super.extensions.typeVarBinder
                       <|> parens (Abstract.explicitlyKindedTypeVariable
-                                  <$> selfReport.typeVar
+                                  <$> self.report.typeVar
                                   <*> wrap self.extensions.kindSignature)}}
 
 existentialQuantificationMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-existentialQuantificationMixin self@ExtendedGrammar{report = selfReport}
-                               super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      declarationLevel= superReport.declarationLevel{
-         declaredConstructor = superReport.declarationLevel.declaredConstructor
+existentialQuantificationMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         declaredConstructor = super.report.declarationLevel.declaredConstructor
             <|> Abstract.existentialConstructor
                 <$ self.extensions.keywordForall
                 <*> many self.extensions.typeVarBinder <* delimiter "."
-                <*> wrap selfReport.declarationLevel.optionalContext
-                <*> wrap superReport.declarationLevel.declaredConstructor
+                <*> wrap self.report.declarationLevel.optionalContext
+                <*> wrap super.report.declarationLevel.declaredConstructor
             <|> Abstract.existentialConstructor []
-                <$> wrap selfReport.declarationLevel.context
-                <* selfReport.rightDoubleArrow
-                <*> wrap superReport.declarationLevel.declaredConstructor}}}
+                <$> wrap self.report.declarationLevel.context
+                <* self.report.rightDoubleArrow
+                <*> wrap super.report.declarationLevel.declaredConstructor}}}
 
 scopedTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-scopedTypeVariablesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      pattern = superReport.pattern
+scopedTypeVariablesMixin self super = super{
+   report= super.report{
+      pattern = super.report.pattern
          <|> Abstract.typedPattern
                 <$> wrap self.extensions.infixPattern
-                <* selfReport.doubleColon
-                <*> wrap selfReport.typeTerm}}
+                <* self.report.doubleColon
+                <*> wrap self.report.typeTerm}}
 
 explicitForAllMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                         Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                     => ExtensionOverlay l g t
-explicitForAllMixin
-   self@ExtendedGrammar{
-      report= selfReport@HaskellGrammar{
-         declarationLevel= DeclarationGrammar{context, optionalContext, instanceDesignator}}}
-   super@ExtendedGrammar{report = superReport} = super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
+explicitForAllMixin self super = super{
+      report= super.report{
+         declarationLevel= super.report.declarationLevel{
             optionalTypeSignatureContext = pure Abstract.noContext,
-            topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
+            topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
                <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
                    <* self.extensions.keywordForall
                    <*> many self.extensions.typeVarBinder
                    <* delimiter "."
-                   <*> wrap optionalContext
-                   <*> wrap instanceDesignator
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.instanceDesignator
                    <*> (keyword "where"
-                        *> blockOf (wrap selfReport.declarationLevel.inInstanceDeclaration)
+                        *> blockOf (wrap self.report.declarationLevel.inInstanceDeclaration)
                         <|> pure [])},
-         typeVar = notFollowedBy (self.extensions.keywordForall) *> superReport.typeVar},
+         typeVar = notFollowedBy (self.extensions.keywordForall) *> super.report.typeVar},
    extensions = super.extensions{
       arrowType = super.extensions.arrowType
          <|> Abstract.forallType <$ self.extensions.keywordForall
@@ -1569,143 +1537,131 @@ explicitForAllMixin
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                 => ExtensionOverlay l g t
-gadtSyntaxMixin
-   self@ExtendedGrammar{report= HaskellGrammar{declarationLevel= DeclarationGrammar{simpleType, derivingClause}}}
-   super@ExtendedGrammar{report = superReport} = super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
-            topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
-               <|> Abstract.gadtDeclaration <$ keyword "data"
-                   <*> wrap simpleType
-                   <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
-                   <*> blockOf (wrap self.extensions.gadtConstructors)
-                   <*> moptional derivingClause
-               <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
-                   <*> wrap simpleType
-                   <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
-                   <*> wrap self.extensions.gadtNewConstructor
-                   <*> moptional derivingClause}},
+gadtSyntaxMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.gadtDeclaration <$ keyword "data"
+                <*> wrap super.report.declarationLevel.simpleType
+                <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
+                <*> blockOf (wrap self.extensions.gadtConstructors)
+                <*> moptional super.report.declarationLevel.derivingClause
+            <|> Abstract.gadtNewtypeDeclaration <$ keyword "newtype"
+                <*> wrap super.report.declarationLevel.simpleType
+                <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
+                <*> wrap self.extensions.gadtNewConstructor
+                <*> moptional super.report.declarationLevel.derivingClause}},
    extensions = super.extensions{
       optionalForall = self.extensions.keywordForall *> many self.extensions.typeVarBinder <* delimiter "."
                        <<|> pure []}}
 
 gadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-gadtSyntaxTypeOperatorsMixin self@ExtendedGrammar{report = selfReport}
-                             super@ExtendedGrammar{report = superReport} = super{
+gadtSyntaxTypeOperatorsMixin self super = super{
    extensions = super.extensions{
       prefix_gadt_body = (super.extensions.prefix_gadt_body)
          <|> Abstract.functionType
                 <$> wrap (Abstract.infixTypeApplication
                              <$> wrap self.extensions.cType
-                             <*> selfReport.qualifiedOperator
-                             <*> wrap selfReport.bType)
-                <* selfReport.rightArrow
+                             <*> self.report.qualifiedOperator
+                             <*> wrap self.report.bType)
+                <* self.report.rightArrow
                 <*> wrap (self.extensions.prefix_gadt_body),
       return_type = (super.extensions.return_type) <|>
           Abstract.infixTypeApplication <$> wrap (self.extensions.arg_type)
-                                        <*> selfReport.qualifiedOperator
+                                        <*> self.report.qualifiedOperator
                                         <*> wrap (self.extensions.arg_type)}}
 
 dataKindsGadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-dataKindsGadtSyntaxTypeOperatorsMixin self@ExtendedGrammar{report = selfReport}
-                                      super@ExtendedGrammar{report = superReport} = super{
+dataKindsGadtSyntaxTypeOperatorsMixin self super = super{
    extensions = super.extensions{
       return_type = (super.extensions.return_type) <|>
          Abstract.promotedInfixTypeApplication
          <$> wrap (self.extensions.arg_type)
          <* terminator "'"
-         <*> selfReport.qualifiedOperator
+         <*> self.report.qualifiedOperator
          <*> wrap (self.extensions.arg_type)}}
 
 namedFieldPunsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-namedFieldPunsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         fieldBinding = superReport.fieldBinding <|>
-            Abstract.punnedFieldBinding <$> selfReport.qualifiedVariable,
-         fieldPattern = superReport.fieldPattern <|>
-            Abstract.punnedFieldPattern <$> selfReport.qualifiedVariable}}
+namedFieldPunsMixin self super = super{
+   report = super.report{
+      fieldBinding = super.report.fieldBinding <|>
+         Abstract.punnedFieldBinding <$> self.report.qualifiedVariable,
+      fieldPattern = super.report.fieldPattern <|>
+         Abstract.punnedFieldPattern <$> self.report.qualifiedVariable}}
 
 recordWildCardsMixin :: Abstract.ExtendedWith '[ 'RecordWildCards ] l => ExtensionOverlay l g t
-recordWildCardsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      extensions = super.extensions{
-        conArgPattern = super.extensions.conArgPattern
-           <|> Abstract.wildcardRecordPattern' Abstract.build <$> selfReport.qualifiedConstructor
-               <*> braces (wrap selfReport.fieldPattern `endBy` comma <* delimiter "..")},
-      report = superReport{
-         bareExpression = superReport.bareExpression
-            <|> Abstract.wildcardRecordExpression' Abstract.build <$> selfReport.qualifiedConstructor
-                <*> braces (wrap selfReport.fieldBinding `endBy` comma <* delimiter "..")}}
+recordWildCardsMixin self super = super{
+   extensions = super.extensions{
+     conArgPattern = super.extensions.conArgPattern
+        <|> Abstract.wildcardRecordPattern' Abstract.build <$> self.report.qualifiedConstructor
+            <*> braces (wrap self.report.fieldPattern `endBy` comma <* delimiter "..")},
+   report = super.report{
+      bareExpression = super.report.bareExpression
+         <|> Abstract.wildcardRecordExpression' Abstract.build <$> self.report.qualifiedConstructor
+             <*> braces (wrap self.report.fieldBinding `endBy` comma <* delimiter "..")}}
 
 overloadedRecordDotMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-overloadedRecordDotMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         qualifiedVariableSymbol =
-            notFollowedBy (string "." *> satisfyCharInput varStart) *> superReport.qualifiedVariableSymbol,
-         bareExpression = superReport.bareExpression <|>
-            Abstract.getField <$> selfReport.aExpression <* prefixDot <*> selfReport.variableIdentifier
-            <|>
-            Abstract.fieldProjection <$> parens (someNonEmpty $ prefixDot *> selfReport.variableIdentifier)}}
+overloadedRecordDotMixin self super = super{
+   report = super.report{
+      qualifiedVariableSymbol =
+         notFollowedBy (string "." *> satisfyCharInput varStart) *> super.report.qualifiedVariableSymbol,
+      bareExpression = super.report.bareExpression <|>
+         Abstract.getField <$> self.report.aExpression <* prefixDot <*> self.report.variableIdentifier
+         <|>
+         Abstract.fieldProjection <$> parens (someNonEmpty $ prefixDot *> self.report.variableIdentifier)}}
    where prefixDot = void (string "."
                            <* lookAhead (satisfyCharInput varStart)
                            <* lift ([[Token Modifier "."]], ()))
                      <?> "prefix ."
 
 implicitParametersMixin :: Abstract.ExtendedWith '[ 'ImplicitParameters ] l => ExtensionOverlay l g t
-implicitParametersMixin self@ExtendedGrammar{report = selfReport}
-                        super@ExtendedGrammar{report= superReport@HaskellGrammar{declarationLevel, bareExpression}} =
-   super{
-      extensions = super.extensions{
-         implicitParameterConstraint =
-            Abstract.implicitParameterConstraint Abstract.build
-            <$ delimiter "?"
-            <*> selfReport.variableIdentifier
-            <* selfReport.doubleColon
-            <*> wrap selfReport.typeTerm},
-      report = superReport{
-          declarationLevel = declarationLevel{
-              declaration = declaration declarationLevel
-                 <|> Abstract.implicitParameterDeclaration Abstract.build
-                     <$ delimiter "?"
-                     <*> selfReport.variableIdentifier
-                     <* delimiter "="
-                     <*> selfReport.expression},
-          bareExpression = bareExpression
-             <|> Abstract.implicitParameterExpression Abstract.build
-                 <$ delimiter "?" <*> selfReport.variableIdentifier,
-          qualifiedVariableSymbol = notFollowedBy (delimiter "?") *> superReport.qualifiedVariableSymbol}}
+implicitParametersMixin self super = super{
+   extensions = super.extensions{
+      implicitParameterConstraint =
+         Abstract.implicitParameterConstraint Abstract.build
+         <$ delimiter "?"
+         <*> self.report.variableIdentifier
+         <* self.report.doubleColon
+         <*> wrap self.report.typeTerm},
+   report = super.report{
+       declarationLevel = super.report.declarationLevel{
+           declaration = super.report.declarationLevel.declaration
+              <|> Abstract.implicitParameterDeclaration Abstract.build
+                  <$ delimiter "?"
+                  <*> self.report.variableIdentifier
+                  <* delimiter "="
+                  <*> self.report.expression},
+       bareExpression = super.report.bareExpression
+          <|> Abstract.implicitParameterExpression Abstract.build
+              <$ delimiter "?" <*> self.report.variableIdentifier,
+       qualifiedVariableSymbol = notFollowedBy (delimiter "?") *> super.report.qualifiedVariableSymbol}}
 
 strictDataMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'StrictData ] l) => ExtensionOverlay l g t
-strictDataMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         declarationLevel = superReport.declarationLevel{
-            strictType = superReport.declarationLevel.strictType
-               <|> Abstract.lazyType Abstract.build <$ delimiter "~" <*> wrap selfReport.aType}}}
+strictDataMixin self super = super{
+   report = super.report{
+      declarationLevel = super.report.declarationLevel{
+         strictType = super.report.declarationLevel.strictType
+            <|> Abstract.lazyType Abstract.build <$ delimiter "~" <*> wrap self.report.aType}}}
 
 strictMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'Strict ] l) => ExtensionOverlay l g t
-strictMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         aPattern =
-            Abstract.irrefutablePattern
-               <$ delimiter "~"
-               <*> parens (wrap (Abstract.lazyPattern Abstract.build
-                                    <$ delimiter "~"
-                                    <*> wrap selfReport.aPattern))
-            <<|> Abstract.lazyPattern Abstract.build <$ delimiter "~" <*> wrap selfReport.aPattern
-            <<|> superReport.aPattern}}
+strictMixin self super = super{
+   report = super.report{
+      aPattern =
+         Abstract.irrefutablePattern
+            <$ delimiter "~"
+            <*> parens (wrap (Abstract.lazyPattern Abstract.build
+                                 <$ delimiter "~"
+                                 <*> wrap self.report.aPattern))
+         <<|> Abstract.lazyPattern Abstract.build <$ delimiter "~" <*> wrap self.report.aPattern
+         <<|> super.report.aPattern}}
 
 bangPatternsMixin :: (SpaceMonoid t, Abstract.ExtendedWith '[ 'BangPatterns ] l) => ExtensionOverlay l g t
-bangPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      extensions = super.extensions{
-         conArgPattern = super.extensions.conArgPattern
-            <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap self.extensions.conArgPattern},
-      report = superReport{
-         variableOperator = notFollowedBy bang *> superReport.variableOperator}}
+bangPatternsMixin self super = super{
+   extensions = super.extensions{
+      conArgPattern = super.extensions.conArgPattern
+         <|> Abstract.bangPattern Abstract.build <$ bang <*> wrap self.extensions.conArgPattern},
+   report = super.report{
+      variableOperator = notFollowedBy bang *> super.report.variableOperator}}
    where bang = filter precededByOpenSpace getInput
                 *> string "!"
                 <* notSatisfyChar (\c-> Char.isSpace c || isSymbol c)
@@ -1713,261 +1669,226 @@ bangPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGramma
                 <* lift ([[Token Delimiter "!"]], ())
 
 viewPatternsMixin :: Abstract.ExtendedWith '[ 'ViewPatterns ] l => ExtensionOverlay l g t
-viewPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         pPattern = superReport.pPattern
-            <|> Abstract.viewPattern Abstract.build
-                <$> selfReport.expression
-                <* selfReport.rightArrow
-                <*> wrap selfReport.pPattern}}
+viewPatternsMixin self super = super{
+   report = super.report{
+      pPattern = super.report.pPattern
+         <|> Abstract.viewPattern Abstract.build
+             <$> self.report.expression
+             <* self.report.rightArrow
+             <*> wrap self.report.pPattern}}
 
 nPlusKPatternsMixin :: Abstract.ExtendedWith '[ 'NPlusKPatterns ] l => ExtensionOverlay l g t
-nPlusKPatternsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         pPattern = superReport.pPattern
-            <|> Abstract.nPlusKPattern Abstract.build
-                <$> selfReport.variable
-                <* delimiter "+"
-                <*> selfReport.integer}}
+nPlusKPatternsMixin self super = super{
+   report = super.report{
+      pPattern = super.report.pPattern
+         <|> Abstract.nPlusKPattern Abstract.build
+             <$> self.report.variable
+             <* delimiter "+"
+             <*> self.report.integer}}
 
 patternSynonymsMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'PatternSynonyms ] l,
                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.PatternEquationClause l l),
                                        Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                      => ExtensionOverlay l g t
-patternSynonymsMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         moduleLevel= superReport.moduleLevel{
-            export = superReport.moduleLevel.export
-               <|> Abstract.exportPattern Abstract.build <$ keyword "pattern"
-                   <*> selfReport.qualifiedConstructor,
-            importItem = superReport.moduleLevel.importItem
-               <|> Abstract.importPattern Abstract.build <$ keyword "pattern"
-                   <*> selfReport.constructor,
-            members = superReport.moduleLevel.members
-               <|> parens (Abstract.allMembersPlus Abstract.build
-                           <$> filter (not . null)
-                                  (moptional (selfReport.moduleLevel.cname `sepBy` comma <* comma)
-                                   <> ([] <$ delimiter "..")
-                                   <> moptional (comma *> selfReport.moduleLevel.cname `sepEndBy` comma)))},
-         declarationLevel= superReport.declarationLevel{
-            topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
-               <|> keyword "pattern" *>
-               (Abstract.implicitPatternSynonym Abstract.build
-                   <$> wrap lhsPattern <* delimiter "=" <*> wrap selfReport.pattern
-                <|> Abstract.unidirectionalPatternSynonym Abstract.build
-                       <$> wrap lhsPattern <* selfReport.leftArrow <*> wrap selfReport.pattern
-                <|> Abstract.explicitPatternSynonym Abstract.build
-                       <$> wrap lhsPattern
-                       <* selfReport.leftArrow
-                       <*> wrap selfReport.pattern
-                       <*> patternClauses
-                <|> Abstract.patternSynonymSignature Abstract.build
-                       <$> selfReport.constructor `sepByNonEmpty` comma
-                       <* selfReport.doubleColon
-                       <*> self.extensions.optionalForall
-                       <*> wrap (selfReport.declarationLevel.context <* selfReport.rightDoubleArrow
-                                 <<|> pure Abstract.noContext)
-                       <*> self.extensions.optionalForall
-                       <*> wrap selfReport.declarationLevel.optionalContext
-                       <*> many (wrap self.extensions.cType <* selfReport.rightArrow)
-                       <*> wrap self.extensions.cType)},
-         variableIdentifier = notFollowedBy (keyword "pattern") *> superReport.variableIdentifier}}
+patternSynonymsMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         export = super.report.moduleLevel.export
+            <|> Abstract.exportPattern Abstract.build <$ keyword "pattern"
+                <*> self.report.qualifiedConstructor,
+         importItem = super.report.moduleLevel.importItem
+            <|> Abstract.importPattern Abstract.build <$ keyword "pattern"
+                <*> self.report.constructor,
+         members = super.report.moduleLevel.members
+            <|> parens (Abstract.allMembersPlus Abstract.build
+                        <$> filter (not . null)
+                               (moptional (self.report.moduleLevel.cname `sepBy` comma <* comma)
+                                <> ([] <$ delimiter "..")
+                                <> moptional (comma *> self.report.moduleLevel.cname `sepEndBy` comma)))},
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> keyword "pattern" *>
+            (Abstract.implicitPatternSynonym Abstract.build
+                <$> wrap lhsPattern <* delimiter "=" <*> wrap self.report.pattern
+             <|> Abstract.unidirectionalPatternSynonym Abstract.build
+                    <$> wrap lhsPattern <* self.report.leftArrow <*> wrap self.report.pattern
+             <|> Abstract.explicitPatternSynonym Abstract.build
+                    <$> wrap lhsPattern
+                    <* self.report.leftArrow
+                    <*> wrap self.report.pattern
+                    <*> patternClauses
+             <|> Abstract.patternSynonymSignature Abstract.build
+                    <$> self.report.constructor `sepByNonEmpty` comma
+                    <* self.report.doubleColon
+                    <*> self.extensions.optionalForall
+                    <*> wrap (self.report.declarationLevel.context <* self.report.rightDoubleArrow
+                              <<|> pure Abstract.noContext)
+                    <*> self.extensions.optionalForall
+                    <*> wrap self.report.declarationLevel.optionalContext
+                    <*> many (wrap self.extensions.cType <* self.report.rightArrow)
+                    <*> wrap self.extensions.cType)},
+      variableIdentifier = notFollowedBy (keyword "pattern") *> super.report.variableIdentifier}}
    where lhsPattern =
             Abstract.prefixPatternLHS Abstract.build
-               <$> selfReport.constructor
-               <*> many selfReport.variableIdentifier
+               <$> self.report.constructor
+               <*> many self.report.variableIdentifier
             <|> Abstract.infixPatternLHS Abstract.build
-                   <$> selfReport.variableIdentifier
-                   <*> selfReport.constructorOperator
-                   <*> selfReport.variableIdentifier
+                   <$> self.report.variableIdentifier
+                   <*> self.report.constructorOperator
+                   <*> self.report.variableIdentifier
             <|> Abstract.recordPatternLHS Abstract.build
-                   <$> selfReport.constructor
-                   <*> braces (selfReport.variable `sepBy` comma)
+                   <$> self.report.constructor
+                   <*> braces (self.report.variable `sepBy` comma)
          patternClauses = keyword "where" *> blockOf (wrap patternClause)
          patternClause = Abstract.patternEquationClause @l Abstract.build
                          <$> wrap patternClauseLHS
-                         <*> wrap selfReport.rhs
-                         <*> selfReport.declarationLevel.whereClauses
+                         <*> wrap self.report.rhs
+                         <*> self.report.declarationLevel.whereClauses
          patternClauseLHS =
             Abstract.prefixPatternEquationLHS Abstract.build
-               <$> selfReport.constructor
-               <*> many (wrap selfReport.pattern)
+               <$> self.report.constructor
+               <*> many (wrap self.report.pattern)
             <|> Abstract.infixPatternEquationLHS Abstract.build
-                   <$> wrap selfReport.pattern
-                   <*> selfReport.constructorOperator
-                   <*> wrap selfReport.pattern
+                   <$> wrap self.report.pattern
+                   <*> self.report.constructorOperator
+                   <*> wrap self.report.pattern
 
 standaloneDerivingMixin :: Abstract.ExtendedWith '[ 'StandaloneDeriving ] l => ExtensionOverlay l g t
-standaloneDerivingMixin self@ExtendedGrammar{
-                           report= HaskellGrammar{
-                              declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
-                        super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
-   super{
-      report = report{
-         declarationLevel= declarationLevel{
-            topLevelDeclaration = declarationLevel.topLevelDeclaration
-               <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
-                   <*> self.extensions.optionalForall
-                   <*> wrap optionalContext
-                   <*> wrap instanceDesignator}}}
+standaloneDerivingMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.standaloneDerivingDeclaration Abstract.build <$ keyword "deriving" <* keyword "instance"
+                <*> self.extensions.optionalForall
+                <*> wrap self.report.declarationLevel.optionalContext
+                <*> wrap self.report.declarationLevel.instanceDesignator}}}
 
 derivingStrategiesMixin :: forall l g t. Abstract.ExtendedWith '[ 'DerivingStrategies ] l => ExtensionOverlay l g t
-derivingStrategiesMixin self@ExtendedGrammar{
-                           report= selfReport@HaskellGrammar{generalConstructor, typeTerm}}
-                        super@ExtendedGrammar{report= superReport@HaskellGrammar{declarationLevel}} =
-   super{
-      report = superReport{
-         declarationLevel= declarationLevel{
-            derivingClause = concatSome self.extensions.singleDerivingClause}},
-      extensions = super.extensions{
-         singleDerivingClause = declarationLevel.derivingClause
-            <|> takeSome (wrap $
-                          Abstract.strategicDerive Abstract.build <$ keyword "deriving"
-                          <*> wrap self.extensions.derivingStrategy
-                          <*> (pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor)
-                               <<|> parens (wrap typeTerm `sepBy` comma))),
-         derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
-                            <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
-                            <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}}
+derivingStrategiesMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         derivingClause = concatSome self.extensions.singleDerivingClause}},
+   extensions = super.extensions{
+      singleDerivingClause = super.report.declarationLevel.derivingClause
+         <|> takeSome (wrap $
+                       Abstract.strategicDerive Abstract.build <$ keyword "deriving"
+                       <*> wrap self.extensions.derivingStrategy
+                       <*> (pure <$> wrap (Abstract.constructorType <$> wrap self.report.generalConstructor)
+                            <<|> parens (wrap self.report.typeTerm `sepBy` comma))),
+      derivingStrategy = Abstract.stockStrategy @l Abstract.build <$ keyword "stock"
+                         <|> Abstract.anyClassStrategy @l Abstract.build <$ keyword "anyclass"
+                         <|> Abstract.newtypeStrategy @l Abstract.build <$ keyword "newtype"}}
 
 standaloneDerivingStrategiesMixin :: (Abstract.ExtendedWith '[ 'StandaloneDeriving ] l,
                                       Abstract.ExtendedWith '[ 'DerivingStrategies ] l)
                                   => ExtensionOverlay l g t
-standaloneDerivingStrategiesMixin self@ExtendedGrammar{
-                                     report= HaskellGrammar{
-                                        declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
-                                  super@ExtendedGrammar{report= report@HaskellGrammar{declarationLevel}} =
-   super{
-      report = report{
-         declarationLevel= declarationLevel{
-            topLevelDeclaration = declarationLevel.topLevelDeclaration
-               <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
-                      <$ keyword "deriving"
-                      <*> wrap self.extensions.derivingStrategy
-                      <* keyword "instance"
-                      <*> self.extensions.optionalForall
-                      <*> wrap optionalContext
-                      <*> wrap instanceDesignator}}}
+standaloneDerivingStrategiesMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
+                   <$ keyword "deriving"
+                   <*> wrap self.extensions.derivingStrategy
+                   <* keyword "instance"
+                   <*> self.extensions.optionalForall
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.instanceDesignator}}}
 
 derivingViaMixin :: forall l g t. Abstract.ExtendedWith '[ 'DerivingVia ] l => ExtensionOverlay l g t
-derivingViaMixin self@ExtendedGrammar{
-                    report= HaskellGrammar{generalConstructor, typeTerm}}
-                 super@ExtendedGrammar{report= HaskellGrammar{declarationLevel}} =
-   super{
-      extensions = super.extensions{
-         singleDerivingClause =
-            super.extensions.singleDerivingClause
-            <|> takeSome (wrap $
-                          Abstract.deriveVia Abstract.build <$ keyword "deriving"
-                          <*> (parens (wrap typeTerm `sepBy` comma)
-                               <<|> pure <$> wrap (Abstract.constructorType <$> wrap generalConstructor))
-                          <* keyword "via"
-                          <*> wrap typeTerm)}}
+derivingViaMixin self super = super{
+   extensions = super.extensions{
+      singleDerivingClause =
+         super.extensions.singleDerivingClause
+         <|> takeSome (wrap $
+                       Abstract.deriveVia Abstract.build <$ keyword "deriving"
+                       <*> (parens (wrap self.report.typeTerm `sepBy` comma)
+                            <<|> pure <$> wrap (Abstract.constructorType <$> wrap self.report.generalConstructor))
+                       <* keyword "via"
+                       <*> wrap self.report.typeTerm)}}
 
 standaloneDerivingViaMixin :: forall l g t. (Abstract.ExtendedWith '[ 'StandaloneDeriving ] l,
                                              Abstract.ExtendedWith '[ 'DerivingStrategies ] l,
                                              Abstract.ExtendedWith '[ 'DerivingVia ] l)
                            => ExtensionOverlay l g t
-standaloneDerivingViaMixin self@ExtendedGrammar{
-                              report= selfReport@HaskellGrammar{
-                                 declarationLevel= DeclarationGrammar{optionalContext, instanceDesignator}}}
-                           super@ExtendedGrammar{report= superReport@HaskellGrammar{declarationLevel}} =
-   super{
-      report = superReport{
-         declarationLevel= declarationLevel{
-            topLevelDeclaration = declarationLevel.topLevelDeclaration
-               <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
-                      <$ keyword "deriving"
-                      <*> wrap derivingVia
-                      <* keyword "instance"
-                      <*> self.extensions.optionalForall
-                      <*> wrap optionalContext
-                      <*> wrap instanceDesignator}}}
-   where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via"
-                       <*> wrap selfReport.typeTerm
+standaloneDerivingViaMixin self super = super{
+   report = super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.standaloneStrategicDerivingDeclaration Abstract.build
+                   <$ keyword "deriving"
+                   <*> wrap derivingVia
+                   <*  keyword "instance"
+                   <*> self.extensions.optionalForall
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.instanceDesignator}}}
+   where derivingVia = Abstract.derivingViaStrategy @l Abstract.build <$ keyword "via" <*> wrap self.report.typeTerm
 
 functionalDependenciesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'FunctionalDependencies ] l,
                                               Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l))
                             => ExtensionOverlay l g t
-functionalDependenciesMixin
-   self@ExtendedGrammar{
-     report= HaskellGrammar{
-        rightArrow, typeVar,
-        declarationLevel= DeclarationGrammar{optionalContext, classLHS, inClassDeclaration}}}
-   super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
-            topLevelDeclaration = superReport.declarationLevel.topLevelDeclaration
-               <|> Abstract.fundepClassDeclaration Abstract.build
-                      <$ keyword "class"
-                      <*> wrap optionalContext
-                      <*> wrap classLHS
-                      <* delimiter "|"
-                      <*> wrap (Abstract.functionalDependency Abstract.build
-                                   <$> many typeVar <* rightArrow <*> many typeVar)
-                         `sepBy` comma
-                      <*> moptional (keyword "where" *> blockOf (wrap inClassDeclaration))}}}
+functionalDependenciesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> Abstract.fundepClassDeclaration Abstract.build
+                   <$ keyword "class"
+                   <*> wrap self.report.declarationLevel.optionalContext
+                   <*> wrap self.report.declarationLevel.classLHS
+                   <*  delimiter "|"
+                   <*> wrap (Abstract.functionalDependency Abstract.build
+                                <$> many self.report.typeVar <* self.report.rightArrow <*> many self.report.typeVar)
+                      `sepBy` comma
+                   <*> moptional (keyword "where" *> blockOf (wrap self.report.declarationLevel.inClassDeclaration))}}}
 
 constraintsAreTypesMixin :: forall l g t. Abstract.ExtendedHaskell l => ExtensionOverlay l g t
-constraintsAreTypesMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      extensions = super.extensions{
-         cType = super.extensions.cType <|> Abstract.constraintType <$> wrap self.extensions.equalityConstraint},
-      report= superReport{
-         typeTerm = superReport.typeTerm
-                    <|> Abstract.constraintType <$> wrap self.extensions.implicitParameterConstraint,
-         declarationLevel= superReport.declarationLevel{
-            context = selfReport.declarationLevel.constraint,
-            constraint = Abstract.typeConstraint <$> wrap self.extensions.cType}}}
+constraintsAreTypesMixin self super = super{
+   extensions = super.extensions{
+      cType = super.extensions.cType <|> Abstract.constraintType <$> wrap self.extensions.equalityConstraint},
+   report= super.report{
+      typeTerm = super.report.typeTerm
+                 <|> Abstract.constraintType <$> wrap self.extensions.implicitParameterConstraint,
+      declarationLevel= super.report.declarationLevel{
+         context = self.report.declarationLevel.constraint,
+         constraint = Abstract.typeConstraint <$> wrap self.extensions.cType}}}
 
 instanceSignaturesMixin :: ExtensionOverlay l g t
-instanceSignaturesMixin
-   self@ExtendedGrammar{
-      report= HaskellGrammar{doubleColon, typeTerm,
-                             declarationLevel= DeclarationGrammar{optionalTypeSignatureContext, variables}}}
-   super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
-            inInstanceDeclaration = superReport.declarationLevel.inInstanceDeclaration
-               <|> Abstract.typeSignature <$> variables <* doubleColon <*> wrap optionalTypeSignatureContext
-                                          <*> wrap typeTerm}}}
+instanceSignaturesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         inInstanceDeclaration = super.report.declarationLevel.inInstanceDeclaration
+            <|> Abstract.typeSignature <$> self.report.declarationLevel.variables
+                                       <*  self.report.doubleColon
+                                       <*> wrap self.report.declarationLevel.optionalTypeSignatureContext
+                                       <*> wrap self.report.typeTerm}}}
 
 defaultSignaturesMixin :: Abstract.ExtendedWith '[ 'DefaultSignatures ] l => ExtensionOverlay l g t
-defaultSignaturesMixin
-   self@ExtendedGrammar{
-      report= HaskellGrammar{doubleColon, typeTerm, variable,
-                             declarationLevel= DeclarationGrammar{optionalTypeSignatureContext}}}
-   super@ExtendedGrammar{report = superReport} =
-   super{
-      report= superReport{
-         declarationLevel= superReport.declarationLevel{
-            inClassDeclaration = superReport.declarationLevel.inClassDeclaration
-               <|> Abstract.defaultMethodSignature Abstract.build <$ keyword "default"
-                      <*> variable <* doubleColon <*> wrap optionalTypeSignatureContext <*> wrap typeTerm}}}
+defaultSignaturesMixin self super = super{
+   report= super.report{
+      declarationLevel= super.report.declarationLevel{
+         inClassDeclaration = super.report.declarationLevel.inClassDeclaration
+            <|> Abstract.defaultMethodSignature Abstract.build <$ keyword "default"
+                   <*> self.report.variable
+                   <*  self.report.doubleColon
+                   <*> wrap self.report.declarationLevel.optionalTypeSignatureContext
+                   <*> wrap self.report.typeTerm}}}
 
 -- | Not an extension by itself, common to magicHashMixin and negativeLiteralsMixin.
 negationConstraintMixin :: Parser g t t -> ExtensionOverlay l g t
-negationConstraintMixin prefixMinusFollow self super@ExtendedGrammar{report = superReport} = super{
-   report= superReport{
-      variableSymbol = negationGuard *> superReport.variableSymbol,
-      qualifiedVariableSymbol = negationGuard *> superReport.qualifiedVariableSymbol,
-      prefixNegation = negationGuard *> superReport.prefixNegation}}
+negationConstraintMixin prefixMinusFollow self super = super{
+   report= super.report{
+      variableSymbol = negationGuard *> super.report.variableSymbol,
+      qualifiedVariableSymbol = negationGuard *> super.report.qualifiedVariableSymbol,
+      prefixNegation = negationGuard *> super.report.prefixNegation}}
    where negationGuard = notFollowedBy (string "-" *> prefixMinusFollow)
 
 nondecreasingIndentationMixin :: (Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
                                   OutlineMonoid t)
                               => ExtensionOverlay l g t
-nondecreasingIndentationMixin self@ExtendedGrammar{report = selfReport} super@ExtendedGrammar{report = superReport} =
-   super{
-      report = superReport{
-         statements = Report.blockWith nonDecreasingIndentLine Report.blockTerminatorKeyword selfReport.statement
-                      >>= Report.verifyStatements}}
+nondecreasingIndentationMixin self super = super{
+   report = super.report{
+      statements = Report.blockWith nonDecreasingIndentLine Report.blockTerminatorKeyword self.report.statement
+                   >>= Report.verifyStatements}}
 
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
