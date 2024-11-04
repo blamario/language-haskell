@@ -601,6 +601,14 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
       AST.QualifiedDoExpression sup m (translateFully t body)
    translateDeeply t (AST.MDoQualifiedExpression sup1 sup2 m body) =
       AST.MDoQualifiedExpression sup1 sup2 m (translateFully t body)
+   translateDeeply t (AST.ProcExpression sup pat body) =
+      AST.ProcExpression sup (translateFully t pat) (translateFully t body)
+   translateDeeply t (AST.ArrowApplication sup left right) =
+      AST.ArrowApplication sup (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.ArrowDoubleApplication sup left right) =
+      AST.ArrowDoubleApplication sup (translateFully t left) (translateFully t right)
+   translateDeeply t (AST.ArrowBrackets sup f args) =
+      AST.ArrowBrackets sup (translateFully t f) (translateFully t <$> args)
    translateDeeply t (AST.InfixExpression left op right) =
       AST.InfixExpression (translateFully t left) (translateFully t op) (translateFully t right)
    translateDeeply t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression (translateFully t left) op
@@ -742,6 +750,8 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.QualifiedDo (Target t),
     Abstract.SupportFor 'Extensions.RecursiveDo (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecursiveDo (Target t),
+    Abstract.SupportFor 'Extensions.Arrows (Origin t)
+    ~ Abstract.SupportFor 'Extensions.Arrows (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t),
     Abstract.SupportFor 'Extensions.UnboxedSums (Origin t)
@@ -762,6 +772,10 @@ instance {-# overlappable #-}
       AST.QualifiedDoExpression sup (translateModuleName t m) statements
    translate t (AST.MDoQualifiedExpression sup1 sup2 m statements) =
       AST.MDoQualifiedExpression sup1 sup2 (translateModuleName t m) statements
+   translate _ (AST.ProcExpression sup pat body) = AST.ProcExpression sup pat body
+   translate _ (AST.ArrowApplication sup left right) = AST.ArrowApplication sup left right
+   translate _ (AST.ArrowDoubleApplication sup left right) = AST.ArrowDoubleApplication sup left right
+   translate _ (AST.ArrowBrackets sup f args) = AST.ArrowBrackets sup f args
    translate _ (AST.InfixExpression left op right) = AST.InfixExpression left op right
    translate t (AST.LeftSectionExpression left op) = AST.LeftSectionExpression left (translateQualifiedName t op)
    translate _ (AST.LambdaExpression pat body) = AST.LambdaExpression pat body

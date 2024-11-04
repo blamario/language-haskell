@@ -47,6 +47,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
    'Extensions.QualifiedDo,
+   'Extensions.Arrows,
    'Extensions.LambdaCase,
    'Extensions.ImplicitParameters,
    'Extensions.TupleSections,
@@ -111,6 +112,13 @@ instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] Language where
    build = Abstract.QualifiedRecursiveDoConstruction {
       Abstract.mdoQualifiedExpression = MDoQualifiedExpression () ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.Arrows ] Language where
+   build = Abstract.ArrowsConstruction {
+      Abstract.procExpression = ProcExpression (),
+      Abstract.arrowApplication = ArrowApplication (),
+      Abstract.arrowDoubleApplication = ArrowDoubleApplication (),
+      Abstract.arrowBrackets = ArrowBrackets ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
    build = Abstract.LambdaCaseConstruction {
@@ -724,6 +732,14 @@ data Expression λ l d s =
    | MDoQualifiedExpression !(Abstract.SupportFor 'Extensions.QualifiedDo λ)
                             !(Abstract.SupportFor 'Extensions.RecursiveDo λ)
                             (Abstract.ModuleName λ) (s (Abstract.GuardedExpression l l d d))
+   | ProcExpression !(Abstract.SupportFor 'Extensions.Arrows λ)
+                    (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
+   | ArrowApplication !(Abstract.SupportFor 'Extensions.Arrows λ)
+                      (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+   | ArrowDoubleApplication !(Abstract.SupportFor 'Extensions.Arrows λ)
+                            (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+   | ArrowBrackets !(Abstract.SupportFor 'Extensions.Arrows λ)
+                   (s (Abstract.Expression l l d d)) [s (Abstract.Expression l l d d)]
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
@@ -1077,6 +1093,7 @@ deriving instance (Typeable (Abstract.Pattern l), Typeable (Abstract.EquationRHS
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Data (Abstract.SupportFor 'Extensions.Arrows λ),
                    Data (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
@@ -1093,6 +1110,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Show (Abstract.SupportFor 'Extensions.Arrows λ),
                    Show (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
@@ -1110,6 +1128,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Eq (Abstract.SupportFor 'Extensions.RecursiveDo λ),
+                   Eq (Abstract.SupportFor 'Extensions.Arrows λ),
                    Eq (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
