@@ -209,6 +209,11 @@ expressionTemplate (MDoQualifiedExpression () () m statements) =
    MDoE (Just $ moduleNameTemplate m) (guardedTemplate $ extract statements)
 #endif
 
+expressionTemplate (ProcExpression () pat body) = error "Template Haskell doesn't support Arrows"
+expressionTemplate (ArrowApplication () left right) = error "Template Haskell doesn't support Arrows"
+expressionTemplate (ArrowDoubleApplication () left right) = error "Template Haskell doesn't support Arrows"
+expressionTemplate (ArrowBrackets () f args) = error "Template Haskell doesn't support Arrows"
+
 expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (nameString name)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)

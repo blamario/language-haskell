@@ -15,6 +15,7 @@ module Language.Haskell.Extensions.Abstract (
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
+              ArrowsConstruction, procExpression, arrowApplication, arrowDoubleApplication, arrowBrackets,
               LambdaCaseConstruction, lambdaCaseExpression, lambdaCasesExpression, lambdaCasesAlternative,
               ParallelListComprehensionConstruction, parallelListComprehension',
               TypeDataConstruction, typeDataDeclaration,
@@ -133,6 +134,12 @@ data instance Construct '[ 'Extensions.QualifiedDo ] λ l d s = QualifiedDoConst
 data instance Construct '[ 'Extensions.QualifiedDo,
                            'Extensions.RecursiveDo ] λ l d s = QualifiedRecursiveDoConstruction {
    mdoQualifiedExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
+
+data instance Construct '[ 'Extensions.Arrows ] λ l d s = ArrowsConstruction {
+   procExpression :: s (Pattern l l d d) -> s (Expression l l d d) -> Expression λ l d s,
+   arrowApplication :: s (Expression l l d d) -> s (Expression l l d d) -> Expression λ l d s,
+   arrowDoubleApplication :: s (Expression l l d d) -> s (Expression l l d d) -> Expression λ l d s,
+   arrowBrackets :: s (Expression l l d d) -> [s (Expression l l d d)] -> Expression λ l d s}
 
 type family LambdaCasesAlternative λ :: TreeNodeSubKind
 
@@ -276,7 +283,7 @@ class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
                           'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
                           'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards,
-                          'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
+                          'Extensions.RecursiveDo, 'Extensions.QualifiedDo, 'Extensions.Arrows,
                           'Extensions.LambdaCase,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
