@@ -49,6 +49,11 @@ type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 data ReformulationOf (e :: ExtensionSwitch) (es :: [ExtensionSwitch]) λ l pos s
    = Reformulation ExtensionSwitch [ExtensionSwitch] -- e es
 
+data ArrowTranslation λ l pos s =
+  ArrowTranslation (ReformulationOf (On 'Extensions.Arrows) '[] λ l pos s)
+                   (forall x. x -> Wrap λ pos s x)
+                   (Wrap λ pos s (AST.Pattern λ λ (Wrap λ pos s) (Wrap λ pos s)))
+
 instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.ModuleName λ ~ AST.ModuleName λ,
           Abstract.Name λ ~ AST.Name λ,
@@ -67,6 +72,24 @@ instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
           Abstract.Name l ~ AST.Name l) =>
   WrapTranslation (ReformulationOf e es λ l pos s) where
    type Wrap (ReformulationOf e es λ l pos s) = Wrap λ pos s
+
+instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
+          Abstract.ModuleName λ ~ AST.ModuleName λ,
+          Abstract.Name λ ~ AST.Name λ,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.ModuleName l ~ AST.ModuleName l,
+          Abstract.Name l ~ AST.Name l) => NameTranslation (ArrowTranslation λ l pos s) where
+   type Origin (ArrowTranslation λ l pos s) = λ
+   type Target (ArrowTranslation λ l pos s) = l
+
+instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
+          Abstract.ModuleName λ ~ AST.ModuleName λ,
+          Abstract.Name λ ~ AST.Name λ,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.ModuleName l ~ AST.ModuleName l,
+          Abstract.Name l ~ AST.Name l) =>
+  WrapTranslation (ArrowTranslation λ l pos s) where
+   type Wrap (ArrowTranslation λ l pos s) = Wrap λ pos s
 
 type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
    Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
@@ -103,6 +126,14 @@ type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
    Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
    Abstract.Value l1 ~ AST.Value l1,
    Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2)
+
+dropArrows :: forall l1 l2 node pos s.
+              (Abstract.Haskell l2, FullyTranslatable (ReformulationOf (On 'Extensions.Arrows) '[ ] l1 l2 pos s) node)
+           => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+           -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropArrows =
+   Translation.translateFully
+      (Reformulation (Extensions.on Extensions.Arrows) [] :: ReformulationOf (On 'Extensions.Arrows) '[ ] l1 l2 pos s)
 
 dropNoListTuplePuns :: forall l1 l2 node pos s.
                        (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
@@ -165,6 +196,36 @@ instance (TextualMonoid s,
       AST.NamedModule (Translation.translateModuleName t name) exports imports declarations
    translate t (AST.AnonymousModule imports declarations) = AST.AnonymousModule imports declarations
 
+-- Arrows instances
+
+instance (SameWrap 'Extensions.Arrows '[ ] pos s λ l,
+          Abstract.Supports 'Extensions.Arrows λ,
+          Abstract.Haskell l,
+          Abstract.FieldBinding l ~ AST.FieldBinding l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.ModuleName l ~ AST.ModuleName l,
+          Abstract.Name l ~ AST.Name l) =>
+   ReformulationOf (On 'Extensions.Arrows) '[] λ l pos s
+   `WrappedTranslation` AST.Expression
+  where
+    t `translateWrapped` Compose (env, (s, AST.ProcExpression () p e)) = e'
+      where e' = ArrowTranslation t (Compose . (,) env . (,) s) p `Translation.translateWrapped` e
+    _ `translateWrapped` Compose (env, (s, e)) = Compose (env, (s, e))
+
+instance (SameWrap 'Extensions.Arrows '[ ] pos s l1 l2,
+          Abstract.Supports 'Extensions.Arrows l1,
+          Abstract.Expression l1 ~ AST.Expression l1,
+          Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
+          Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+          Abstract.ModuleName l1 ~ AST.ModuleName l1,
+          Abstract.ModuleName l2 ~ AST.ModuleName l2,
+          Abstract.Name l1 ~ AST.Name l1,
+          Abstract.Name l2 ~ AST.Name l2) => Translation (ArrowTranslation l1 l2 pos s) AST.Expression
+  where
+    translate t@(ArrowTranslation t' _ p) (AST.ArrowBrackets () e []) = Translation.translate t' (unwrap e)
+    translate t@(ArrowTranslation _ wrap p) (AST.ArrowBrackets () e args)
+      | Just (xs, x) <- List.unsnoc args = AST.ApplyExpression (wrap $ AST.ArrowBrackets () e xs) x
+
 -- RecordWildCards instances
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
@@ -219,7 +280,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
             explicitFieldName (AST.PunnedFieldBinding name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
             conExp | let (start, _, _) = s = Compose (env, ((start, mempty, start), Abstract.referenceExpression con))
-   _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
+   _ `translateWrapped` Compose (env, (s, e)) = Compose (env, (s, e))
 
 -- NPlusKPattern instances
 
@@ -293,3 +354,9 @@ mapModuleName (AST.ModuleName parts) = Abstract.moduleName (mapName <$> parts)
 
 mapName :: Abstract.Haskell λ2 => AST.Name λ1 -> Abstract.Name λ2
 mapName (AST.Name name) = Abstract.name name
+
+applyNRewrap :: (Wrap l pos s node -> node') -> Wrap l pos s node -> Wrap l pos s node'
+applyNRewrap f node@(Compose (env, (pos@(start, _, end), _))) = Compose (env, ((start, mempty, end), f node))
+
+unwrap :: Wrap l pos s node -> node
+unwrap (Compose (_, (_, node))) = node
