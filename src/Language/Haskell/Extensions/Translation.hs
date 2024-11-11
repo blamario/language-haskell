@@ -37,9 +37,12 @@ class WrapTranslation t where
    type Wrap t :: Abstract.NodeWrap
 
 class (NameTranslation t, WrapTranslation t) => WrappedTranslation t (node :: Abstract.TreeNodeKind) where
-   translateWrapped :: t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
+   translateWrapped :: t
+                    -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+                    -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
    default translateWrapped :: (Functor (Wrap t), Translation t node)
-                            => t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+                            => t
+                            -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t))
                             -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
    translateWrapped = fmap . translate
 
