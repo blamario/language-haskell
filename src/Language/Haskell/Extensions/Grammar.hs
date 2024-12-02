@@ -98,7 +98,6 @@ data GrammarExtensions l t f p = GrammarExtensions {
    conArgPattern :: p (Abstract.Pattern l l f f),
    gadtNewBody, gadtBody, prefix_gadt_body, record_gadt_body :: p (Abstract.Type l l f f),
    return_type, arg_type :: p (Abstract.Type l l f f),
-   arrowCommand :: p (Abstract.Expression l l f f),
    binary :: p t}
 
 $(Rank2.TH.deriveAll ''ExtendedGrammar)
@@ -141,6 +140,7 @@ extensionMixins =
      (Set.fromList [MagicHash],                      [(3, magicHashMixin)]),
      (Set.fromList [ParallelListComprehensions],     [(3, parallelListComprehensionsMixin)]),
      (Set.fromList [ExtendedLiterals],               [(4, extendedLiteralsMixin)]),
+     (Set.fromList [Arrows],                         [(4, arrowsMixin)]),
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
      (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
@@ -617,23 +617,24 @@ qualifiedRecursiveDoMixin self super = super{
 arrowsMixin :: forall g t l. Abstract.ExtendedWith '[ 'Arrows ] l => ExtensionOverlay l g t
 arrowsMixin self super = super{
    report = super.report{
-      closedBlockExpression = super.report.closedBlockExpression
+      expression = super.report.expression
+         <|> wrap (Abstract.arrowApplication @l Abstract.build
+                      <$> self.report.leftInfixExpression <* delimiter "-<" <*> self.report.expression
+                   <|> Abstract.arrowDoubleApplication @l Abstract.build
+                          <$> self.report.leftInfixExpression <* delimiter "-<<" <*> self.report.expression),
+      openBlockExpression = super.report.openBlockExpression
          <|> Abstract.procExpression Abstract.build
              <$  keyword "proc"
              <*> wrap self.report.aPattern
-             <* delimiter "->"
-             <*> wrap self.extensions.arrowCommand,
+             <* self.report.rightArrow
+             <*> self.report.expression,
       aExpression = super.report.aExpression
          <|> wrap (Abstract.arrowBrackets Abstract.build <$ delimiter "(|"
                    <*> self.report.expression
                    <*> many self.report.expression
-                   <*  delimiter "|)")},
-   extensions = super.extensions{
-      arrowCommand = super.extensions.arrowCommand
-         <|> Abstract.arrowApplication @l Abstract.build
-             <$> self.report.expression <* delimiter "-<" <*> self.report.expression
-         <|> Abstract.arrowDoubleApplication @l Abstract.build
-             <$> self.report.expression <* delimiter "-<<" <*> self.report.expression}}
+                   <*  delimiter "|)"),
+      variableIdentifier = notFollowedBy (keyword "proc") *> super.report.variableIdentifier,
+      variableSymbol = notFollowedBy (delimiter "-<" <|> delimiter "-<<") *> super.report.variableSymbol}}
 
 parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
