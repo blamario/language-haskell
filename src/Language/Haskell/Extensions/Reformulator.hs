@@ -8,9 +8,13 @@ import qualified Data.Foldable1 as Foldable1
 import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import qualified Data.Map.Lazy as Map
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup.Union (UnionWith(..))
+import Data.Semigroup (Max(Max), Min(Min))
+import qualified Data.Text as Text
+import Data.Text (Text)
 
 import qualified Rank2
 import qualified Transformation
@@ -201,6 +205,7 @@ instance (TextualMonoid s,
 instance (SameWrap 'Extensions.Arrows '[ ] pos s λ l,
           Abstract.Supports 'Extensions.Arrows λ,
           Abstract.Haskell l,
+          Bounded pos, Ord pos,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,
@@ -212,7 +217,9 @@ instance (SameWrap 'Extensions.Arrows '[ ] pos s λ l,
       where e' = ArrowTranslation t (Compose . (,) env . (,) s) p `Translation.translateWrapped` e
     _ `translateWrapped` Compose (env, (s, e)) = Compose (env, (s, e))
 
-instance (SameWrap 'Extensions.Arrows '[ ] pos s l1 l2,
+instance (Abstract.Haskell l2,
+          Bounded pos, Ord pos,
+          SameWrap 'Extensions.Arrows '[ ] pos s l1 l2,
           Abstract.Supports 'Extensions.Arrows l1,
           Abstract.Expression l1 ~ AST.Expression l1,
           Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
@@ -222,9 +229,44 @@ instance (SameWrap 'Extensions.Arrows '[ ] pos s l1 l2,
           Abstract.Name l1 ~ AST.Name l1,
           Abstract.Name l2 ~ AST.Name l2) => Translation (ArrowTranslation l1 l2 pos s) AST.Expression
   where
+    translate t@(ArrowTranslation t' wrap p) (AST.ArrowApplication () left right) =
+        Abstract.infixExpression
+          (wrap $
+           wrapReferenceExpresion "Control.Arrow.arr"
+           `Abstract.applyExpression`
+           wrap (Abstract.lambdaExpression [p] right))
+          (wrapReferenceExpresion "Control.Arrow.>>>")
+          left
+    translate t@(ArrowTranslation t' wrap p) (AST.ArrowDoubleApplication () left right) =
+        Abstract.infixExpression
+          (wrap $
+           wrapReferenceExpresion "Control.Arrow.arr"
+           `Abstract.applyExpression`
+           wrap (Abstract.lambdaExpression [p] $ wrap $ Abstract.tupleExpression (left :| right : [])))
+          (wrapReferenceExpresion "Control.Arrow.>>>")
+          (wrapReferenceExpresion "Control.Arrow.app")
+    translate t@(ArrowTranslation t' _ p) (AST.ConditionalExpression test true false) =
+        Abstract.infixExpression
+          (wrapNew $
+           wrapReferenceExpresion "Control.Arrow.arr"
+           `Abstract.applyExpression`
+           wrapNew (Abstract.lambdaExpression [wrapNew $ Abstract.variablePattern $ Abstract.name "test"] $ wrapNew $
+                    Abstract.conditionalExpression
+                      test
+                      (wrapNew $ Abstract.applyExpression (wrapReferenceExpresion "Data.Either.Left") $
+                       wrapReferenceExpresion "test")
+                      (wrapNew $ Abstract.applyExpression (wrapReferenceExpresion "Data.Either.Right") $
+                       wrapReferenceExpresion "test")))
+          (wrapReferenceExpresion "Control.Arrow.>>>")
+          (wrapNew $ Abstract.infixExpression true (wrapReferenceExpresion "|||") false)
     translate t@(ArrowTranslation t' _ p) (AST.ArrowBrackets () e []) = Translation.translate t' (unwrap e)
     translate t@(ArrowTranslation _ wrap p) (AST.ArrowBrackets () e args)
-      | Just (xs, x) <- List.unsnoc args = AST.ApplyExpression (wrap $ AST.ArrowBrackets () e xs) x
+      | Just (xs, x) <- List.unsnoc args =
+          Abstract.applyExpression (wrap $ AST.ProcExpression () p $ wrapNew $ AST.ArrowBrackets () e xs) x
+    translate t@(ArrowTranslation _ wrap p) (AST.InfixExpression left op right) =
+      Abstract.infixExpression
+         (wrap $ AST.ProcExpression () p left) op
+         (wrap $ AST.ProcExpression () p right)
 
 -- RecordWildCards instances
 
@@ -355,8 +397,23 @@ mapModuleName (AST.ModuleName parts) = Abstract.moduleName (mapName <$> parts)
 mapName :: Abstract.Haskell λ2 => AST.Name λ1 -> Abstract.Name λ2
 mapName (AST.Name name) = Abstract.name name
 
+qnameFromText :: Abstract.Haskell l => Text -> Abstract.QualifiedName l
+qnameFromText t = case List.unsnoc (Abstract.name <$> Text.splitOn "." t) of
+  Nothing -> error "empty name"
+  Just (moduleNames, local) -> Abstract.qualifiedName (Abstract.moduleName <$> nonEmpty moduleNames) local
+
 applyNRewrap :: (Wrap l pos s node -> node') -> Wrap l pos s node -> Wrap l pos s node'
 applyNRewrap f node@(Compose (env, (pos@(start, _, end), _))) = Compose (env, ((start, mempty, end), f node))
 
 unwrap :: Wrap l pos s node -> node
 unwrap (Compose (_, (_, node))) = node
+
+wrapNew :: (Bounded pos, Ord pos, Rank2.Foldable node) => node (Wrap l pos s) -> Wrap l pos s (node (Wrap l pos s))
+wrapNew node = Compose (env, ((start, mempty, end), node))
+  where (env, Min start, Max end) = Rank2.foldMap wrapper node
+        wrapper (Compose (env, ((start, _, end), _))) = (env, Min start, Max end)
+
+wrapReferenceExpresion :: (Abstract.Haskell l, Bounded pos, Ord pos,
+                           Rank2.Foldable (Abstract.Expression l l (Wrap l pos s)))
+                       => Text -> Wrap l pos s (Abstract.Expression l l (Wrap l pos s) (Wrap l pos s))
+wrapReferenceExpresion = wrapNew . Abstract.referenceExpression . qnameFromText
