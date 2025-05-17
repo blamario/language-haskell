@@ -52,23 +52,25 @@ type Placed = Reserializer.Wrapped Int Text
 -- | Every node in a parsed and resolved AST is wrapped with this functor
 type Bound = Binder.WithEnvironment AST.Language Placed
 
+-- | The input monoid type
 type Input = Shadowed Text
 
--- | Parse the given text of a single module.
-parseModule :: Map Extension Bool
-            -> Binder.ModuleEnvironment AST.Language
-            -> Binder.Environment AST.Language
-            -> Bool
-            -> Text
+-- | Parse the given text of a single module according to the specified language extensions and resolve all
+-- identifiers inside the module.
+parseModule :: Map Extension Bool                      -- ^ language extensions
+            -> Binder.ModuleEnvironment AST.Language   -- ^ modules available for import
+            -> Binder.Environment AST.Language         -- ^ names available without import
+            -> Bool                                    -- ^ verify if the identifiers are bound and extensions used?
+            -> Text                                    -- ^ the module's source code
             -> ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
 parseModule extensions modEnv env verify source =
    ((resolvePositions extensions modEnv env source <$>)
     <$> Grammar.parseModule extensions (fromText source :: Input))
    >>= (if verify then traverse (checkAllBound >=> checkRestrictions extensions) else pure)
 
--- | Replace the stored positions in the entire tree with offsets from the start of the given source text
-resolvePositions :: (p ~ Grammar.NodeWrap Input,
-                     q ~ Reserializer.Wrapped (Down Int) Input, r ~ Bound,
+-- | Resolve identifiers in the given parsed AST, and replace the stored positions in the entire tree with
+-- offsets from the start of the given source text.s
+resolvePositions :: (p ~ Grammar.NodeWrap Input, q ~ Reserializer.Wrapped (Down Int) Input, r ~ Bound,
                      Full.Traversable (Di.Keep (Binder.Binder AST.Language p)) g,
                      Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) g,
                      Deep.Functor
@@ -90,13 +92,14 @@ resolvePositions extensions modEnv env src =
    where rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
          rewrap = Reserializer.mapWrapping (offset src) content
 
+-- | Check if all the identifiers in the given resolved module are properly bound.
 checkAllBound :: Bound (AST.Module AST.Language AST.Language Bound Bound)
               -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))
 checkAllBound m = if unbounds == mempty then pure m
                   else Left mempty{errorAlternatives= [show unbounds]}
    where unbounds = Binder.unboundNames m
 
--- | Check if the given module conforms to and depends on the given extensions.
+-- | Check if the given resolved module conforms to and depends on the given extensions.
 checkRestrictions :: Map Extension Bool
                   -> Bound (AST.Module AST.Language AST.Language Bound Bound)
                   -> ParseResults Input (Bound (AST.Module AST.Language AST.Language Bound Bound))
@@ -109,9 +112,11 @@ instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
          Full.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g where
    (<$>) = Full.mapDownDefault
 
+-- | All the qualified bindings available without any import statement, such as @Prelude.id@
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 predefinedModuleBindings = UnionWith . Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
 
+-- | All the @Prelude@ bindings available without any import statement
 preludeBindings :: IO (Binder.Environment AST.Language)
 preludeBindings = Binder.onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing) <$> unqualifiedPreludeBindings
 

@@ -1,10 +1,14 @@
 {-# Language ConstraintKinds, DataKinds, FlexibleContexts, KindSignatures, MultiParamTypeClasses,
              PolyKinds, RankNTypes, TypeFamilies, TypeFamilyDependencies, TypeOperators,
              UndecidableInstances, UndecidableSuperClasses #-}
+
+-- | The abstract node types forming a Haskell module with language extensions. Every node type has
+-- the kind 'TreeNodeKind'.
 module Language.Haskell.Extensions.Abstract (
-   ExtendedHaskell(..),
-   ExtendedWith (build),
+   -- * Types and classes for extension support
+   ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
    ExtendedWithAllOf,
+   ExtendedWith (build),
    Construct (ExplicitNamespacesConstruction,
               explicitlyNamespacedMemberList, defaultMember, patternMember, typeMember,
               explicitTypeFixityDeclaration, explicitDataFixityDeclaration,
@@ -49,8 +53,10 @@ module Language.Haskell.Extensions.Abstract (
               DerivingViaConstruction, deriveVia, derivingViaStrategy,
               DefaultSignatureConstruction, defaultMethodSignature,
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
-   ExtensionsSupportedBy, SupportFor, Supports, SupportsNo, SupportsAllOf,
+   ExtendedHaskell(..),
+  -- * Constraint synonyms
    UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+  -- * AST node types for language extensions
    DerivingStrategy, FunctionalDependency, LambdaCasesAlternative,
    PatternLHS, PatternEquationClause, PatternEquationLHS,
    module Language.Haskell.Abstract) where
@@ -71,8 +77,10 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions as Extensions
 
 
+-- | @Construct es@ is a record of functions for constructing the AST nodes for language extensions @es@.
 data family Construct (es :: [Extension]) :: TreeNodeKind
 
+-- | List of extensions supported by language @λ@
 type family ExtensionsSupportedBy λ :: [Extension]
 
 type family Elem (t :: k) (ts :: [k]) :: Bool where
@@ -80,24 +88,28 @@ type family Elem (t :: k) (ts :: [k]) :: Bool where
    Elem t (_ ': ts) = Elem t ts
    Elem _ '[] = 'False
 
+-- | @SupportFor e l@ reduces to @()@ if the language @l@ supports extension @e@ and to 'Void' otherwise.
 type SupportFor (e :: Extension) (l :: Kind.Type) = If (Elem e (ExtensionsSupportedBy l)) () Void
 
+-- | Constraint asserting the language @l@ supports extension @e@
 type Supports e l = SupportFor e l ~ ()
 
+-- | Constraint asserting the language @l@ does not support extension @e@
 type SupportsNo e l = SupportFor e l ~ Void
 
+-- | Constraint asserting the language @l@ supports all extensions in the list @es@
 type family SupportsAllOf (es :: [Extension]) l :: Kind.Constraint where
    SupportsAllOf '[] _ = ()
    SupportsAllOf (e ': es) l = (Supports e l, SupportsAllOf es l)
 
+-- | If the language @λ@ supports all the extensions @es@, @instance ExtendedWith es λ@ provides the implementation.
 class SupportsAllOf es λ => ExtendedWith es λ where
+   -- | How to construct the AST nodes supporting the extensions
    build :: Construct es λ l d s
 
 type family ExtendedWithAllOf (es :: [Extension]) l :: Kind.Constraint where
    ExtendedWithAllOf '[] _ = ()
    ExtendedWithAllOf (e ': es) l = (ExtendedWith '[e] l, ExtendedWithAllOf es l)
-
--- * 'Construct' instances for language extensions
 
 data instance Construct '[ 'Extensions.ExplicitNamespaces ] λ l d s = ExplicitNamespacesConstruction {
    explicitlyNamespacedMemberList :: [ModuleMember λ] -> Members λ,
@@ -272,6 +284,7 @@ data instance Construct '[ 'Extensions.FunctionalDependencies ] λ l d s = Funct
    fundepClassDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (FunctionalDependency l l d d)]
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
 
+-- | The big collection of all known extensions
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
                           'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
@@ -423,6 +436,8 @@ class (Haskell λ,
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
    wildcardRecordPattern = wildcardRecordPattern' build
 
+-- | Constraint @UniversallyApplicable t l d@ means that the transformation @t@ can be applied to any AST node of
+-- language @l@ with subtrees wrapped in @d@.
 type UniversallyApplicable t l d = (Transformation.At t (GADTConstructor l l d d),
                                     Transformation.At t (Kind l l d d),
                                     Transformation.At t (TypeVarBinding l l d d),
@@ -432,12 +447,18 @@ type UniversallyApplicable t l d = (Transformation.At t (GADTConstructor l l d d
                                     Transformation.At t (PatternEquationLHS l l d d),
                                     Transformation.At t (PatternEquationClause l l d d),
                                     Report.UniversallyApplicable t l d)
+
+-- | Named collection of constraints @DeeplyFunctor t l@ means that every AST node of language @l@ is a
+-- 'Deep.Functor' for transformation @t@.
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
                           Deep.Functor t (FunctionalDependency l l),
                           Deep.Functor t (PatternLHS l l), Deep.Functor t (PatternEquationLHS l l),
                           Deep.Functor t (PatternEquationClause l l),
                           Report.DeeplyFunctor t l)
+
+-- | Named collection of constraints @DeeplyFoldable t l@ means that every AST node of language @l@ is
+-- 'Deep.Foldable' for transformation @t@.
 type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable t (Kind l l),
                            Deep.Foldable t (TypeVarBinding l l), Deep.Foldable t (DerivingStrategy l l),
                            Deep.Foldable t (FunctionalDependency l l),
@@ -445,6 +466,9 @@ type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable 
                            Deep.Foldable t (PatternLHS l l), Deep.Foldable t (PatternEquationLHS l l),
                            Deep.Foldable t (PatternEquationClause l l),
                            Report.DeeplyFoldable t l)
+
+-- | Named collection of constraints @DeeplyTraversable t l@ means that every AST node of language @l@ is
+-- 'Deep.Traversable' for transformation @t@.
 type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
                               Deep.Traversable t (TypeVarBinding l l), Deep.Traversable t (DerivingStrategy l l),
                               Deep.Traversable t (FunctionalDependency l l),

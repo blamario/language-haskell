@@ -1,6 +1,16 @@
 {-# Language ConstraintKinds, FlexibleContexts, KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
 
-module Language.Haskell.Abstract where
+-- | The abstract node types forming a standard Haskell 2010 module. Every node type has the kind 'TreeNodeKind'.
+module Language.Haskell.Abstract (
+  -- * Kinds
+  TreeNodeKind, TreeNodeSubKind, NodeWrap, Language,
+  -- * Class
+  Haskell(..),
+  -- * Constraint synonyms
+  DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
+  Rank2lyFunctor, Rank2lyFoldable, Rank2lyTraversable,
+  UniversallyApplicable)
+where
 
 import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
@@ -11,11 +21,18 @@ import qualified Transformation.Deep as Deep
 
 import Language.Haskell.Extensions (ExtensionSwitch)
 
-type Language = Kind.Type
-type NodeWrap = Kind.Type -> Kind.Type
+-- | The kind of a tree node with four type parameters:
+--
+-- * the language of the node itself
+-- * the language of the node's subtrees
+-- * the wrapper for the node's subtrees' subtrees
+-- * the wrapper for the node's subtrees
 type TreeNodeKind = Language -> TreeNodeSubKind
 type TreeNodeSubKind = Language -> NodeWrap -> NodeWrap -> Kind.Type
+type NodeWrap = Kind.Type -> Kind.Type
+type Language = Kind.Type
 
+-- | An abstract finally-tagless specification of a Haskell 2010 language
 class Haskell λ where
    type Module λ = (x :: TreeNodeSubKind) | x -> λ
    type Declaration λ = (x :: TreeNodeSubKind) | x -> λ
@@ -183,6 +200,8 @@ class Haskell λ where
    cCall, cppCall, dotNetCall, jvmCall, stdCall :: CallingConvention λ
    safeCall, unsafeCall :: CallSafety λ
 
+-- | Constraint @UniversallyApplicable t l d@ means that the transformation @t@ can be applied to any AST node of
+-- language @l@ with subtrees wrapped in @d@.
 type UniversallyApplicable t l d = (Transformation.At t (Module l l d d),
                                     Transformation.At t (Declaration l l d d),
                                     Transformation.At t (Expression l l d d),
@@ -208,6 +227,8 @@ type UniversallyApplicable t l d = (Transformation.At t (Module l l d d),
                                     Transformation.At t (Constructor l l d d),
                                     Transformation.At t (Value l l d d))
 
+-- | Named collection of constraints @DeeplyFunctor t l@ means that every AST node of language @l@ is a
+-- 'Deep.Functor' for transformation @t@.
 type DeeplyFunctor t l = (Deep.Functor t (Module l l),
                           Deep.Functor t (Declaration l l),
                           Deep.Functor t (Expression l l),
@@ -233,6 +254,8 @@ type DeeplyFunctor t l = (Deep.Functor t (Module l l),
                           Deep.Functor t (Constructor l l),
                           Deep.Functor t (Value l l))
 
+-- | Named collection of constraints @DeeplyFoldable t l@ means that every AST node of language @l@ is
+-- 'Deep.Foldable' for transformation @t@.
 type DeeplyFoldable t l = (Deep.Foldable t (Module l l),
                            Deep.Foldable t (Declaration l l),
                            Deep.Foldable t (Expression l l),
@@ -258,6 +281,8 @@ type DeeplyFoldable t l = (Deep.Foldable t (Module l l),
                            Deep.Foldable t (Constructor l l),
                            Deep.Foldable t (Value l l))
 
+-- | Named collection of constraints @DeeplyTraversable t l@ means that every AST node of language @l@ is
+-- 'Deep.Traversable' for transformation @t@.
 type DeeplyTraversable t l = (Deep.Traversable t (Module l l),
                               Deep.Traversable t (Declaration l l),
                               Deep.Traversable t (Expression l l),
@@ -283,6 +308,8 @@ type DeeplyTraversable t l = (Deep.Traversable t (Module l l),
                               Deep.Traversable t (Constructor l l),
                               Deep.Traversable t (Value l l))
 
+-- | Named collection of constraints @Rank2lyFunctor l f@ means that every AST node of language @l@ with subtrees
+-- wrapped in @f@ is a 'Rank2.Functor'.
 type Rank2lyFunctor l f = (Rank2.Functor (Module l l f),
                            Rank2.Functor (Declaration l l f),
                            Rank2.Functor (Expression l l f),
@@ -308,6 +335,8 @@ type Rank2lyFunctor l f = (Rank2.Functor (Module l l f),
                            Rank2.Functor (Constructor l l f),
                            Rank2.Functor (Value l l f))
 
+-- | Named collection of constraints @Rank2lyFoldable l f@ means that every AST node of language @l@ with subtrees
+-- wrapped in @f@ is 'Rank2.Foldable'.
 type Rank2lyFoldable l f = (Rank2.Foldable (Module l l f),
                             Rank2.Foldable (Declaration l l f),
                             Rank2.Foldable (Expression l l f),
@@ -333,6 +362,8 @@ type Rank2lyFoldable l f = (Rank2.Foldable (Module l l f),
                             Rank2.Foldable (Constructor l l f),
                             Rank2.Foldable (Value l l f))
 
+-- | Named collection of constraints @Rank2lyTraversable l f@ means that every AST node of language @l@ with subtrees
+-- wrapped in @f@ is 'Rank2.Traversable'.
 type Rank2lyTraversable l f = (Rank2.Traversable (Module l l f),
                                Rank2.Traversable (Declaration l l f),
                                Rank2.Traversable (Expression l l f),

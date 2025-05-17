@@ -1,6 +1,7 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
+-- | The types of nodes forming the Abstract Syntax Tree of the standard Haskell 2010 language without extensions
 module Language.Haskell.AST where
 
 import Control.Monad (forM)
@@ -16,6 +17,7 @@ import qualified Transformation.Shallow.TH
 
 import Language.Haskell.Extensions (ExtensionSwitch)
 
+-- | The Haskell 2010 language node parameter type
 data Language = Language deriving (Data, Eq, Show)
 
 instance Abstract.Haskell Language where
@@ -535,8 +537,10 @@ data Members λ = AllMembers
                | MemberList [Name λ]
                deriving (Data, Eq, Show)
 
+-- | A primitive name type
 newtype Name λ = Name {getName :: Text} deriving (Data, Eq, Ord, Show)
 
+-- | A name that may but need not be qualified with a 'ModuleName'
 data QualifiedName λ = QualifiedName (Maybe (ModuleName λ)) (Name λ) deriving (Data, Eq, Ord, Show)
 
 newtype ModuleName λ = ModuleName (NonEmpty (Name λ)) deriving (Data, Eq, Ord, Show)

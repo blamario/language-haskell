@@ -5,14 +5,19 @@
 -- | Dimorphic attribute grammar for establishing the static identifier bindings
 
 module Language.Haskell.Binder (
+   -- * Main functions
+   withBindings, unboundNames,
+   -- * Transformations
    Binder, BindingVerifier,
+   -- * Node wrappers
+   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
+   -- * Binding types
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
-   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
-   lookupType, lookupValue, unboundNames,
-   onMap, withBindings,
-   preludeName, baseName, unqualifiedName) where
+   -- * Utility functions
+   lookupType, lookupValue,
+   onMap, preludeName, baseName, unqualifiedName) where
 
 import Control.Applicative ((<|>))
 import Control.Exception (assert)
@@ -44,18 +49,25 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
+-- | Bindings of all names in scope
 type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
 
+-- | Bindings of local names
 type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
+-- | Bindings of all names exported by the available modules
 type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
 
+-- | The inherited attributes are an 'Environment', the synthesized attributes a 'LocalEnvironment'
 type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
 
+-- | Tree node wrapper carrying the 'Attributes'
 type WithEnvironment l = Compose ((,) (Attributes l))
 
+-- | Tree node wrapper mapping an 'Environment' to 'Attributes'
 type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
 
+-- | A binding for any single name
 data Binding l = ErroneousBinding (BindingError l)
                | TypeBinding (TypeBinding l)
                | ValueBinding (ValueBinding l)
@@ -63,17 +75,20 @@ data Binding l = ErroneousBinding (BindingError l)
                | PatternBinding
                deriving (Typeable, Data, Eq, Show)
 
+-- | An erroneous binding
 data BindingError l = ClashingBindings (Binding l) (Binding l)
                     | DuplicateInfixDeclaration (ValueBinding l) (ValueBinding l)
                     | DuplicateRecordField
                     | NoBindings
                     deriving (Typeable, Data, Eq, Show)
 
+-- | A binding for a type name
 data TypeBinding l = TypeClass (LocalEnvironment l) -- methods and associated types
                    | DataType (LocalEnvironment l)  -- constructors
                    | UnknownType
                    deriving (Typeable, Data, Eq, Show)
 
+-- | A binding for a value name
 data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBinding l))
                     | DataConstructor
                     | RecordConstructor (LocalEnvironment l) -- fields
@@ -82,6 +97,7 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     | RecordFieldAndValue
                     deriving (Typeable, Data, Eq, Show)
 
+-- | The list of erroneously unbound names
 data Unbound l = Unbound {types :: [AST.QualifiedName l],
                           values :: [AST.QualifiedName l],
                           constructors :: [AST.QualifiedName l]}
@@ -100,12 +116,14 @@ unboundNames :: Full.Foldable (BindingVerifier l p) g
              => WithEnvironment l p (g (WithEnvironment l p) (WithEnvironment l p)) -> Unbound l
 unboundNames = Full.foldMap BindingVerifier
 
+-- | Look up a type name in the environment
 lookupType :: AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
 lookupType name (UnionWith env) = Map.lookup name env >>= \case
   TypeBinding t -> Just t
   TypeAndValueBinding t _ -> Just t
   _ -> Nothing
 
+-- | Look up a value name in the environment
 lookupValue :: AST.QualifiedName l -> Environment l -> Maybe (ValueBinding l)
 lookupValue name (UnionWith env) = Map.lookup name env >>= \case
   ValueBinding v -> Just v
@@ -146,13 +164,16 @@ withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ WithEnvironment 
              => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings extensions modEnv = flip (Full.traverse (Di.Keep $ Binder extensions modEnv))
 
+-- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
 onMap f (UnionWith x) = UnionWith (f x)
 
+-- | The transformation type used by 'withBindings'
 data Binder l (f :: Type -> Type) = Binder {
    extensions :: Map Extension Bool,
    modules :: ModuleEnvironment l}
 
+-- | The transformation type folds the tree wrapped 'WithEnvironment' to 'Unbound'
 data BindingVerifier l (f :: Type -> Type) = BindingVerifier
 
 instance Transformation (Di.Keep (Binder l f)) where
@@ -682,11 +703,14 @@ qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Jus
 unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
 unqualified = onMap (Map.mapKeysMonotonic unqualifiedName)
 
+-- | The local name part of a qualified name
 baseName :: AST.QualifiedName l -> AST.Name l
 baseName (AST.QualifiedName _ name) = name
 
+-- | Turns a local name into a 'QualifiedName'
 unqualifiedName :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l
 unqualifiedName = Abstract.qualifiedName Nothing
 
+-- | The name of the @Prelude@ module
 preludeName :: Abstract.Haskell l => Abstract.ModuleName l
 preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])

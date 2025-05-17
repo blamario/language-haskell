@@ -2,6 +2,7 @@
              MultiParamTypeClasses, OverloadedStrings, StandaloneDeriving,
              TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
+-- | The types of nodes forming the Abstract Syntax Tree of the Haskell language with GHC extensions
 module Language.Haskell.Extensions.AST (Language(Language),
                                         Export(..), Import(..), ImportItem(..), Members(..), ModuleMember(..),
                                         Declaration(..), DataConstructor(..), GADTConstructor(..),
@@ -36,6 +37,7 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
+-- | The extended Haskell language node parameter type
 data Language = Language deriving (Data, Eq, Show)
 
 type instance Abstract.ExtensionsSupportedBy Language = '[
