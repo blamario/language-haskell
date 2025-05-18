@@ -2,7 +2,26 @@
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeOperators, TypeSynonymInstances #-}
 
-module Language.Haskell.Grammar where
+-- | This module exports the original Haskell 2010 grammar with no extensions. Apart from use of parser combinators
+-- and some minor refactorings, the grammar productions closely correspond to those documented in the [Haskell 2010
+-- Language Report](https://www.haskell.org/onlinereport/haskell2010/haskell.html)
+module Language.Haskell.Grammar (Parser,
+                                 -- * The Haskell 2010 grammar
+                                 HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),
+                                 grammar, grammar2010,
+                                 -- * Lexical layer
+                                 keyword, delimiter, terminator, moduleLexeme, moduleId, nameQualifier, nameToken,
+                                 constructorSymbolLexeme, variableSymbolLexeme,
+                                 whiteSpace, comment,
+                                 reservedWords,
+                                 isLineChar, isNameTailChar, isSymbol,
+                                 -- * Layout parsing
+                                 blockOf, blockWith, blockTerminatorKeyword, oneExtendedLine, verifyStatements,
+                                 OutlineMonoid(currentColumn), inputColumn,
+                                 -- * Node wrapping
+                                 NodeWrap, storeToken, wrap, rewrap, unwrap,
+                                 -- * Utility functions
+                                 expressionToStatement, startSepEndBy) where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -42,8 +61,10 @@ import Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), Serializati
 
 import Prelude hiding (exponent, filter, null)
 
+-- | The parser keeps track of the lexemes consumed while parsing the current node.
 type Parser g s = ParserT ((,) [[Lexeme s]]) g s
 
+-- | Top level of the grammar, including types and expressions
 data HaskellGrammar l t f p = HaskellGrammar {
    haskellModule :: p (f (Abstract.Module l l f f)),
    moduleLevel :: ModuleLevelGrammar l f p,
@@ -82,6 +103,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    stringLiteral, stringLexeme :: p Text
 }
 
+-- | The grammar productions that are relevant only at the module level
 data ModuleLevelGrammar l f p = ModuleLevelGrammar {
    exports :: p [f (Abstract.Export l l f f)],
    export :: p (Abstract.Export l l f f),
@@ -92,6 +114,7 @@ data ModuleLevelGrammar l f p = ModuleLevelGrammar {
    cname :: p (Abstract.Name l)
 }
 
+-- | The grammar productions that are only relevant inside declarations
 data DeclarationGrammar l f p = DeclarationGrammar {
    topLevelDeclaration :: p (Abstract.Declaration l l f f),
    declarations :: p [f (Abstract.Declaration l l f f)],
@@ -133,6 +156,7 @@ $(Rank2.TH.deriveAll ''HaskellGrammar)
 $(Rank2.TH.deriveAll ''ModuleLevelGrammar)
 $(Rank2.TH.deriveAll ''DeclarationGrammar)
 
+-- | Fixed (and thus non-extensible) grammar of Haskell 2010
 grammar2010 :: (Abstract.Haskell l,
                 Ord t, Show t, OutlineMonoid t,
                 Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
@@ -143,6 +167,7 @@ grammar2010 :: (Abstract.Haskell l,
             => Grammar (HaskellGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
 grammar2010 = autochain $ fixGrammar grammar
 
+-- | Extensible grammar builder with all the syntax of Haskell 2010
 grammar :: forall l g t. (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, OutlineMonoid t,
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.CaseAlternative l l),
                       Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
@@ -830,17 +855,21 @@ controlEscape = Char.chr . (-64 +) . Char.ord <$> Text.Parser.Char.satisfy (\c->
 -- cntrl 	→ 	ascLarge | @ | [ | \ | ] | ^ | _
 -- gap 	→ 	\ whitechar {whitechar} \
 
+-- | The wrap of every parsed AST node keeps track of the parsed input range and the lexemes consumed from it.
 type NodeWrap s = Reserializer.Wrapped (Down Int) s
 
+-- | Apply the argument parser and wrap the resulting node.
 wrap :: (Rank2.Apply g, Ord t, TextualMonoid t) => Parser g t a -> Parser g t (NodeWrap t a)
 wrap = (\p-> liftA3 surround getSourcePos p getSourcePos)
          . tmap store . ((,) (Trailing []) <$>)
    where store (wss, (Trailing [], a)) = (mempty, (Trailing (concat wss), a))
          surround start (ls, val) end = ((start, ls, end), val)
 
+-- | Rewrap the node with an empty wrap.
 rewrap :: (NodeWrap t a -> b) -> NodeWrap t a -> NodeWrap t b
 rewrap f node@((start, _, end), _) = ((start, mempty, end), f node)
 
+-- | Strip the wrap.
 unwrap :: NodeWrap t a -> a
 unwrap (_, x) = x
 
@@ -903,6 +932,8 @@ comment = do c <- try (blockComment
             <> concatMany (blockComment <<|> (notFollowedBy (string "-}") *> anyToken) <> takeCharsWhile isCommentChar)
             <> string "-}"
 
+-- | Check if the given sequence of statements and expressions ends with an expression, and if they do pack them all
+-- into a single 'Abstract.GuardedExpression'.
 verifyStatements :: (Abstract.Haskell l, Rank2.Apply g, Ord t) =>
    [NodeWrap t (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) (NodeWrap t) (NodeWrap t))]
    -> Parser g t (Abstract.GuardedExpression l l (NodeWrap t) (NodeWrap t))
@@ -912,6 +943,7 @@ verifyStatements stats =
    <$> (traverse (either (const $ fail "do block must end with an expression") pure)
         $ Deep.eitherFromSum <$> last stats)
 
+-- | Convert a tagged 'Deep.Sum' of either 'Abstract.Statement' or 'Abstract.Expression' into a 'Abstract.Statement'.
 expressionToStatement
    :: Abstract.Haskell l
    => NodeWrap t (Deep.Sum (Abstract.Statement l l) (Abstract.Expression l l) (NodeWrap t) (NodeWrap t))
@@ -920,15 +952,21 @@ expressionToStatement se = case unwrap se of
    Deep.InL s -> s <$ se
    Deep.InR e -> rewrap Abstract.expressionStatement (e <$ se)
 
+-- | The combinator turns a parser for a single block item (statement or case alternative or declaration or ...) into
+-- the parser for an aligned block of the things.
 blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
         -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockOf = blockWith oneExtendedLine blockTerminatorKeyword
 
+-- | A more general form of 'blockOf'
 blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
           => (Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool)
+          -- ^ test if the indent, the line and the node parsed from it are a valid block item, 'oneExtendedLine' by default
           -> Parser g t ()
+          -- ^ parser for a keyword that can't start a valid block item, 'blockTerminatorKeyword' by default
           -> Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
+          -- ^ parser for a single block item
           -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
 blockWith lineFilter terminatorKeyword p =
    braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
@@ -961,7 +999,9 @@ startSepEndBy p sep = (:) <$> p <*> (sep *> startSepEndBy p sep <|> pure [])
                       <|> sep *> startSepEndBy p sep
                       <|> pure []
 
+-- | Class of inputs that keep track of their current position in terms of line and column
 class TextualMonoid t => OutlineMonoid t where
+   -- | The column of the current input position, i.e. the count of characters from the position to the preceding line start
    currentColumn :: t -> Int
 
 instance OutlineMonoid (LinePositioned Text) where
@@ -977,13 +1017,16 @@ instance OutlineMonoid (Shadowed Text) where
 utf8bom :: Char
 utf8bom = '\xfeff'
 
+-- | Returns the column of the current input position
 inputColumn :: (Rank2.Apply g, Ord t, OutlineMonoid t) => Parser g t Int
 inputColumn = currentColumn <$> getInput
 
+-- | A default argument to 'blockWith'
 blockTerminatorKeyword :: (Rank2.Apply g, Ord t, OutlineMonoid t, Show t) => Parser g t ()
 blockTerminatorKeyword = (string "else" <|> string "in" <|> string "of" <|> string "where")
                          *> notSatisfyChar isNameTailChar
 
+-- | A default argument to 'blockWith'
 oneExtendedLine :: (Ord t, Show t, OutlineMonoid t,
                     Deep.Foldable (Serialization (Down Int) t) node)
                 => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool

@@ -10,6 +10,7 @@ import Language.Haskell.Extensions.AST (Language)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
+import qualified Language.Haskell.Grammar (HaskellGrammar(expression))
 import qualified Language.Haskell.Extensions.Grammar as Grammar
 import Language.Haskell.Extensions.Reformulator (ReformulationOf)
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
