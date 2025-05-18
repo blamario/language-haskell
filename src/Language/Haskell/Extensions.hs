@@ -1,11 +1,6 @@
 {-# Language DataKinds, DeriveDataTypeable, FlexibleInstances, OverloadedStrings, TypeFamilies, TypeOperators #-}
 
--- | Missing syntax extensions:
--- * @QualifiedDo@ requires TemplateHaskell 2.17
--- * @TransformListComp@ is not supported by TemplateHaskell
--- * @Arrows@ is not supported by TemplateHaskell
--- * @LexicalNegation@ awaits
-
+-- | The module exports the set of recognized language extensions, mostly corresponding to GHC extensions
 module Language.Haskell.Extensions (Extension(..), ExtensionSwitch(..),
                                     On, Off, on, off,
                                     allExtensions, byName, includedByDefault, implications, inverseImplications,
@@ -22,20 +17,21 @@ import Data.Set (Set)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.String (IsString)
 
+-- | The enumeration of all language extensions
 data Extension = AllowAmbiguousTypes
                | AlternativeLayoutRule
                | AlternativeLayoutRuleTransitional
                | ApplicativeDo
                | Arrows
                | AutoDeriveTypeable
-               | BangDataFields -- active but unnamed in GHC and Report
+               | BangDataFields -- | active but unnamed in GHC and Report
                | BangPatterns
                | BinaryLiterals
                | BlockArguments
                | CApiFFI
                | CUSKs
                | ConstrainedClassMethods
-               | ConstraintsAreTypes -- active but unnamed in GHC
+               | ConstraintsAreTypes -- | active but unnamed in GHC
                | ConstraintKinds
                | Cpp
                | DataKinds
@@ -57,7 +53,7 @@ data Extension = AllowAmbiguousTypes
                | EmptyCase
                | EmptyDataDeclarations
                | EmptyDataDeriving
-               | EqualityConstraints -- unnamed in GHC
+               | EqualityConstraints -- | unnamed in GHC
                | ExistentialQuantification
                | ExplicitForAll
                | ExplicitNamespaces
@@ -77,13 +73,13 @@ data Extension = AllowAmbiguousTypes
                | Haskell2010
                | Haskell98
                | HexFloatLiterals
-               | IdentifierSyntax -- active but unnamed in GHC
+               | IdentifierSyntax -- | active but unnamed in GHC
                | ImplicitParameters
                | ImplicitPrelude
                | ImportQualifiedPost
                | ImpredicativeTypes
                | IncoherentInstances
-               | InferredTypeVariables -- unnamed in GHC
+               | InferredTypeVariables -- | unnamed in GHC
                | InstanceSigs
                | InterruptibleFFI
                | JavaScriptFFI
@@ -100,7 +96,7 @@ data Extension = AllowAmbiguousTypes
                | MonoPatBinds
                | MonomorphismRestriction
                | MultiParamTypeClasses
-               | MultiParameterConstraints -- active unnamed in GHC
+               | MultiParameterConstraints -- | active unnamed in GHC
                | MultiWayIf
                | NPlusKPatterns
                | NamedDefaults
@@ -121,8 +117,8 @@ data Extension = AllowAmbiguousTypes
                | ParallelArrays
                | ParallelListComp
                | ParallelListComprehensions
-               | ParenthesizedTypeOperators     -- active but unnamed in GHC
-               | GratuitouslyParenthesizedTypes -- active but unnamed in GHC
+               | ParenthesizedTypeOperators     -- | active but unnamed in GHC
+               | GratuitouslyParenthesizedTypes -- | active but unnamed in GHC
                | PartialTypeSignatures
                | PatternGuards
                | PatternSynonyms
@@ -156,7 +152,7 @@ data Extension = AllowAmbiguousTypes
                | Trustworthy
                | TupleSections
                | TypeAbstractions
-               | TypeAbstractionsOrApplicationsInConstructorPatterns -- nameless
+               | TypeAbstractionsOrApplicationsInConstructorPatterns -- | nameless
                | TypeApplications
                | TypeData
                | TypeFamilies
@@ -164,7 +160,7 @@ data Extension = AllowAmbiguousTypes
                | TypeInType
                | TypeOperators
                | TypeSynonymInstances
-               | TypeVariableConstraints -- active but unnamed in GHC
+               | TypeVariableConstraints -- | active but unnamed in GHC
                | UnboxedSums
                | UnboxedTuples
                | UndecidableInstances
@@ -175,9 +171,10 @@ data Extension = AllowAmbiguousTypes
                | UnliftedNewtypes
                | Unsafe
                | ViewPatterns
-               | VisibleDependedentQuantification -- nameless
+               | VisibleDependedentQuantification -- | nameless
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
+-- | An extension together with an on/off boolean
 newtype ExtensionSwitch = ExtensionSwitch (Extension, Bool)
                           deriving (Data, Eq, Ord, Show)
 
@@ -196,9 +193,11 @@ on x = ExtensionSwitch (x, True)
 type On (e :: Extension) = 'ExtensionSwitch '( e, 'True) :: ExtensionSwitch
 type Off (e :: Extension) = 'ExtensionSwitch '( e, 'False) :: ExtensionSwitch
 
+-- | Set of all extensions
 allExtensions :: Set Extension
 allExtensions = Set.fromList [minBound .. maxBound]
 
+-- | Set of extensions that are on by default
 includedByDefault :: Set Extension
 includedByDefault = Set.fromList [BangDataFields, ConstraintsAreTypes,
                                   DatatypeContexts, DoAndIfThenElse, EmptyDataDeclarations, EqualityConstraints,
@@ -208,9 +207,11 @@ includedByDefault = Set.fromList [BangDataFields, ConstraintsAreTypes,
                                   RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
 
+-- | Set of language version extensions, such as 'Haskell2010'
 languageVersions :: Set Extension
 languageVersions = Set.fromList [Haskell98, Haskell2010]
 
+-- | Map of all extension implications, including 'directImplications' but adding transitive implications
 implications :: Map Extension (Map Extension Bool)
 implications = transitiveClosure directImplications directImplications
   where transitiveClosure margin c
@@ -220,6 +221,7 @@ implications = transitiveClosure directImplications directImplications
                  marginOf k1 k2 True = Map.findWithDefault mempty k2 c Map.\\ Map.findWithDefault mempty k1 c
                  marginOf _ _ False = mempty
 
+-- | Map of direct extension implications
 directImplications :: Map Extension (Map Extension Bool)
 directImplications = Map.fromList <$> Map.fromList [
   (AutoDeriveTypeable, [(DeriveDataTypeable, True)]),
@@ -290,6 +292,7 @@ directImplications = Map.fromList <$> Map.fromList [
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
   (Unsafe, [(SafeImports, True)])]
 
+-- | Inverse of the 'implications' map
 inverseImplications :: Map Extension (Set Extension)
 inverseImplications = getUnionWith $ Map.foldMapWithKey inverse implications 
    where inverse parent = UnionWith . Map.mapMaybe (bool Nothing $ Just $ Set.singleton parent)
@@ -309,9 +312,8 @@ partitionContradictory switches = (Map.keysSet contradictions, Map.mapKeys getEx
 withImplications :: Map Extension Bool -> Map Extension Bool
 withImplications extensions = extensions <> Map.unions (implications `Map.intersection` Map.filter id extensions)
 
-inverse :: ExtensionSwitch -> ExtensionSwitch
-inverse (ExtensionSwitch (ext, s)) = ExtensionSwitch (ext, not s)
-
+-- | Map from valid extension switch strings (such as "EmptyCase" or "NoArrows") to the corresponding
+-- extension switches
 switchesByName :: (IsString t, Ord t, Semigroup t) => Map t ExtensionSwitch
 switchesByName = ExtensionSwitch <$> ((flip (,) True <$> byName)
                                       <> (flip (,) False <$> Map.mapKeysMonotonic ("No" <>) byName))

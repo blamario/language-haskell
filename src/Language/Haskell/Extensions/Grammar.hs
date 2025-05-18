@@ -3,10 +3,11 @@
              Rank2Types, RecordWildCards, ScopedTypeVariables,
              TemplateHaskell, TupleSections, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances #-}
 
--- | Missing syntax extensions:
--- * @TransformListComp@ is not supported by TemplateHaskell
--- * @OverloadedRecordUpdate@ is not supported by TemplateHaskell
--- * @Arrows@ is not supported by TemplateHaskell
+-- | Missing syntax extensions, not supported by TemplateHaskell:
+--
+-- * @TransformListComp@
+-- * @OverloadedRecordUpdate@
+-- * @Arrows@
 
 module Language.Haskell.Extensions.Grammar (ExtendedGrammar(report), extendedGrammar, parseModule, module Report) where
 
@@ -73,6 +74,7 @@ followedByCloseSpace t =
    any isCloseOrSpace (Textual.characterPrefix t) || "{-" `isPrefixOf` t || "--" `isPrefixOf` t
    where isCloseOrSpace c = Char.isSpace c || c `elem` (")]},;" :: [Char])
 
+-- | Contains the refactored Haskell2010 grammar overlaid with active language extensions
 data ExtendedGrammar l t f p = ExtendedGrammar {
    report :: HaskellGrammar l t f p,
    extensions :: GrammarExtensions l t f p}
@@ -247,6 +249,8 @@ languagePragmas = spaceChars
                                      <|> notFollowedBy (string "-}") *> anyToken <> takeCharsWhile  (/= '-'))
                         *> string "-}"
 
+-- | Parse a Haskell module using the grammar corresponding to the given set of language extensions and the
+-- extensions specified inside the module with the @LANGUAGE@ pragmas.
 parseModule :: forall l t. (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                             Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
                             Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
@@ -267,6 +271,7 @@ parseModule extensions source = case moduleExtensions of
          positiveKeys = Map.keysSet . Map.filter id
          getSwitch (ExtensionSwitch s) = s
 
+-- | Construct the Haskell grammar corresponding to the given set of language extensions
 extendedGrammar :: forall l t.
                    (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
                     Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
