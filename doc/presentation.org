@@ -1,0 +1,65 @@
+#+OPTIONS: H:2 toc:nil
+#+BEAMER_COLOR_THEME:
+#+BEAMER_FONT_THEME:
+#+BEAMER_HEADER:
+#+BEAMER_INNER_THEME:
+#+BEAMER_OUTER_THEME:
+#+startup: beamer
+#+LATEX_CLASS: beamer
+#+LATEX_CLASS_OPTIONS: [presentation]
+#+BEAMER_THEME: Singapore
+
+#+TITLE:     language-haskell (better name wanted!)
+#+AUTHOR:    Mario Blazevic
+#+DATE:      2025-06-06
+
+* Introduction
+
+** What it is
+=language-haskell= fits well into the general category of =language-X=
+- AST, parser, and pretty-printer
+- Haskell 2010 as the basis
+- with almost all syntactic extensions
+
+** What it's for
+- alternative to =haskell-src-exts=
+- base for new Haskell implementation experiments
+- also for Haskell derivatives
+- having fun
+
+** What it's not for
+- efficient parsing
+- good error messages
+- teaching compiler techniques
+
+* Overview
+
+** Dependencies
+[[file:dependencies.dot.pdf]]
+
+** Modules
+[[file:modules.dot.pdf]]
+
+** Data flow
+[[file:dataflow.dot.pdf]]
+
+** Lines of Code
+- ~10k lines total
+  - 1k for Haskell 2010 grammar
+  - 2k for the extension grammar overlays
+  - 1.3k for extended AST declarations
+
+- GHC in contrast:
+  - 4.7k in =Parser.y=
+  - 3.7k in =Lexer.x=
+
+- =haskell-src-exts= in contrast:
+  - 2.3k in =InternalParser.ly=
+  - 1.5k in =InternalLexer.hs=
+
+** Test suite
+  - ~3k source files stolen from GHC tests
+  - ~81k LoC
+  - positive tests only
+  - 13 minutes with all the round-trips
+[[file:testflow.dot.pdf]]

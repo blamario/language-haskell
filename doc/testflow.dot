@@ -1,0 +1,5 @@
+digraph testflow {
+    rankdir="LR"
+    Grammar -> Reserializer -> Grammar;
+    Grammar -> Binder -> Reorganizer -> Reformulator -> Template -> Grammar;
+    }

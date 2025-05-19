@@ -1,0 +1,7 @@
+digraph libraries {
+    edge[arrowhead=none];
+    parsers[style="dashed"];
+    "language-haskell" -> {"grammatical-parsers" "deep-transformations"};
+    "grammatical-parsers" -> {"monoid-subclasses" rank2classes "input-parsers"};
+    "input-parsers" -> {parsers "monoid-subclasses"};
+    "deep-transformations" -> rank2classes}

@@ -1,0 +1,7 @@
+digraph flow {
+    rankdir="LR"
+    Grammar -> Reserializer
+    Grammar -> Binder -> Reserializer;
+               Binder -> Reorganizer -> Reserializer;
+                         Reorganizer -> Reformulator -> Template;
+    }

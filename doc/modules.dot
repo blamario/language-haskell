@@ -1,0 +1,23 @@
+digraph modules {
+    edge[arrowhead=none];
+    // app -> {"Language.Haskell" Extensions ExtAbstract ExtAST ExtGrammar Binder Reorganizer Reformulator Reserializer Verifier Template};
+    // "Language.Haskell" -> {Abstract Binder Extensions ExtAST ExtGrammar Verifier Reorganizer Reserializer};
+    ExtGrammar -> {Extensions ExtAbstract Grammar Reserializer};
+    Grammar -> {Abstract Reserializer};
+    AST -> Abstract;
+    ExtAST -> {Extensions ExtAbstract AST};
+    Binder -> {Abstract AST ExtAST Extensions};
+    Reorganizer -> {Abstract AST ExtAST Binder Reserializer};
+    Reformulator -> {Abstract Extensions ExtAbstract ExtAST Binder Translation}; // Reserializer
+    Translation -> {Extensions ExtAbstract ExtAST Binder Verifier};
+    Template -> {ExtAbstract AST ExtAST Extensions Reformulator Reserializer}; // Translation
+
+    subgraph clusterExtensions {
+        label="Extensions.";
+        ExtAbstract [label="Abstract"];
+        ExtAST [label="AST"];
+        ExtGrammar [label="Grammar"];
+        Reformulator;
+        Translation;
+        Verifier}
+    }
