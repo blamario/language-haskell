@@ -4,7 +4,7 @@
 
 -- | This module exports the original Haskell 2010 grammar with no extensions. Apart from use of parser combinators
 -- and some minor refactorings, the grammar productions closely correspond to those documented in the [Haskell 2010
--- Language Report](https://www.haskell.org/onlinereport/haskell2010/haskell.html)
+-- Language Report](https://www.haskell.org/onlinereport/haskell2010/haskell.html).
 module Language.Haskell.Grammar (Parser,
                                  -- * The Haskell 2010 grammar
                                  HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),

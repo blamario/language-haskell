@@ -59,7 +59,7 @@ reserialize :: (Monoid s, Factorial s, Position pos, Deep.Foldable (Serializatio
             => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> s
 reserialize = foldMap lexemeText . lexemes
 
--- | Serializes the tree back into the text it was parsed from.
+-- | Serializes the tree just like 'reserialize', but with an additional wrapping on every node.
 reserializeNested :: (Monoid s, Factorial s, Position pos, Foldable f,
                       Deep.Foldable (Transformation.Folded f (Serialization pos s)) g)
                   => Compose f (Wrapped pos s) (g (Compose f (Wrapped pos s)) (Compose f (Wrapped pos s))) -> s
@@ -102,7 +102,7 @@ joinWrapped ((start, Trailing lexemes, end), ((innerStart, Trailing innerLexemes
    ((start, Trailing $ mergeLexemes start lexemes innerStart innerLexemes, end), x)
 
 -- | Given two lists of lexemes where the first wraps the second and their starting positions, return a single list
--- | sorted by position.
+-- sorted by position.
 mergeLexemes :: (Position pos, Factorial s) => pos -> [Lexeme s] -> pos -> [Lexeme s] -> [Lexeme s]
 mergeLexemes pos1 outer@(lexeme1:rest1) pos2 inner@(lexeme2:rest2)
    | pos1 < pos2 = lexeme1 : mergeLexemes (move (Factorial.length $ lexemeText lexeme1) pos1) rest1 pos2 inner

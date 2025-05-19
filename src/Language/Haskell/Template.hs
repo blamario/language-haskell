@@ -2,7 +2,9 @@
              ScopedTypeVariables, TemplateHaskell, TypeOperators #-}
 {-# Options_GHC -Werror=incomplete-patterns #-}
 
-module Language.Haskell.Template where
+-- | Pretty-printing of AST via Template Haskell. That is, the AST is first transformed into corresponding
+-- Template Haskell AST, then printed using its pretty-printer.
+module Language.Haskell.Template (PrettyViaTH, pprint) where
 
 import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
@@ -28,7 +30,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.Reformulator as Reformulator
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
-import Language.Haskell.TH hiding (Extension, doE, mdoE, safe)
+import Language.Haskell.TH hiding (Extension, doE, mdoE, pprint, safe)
 import Language.Haskell.TH.Datatype.TyVarBndr (TyVarBndrSpec, TyVarBndrUnit, TyVarBndrVis,
                                                kindedTV, plainTV,
                                                kindedTVInferred, plainTVInferred,
@@ -42,6 +44,7 @@ import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
+-- | Pretty-print the AST.
 pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
            FullyTranslatable
               (Reformulator.ReformulationOf
@@ -70,7 +73,9 @@ doE = DoE
 mdoE = MDoE
 #endif
 
+-- | Class for AST nodes that can be pretty-printed, typically via Template Haskell
 class PrettyViaTH a where
+  -- | Turn the node into a 'Ppr.Doc'.
    prettyViaTH :: a -> Ppr.Doc
 
 class Functor f => TemplateWrapper f where

@@ -1,6 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification), verify) where
+
+-- | Tracking which extensions are used by the AST
+module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification),
+                                             Error(..), verify) where
 
 import Control.Applicative (liftA2)
 import Control.Monad.Trans.Accum (Accum, accum, evalAccum)
@@ -40,17 +43,22 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Reserializer as Reserializer
 import Language.Haskell.Reserializer (Lexeme(..), ParsedLexemes(..), TokenType(..))
 
+-- | Transformation for tracking the uses of language extensions.
 data Accounting l pos s = Accounting
+
 data MPTCAccounting l pos s = MPTCAccounting
 data FlexibleInstanceHeadAccounting l pos s = FlexibleInstanceHeadAccounting
 data FlexibleInstanceTypeAccounting l pos s = FlexibleInstanceTypeAccounting
 data FlexibleInstanceTypeArgAccounting l pos s = FlexibleInstanceTypeArgAccounting
 data UnicodeSyntaxAccounting l pos s = UnicodeSyntaxAccounting
+
+-- | Transformation for reporting errors about language extension use
 data Verification l pos s = Verification
 
 type Accounted pos = Const (UnionWith (Map Extension) [(pos, pos)])
 type Verified pos = Const (Ap (Accum (Map Extension Bool)) [Error pos])
 
+-- | Extension misuse or disuse errors
 data Error pos = ContradictoryExtensionSwitches (Set ExtensionSwitch)
                | UndeclaredExtensionUse Extension [(pos, pos)]
                | UnusedExtension Extension
@@ -88,6 +96,8 @@ instance Transformation.Transformation (Verification l pos s) where
     type Domain (Verification l pos s) = Wrap l pos s
     type Codomain (Verification l pos s) = Verified pos
 
+-- | Given the list of declared extensions, report errors on the use of undeclared extensions and non-use
+-- of declared ones.
 verify :: forall w l pos s g. (w ~ Wrap l pos s, Full.Foldable (Verification l pos s) g) =>
                 Map Extension Bool
              -> w (g w w)

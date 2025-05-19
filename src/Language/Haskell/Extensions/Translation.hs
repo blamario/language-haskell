@@ -3,6 +3,8 @@
              ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 {-# Options_GHC -Wall -Werror=incomplete-patterns #-}
 
+-- | The module exports classes of methods for translating the AST from one language to another, along with their
+-- generic instances.
 module Language.Haskell.Extensions.Translation where
 
 import Data.Coerce (Coercible, coerce)
@@ -10,6 +12,7 @@ import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions as Extensions
 
+-- | Class of transformations that can translate names from the origin to target language.
 class NameTranslation t where
    type Origin t :: Abstract.Language
    type Target t :: Abstract.Language
@@ -36,6 +39,7 @@ class NameTranslation t where
 class WrapTranslation t where
    type Wrap t :: Abstract.NodeWrap
 
+-- | Class of transformations that can translate wrapped nodes without changing their wrap nor their subtrees.
 class (NameTranslation t, WrapTranslation t) => WrappedTranslation t (node :: Abstract.TreeNodeKind) where
    translateWrapped :: t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
    default translateWrapped :: (Functor (Wrap t), Translation t node)
@@ -43,15 +47,21 @@ class (NameTranslation t, WrapTranslation t) => WrappedTranslation t (node :: Ab
                             -> Wrap t (node (Target t) (Origin t) (Wrap t) (Wrap t))
    translateWrapped = fmap . translate
 
+-- | Class of transformations that can translate AST nodes from the origin to target language without changing
+-- their subtrees.
 class (NameTranslation t, WrapTranslation t) => Translation t (node :: Abstract.TreeNodeKind) where
    translate :: t -> node (Origin t) (Origin t) (Wrap t) (Wrap t) -> node (Target t) (Origin t) (Wrap t) (Wrap t)
 
+-- | Class of transformations that can translate an entire tree rooted in an AST node.
 class WrapTranslation t => DeeplyTranslatable t (node :: Abstract.TreeNodeKind) where
    translateDeeply :: Functor (Wrap t)
                    => t -> node l (Origin t) (Wrap t) (Wrap t) -> node l (Target t) (Wrap t) (Wrap t)
 
-translateFully :: (FullyTranslatable t node, Functor (Wrap t)) =>
-                  t -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t)) -> Wrap t (node (Target t) (Target t) (Wrap t) (Wrap t))
+-- | Translate an entire tree rooted in a wrapped AST node.
+translateFully :: (FullyTranslatable t node, Functor (Wrap t))
+               => t
+               -> Wrap t (node (Origin t) (Origin t) (Wrap t) (Wrap t))
+               -> Wrap t (node (Target t) (Target t) (Wrap t) (Wrap t))
 translateFully t = (translateDeeply t <$>) . translateWrapped t
 
 type FullyTranslatable t node = (WrappedTranslation t node, DeeplyTranslatable t node)

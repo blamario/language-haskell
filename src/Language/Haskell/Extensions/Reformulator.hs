@@ -2,7 +2,10 @@
              OverloadedStrings, RankNTypes, ScopedTypeVariables,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
-module Language.Haskell.Extensions.Reformulator where
+-- | The module exports functions that reformulate an AST in terms of the language extensions it uses.
+module Language.Haskell.Extensions.Reformulator (ReformulationOf, Wrap,
+                                                 dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns)
+where
 
 import qualified Data.Foldable1 as Foldable1
 import Data.Foldable1 (Foldable1)
@@ -44,8 +47,10 @@ type Transpiler λ1 λ2 f = Abstract.Module λ1 λ1 f f -> Abstract.Module λ2 �
 type Reformulator xs ys λ c f = ExtendedWithAllOf xs λ =>
    forall l. (Abstract.Haskell l, ExtendedWithAllOf (Difference ys xs) l, c λ l) => Transpiler λ l f
 
+-- | The same node wrap is used by both the original and target language.
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
 
+-- | Transformation to reformulate code from language @λ@ using extension @e@ to language @l@ using extensions @es@
 data ReformulationOf (e :: ExtensionSwitch) (es :: [ExtensionSwitch]) λ l pos s
    = Reformulation ExtensionSwitch [ExtensionSwitch] -- e es
 
@@ -104,8 +109,9 @@ type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
    Abstract.Value l1 ~ AST.Value l1,
    Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2)
 
+-- | Eliminate the @NoListTuplePuns@ extension.
 dropNoListTuplePuns :: forall l1 l2 node pos s.
-                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
+                       (Abstract.Haskell l2,
                         FullyTranslatable
                            (ReformulationOf (Off 'Extensions.ListTuplePuns) '[ ] l1 l2 pos s)
                            node)
@@ -116,6 +122,7 @@ dropNoListTuplePuns =
       (Reformulation (Extensions.off Extensions.ListTuplePuns) []
        :: ReformulationOf (Off 'Extensions.ListTuplePuns) '[ ] l1 l2 pos s)
 
+-- | Eliminate the 'Extensions.RecordWildCards' extension and replace it with 'Extensions.NamedFieldPuns'.
 dropRecordWildCards :: forall l1 l2 node pos s.
                        (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
                         SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
@@ -129,6 +136,7 @@ dropRecordWildCards =
       (Reformulation (Extensions.on Extensions.RecordWildCards) [Extensions.on Extensions.NamedFieldPuns]
        :: ReformulationOf (On 'Extensions.RecordWildCards) '[ On 'Extensions.NamedFieldPuns ] l1 l2 pos s)
 
+-- | Eliminate the 'Extensions.NPlusKPatterns' extension and replace it with 'Extensions.ViewPatterns'.
 dropNPlusKPatterns :: forall l1 l2 node pos s.
                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
                        SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s l1 l2,

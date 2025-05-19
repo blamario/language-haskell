@@ -2,9 +2,10 @@
              ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 
--- | An AST traversal for adjusting the infix operator applications
+-- | An AST traversal for adjusting the sequences of prefix and infix operator applications in the parsed and
+-- resolved AST, based on their declared precedence and fixity.
 
-module Language.Haskell.Reorganizer (Reorganization (Reorganization), reorganizeModules, NestedAdjustment) where
+module Language.Haskell.Reorganizer (Reorganization (Reorganization), reorganizeModules) where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, runState, state)
@@ -38,6 +39,7 @@ import Language.Haskell.Reserializer (Lexeme (Token, lexemeText, lexemeType), To
 
 import Prelude hiding (mod, span)
 
+-- | Transformation to reorganize the AST
 data Reorganization l pos s = Reorganization
 
 type Wrap l pos s = Binder.WithEnvironment l (Reserializer.Wrapped pos s)
@@ -161,8 +163,8 @@ instance Monad (Validation (NonEmpty (Error l f))) where
    Success s >>= f = f s
    Failure errors >>= _ = Failure errors
 
--- | Reorganize ambiguities in the given collection of modules, a 'Map' keyed by module name. Note that all class
--- constraints in the function's type signature are satisfied by the Haskell 'AST.Language'.
+-- | Reorganize sequences of operators in the given collection of modules, a 'Map' keyed by module name. Note
+-- that all class constraints in the function's type signature are satisfied by the Haskell 'AST.Language'.
 reorganizeModules :: forall l pos s f. (f ~ Wrap l pos s,
                                 Abstract.Haskell l,
                                 Abstract.Module l l ~ AST.Module l l,
