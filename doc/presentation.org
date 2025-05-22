@@ -20,6 +20,7 @@
 - AST, parser, and pretty-printer
 - Haskell 2010 as the basis
 - with almost all syntactic extensions
+- a sanity check on GHC
 
 ** What it's for
 - alternative to =haskell-src-exts=
@@ -30,12 +31,75 @@
 ** What it's not for
 - efficient parsing
 - good error messages
+  - goal opposed to exact grammar
+  - easier to do with lax grammar and AST verification
 - teaching compiler techniques
+  - very far from Simple Haskell
 
-* Overview
+* Foundations
 
 ** Dependencies
 [[file:dependencies.dot.pdf]]
+
+** =monoid-subclasses=
+- solid mathematical foundations
+  - =FactorialMonoid=
+  - =LeftCancellative=
+  - =Monus=
+- a practical input abstraction for parsers
+  - efficient method collection
+  - =TextualMonoid= sin bin
+- several concrete monoids and transformers
+  - =Data.Monoid.Instances.PrefixMemory=
+  - =Data.Monoid.Instances.ByteString.UTF8=
+
+** =input-parsers=
+  - builds on the =parsers= library
+  - exports only combinators and classes
+    - =DeterministicParsing ((<<|>), takeOptional, takeMany)=
+    - =InputParsing (type ParserInput, getInput, satisfy, string, take)=
+    - =ConsumedInputParsing (match)=
+    - =InputCharParsing (satisfyCharInput, takeCharsWhile)=
+    - =Position (distance, move, offset)=
+  - input constraints from =monoid-subclasses=
+
+** =rank2classes=
+  - the first, if not the original, HKD library
+  - =data Rec f = Rec{foo :: f Int, bar :: f Float}= 
+  - =class Functor {(<$>) :: (p ~> q) -> (g p -> g q)}=
+    - ~type p ~> q = forall a. p a -> q a~
+    - natural transformation
+  - =Foldable=, =Traversable=
+  - =Apply=, =Applicative=, =Distributive=, =Logistic=
+  - =Rank2.TH.deriveAll ''Rec=
+
+** =grammatical-parsers=
+  - some more classes and combinators
+  - several different parser implementations
+    - all instances of =input-parsers=
+    - PEG parsers: backtracking and Packrat
+    - context-free:
+      - backtracking, parallel, continuation
+      - transformer, memoizing, left-recursive
+  - HKD grammars
+    =data Grammar p = Grammar{prod1 :: p Int, ...}=
+    - =Rank2.liftA2 (<|>) g1 g2=
+    - ==fixGrammar :: Distributive g => (p p -> g p) -> g p==
+
+** =deep-transformations=
+  - HKD has a problem with nesting
+    =data Rec1 f = Rec1{child :: f (Rec2 f)}=
+  - ASTs are very much nested
+    - add another parameter
+      =data Rec1 d s = Rec1{child :: s (Rec2 d d)}=
+  - natural tranformations must behave uniformly
+    - ~type p ~> q = forall a. p a -> q a~
+    - enter unnatural transformations
+      =class Transformation t => t `At` a`=
+        =where ($) :: t -> Domain t a -> Codomain t a=
+    - attribute grammars
+
+* Overview
 
 ** Modules
 [[file:modules.dot.pdf]]
@@ -44,18 +108,18 @@
 [[file:dataflow.dot.pdf]]
 
 ** Lines of Code
-- ~10k lines total
-  - 1k for Haskell 2010 grammar
-  - 2k for the extension grammar overlays
-  - 1.3k for extended AST declarations
+  - ~10k lines total
+    - 1k for Haskell 2010 grammar
+    - 2k for the extension grammar overlays
+    - 1.3k for extended AST declarations
 
-- GHC in contrast:
-  - 4.7k in =Parser.y=
-  - 3.7k in =Lexer.x=
+  - GHC in contrast:
+    - 4.7k in =Parser.y=
+    - 3.7k in =Lexer.x=
 
-- =haskell-src-exts= in contrast:
-  - 2.3k in =InternalParser.ly=
-  - 1.5k in =InternalLexer.hs=
+  - =haskell-src-exts= in contrast:
+    - 2.3k in =InternalParser.ly=
+    - 1.5k in =InternalLexer.hs=
 
 ** Test suite
   - ~3k source files stolen from GHC tests
@@ -63,3 +127,9 @@
   - positive tests only
   - 13 minutes with all the round-trips
 [[file:testflow.dot.pdf]]
+
+** Side effects
+  - Found and reported 34 issues in the GHC project
+    - 19 in Template Haskell pretty printer, all fixed
+    - 10 documentation issues, 6 of them fixed
+
