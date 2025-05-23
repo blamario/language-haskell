@@ -5,9 +5,11 @@
 #+BEAMER_INNER_THEME:
 #+BEAMER_OUTER_THEME:
 #+startup: beamer
+#+latex_compiler: lualatex
 #+LATEX_CLASS: beamer
 #+LATEX_CLASS_OPTIONS: [presentation]
 #+BEAMER_THEME: Singapore
+#+BEAMER_HEADER: \usepackage{fontspec}\setmonofont[Scale=0.8]{Liberation Mono}
 
 #+TITLE:     language-haskell (better name wanted!)
 #+AUTHOR:    Mario Blazevic
@@ -64,14 +66,14 @@
   - input constraints from =monoid-subclasses=
 
 ** =rank2classes=
-  - the first, if not the original, HKD library
-  - =data Rec f = Rec{foo :: f Int, bar :: f Float}= 
-  - =class Functor {(<$>) :: (p ~> q) -> (g p -> g q)}=
+  - the first, if not the original, HKD libraryr
+  - ~data Rec f = Rec{foo :​: f Int, bar :​: f Float}~
+  - ~class Functor {(<$>) :​: (p ~> q) -> (g p -> g q)}~
     - ~type p ~> q = forall a. p a -> q a~
-    - natural transformation
+      - natural transformation
   - =Foldable=, =Traversable=
   - =Apply=, =Applicative=, =Distributive=, =Logistic=
-  - =Rank2.TH.deriveAll ''Rec=
+  - =$(Rank2.TH.deriveAll ''Rec)=
 
 ** =grammatical-parsers=
   - some more classes and combinators
@@ -82,21 +84,22 @@
       - backtracking, parallel, continuation
       - transformer, memoizing, left-recursive
   - HKD grammars
-    =data Grammar p = Grammar{prod1 :: p Int, ...}=
+    - ~data Grammar p = Grammar{prod1 :​: p Int, ...}~
     - =Rank2.liftA2 (<|>) g1 g2=
-    - ==fixGrammar :: Distributive g => (p p -> g p) -> g p==
+    - ~fixGrammar :​: Distributive g => (g p -> g p) -> g p~
+    - memoization of production results
 
 ** =deep-transformations=
-  - HKD has a problem with nesting
+  - HKD has a problem with nesting \\
     =data Rec1 f = Rec1{child :: f (Rec2 f)}=
   - ASTs are very much nested
-    - add another parameter
+    - add another parameter \\
       =data Rec1 d s = Rec1{child :: s (Rec2 d d)}=
-  - natural tranformations must behave uniformly
-    - ~type p ~> q = forall a. p a -> q a~
-    - enter unnatural transformations
-      =class Transformation t => t `At` a`=
-        =where ($) :: t -> Domain t a -> Codomain t a=
+  - natural tranformations must behave uniformly \\
+    ~type p ~> q = forall a. p a -> q a~
+    - enter unnatural transformations \\
+      =class Transformation t => t `At` a`= \\
+      =where ($) :​: t -> Domain t a -> Codomain t a=
     - attribute grammars
 
 * Overview
