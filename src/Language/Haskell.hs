@@ -4,8 +4,12 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions,
-                         Input, Bound, Placed) where
+module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions, Input,
+                         -- * Node wrappers
+                         -- | An abstract syntax tree produced by this library contains nodes of different types
+                         -- (declarations, types, expressions, patterns, etc), but every node is contained by the
+                         -- same type of /wrapper/ node.
+                         Parsed, Placed, Bound) where
 
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Language.Haskell.Binder as Binder
@@ -46,7 +50,10 @@ import Paths_language_haskell (getDataDir)
 
 import Prelude hiding (readFile)
 
--- | Every node in a parsed AST is wrapped with this functor
+-- | Every node in a parsed AST is originally wrapped with this functor
+type Parsed = Grammar.NodeWrap Input
+
+-- | Every node in a parsed AST with calculated positions is wrapped with this functor
 type Placed = Reserializer.Wrapped Int Text
 
 -- | Every node in a parsed and resolved AST is wrapped with this functor
@@ -57,7 +64,7 @@ type Input = Shadowed Text
 
 -- | Parse the given text of a single module according to the specified language extensions and resolve all
 -- identifiers inside the module.
-parseModule :: Map Extension Bool                      -- ^ language extensions
+parseModule :: Map Extension Bool                      -- ^ language extension switches
             -> Binder.ModuleEnvironment AST.Language   -- ^ modules available for import
             -> Binder.Environment AST.Language         -- ^ names available without import
             -> Bool                                    -- ^ verify if the identifiers are bound and extensions used?
@@ -69,21 +76,20 @@ parseModule extensions modEnv env verify source =
    >>= (if verify then traverse (checkAllBound >=> checkRestrictions extensions) else pure)
 
 -- | Resolve identifiers in the given parsed AST, and replace the stored positions in the entire tree with
--- offsets from the start of the given source text.s
-resolvePositions :: (p ~ Grammar.NodeWrap Input, q ~ Reserializer.Wrapped (Down Int) Input, r ~ Bound,
-                     Full.Traversable (Di.Keep (Binder.Binder AST.Language p)) g,
-                     Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) g,
+-- offsets from the start of the given source text.
+resolvePositions :: (Full.Traversable (Di.Keep (Binder.Binder AST.Language Parsed)) node,
+                     Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) node,
                      Deep.Functor
                         (Transformation.Mapped
-                            ((,) (Di.Atts (Binder.Environment AST.Language) (Binder.LocalEnvironment AST.Language)))
-                            (Rank2.Map q Placed))
-                        g)
-                 => Map Extension Bool
-                 -> Binder.ModuleEnvironment AST.Language
-                 -> Binder.Environment AST.Language
-                 -> Text
-                 -> p (g p p)
-                 -> r (g r r)
+                            ((,) (Binder.Attributes AST.Language))
+                            (Rank2.Map Parsed Placed))
+                        node)
+                 => Map Extension Bool                      -- ^ language extension switches
+                 -> Binder.ModuleEnvironment AST.Language   -- ^ modules available for import
+                 -> Binder.Environment AST.Language         -- ^ names available without import
+                 -> Text                                    -- ^ the module's source code for adjusting node positions
+                 -> Parsed (node Parsed Parsed)             -- ^ parsed AST
+                 -> Bound (node Bound Bound)
 resolvePositions extensions modEnv env src =
    (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
    . either (error . show) id . validationToEither
