@@ -2,19 +2,25 @@ cabal-version:       >=1.10
 
 name:                language-haskell
 version:             0.1
--- synopsis:
--- description:
--- bug-reports:
+synopsis:            ASTs, parser and pretty-printer for Haskell 2010 with most language extensions
+description:
+   A library and executable providing the parser, pretty-printer, and some AST transformations for the Haskell 2010
+   language and its syntactic extensions. The extension syntax is defined in form of independent grammar overlays,
+   making it easy to set up new syntactic experiments.
+bug-reports:         https://github.com/blamario/language-Haskell/issues
 license:             BSD3
 license-file:        LICENSE
 author:              Mario Blažević
 maintainer:          blamario@protonmail.com
--- copyright:
--- category:
+copyright:           
+category:            Language
 build-type:          Simple
 extra-source-files:  README.md, CHANGELOG.md
 data-dir:            data/
 data-files:          report/*.hs
+source-repository head
+   type: git
+   location: https://github.com/blamario/language-Haskell/
 
 library
   exposed-modules:     Language.Haskell, Language.Haskell.Abstract, Language.Haskell.AST,
@@ -29,10 +35,10 @@ library
   other-modules:       Paths_language_haskell
   build-depends:       base >=4.7 && <5, ghc-prim < 0.14,
                        foldable1-classes-compat < 0.2,
-                       bytestring < 0.13, text < 3, containers >= 0.5.8 && < 1.0,
-                       reducers < 4.0, transformers >= 0.5 && < 0.7,
+                       bytestring < 0.13, text < 3, containers >= 0.5.8 && < 1,
+                       reducers < 4, transformers >= 0.5 && < 0.7,
                        directory < 2, filepath < 1.5,
-                       monoid-subclasses >= 1.2.4 && <= 1.3,
+                       monoid-subclasses >= 1.2.4 && < 1.3,
                        parsers >= 0.12.7 && < 0.13, input-parsers >= 0.2.2 && < 0.4,
                        rank2classes >= 1.3 && < 1.6, grammatical-parsers >= 0.6 && < 0.8,
                        deep-transformations >= 0.3 && < 0.4,
@@ -47,7 +53,7 @@ executable haskell-parser
   main-is:             Parse.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.14 && <5, containers < 1.0, text, repr-tree-syb < 0.2, filepath < 1.5,
+  build-depends:       base >=4.14 && <5, containers < 1, text, repr-tree-syb < 0.2, filepath < 1.5,
                        monoid-subclasses, optparse-applicative >= 0.12 && < 0.19,
                        input-parsers >= 0.2.2 && < 0.4, grammatical-parsers,
                        rank2classes, deep-transformations,
@@ -57,7 +63,7 @@ executable haskell-parser
 
 test-suite             positive
   type:                exitcode-stdio-1.0
-  build-depends:       base >= 4.7 && < 5, text, containers < 1.0, grammatical-parsers,
+  build-depends:       base >= 4.7 && < 5, text, containers < 1, grammatical-parsers,
                        either == 5.*, directory < 2, filepath < 1.5,
                        monoid-subclasses, deep-transformations,
                        tasty >= 0.7, tasty-hunit,
@@ -67,7 +73,7 @@ test-suite             positive
 
 test-suite             extensions
   type:                exitcode-stdio-1.0
-  build-depends:       base >= 4.7 && < 5, text, containers < 1.0, grammatical-parsers,
+  build-depends:       base >= 4.7 && < 5, text, containers < 1, grammatical-parsers,
                        either == 5.*, directory < 2, filepath < 1.5,
                        monoid-subclasses, deep-transformations,
                        tasty >= 0.7, tasty-hunit,
