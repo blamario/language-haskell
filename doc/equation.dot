@@ -1,0 +1,20 @@
+digraph equation {
+   label = "f x = x";
+   Wrap1 -> EquationDeclaration;
+   EquationDeclaration -> {Wrap2 Wrap3};
+   EquationDeclaration[label = "EquationDeclaration :: Declaration λ l d s"];
+   Wrap2 -> PrefixLHS;
+   Wrap3 -> NormalRHS;
+   PrefixLHS -> {Wrap4 Wrap5};
+   NormalRHS -> Wrap6;
+   Wrap4 -> VariableLHS;
+   Wrap5 -> VariablePattern;
+   Wrap6 -> ReferenceExpression;
+   VariableLHS -> f
+   {VariablePattern ReferenceExpression} -> x
+   Wrap1[label="wrap", style="dashed"];
+   Wrap2[label="wrap", style="dashed"];
+   Wrap3[label="wrap", style="dashed"];
+   Wrap4[label="wrap", style="dashed"];
+   Wrap5[label="wrap", style="dashed"];
+   Wrap6[label="wrap", style="dashed"]}

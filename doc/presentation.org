@@ -18,20 +18,28 @@
 * Introduction
 
 ** What it is
-=language-haskell= fits well into the general category of =language-X=
+=https://hackage.haskell.org/package/language-haskell-0.1/candidate=
+fits well into the general category of =language-X=
 - AST, parser, and pretty-printer
 - Haskell 2010 as the basis
-- with almost all syntactic extensions
-- a sanity check on GHC
+- with /almost/ all syntactic extensions
+- maximally flexible
 
 ** What it's for
+- PoC of composable grammars
 - alternative to =haskell-src-exts=
+  - lower performance
+  - but should be easier to maintain
 - base for new Haskell implementation experiments
 - also for Haskell derivatives
+- reference grammar for Haskell 2030
+- GHC bug report generator
 - having fun
 
 ** What it's not for
-- efficient parsing
+- efficiency
+  - parser combinators, no separate lexical layer
+  - twice the number of AST heap objects
 - good error messages
   - goal opposed to exact grammar
   - easier to do with lax grammar and AST verification
@@ -66,7 +74,7 @@
   - input constraints from =monoid-subclasses=
 
 ** =rank2classes=
-  - the first, if not the original, HKD libraryr
+  - the first, if not the original, HKD library
   - ~data Rec f = Rec{foo :​: f Int, bar :​: f Float}~
   - ~class Functor {(<$>) :​: (p ~> q) -> (g p -> g q)}~
     - ~type p ~> q = forall a. p a -> q a~
@@ -85,24 +93,28 @@
       - transformer, memoizing, left-recursive
   - HKD grammars
     - ~data Grammar p = Grammar{prod1 :​: p Int, ...}~
-    - =Rank2.liftA2 (<|>) g1 g2=
     - ~fixGrammar :​: Distributive g => (g p -> g p) -> g p~
     - memoization of production results
+    - =Rank2.liftA2 (<|>) g1 g2=
 
 ** =deep-transformations=
   - HKD has a problem with nesting \\
     =data Rec1 f = Rec1{child :: f (Rec2 f)}=
-  - ASTs are very much nested
+    - ASTs are very much nested
     - add another parameter \\
       =data Rec1 d s = Rec1{child :: s (Rec2 d d)}=
   - natural tranformations must behave uniformly \\
     ~type p ~> q = forall a. p a -> q a~
-    - enter unnatural transformations \\
-      =class Transformation t => t `At` a`= \\
-      =where ($) :​: t -> Domain t a -> Codomain t a=
+    - enter /unnatural/ transformations
+    - from parametric to ad-hoc overloading \\
+      =class Transformation t => t `At` a= \\
+       =where ($) :​: t -> Domain t a -> Codomain t a=
     - attribute grammars
 
 * Overview
+
+** AST shape
+[[file:equation.dot.pdf]]
 
 ** Modules
 [[file:modules.dot.pdf]]
@@ -132,7 +144,19 @@
 [[file:testflow.dot.pdf]]
 
 ** Side effects
+  - Forced improvements in dependencies
+    - Performance of =monoid-subclasses= and =grammatical-parsers=
+    - Comforts like =TraceableParsing=, state, and more combinators
+    - Improved and expanded =deep-transformations= and =rank2classes=
   - Found and reported 34 issues in the GHC project
     - 19 in Template Haskell pretty printer, all fixed
     - 10 documentation issues, 6 of them fixed
-
+** Future directions
+  - documentation
+  - modularize ~Extensions.Abstract~
+  - add more extension reformulators
+  - keep improving the parser
+  - extend the compiler pipeline
+    - type system as attribute grammar
+  - more source-level transformations
+** Questions?
