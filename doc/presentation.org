@@ -18,7 +18,7 @@
 * Introduction
 
 ** What it is
-=https://hackage.haskell.org/package/language-haskell-0.1/candidate=
+=https://hackage.haskell.org/package/language-haskell-0.1/candidate= \\
 fits well into the general category of =language-X=
 - AST, parser, and pretty-printer
 - Haskell 2010 as the basis
