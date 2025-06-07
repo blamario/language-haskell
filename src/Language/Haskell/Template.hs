@@ -634,6 +634,11 @@ patternTemplate (RecordPattern constructor fields) =
      fieldPatternTemplate (PunnedFieldPattern q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
 patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
 patternTemplate NPlusKPattern{} = error "TH doesn't support N+K patterns"
+#if MIN_VERSION_template_haskell(2,23,0)
+patternTemplate (OrPattern () alternatives) = OrP (patternTemplate . extract <$> alternatives)
+#else
+patternTemplate (OrPattern () alternatives) = error "GHC < 9.12 doesn't support OrPatterns"
+#endif
 patternTemplate (TuplePattern items) = TupP (patternTemplate . extract <$> toList items)
 patternTemplate (UnboxedTuplePattern () items) = UnboxedTupP (patternTemplate . extract <$> toList items)
 patternTemplate (UnboxedSumPattern () before branch after) =

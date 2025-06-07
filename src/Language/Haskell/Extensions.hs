@@ -107,6 +107,7 @@ data Extension = AllowAmbiguousTypes
                | NullaryTypeClasses
                | NumDecimals
                | NumericUnderscores
+               | OrPatterns
                | OverlappingInstances
                | OverloadedLabels
                | OverloadedLists
@@ -411,6 +412,7 @@ byName = Map.fromList [
   ("NullaryTypeClasses", NullaryTypeClasses),
   ("NumDecimals", NumDecimals),
   ("NumericUnderscores", NumericUnderscores),
+  ("OrPatterns", OrPatterns),
   ("OverlappingInstances", OverlappingInstances),
   ("OverloadedLabels", OverloadedLabels),
   ("OverloadedLists", OverloadedLists),

@@ -198,6 +198,7 @@ extensionMixins =
      (Set.fromList [StrictData],                     [(9, strictDataMixin)]),
      (Set.fromList [Strict],                         [(9, strictMixin)]),
      (Set.fromList [BangPatterns],                   [(9, bangPatternsMixin)]),
+     (Set.fromList [OrPatterns],                     [(9, orPatternsMixin)]),
      (Set.fromList [ViewPatterns],                   [(9, viewPatternsMixin)]),
      (Set.fromList [NPlusKPatterns],                 [(9, nPlusKPatternsMixin)]),
      (Set.fromList [PatternSynonyms],                [(9, patternSynonymsMixin)]),
@@ -1676,6 +1677,15 @@ bangPatternsMixin self super = super{
                 <* notSatisfyChar (\c-> Char.isSpace c || isSymbol c)
                 <* notFollowedBy Report.comment
                 <* lift ([[Token Delimiter "!"]], ())
+
+orPatternsMixin :: Abstract.ExtendedWith '[ 'OrPatterns ] l => ExtensionOverlay l g t
+orPatternsMixin self super = super{
+   report = super.report{
+      aPattern = super.report.aPattern
+         <|> parens (Abstract.orPattern Abstract.build
+                     <$> ((:|)
+                          <$> wrap self.report.pPattern
+                          <*> some (semi *> wrap self.report.pPattern)))}}
 
 viewPatternsMixin :: Abstract.ExtendedWith '[ 'ViewPatterns ] l => ExtensionOverlay l g t
 viewPatternsMixin self super = super{

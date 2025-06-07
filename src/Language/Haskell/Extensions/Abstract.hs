@@ -38,6 +38,7 @@ module Language.Haskell.Extensions.Abstract (
               StrictDataConstruction, lazyType,
               StrictConstruction, lazyPattern,
               BangPatternConstruction, bangPattern,
+              OrPatternConstruction, orPattern,
               ViewPatternConstruction, viewPattern,
               NPlusKPatternConstruction, nPlusKPattern,
               PatternSynonymConstruction,
@@ -207,11 +208,14 @@ data instance Construct '[ 'Extensions.Strict ] λ l d s = StrictConstruction {
 data instance Construct '[ 'Extensions.BangPatterns ] λ l d s = BangPatternConstruction {
    bangPattern :: s (Pattern l l d d) -> Pattern λ l d s}
 
-data instance Construct '[ 'Extensions.ViewPatterns ] λ l d s = ViewPatternConstruction {
-   viewPattern :: s (Expression l l d d) -> s (Pattern l l d d) -> Pattern λ l d s}
-
 data instance Construct '[ 'Extensions.NPlusKPatterns ] λ l d s = NPlusKPatternConstruction {
    nPlusKPattern :: Name λ -> Integer -> Pattern λ l d s}
+
+data instance Construct '[ 'Extensions.OrPatterns ] λ l d s = OrPatternConstruction {
+   orPattern :: NonEmpty (s (Pattern l l d d)) -> Pattern λ l d s}
+
+data instance Construct '[ 'Extensions.ViewPatterns ] λ l d s = ViewPatternConstruction {
+   viewPattern :: s (Expression l l d d) -> s (Pattern l l d d) -> Pattern λ l d s}
 
 type family PatternLHS λ :: TreeNodeSubKind
 type family PatternEquationLHS λ :: TreeNodeSubKind
@@ -294,7 +298,8 @@ class (Haskell λ,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
                           'Extensions.InterruptibleFFI, 'Extensions.CApiFFI,
                           'Extensions.StrictData, 'Extensions.Strict,
-                          'Extensions.BangPatterns, 'Extensions.ViewPatterns, 'Extensions.NPlusKPatterns,
+                          'Extensions.BangPatterns, 'Extensions.NPlusKPatterns,
+                          'Extensions.OrPatterns, 'Extensions.ViewPatterns,
                           'Extensions.NamedDefaults,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,

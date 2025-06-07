@@ -59,6 +59,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.StrictData,
    'Extensions.Strict,
    'Extensions.BangPatterns,
+   'Extensions.OrPatterns,
    'Extensions.ViewPatterns,
    'Extensions.NPlusKPatterns,
    'Extensions.PatternSynonyms,
@@ -168,6 +169,10 @@ instance Abstract.ExtendedWith '[ 'Extensions.Strict ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.BangPatterns ] Language where
    build = Abstract.BangPatternConstruction {
       Abstract.bangPattern = BangPattern ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.OrPatterns ] Language where
+   build = Abstract.OrPatternConstruction {
+      Abstract.orPattern = OrPattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] Language where
    build = Abstract.ViewPatternConstruction {
@@ -785,6 +790,7 @@ data Pattern λ l d s =
    | ExplicitTypePattern !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | LazyPattern !(Abstract.SupportFor 'Extensions.Strict λ) (s (Abstract.Pattern l l d d))
+   | OrPattern !(Abstract.SupportFor 'Extensions.OrPatterns λ) (NonEmpty (s (Abstract.Pattern l l d d)))
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
                   (s (Abstract.Pattern l l d d))
@@ -1152,6 +1158,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (Abstract.SupportFor 'Extensions.Strict λ),
                    Data (Abstract.SupportFor 'Extensions.BangPatterns λ),
+                   Data (Abstract.SupportFor 'Extensions.OrPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Data (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
@@ -1166,6 +1173,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (Abstract.SupportFor 'Extensions.Strict λ),
                    Show (Abstract.SupportFor 'Extensions.BangPatterns λ),
+                   Show (Abstract.SupportFor 'Extensions.OrPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Show (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
@@ -1179,6 +1187,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (Abstract.SupportFor 'Extensions.Strict λ),
                    Eq (Abstract.SupportFor 'Extensions.BangPatterns λ),
+                   Eq (Abstract.SupportFor 'Extensions.OrPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.ViewPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.NPlusKPatterns λ),
                    Eq (Abstract.SupportFor 'Extensions.TypeAbstractions λ),
