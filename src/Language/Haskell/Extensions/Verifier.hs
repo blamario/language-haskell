@@ -455,6 +455,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
    Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
       case t of ExtAST.BangPattern {} -> Map.singleton Extensions.BangPatterns [(start, end)]
                 ExtAST.NPlusKPattern {} -> Map.singleton Extensions.NPlusKPatterns [(start, end)]
+                ExtAST.OrPattern {} -> Map.singleton Extensions.OrPatterns [(start, end)]
                 ExtAST.ViewPattern {} -> Map.singleton Extensions.ViewPatterns [(start, end)]
                 ExtAST.UnboxedSumPattern{} -> Map.singleton Extensions.UnboxedSums [(start, end)]
                 ExtAST.UnboxedTuplePattern{} -> Map.singleton Extensions.UnboxedTuples [(start, end)]
