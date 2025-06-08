@@ -260,6 +260,7 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
           Abstract.Haskell l2,
           Abstract.Supports 'Extensions.NPlusKPatterns λ,
           Abstract.Supports 'Extensions.ViewPatterns l2,
+          Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
@@ -272,7 +273,9 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
       Reformulation{}
       (Compose (env, (s@(start, lexemes, end), AST.NPlusKPattern () n k))) =
       Compose (env,
-               (s, AST.ViewPattern () (justGreaterOrEqual k) (rewrap $ AST.ConstructorPattern just [] [rewrap $ AST.VariablePattern n])))
+               (s,
+                Abstract.viewPattern Abstract.build (justGreaterOrEqual k)
+                 $ rewrap $ AST.ConstructorPattern just [] [rewrap $ AST.VariablePattern n]))
       where justGreaterOrEqual k =
                rewrap
                $ AST.LambdaExpression [rewrap $ AST.VariablePattern n]
@@ -287,7 +290,6 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
             nExp = rewrap $ AST.ReferenceExpression $ Binder.unqualifiedName n
             kExp = rewrap $ AST.LiteralExpression $ rewrap $ AST.IntegerLiteral k
             just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Just"
-            qualifiedWithPrelude = AST.QualifiedName (Just Binder.preludeName)
             rewrap :: node -> Wrap l2 pos s node
             rewrap node = Compose (env, ((start, mempty, end), node))
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
@@ -299,6 +301,8 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
           Abstract.Supports 'Extensions.OrPatterns λ,
           Abstract.Supports 'Extensions.ViewPatterns l2,
           Abstract.Supports 'Extensions.LambdaCase l2,
+          Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
+          Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
@@ -311,17 +315,19 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
       Reformulation{}
       (Compose (env, (s@(start, lexemes, end), AST.OrPattern () patterns))) =
       Compose (env,
-               (s, AST.ViewPattern () alternatives $ rewrap $ Abstract.constructorPattern true []))
-      where alternatives = rewrap $ AST.LambdaCaseExpression () $ (translateAlternative <$> toList patterns) <> [fallback]
+               (s, Abstract.viewPattern Abstract.build alternatives $ rewrap $ Abstract.constructorPattern true []))
+      where alternatives = rewrap
+               $ Abstract.lambdaCaseExpression Abstract.build
+               $ (translateAlternative <$> toList patterns) <> [fallback]
             fallback = rewrap $
                        Abstract.caseAlternative
                           (rewrap Abstract.wildcardPattern)
                           (rewrap $ Abstract.normalRHS $ rewrap $ Abstract.constructorExpression false)
                           []
-            translateAlternative p = rewrap $ Abstract.caseAlternative p (rewrap $ Abstract.normalRHS $ rewrap $ Abstract.constructorExpression true) []
-            true = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "True"
-            false = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "False"
-            qualifiedWithPrelude = AST.QualifiedName (Just Binder.preludeName)
+            translateAlternative p = rewrap $ Abstract.caseAlternative p trueRHS []
+            trueRHS = rewrap $ Abstract.normalRHS $ rewrap $ Abstract.constructorExpression true
+            true = rewrap $ Abstract.constructorReference $ qualifiedWithPrelude $ Abstract.name "True"
+            false = rewrap $ Abstract.constructorReference $ qualifiedWithPrelude $ Abstract.name "False"
             rewrap :: node -> Wrap l2 pos s node
             rewrap node = Compose (env, ((start, mempty, end), node))
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
@@ -360,3 +366,6 @@ mapModuleName (AST.ModuleName parts) = Abstract.moduleName (mapName <$> parts)
 
 mapName :: Abstract.Haskell λ2 => AST.Name λ1 -> Abstract.Name λ2
 mapName (AST.Name name) = Abstract.name name
+
+qualifiedWithPrelude :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l
+qualifiedWithPrelude = Abstract.qualifiedName (Just Binder.preludeName)
