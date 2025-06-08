@@ -46,8 +46,8 @@ import Prelude ()
 {-
 import PreludeBuiltin                      -- Contains all `prim' values
 import UnicodePrims( primUnicodeMaxChar )  -- Unicode primitives
-import PreludeList
 -}
+import PreludeList
 import PreludeText
 import PreludeIO
 {-
