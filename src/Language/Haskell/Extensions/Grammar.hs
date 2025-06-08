@@ -90,7 +90,7 @@ data GrammarExtensions l t f p = GrammarExtensions {
    cType, arrowType :: p (Abstract.Type l l f f),
    promotedLiteral, promotedStructure :: p (Abstract.Type l l f f),
    equalityConstraint, implicitParameterConstraint :: p (Abstract.Context  l l f f),
-   infixPattern :: p (Abstract.Pattern l l f f),
+   typedPattern, infixPattern :: p (Abstract.Pattern l l f f),
    gadtNewConstructor, gadtConstructors :: p (Abstract.GADTConstructor l l f f),
    constructorIDs :: p (NonEmpty (Abstract.Name l)),
    derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
@@ -321,7 +321,7 @@ initialOverlay self super = super{
                                                        <|> self.extensions.implicitParameterConstraint) `sepBy` comma),
          instanceDesignator = self.extensions.instanceDesignatorApplications,
          instanceTypeDesignator = self.report.aType},
-      pattern = self.extensions.infixPattern,
+      pattern = self.extensions.typedPattern,
       lPattern = self.report.aPattern
                  <|> Abstract.literalPattern
                      <$ delimiter "-"
@@ -356,7 +356,12 @@ initialOverlay self super = super{
       cType = self.report.bType,
       equalityConstraint = empty,
       implicitParameterConstraint = empty,
-      infixPattern = super.report.pattern,
+      typedPattern = self.extensions.infixPattern,
+      infixPattern =
+         Abstract.infixPattern <$> wrap self.report.lPattern
+                               <*> self.report.qualifiedConstructorOperator
+                               <*> wrap self.extensions.infixPattern
+         <|> self.report.lPattern,
       promotedLiteral = empty,
       promotedStructure = empty,
       inClassOrInstanceTypeFamilyDeclaration = empty,
@@ -1510,8 +1515,8 @@ existentialQuantificationMixin self super = super{
 
 scopedTypeVariablesMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 scopedTypeVariablesMixin self super = super{
-   report= super.report{
-      pattern = super.report.pattern
+   extensions = super.extensions{
+      typedPattern = super.extensions.typedPattern
          <|> Abstract.typedPattern
                 <$> wrap self.extensions.infixPattern
                 <* self.report.doubleColon
@@ -1681,11 +1686,11 @@ bangPatternsMixin self super = super{
 orPatternsMixin :: Abstract.ExtendedWith '[ 'OrPatterns ] l => ExtensionOverlay l g t
 orPatternsMixin self super = super{
    report = super.report{
-      aPattern = super.report.aPattern
-         <|> parens (Abstract.orPattern Abstract.build
-                     <$> ((:|)
-                          <$> wrap self.report.pPattern
-                          <*> some (semi *> wrap self.report.pPattern)))}}
+      pattern = super.report.pattern
+         <|> Abstract.orPattern Abstract.build
+             <$> ((:|)
+                  <$> wrap self.extensions.typedPattern
+                  <*> some (semi *> wrap self.extensions.typedPattern))}}
 
 viewPatternsMixin :: Abstract.ExtendedWith '[ 'ViewPatterns ] l => ExtensionOverlay l g t
 viewPatternsMixin self super = super{
