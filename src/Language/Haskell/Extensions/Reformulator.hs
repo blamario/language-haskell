@@ -3,11 +3,13 @@
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The module exports functions that reformulate an AST in terms of the language extensions it uses.
-module Language.Haskell.Extensions.Reformulator (ReformulationOf, Wrap,
-                                                 dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns)
+module Language.Haskell.Extensions.Reformulator (
+  ReformulationOf, Wrap,
+    dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, orToViewPatterns)
 where
 
 import qualified Data.Foldable1 as Foldable1
+import Data.Foldable (toList)
 import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.List as List
@@ -150,6 +152,29 @@ dropNPlusKPatterns =
       (Reformulation (Extensions.on Extensions.NPlusKPatterns) [Extensions.on Extensions.ViewPatterns]
        :: ReformulationOf (On 'Extensions.NPlusKPatterns) '[ On 'Extensions.ViewPatterns ] l1 l2 pos s)
 
+-- | Eliminate the 'Extensions.OrPatterns' extension and replace it with 'Extensions.ViewPatterns'.
+orToViewPatterns :: forall l1 l2 node pos s.
+                      (Abstract.Haskell l2,
+                       Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
+                       Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] l2,
+                       Abstract.Supports 'Extensions.ViewPatterns l2,
+                       Abstract.Supports 'Extensions.LambdaCase l2,
+                       SameWrap 'Extensions.OrPatterns '[ 'Extensions.ViewPatterns, 'Extensions.LambdaCase ] pos s l1 l2,
+                       FullyTranslatable
+                          (ReformulationOf
+                             (On 'Extensions.OrPatterns)
+                             '[ On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase ]
+                             l1 l2 pos s)
+                          node)
+                    => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                    -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+orToViewPatterns =
+   Translation.translateFully
+      (Reformulation (Extensions.on Extensions.OrPatterns)
+                     [Extensions.on Extensions.ViewPatterns, Extensions.on Extensions.LambdaCase]
+       :: ReformulationOf (On 'Extensions.OrPatterns) '[ On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase ]
+          l1 l2 pos s)
+
 -- Generic instance to adjust the LANGUAGE pragma
 
 instance (TextualMonoid s,
@@ -262,6 +287,40 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
             nExp = rewrap $ AST.ReferenceExpression $ Binder.unqualifiedName n
             kExp = rewrap $ AST.LiteralExpression $ rewrap $ AST.IntegerLiteral k
             just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Just"
+            qualifiedWithPrelude = AST.QualifiedName (Just Binder.preludeName)
+            rewrap :: node -> Wrap l2 pos s node
+            rewrap node = Compose (env, ((start, mempty, end), node))
+   translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
+
+-- OrPattern instances
+
+instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions.ViewPatterns ] pos s λ l2,
+          Abstract.Haskell l2,
+          Abstract.Supports 'Extensions.OrPatterns λ,
+          Abstract.Supports 'Extensions.ViewPatterns l2,
+          Abstract.Supports 'Extensions.LambdaCase l2,
+          Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
+          Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
+          Abstract.ModuleName l2 ~ AST.ModuleName l2,
+          Abstract.Name l2 ~ AST.Name l2) =>
+   WrappedTranslation
+      (ReformulationOf (On 'Extensions.OrPatterns) '[On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase] λ l2 pos s)
+      AST.Pattern
+  where
+   translateWrapped
+      Reformulation{}
+      (Compose (env, (s@(start, lexemes, end), AST.OrPattern () patterns))) =
+      Compose (env,
+               (s, AST.ViewPattern () alternatives $ rewrap $ Abstract.constructorPattern true []))
+      where alternatives = rewrap $ AST.LambdaCaseExpression () $ (translateAlternative <$> toList patterns) <> [fallback]
+            fallback = rewrap $
+                       Abstract.caseAlternative
+                          (rewrap Abstract.wildcardPattern)
+                          (rewrap $ Abstract.normalRHS $ rewrap $ Abstract.constructorExpression false)
+                          []
+            translateAlternative p = rewrap $ Abstract.caseAlternative p (rewrap $ Abstract.normalRHS $ rewrap $ Abstract.constructorExpression true) []
+            true = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "True"
+            false = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "False"
             qualifiedWithPrelude = AST.QualifiedName (Just Binder.preludeName)
             rewrap :: node -> Wrap l2 pos s node
             rewrap node = Compose (env, ((start, mempty, end), node))

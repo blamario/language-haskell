@@ -57,11 +57,21 @@ pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.W
                   Language Language pos s)
               node,
            FullyTranslatable
+              (Reformulator.ReformulationOf
+                  (Extensions.On 'Extensions.OrPatterns) '[ Extensions.On 'Extensions.ViewPatterns,
+                                                            Extensions.On 'Extensions.LambdaCase ]
+                  Language Language pos s)
+              node,
+           FullyTranslatable
               (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language pos s)
               node) => a -> String
 pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
          . Reformulator.dropRecordWildCards
          . Reformulator.dropNPlusKPatterns
+#if MIN_VERSION_template_haskell(2,23,0)
+#else
+         . Reformulator.orToViewPatterns
+#endif
          . Reformulator.dropNoListTuplePuns
 
 doE, mdoE :: [Stmt] -> Exp

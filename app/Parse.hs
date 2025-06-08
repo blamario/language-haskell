@@ -121,6 +121,12 @@ main' Opts{..} = do
                      Language Language Int Text)
                  g,
               FullyTranslatable
+                 (ReformulationOf
+                     (Extensions.On 'Extensions.OrPatterns)
+                     '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase]
+                     Language Language Int Text)
+                 g,
+              FullyTranslatable
                  (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
@@ -168,6 +174,12 @@ main' Opts{..} = do
                          Language Language Int Text)
                      g,
                   FullyTranslatable
+                     (ReformulationOf
+                         (Extensions.On 'Extensions.OrPatterns)
+                         '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase]
+                         Language Language Int Text)
+                     g,
+                 FullyTranslatable
                      (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                      g,
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
