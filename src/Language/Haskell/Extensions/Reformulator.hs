@@ -5,9 +5,10 @@
 -- | The module exports functions that reformulate an AST in terms of the language extensions it uses.
 module Language.Haskell.Extensions.Reformulator (
   ReformulationOf, Wrap,
-    dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, orToViewPatterns)
+    dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, dropMultilineStrings, orToViewPatterns)
 where
 
+import Data.Coerce (coerce)
 import qualified Data.Foldable1 as Foldable1
 import Data.Foldable (toList)
 import Data.Foldable1 (Foldable1)
@@ -174,6 +175,15 @@ orToViewPatterns =
                      [Extensions.on Extensions.ViewPatterns, Extensions.on Extensions.LambdaCase]
        :: ReformulationOf (On 'Extensions.OrPatterns) '[ On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase ]
           l1 l2 pos s)
+
+-- | Eliminating the 'Extensions.MultilineStrings' extension is a no-op.
+dropMultilineStrings :: forall l1 l2 node pos s.
+                        (Abstract.Haskell l2,
+                         SameWrap 'Extensions.MultilineStrings '[] pos s l1 l2,
+                         FullyTranslatable (ReformulationOf (On 'Extensions.MultilineStrings) '[] l1 l2 pos s) node)
+                    => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                    -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropMultilineStrings = coerce
 
 -- Generic instance to adjust the LANGUAGE pragma
 

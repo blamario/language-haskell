@@ -377,8 +377,12 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Value l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), literal)) = Const $ UnionWith $
+      (if any ((isPrefixOf "\"\"\"") . lexemeText) lexemes
+       then Map.singleton Extensions.MultilineStrings [(start, end)]
+       else mempty)
+      <>
       (if any ((isPrefixOf "0b" ||| isPrefixOf "0B") . lexemeText) lexemes
-      then Map.singleton Extensions.BinaryLiterals [(start, end)]
+       then Map.singleton Extensions.BinaryLiterals [(start, end)]
        else mempty)
       <>
       (case hashless literal
