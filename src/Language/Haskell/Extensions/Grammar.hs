@@ -17,16 +17,17 @@ module Language.Haskell.Extensions.Grammar (ExtendedGrammar(report), extendedGra
 import Control.Applicative
 import Control.Monad (void)
 import qualified Data.Char as Char
+import Data.Bifunctor (first)
 import Data.Foldable (fold, toList)
 import Data.Function ((&))
 import Data.Functor.Compose (Compose(getCompose))
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Ord (Down)
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Function.Memoize (memoize)
 import Data.Monoid (Endo(..))
-import Data.Monoid.Cancellative (RightReductive, isPrefixOf, isSuffixOf)
+import Data.Monoid.Cancellative (RightReductive, commonPrefix, isPrefixOf, isSuffixOf, stripPrefix, stripSuffix)
 import Data.Monoid.Instances.Positioned (LinePositioned, column)
 import Data.Monoid.Instances.PrefixMemory (Shadowed (content, prefix))
 import Data.Monoid.Textual (TextualMonoid, toString)
@@ -36,6 +37,7 @@ import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Numeric
@@ -145,6 +147,7 @@ extensionMixins =
      (Set.fromList [MagicHash],                      [(3, magicHashMixin)]),
      (Set.fromList [ParallelListComprehensions],     [(3, parallelListComprehensionsMixin)]),
      (Set.fromList [ExtendedLiterals],               [(4, extendedLiteralsMixin)]),
+     (Set.fromList [MultilineStrings],               [(4, multilineStringsMixin)]),
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
      (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
@@ -563,6 +566,33 @@ extendedLiteralsMixin self super = super{
                           <$> storeToken self.report.integerLexeme
                           <*> hashType}}
    where hashType = storeToken (string "#") *> self.report.typeConstructor
+
+multilineStringsMixin :: ExtensionOverlay l g t
+multilineStringsMixin self super = super{
+   report = super.report{
+      stringLexeme = Text.pack . toString mempty <$> (edge *> (normalize . Textual.toText mempty <$> content) <* edge)
+                     <<|> super.report.stringLexeme}}
+   where content = concatMany (takeCharsWhile1 (\c-> c /= '"' && c /= '\\')
+                               <|> notFollowedBy edge *> string "\""
+                               <|> Textual.singleton <$> self.report.escape
+                               <|> char '\\' *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\') *> pure "")
+         edge = string "\"\"\""
+         normalize =
+             try (stripSuffix "\n") . try (stripPrefix "\n")
+             . Text.unlines
+             . map removeWhiteSpace . stripCommonPrefixFromAll . map untabify
+             . Text.lines
+         stripCommonPrefixFromAll [] = []
+         stripCommonPrefixFromAll lines = fold . stripPrefix common <$> lines
+            where common = foldr1 commonPrefix lines
+         removeWhiteSpace line
+            | Text.all Char.isSpace line = mempty
+            | otherwise = line
+         untabify =
+            uncurry (<>)
+            . first (flip Text.replicate " " . (* 8) . Factorial.length)
+            . Text.span (== '\t')
+         try f a = fromMaybe a (f a)
 
 magicHashMixin :: forall l g t. (SpaceMonoid t, Abstract.ExtendedHaskell l) => ExtensionOverlay l g t
 magicHashMixin self super =

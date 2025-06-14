@@ -95,6 +95,7 @@ data Extension = AllowAmbiguousTypes
                | MonoLocalBinds
                | MonoPatBinds
                | MonomorphismRestriction
+               | MultilineStrings
                | MultiParamTypeClasses
                | MultiParameterConstraints -- | active unnamed in GHC
                | MultiWayIf
@@ -400,6 +401,7 @@ byName = Map.fromList [
   ("MonoLocalBinds", MonoLocalBinds),
   ("MonoPatBinds", MonoPatBinds),
   ("MonomorphismRestriction", MonomorphismRestriction),
+  ("MultilineStrings", MultilineStrings),
   ("MultiParameterConstraints", MultiParameterConstraints),
   ("MultiParamTypeClasses", MultiParamTypeClasses),
   ("MultiWayIf", MultiWayIf),

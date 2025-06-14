@@ -684,7 +684,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    stringLiteral = token stringLexeme <?> "string literal",
    stringLexeme = Text.pack . toString mempty <$>
                   (char '"'
-                   *> concatMany (takeCharsWhile1 (\c-> c == ' ' || not (Char.isSpace c) && c /= '"' && c /= '\\')
+                   *> concatMany (takeCharsWhile1 (\c-> c /= '"' && c /= '\\')
                                   <|> Textual.singleton <$> escape
                                   <|> char '\\'
                                       *> (char '&' <|> takeCharsWhile1 Char.isSpace *> char '\\')
