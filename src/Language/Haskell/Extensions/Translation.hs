@@ -624,8 +624,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
       AST.LetExpression (translateFully t <$> bindings) (translateFully t body)
    translateDeeply t (AST.ListComprehension element guards) =
       AST.ListComprehension (translateFully t element) (translateFully t <$> guards)
-   translateDeeply t (AST.ParallelListComprehension element guards1 guards2 guardses) =
-      AST.ParallelListComprehension
+   translateDeeply t (AST.ParallelListComprehension sup element guards1 guards2 guardses) =
+      AST.ParallelListComprehension sup
          (translateFully t element) (translateFully t <$> guards1)
          (translateFully t <$> guards2) ((translateFully t <$>) <$> guardses)
    translateDeeply t (AST.ListExpression items) = AST.ListExpression (translateFully t <$> items)
@@ -638,8 +638,8 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
    translateDeeply t (AST.SequenceExpression start next end) =
       AST.SequenceExpression (translateFully t start) (translateFully t <$> next) (translateFully t <$> end)
    translateDeeply t (AST.TupleExpression items) = AST.TupleExpression (translateFully t <$> items)
-   translateDeeply t (AST.TupleSectionExpression items) =
-      AST.TupleSectionExpression ((translateFully t <$>) <$> items)
+   translateDeeply t (AST.TupleSectionExpression sup items) =
+      AST.TupleSectionExpression sup ((translateFully t <$>) <$> items)
    translateDeeply t (AST.UnboxedTupleExpression support items) =
       AST.UnboxedTupleExpression support (translateFully t <$> items)
    translateDeeply t (AST.UnboxedTupleSectionExpression support items) =
@@ -752,12 +752,16 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
     Abstract.SupportFor 'Extensions.LambdaCase (Origin t)
     ~ Abstract.SupportFor 'Extensions.LambdaCase (Target t),
+    Abstract.SupportFor 'Extensions.ParallelListComprehensions (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ParallelListComprehensions (Target t),
     Abstract.SupportFor 'Extensions.QualifiedDo (Origin t)
     ~ Abstract.SupportFor 'Extensions.QualifiedDo (Target t),
     Abstract.SupportFor 'Extensions.RecursiveDo (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecursiveDo (Target t),
     Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
     ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t),
+    Abstract.SupportFor 'Extensions.TupleSections (Origin t)
+    ~ Abstract.SupportFor 'Extensions.TupleSections (Target t),
     Abstract.SupportFor 'Extensions.UnboxedSums (Origin t)
     ~ Abstract.SupportFor 'Extensions.UnboxedSums (Target t),
     Abstract.SupportFor 'Extensions.UnboxedTuples (Origin t)
@@ -781,8 +785,8 @@ instance {-# overlappable #-}
    translate _ (AST.LambdaExpression pat body) = AST.LambdaExpression pat body
    translate _ (AST.LetExpression bindings body) = AST.LetExpression bindings body
    translate _ (AST.ListComprehension element guards) = AST.ListComprehension element guards
-   translate _ (AST.ParallelListComprehension element guards1 guards2 guardses) =
-      AST.ParallelListComprehension element guards1 guards2 guardses
+   translate _ (AST.ParallelListComprehension sup element guards1 guards2 guardses) =
+      AST.ParallelListComprehension sup element guards1 guards2 guardses
    translate _ (AST.ListExpression items) = AST.ListExpression items
    translate _ (AST.LiteralExpression value) = AST.LiteralExpression value
    translate _ AST.Negate = AST.Negate
@@ -791,7 +795,7 @@ instance {-# overlappable #-}
    translate t (AST.RightSectionExpression op right) = AST.RightSectionExpression (translateQualifiedName t op) right
    translate _ (AST.SequenceExpression start next end) = AST.SequenceExpression start next end
    translate _ (AST.TupleExpression items) = AST.TupleExpression items
-   translate _ (AST.TupleSectionExpression items) = AST.TupleSectionExpression items
+   translate _ (AST.TupleSectionExpression sup items) = AST.TupleSectionExpression sup items
    translate _ (AST.UnboxedTupleExpression support items) = AST.UnboxedTupleExpression support items
    translate _ (AST.UnboxedTupleSectionExpression support items) = AST.UnboxedTupleSectionExpression support items
    translate _ (AST.UnboxedSumExpression support before branch after) =

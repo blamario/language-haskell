@@ -16,15 +16,15 @@ module Language.Haskell.Extensions.Abstract (
               RecordWildCardConstruction, wildcardRecordExpression, wildcardRecordPattern,
               MagicHashConstruction, hashLiteral',
               NamedFieldPunsConstruction, punnedFieldBinding, punnedFieldPattern,
-              RecursiveDoConstruction, mdoExpression', recursiveStatement',
+              RecursiveDoConstruction, mdoExpression, recursiveStatement,
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
               LambdaCaseConstruction, lambdaCaseExpression, lambdaCasesExpression, lambdaCasesAlternative,
-              ParallelListComprehensionConstruction, parallelListComprehension',
+              ParallelListComprehensionConstruction, parallelListComprehension,
               TypeDataConstruction, typeDataDeclaration,
               TypeGADTConstruction, typeGADTDeclaration,
               TypeAbstractionConstruction, typeLHSTypeApplication, invisibleTypePattern,
-              TupleSectionConstruction, tupleSectionExpression',
+              TupleSectionConstruction, tupleSectionExpression,
               UnboxedSumsConstruction,
               unboxedSumType, unboxedSumConstructor, unboxedSumExpression, unboxedSumPattern,
               UnboxedTuplesConstruction,
@@ -137,8 +137,8 @@ data instance Construct '[ 'Extensions.MagicHash ] λ l d s = MagicHashConstruct
    hashLiteral' :: Value λ l d s -> Value λ l d s}
 
 data instance Construct '[ 'Extensions.RecursiveDo ] λ l d s = RecursiveDoConstruction {
-   mdoExpression' :: s (GuardedExpression l l d d) -> Expression λ l d s,
-   recursiveStatement' :: [s (Statement l l d d)] -> Statement λ l d s}
+   mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s,
+   recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s}
 
 data instance Construct '[ 'Extensions.QualifiedDo ] λ l d s = QualifiedDoConstruction {
    qualifiedDoExpression :: ModuleName λ -> s (GuardedExpression l l d d) -> Expression λ l d s}
@@ -155,14 +155,14 @@ data instance Construct '[ 'Extensions.LambdaCase ] λ l d s = LambdaCaseConstru
    lambdaCasesAlternative :: [s (Pattern l l d d)] -> s (EquationRHS l l d d) -> LambdaCasesAlternative λ l d s}
 
 data instance Construct '[ 'Extensions.ParallelListComprehensions ] λ l d s = ParallelListComprehensionConstruction {
-   parallelListComprehension' :: s (Expression l l d d)
-                              -> NonEmpty (s (Statement l l d d))
-                              -> NonEmpty (s (Statement l l d d))
-                              -> [NonEmpty (s (Statement l l d d))]
-                              -> Expression λ l d s}
+   parallelListComprehension :: s (Expression l l d d)
+                             -> NonEmpty (s (Statement l l d d))
+                             -> NonEmpty (s (Statement l l d d))
+                             -> [NonEmpty (s (Statement l l d d))]
+                             -> Expression λ l d s}
 
 data instance Construct '[ 'Extensions.TupleSections ] λ l d s = TupleSectionConstruction {
-   tupleSectionExpression' :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
+   tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s}
 
 data instance Construct '[ 'Extensions.TypeData ] λ l d s = TypeDataConstruction {
    typeDataDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)]
@@ -316,23 +316,11 @@ class (Haskell λ,
    type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    hashLiteral = hashLiteral' build
-   mdoExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
-   mdoExpression = mdoExpression' build
-   parallelListComprehension :: s (Expression l l d d)
-                             -> NonEmpty (s (Statement l l d d))
-                             -> NonEmpty (s (Statement l l d d))
-                             -> [NonEmpty (s (Statement l l d d))]
-                             -> Expression λ l d s
-   parallelListComprehension = parallelListComprehension' build
-   tupleSectionExpression :: NonEmpty (Maybe (s (Expression l l d d))) -> Expression λ l d s
-   tupleSectionExpression = tupleSectionExpression' build
 
    multiWayIfExpression :: [s (GuardedExpression l l d d)] -> Expression λ l d s
    overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s
    fieldProjection :: NonEmpty (Name λ) -> Expression λ l d s
-   recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s
-   recursiveStatement = recursiveStatement' build
    safeImportDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ)
                          -> Maybe (s (ImportSpecification l l d d))
                          -> Import λ l d s

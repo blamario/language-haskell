@@ -95,7 +95,7 @@ instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Language where
    build = Abstract.ParallelListComprehensionConstruction {
-      Abstract.parallelListComprehension' = ParallelListComprehension}
+      Abstract.parallelListComprehension = ParallelListComprehension ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
    build = Abstract.RecordWildCardConstruction {
@@ -104,8 +104,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecursiveDo ] Language where
    build = Abstract.RecursiveDoConstruction {
-      Abstract.mdoExpression' = MDoExpression,
-      Abstract.recursiveStatement' = RecursiveStatement}
+      Abstract.mdoExpression = MDoExpression,
+      Abstract.recursiveStatement = RecursiveStatement}
 
 instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo ] Language where
    build = Abstract.QualifiedDoConstruction {
@@ -123,7 +123,7 @@ instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
-      Abstract.tupleSectionExpression' = TupleSectionExpression}
+      Abstract.tupleSectionExpression = TupleSectionExpression ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.UnboxedTuples ] Language where
    build = Abstract.UnboxedTuplesConstruction {
@@ -741,7 +741,8 @@ data Expression λ l d s =
    | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
    | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
-   | ParallelListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+   | ParallelListComprehension !(Abstract.SupportFor 'Extensions.ParallelListComprehensions λ)
+                               (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
                                (NonEmpty (s (Abstract.Statement l l d d))) [NonEmpty (s (Abstract.Statement l l d d))]
    | ListExpression [s (Abstract.Expression l l d d)]
    | LiteralExpression (s (Abstract.Value l l d d))
@@ -752,7 +753,8 @@ data Expression λ l d s =
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
-   | TupleSectionExpression (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
+   | TupleSectionExpression !(Abstract.SupportFor 'Extensions.TupleSections λ)
+                            (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | UnboxedSumExpression !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
                           Int (s (Abstract.Expression l l d d)) Int
    | UnboxedTupleExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
@@ -1087,10 +1089,12 @@ deriving instance Typeable (Expression λ l d s)
 deriving instance (Typeable (Abstract.Pattern l), Typeable (Abstract.EquationRHS l),
                    Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Data (Abstract.SupportFor 'Extensions.ParallelListComprehensions λ),
                    Data (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Data (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Data (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Data (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Data (Abstract.SupportFor 'Extensions.TupleSections λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (s (Abstract.CaseAlternative l l d d)), Data (s (Abstract.Constructor l l d d)),
@@ -1103,10 +1107,12 @@ deriving instance (Typeable (Abstract.Pattern l), Typeable (Abstract.EquationRHS
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Expression λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
+                   Show (Abstract.SupportFor 'Extensions.ParallelListComprehensions λ),
                    Show (Abstract.SupportFor 'Extensions.QualifiedDo λ),
                    Show (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Show (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Show (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Show (Abstract.SupportFor 'Extensions.TupleSections λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (s (Abstract.CaseAlternative l l d d)), Show (s (Abstract.Constructor l l d d)),
@@ -1121,9 +1127,11 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
 deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.QualifiedDo λ),
+                   Eq (Abstract.SupportFor 'Extensions.ParallelListComprehensions λ),
                    Eq (Abstract.SupportFor 'Extensions.RecursiveDo λ),
                    Eq (Abstract.SupportFor 'Extensions.LambdaCase λ),
                    Eq (Abstract.SupportFor 'Extensions.RecordWildCards λ),
+                   Eq (Abstract.SupportFor 'Extensions.TupleSections λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (s (Abstract.CaseAlternative l l d d)), Eq (s (Abstract.Constructor l l d d)),

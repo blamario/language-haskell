@@ -620,10 +620,10 @@ recursiveDoMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'RecursiveDo ] l,
 recursiveDoMixin self super = super{
    report= super.report{
       closedBlockExpression = super.report.closedBlockExpression
-         <|> Abstract.mdoExpression' Abstract.build <$ keyword "mdo" <*> wrap self.report.statements,
+         <|> Abstract.mdoExpression Abstract.build <$ keyword "mdo" <*> wrap self.report.statements,
       statement = super.report.statement
                   <|> wrap (Deep.InL
-                            <$> Abstract.recursiveStatement' Abstract.build
+                            <$> Abstract.recursiveStatement Abstract.build
                                 . map Report.expressionToStatement
                                 <$ keyword "rec"
                                 <*> blockOf self.report.statement),
@@ -662,14 +662,14 @@ parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverla
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
    report= super.report{
       bareExpression = super.report.bareExpression
-                       <|> brackets (Abstract.parallelListComprehension
+                       <|> brackets (Abstract.parallelListComprehension Abstract.build
                                      <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
 tupleSectionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 tupleSectionsMixin self super = super{
    report= super.report{
       bareExpression = super.report.bareExpression
-         <|> Abstract.tupleSectionExpression
+         <|> Abstract.tupleSectionExpression Abstract.build
              <$> parens (filter (\l-> any isJust l && any isNothing l)
                          $ (:|) <$> optional self.report.expression
                                 <*> some (comma *> optional self.report.expression))}}

@@ -235,7 +235,7 @@ expressionTemplate (LetExpression bindings body) =
    LetE (foldMap (declarationTemplates . extract) bindings) (wrappedExpressionTemplate body)
 expressionTemplate (ListComprehension element guards) =
    CompE (statementTemplate <$> ((extract <$> toList guards) ++ [ExpressionStatement element]))
-expressionTemplate (ParallelListComprehension element guards1 guards2 guardses) =
+expressionTemplate (ParallelListComprehension () element guards1 guards2 guardses) =
    CompE [ParS (branch guards1 : branch guards2 : map branch guardses),
           statementTemplate (ExpressionStatement element)]
    where branch statements = statementTemplate <$> (extract <$> toList statements)
@@ -259,7 +259,7 @@ expressionTemplate (SequenceExpression start next end) = ArithSeqE $
       (Just n, Just e) -> FromThenToR s n e
    where s = wrappedExpressionTemplate start
 expressionTemplate (TupleExpression items) = TupE (Just . expressionTemplate . extract <$> toList items)
-expressionTemplate (TupleSectionExpression items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
+expressionTemplate (TupleSectionExpression () items) = TupE ((expressionTemplate . extract <$>) <$> toList items)
 expressionTemplate (UnboxedTupleExpression () items) =
    UnboxedTupE (Just . expressionTemplate . extract <$> toList items)
 expressionTemplate (UnboxedTupleSectionExpression () items) =
