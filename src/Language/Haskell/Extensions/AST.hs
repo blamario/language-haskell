@@ -99,8 +99,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Langu
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
    build = Abstract.RecordWildCardConstruction {
-      Abstract.wildcardRecordExpression' = WildcardRecordExpression (),
-      Abstract.wildcardRecordPattern' = WildcardRecordPattern ()}
+      Abstract.wildcardRecordExpression = WildcardRecordExpression (),
+      Abstract.wildcardRecordPattern = WildcardRecordPattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecursiveDo ] Language where
    build = Abstract.RecursiveDoConstruction {

@@ -1643,11 +1643,11 @@ recordWildCardsMixin :: Abstract.ExtendedWith '[ 'RecordWildCards ] l => Extensi
 recordWildCardsMixin self super = super{
    extensions = super.extensions{
      conArgPattern = super.extensions.conArgPattern
-        <|> Abstract.wildcardRecordPattern' Abstract.build <$> self.report.qualifiedConstructor
+        <|> Abstract.wildcardRecordPattern Abstract.build <$> self.report.qualifiedConstructor
             <*> braces (wrap self.report.fieldPattern `endBy` comma <* delimiter "..")},
    report = super.report{
       bareExpression = super.report.bareExpression
-         <|> Abstract.wildcardRecordExpression' Abstract.build <$> self.report.qualifiedConstructor
+         <|> Abstract.wildcardRecordExpression Abstract.build <$> self.report.qualifiedConstructor
              <*> braces (wrap self.report.fieldBinding `endBy` comma <* delimiter "..")}}
 
 overloadedRecordDotMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t

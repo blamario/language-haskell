@@ -13,7 +13,7 @@ module Language.Haskell.Extensions.Abstract (
               explicitlyNamespacedMemberList, defaultMember, patternMember, typeMember,
               explicitTypeFixityDeclaration, explicitDataFixityDeclaration,
               explicitTypeExpression, explicitTypePattern,
-              RecordWildCardConstruction, wildcardRecordExpression', wildcardRecordPattern',
+              RecordWildCardConstruction, wildcardRecordExpression, wildcardRecordPattern,
               MagicHashConstruction, hashLiteral',
               NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
@@ -121,8 +121,8 @@ data instance Construct '[ 'Extensions.ExplicitNamespaces ] λ l d s = ExplicitN
    explicitTypePattern :: s (Type l l d d) -> Pattern λ l d s}
 
 data instance Construct '[ 'Extensions.RecordWildCards ] λ l d s = RecordWildCardConstruction {
-   wildcardRecordExpression' :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
-   wildcardRecordPattern' :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
+   wildcardRecordExpression :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s,
+   wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
 data instance Construct '[ 'Extensions.NamedFieldPuns ] λ l d s = NamedFieldPunsConstruction {
    punnedFieldBinding' :: QualifiedName λ -> FieldBinding λ l d s,
@@ -331,8 +331,6 @@ class (Haskell λ,
    overloadedLabel :: Text -> Expression λ l d s
    getField :: s (Expression l l d d) -> Name λ -> Expression λ l d s
    fieldProjection :: NonEmpty (Name λ) -> Expression λ l d s
-   wildcardRecordExpression :: QualifiedName λ -> [s (FieldBinding l l d d)] -> Expression λ l d s
-   wildcardRecordExpression = wildcardRecordExpression' build
    recursiveStatement :: [s (Statement l l d d)] -> Statement λ l d s
    recursiveStatement = recursiveStatement' build
    safeImportDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ)
@@ -440,8 +438,6 @@ class (Haskell λ,
    typedPattern :: s (Pattern l l d d) -> s (Type l l d d) -> Pattern λ l d s
    constructorPatternWithTypeApplications :: s (Constructor l l d d) -> [s (Type l l d d)] -> [s (Pattern l l d d)]
                                           -> Pattern λ l d s
-   wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s
-   wildcardRecordPattern = wildcardRecordPattern' build
 
 -- | Constraint @UniversallyApplicable t l d@ means that the transformation @t@ can be applied to any AST node of
 -- language @l@ with subtrees wrapped in @d@.
