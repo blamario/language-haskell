@@ -658,14 +658,14 @@ qualifiedRecursiveDoMixin self super = super{
           notFollowedBy (string "." *> optional (Report.moduleLexeme @g @l *> string ".") *> keyword "mdo")
           *> super.report.qualifiedVariableSymbol}}
 
-parallelListComprehensionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+parallelListComprehensionsMixin :: Abstract.ExtendedWith '[ ParallelListComprehensions ] l => ExtensionOverlay l g t
 parallelListComprehensionsMixin self@ExtendedGrammar{report= HaskellGrammar{qualifiers, expression}} super = super{
    report= super.report{
       bareExpression = super.report.bareExpression
                        <|> brackets (Abstract.parallelListComprehension Abstract.build
                                      <$> expression <*> qualifiers <*> qualifiers <*> many qualifiers)}}
 
-tupleSectionsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+tupleSectionsMixin :: Abstract.ExtendedWith '[ TupleSections ] l => ExtensionOverlay l g t
 tupleSectionsMixin self super = super{
    report= super.report{
       bareExpression = super.report.bareExpression
@@ -1631,7 +1631,7 @@ dataKindsGadtSyntaxTypeOperatorsMixin self super = super{
          <*> self.report.qualifiedOperator
          <*> wrap (self.extensions.arg_type)}}
 
-namedFieldPunsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+namedFieldPunsMixin :: Abstract.ExtendedWith '[ 'NamedFieldPuns ] l => ExtensionOverlay l g t
 namedFieldPunsMixin self super = super{
    report = super.report{
       fieldBinding = super.report.fieldBinding <|>
