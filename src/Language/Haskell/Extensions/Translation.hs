@@ -233,7 +233,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
    translateDeeply t (AST.KindSignature name kind) = AST.KindSignature name (translateFully t kind)
    translateDeeply t (AST.DefaultMethodSignature support name context ty) =
       AST.DefaultMethodSignature support name (translateFully t context) (translateFully t ty)
-   translateDeeply _ (AST.TypeRoleDeclaration name role) = AST.TypeRoleDeclaration name role
+   translateDeeply _ (AST.TypeRoleDeclaration sup name role) = AST.TypeRoleDeclaration sup name role
    translateDeeply t (AST.StandaloneDerivingDeclaration support vars context lhs) =
       AST.StandaloneDerivingDeclaration support (translateDeeply t <$> vars)
                                         (translateFully t context) (translateFully t lhs)

@@ -69,6 +69,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.DerivingVia,
    'Extensions.DefaultSignatures,
    'Extensions.GADTs,
+   'Extensions.RoleAnnotations,
    'Extensions.TypeAbstractions,
    'Extensions.TypeData,
    'Extensions.FunctionalDependencies]
@@ -242,19 +243,27 @@ instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language 
       Abstract.functionalDependency = FunctionalDependency,
       Abstract.fundepClassDeclaration = FunDepClassDeclaration ()}
 
+instance Abstract.ExtendedWith '[ 'Extensions.RoleAnnotations ] Language where
+   build = Abstract.RoleAnnotationsConstruction {
+      Abstract.typeRoleDeclaration = TypeRoleDeclaration (),
+      Abstract.inferredRole = InferredRole (),
+      Abstract.nominalRole = NominalRole (),
+      Abstract.representationalRole = RepresentationalRole (),
+      Abstract.phantomRole = PhantomRole ()}
+
 type instance Abstract.FunctionalDependency Language = FunctionalDependency Language
 type instance Abstract.LambdaCasesAlternative Language = LambdaCasesAlternative Language
 type instance Abstract.DerivingStrategy Language = DerivingStrategy Language
 type instance Abstract.PatternLHS Language = PatternLHS Language
 type instance Abstract.PatternEquationLHS Language = PatternEquationLHS Language
 type instance Abstract.PatternEquationClause Language = PatternEquationClause Language
+type instance Abstract.TypeRole Language = TypeRole Language
 
 instance Abstract.ExtendedHaskell Language where
    type GADTConstructor Language = GADTConstructor Language
    type Kind Language = Type Language
    type TypeVarBinding Language = TypeVarBinding Language
    type ModuleMember Language = ModuleMember Language
-   type TypeRole Language = TypeRole Language
    multiWayIfExpression = MultiWayIfExpression
    safeImportDeclaration q = Import True q Nothing 
    packageQualifiedImportDeclaration q p = Import False q (Just p)
@@ -290,12 +299,6 @@ instance Abstract.ExtendedHaskell Language where
    promotedCharLiteral = PromotedCharLiteral
    promotedStringLiteral = PromotedStringLiteral
    promotedInfixTypeApplication = PromotedInfixTypeApplication
-
-   typeRoleDeclaration = TypeRoleDeclaration
-   inferredRole = InferredRole
-   nominalRole = NominalRole
-   representationalRole = RepresentationalRole
-   phantomRole = PhantomRole
 
    explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable False
    implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable False
@@ -523,11 +526,10 @@ data ModuleMember λ = DefaultMember (Name λ)
                     | TypeMember (Name λ)
                     deriving (Data, Eq, Show)
 
-data TypeRole λ = InferredRole
-                | NominalRole
-                | RepresentationalRole
-                | PhantomRole
-                deriving (Data, Eq, Show)
+data TypeRole λ = InferredRole !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
+                | NominalRole !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
+                | RepresentationalRole !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
+                | PhantomRole !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
 
 data Declaration λ l d s =
    ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
@@ -604,7 +606,8 @@ data Declaration λ l d s =
    | TypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
-   | TypeRoleDeclaration (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
+   | TypeRoleDeclaration !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
+                         (Abstract.QualifiedName λ) [Abstract.TypeRole λ]
    | ImplicitPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
                             (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
    | UnidirectionalPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
@@ -869,6 +872,11 @@ deriving instance (Data λ, Data (Abstract.SupportFor 'Extensions.ExplicitNamesp
 deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Show (Members λ)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Eq (Members λ)
 
+deriving instance Typeable (TypeRole λ)
+deriving instance (Data (Abstract.SupportFor 'Extensions.RoleAnnotations λ), Data λ) => Data (TypeRole λ)
+deriving instance (Show (Abstract.SupportFor 'Extensions.RoleAnnotations λ), Show λ) => Show (TypeRole λ)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.RoleAnnotations λ), Eq λ) => Eq (TypeRole λ)
+
 deriving instance Typeable (Declaration λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.StandaloneDeriving λ),
@@ -876,6 +884,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Data (Abstract.SupportFor 'Extensions.GADTs λ),
                    Data (Abstract.SupportFor 'Extensions.NamedDefaults λ),
+                   Data (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Data (Abstract.SupportFor 'Extensions.TypeData λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
@@ -902,6 +911,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Show (Abstract.SupportFor 'Extensions.GADTs λ),
                    Show (Abstract.SupportFor 'Extensions.NamedDefaults λ),
+                   Show (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Show (Abstract.SupportFor 'Extensions.TypeData λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
@@ -928,6 +938,7 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.DefaultSignatures λ),
                    Eq (Abstract.SupportFor 'Extensions.GADTs λ),
                    Eq (Abstract.SupportFor 'Extensions.NamedDefaults λ),
+                   Eq (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Eq (Abstract.SupportFor 'Extensions.TypeData λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),

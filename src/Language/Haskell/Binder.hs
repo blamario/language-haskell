@@ -553,7 +553,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
    BindingVerifier l f `Transformation.At` AST.Declaration l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
-      where verify (AST.TypeRoleDeclaration q _) = verifyTypeName q env
+      where verify (AST.TypeRoleDeclaration _ q _) = verifyTypeName q env
             verify _ = mempty
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,

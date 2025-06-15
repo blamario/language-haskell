@@ -445,12 +445,12 @@ declarationTemplates (GADTNewtypeFamilyInstance vars lhs kind constructor derivi
                  (gadtConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
 declarationTemplates d@TypeFamilyInstance{} = [TySynInstD $ typeFamilyInstanceTemplate d]
-declarationTemplates (TypeRoleDeclaration name roles) =
+declarationTemplates (TypeRoleDeclaration () name roles) =
    [RoleAnnotD (qnameTemplate name) (roleTemplate <$> roles)]
-   where roleTemplate NominalRole = NominalR
-         roleTemplate RepresentationalRole = RepresentationalR
-         roleTemplate PhantomRole = PhantomR
-         roleTemplate InferredRole = InferR
+   where roleTemplate NominalRole{} = NominalR
+         roleTemplate RepresentationalRole{} = RepresentationalR
+         roleTemplate PhantomRole{} = PhantomR
+         roleTemplate InferredRole{} = InferR
 declarationTemplates (StandaloneDerivingDeclaration () _vars context lhs) =
    [StandaloneDerivD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)]
 declarationTemplates (StandaloneStrategicDerivingDeclaration () () strategy _vars context lhs) =

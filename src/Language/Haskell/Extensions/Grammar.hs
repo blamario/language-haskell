@@ -1323,17 +1323,17 @@ starIsTypeOperatorsMixin self super = super{
                                 <$> token (Report.nameToken $ string "*")))
               <<|> super.report.aType}}
 
-roleAnnotationsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+roleAnnotationsMixin :: forall l g t. Abstract.ExtendedWith '[ 'RoleAnnotations ] l => ExtensionOverlay l g t
 roleAnnotationsMixin self super = super{
    report = super.report{
       declarationLevel= super.report.declarationLevel {
          topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
-            <|> Abstract.typeRoleDeclaration <$ keyword "type" <* keyword "role"
+            <|> Abstract.typeRoleDeclaration Abstract.build <$ keyword "type" <* keyword "role"
                 <*> self.report.qualifiedTypeConstructor
-                <*> some (Abstract.nominalRole <$ keyword "nominal"
-                          <|> Abstract.representationalRole <$ keyword "representational"
-                          <|> Abstract.phantomRole <$ keyword "phantom"
-                          <|> Abstract.inferredRole <$ keyword "_")
+                <*> some (Abstract.nominalRole Abstract.build <$ keyword "nominal"
+                          <|> Abstract.representationalRole Abstract.build <$ keyword "representational"
+                          <|> Abstract.phantomRole Abstract.build <$ keyword "phantom"
+                          <|> Abstract.inferredRole Abstract.build <$ keyword "_")
          }
       }
    }

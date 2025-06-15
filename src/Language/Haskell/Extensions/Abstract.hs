@@ -53,13 +53,15 @@ module Language.Haskell.Extensions.Abstract (
               standaloneStrategicDerivingDeclaration, strategicDerive,
               DerivingViaConstruction, deriveVia, derivingViaStrategy,
               DefaultSignatureConstruction, defaultMethodSignature,
-              FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration),
+              FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration,
+              RoleAnnotationsConstruction,
+              typeRoleDeclaration, inferredRole, nominalRole, representationalRole, phantomRole),
    ExtendedHaskell(..),
   -- * Constraint synonyms
    UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
   -- * AST node types for language extensions
    DerivingStrategy, FunctionalDependency, LambdaCasesAlternative,
-   PatternLHS, PatternEquationClause, PatternEquationLHS,
+   PatternLHS, PatternEquationClause, PatternEquationLHS, TypeRole,
    module Language.Haskell.Abstract) where
 
 import qualified Data.Kind as Kind
@@ -288,6 +290,15 @@ data instance Construct '[ 'Extensions.FunctionalDependencies ] λ l d s = Funct
    fundepClassDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> [s (FunctionalDependency l l d d)]
                           -> [s (Declaration l l d d)] -> Declaration λ l d s}
 
+type family TypeRole λ = x | x -> λ
+
+data instance Construct '[ 'Extensions.RoleAnnotations ] λ l d s = RoleAnnotationsConstruction {
+   typeRoleDeclaration :: QualifiedName λ -> [TypeRole λ] -> Declaration λ l d s,
+   inferredRole :: TypeRole λ,
+   nominalRole :: TypeRole λ,
+   representationalRole :: TypeRole λ,
+   phantomRole :: TypeRole λ}
+
 -- | The big collection of all known extensions
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
@@ -305,7 +316,7 @@ class (Haskell λ,
                           'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
                           'Extensions.DefaultSignatures, 'Extensions.TypeData, 'Extensions.TypeAbstractions,
-                          'Extensions.FunctionalDependencies] λ,
+                          'Extensions.FunctionalDependencies, 'Extensions.RoleAnnotations] λ,
        ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] λ,
        ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
       ExtendedHaskell λ where
@@ -313,7 +324,6 @@ class (Haskell λ,
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ
    type TypeVarBinding λ = (x :: TreeNodeSubKind) | x -> λ
    type ModuleMember λ = x | x -> λ
-   type TypeRole λ = x | x -> λ
    hashLiteral :: Value λ l d s -> Value λ l d s
    hashLiteral = hashLiteral' build
 
@@ -356,7 +366,6 @@ class (Haskell λ,
 
    typeKind :: s (Type l l d d) -> Kind λ l d s
    groundTypeKind :: Type λ l d s
-   typeRoleDeclaration :: QualifiedName λ -> [TypeRole λ] -> Declaration λ l d s
    kindedDataDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
                          -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    kindedNewtypeDeclaration :: s (Context l l d d) -> s (TypeLHS l l d d) -> s (Kind l l d d)
@@ -401,11 +410,6 @@ class (Haskell λ,
    typeEquality :: s (Type l l d d) -> s (Type l l d d) -> Context λ l d s
    typeConstraint :: s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s
-
-   inferredRole :: TypeRole λ
-   nominalRole :: TypeRole λ
-   representationalRole :: TypeRole λ
-   phantomRole :: TypeRole λ
 
    promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
    promotedTupleType :: [s (Type l l d d)] -> Type λ l d s
