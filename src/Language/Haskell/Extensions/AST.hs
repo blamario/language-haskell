@@ -301,6 +301,8 @@ instance Abstract.ExtendedHaskell Language where
    implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable False
    inferredTypeVariable = ImplicitlyKindedTypeVariable True
    inferredExplicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable True
+   wildcardTypeBinding = WildcardTypeBinding
+   explicitlyKindedWildcardTypeBinding = ExplicitlyKindedWildcardTypeBinding
    
    groundTypeKind = GroundTypeKind
    typeConstraint = TypeConstraint
@@ -699,6 +701,8 @@ data Type λ l d s =
 data TypeVarBinding λ l d s =
    ExplicitlyKindedTypeVariable Bool (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | ImplicitlyKindedTypeVariable Bool (Abstract.Name λ)
+   | WildcardTypeBinding
+   | ExplicitlyKindedWildcardTypeBinding (s (Abstract.Kind l l d d))
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [TypeVarBinding λ l d s]

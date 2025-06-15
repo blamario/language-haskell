@@ -378,7 +378,8 @@ initialOverlay self super = super{
              <*> wrap self.report.declarationLevel.instanceTypeDesignator,
       optionalForall = pure [],
       optionallyParenthesizedTypeVar = self.report.typeVar,
-      optionallyKindedAndParenthesizedTypeVar = Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar,
+      optionallyKindedAndParenthesizedTypeVar =
+         Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar,
       optionallyKindedTypeVar = empty,
       typeVarBinder = Abstract.implicitlyKindedTypeVariable <$> self.report.typeVar,
       gadtConstructors =
@@ -1380,6 +1381,10 @@ typeAbstractionsOrApplicationsMixin self super = super{
              <*> some (typeApplicationDelimiter *> wrap self.report.aType)
              <*> many (wrap self.extensions.conArgPattern)},
    extensions = super.extensions{
+      typeVarBinder = super.extensions.typeVarBinder
+         <|> Abstract.wildcardTypeBinding <$ keyword "_"
+         <|> parens (Abstract.explicitlyKindedWildcardTypeBinding <$ keyword "_"
+                     <*> wrap self.extensions.kindSignature),
       instanceDesignatorApplications = super.extensions.instanceDesignatorApplications
          <|> Abstract.classInstanceLHSKindApplication
              <$> filter whiteSpaceTrailing (wrap self.extensions.instanceDesignatorApplications)

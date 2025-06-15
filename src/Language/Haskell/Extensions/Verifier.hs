@@ -519,6 +519,12 @@ instance Accounting l pos s `Transformation.At` ExtAST.CallSafety l where
 checkKindedTypevar :: (pos, pos) -> ExtAST.TypeVarBinding λ l d s -> Map Extension [(pos, pos)]
 checkKindedTypevar span ExtAST.ExplicitlyKindedTypeVariable{} = Map.singleton Extensions.KindSignatures [span]
 checkKindedTypevar _ ExtAST.ImplicitlyKindedTypeVariable{} = mempty
+checkKindedTypevar span ExtAST.WildcardTypeBinding =
+  Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
+checkKindedTypevar span ExtAST.ExplicitlyKindedWildcardTypeBinding{} =
+  Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
+  <>
+  Map.singleton Extensions.KindSignatures [span]
 
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)

@@ -500,6 +500,9 @@ instance (WrapTranslation t, FullyTranslatable t AST.Type,
    translateDeeply t (AST.ExplicitlyKindedTypeVariable inferred name kind) =
       AST.ExplicitlyKindedTypeVariable inferred name (translateFully t kind)
    translateDeeply _ (AST.ImplicitlyKindedTypeVariable inferred name) = AST.ImplicitlyKindedTypeVariable inferred name
+   translateDeeply t (AST.ExplicitlyKindedWildcardTypeBinding kind) =
+      AST.ExplicitlyKindedWildcardTypeBinding (translateFully t kind)
+   translateDeeply _ AST.WildcardTypeBinding = AST.WildcardTypeBinding
 
 instance (WrapTranslation t, WrappedTranslation t AST.EquationLHS, FullyTranslatable t AST.Pattern,
           Abstract.EquationLHS (Origin t) ~ AST.EquationLHS (Origin t),

@@ -365,6 +365,8 @@ class (Haskell λ,
    implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
    inferredTypeVariable :: Name λ -> TypeVarBinding λ l d s
    inferredExplicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
+   wildcardTypeBinding :: TypeVarBinding λ l d s
+   explicitlyKindedWildcardTypeBinding :: s (Kind l l d d) -> TypeVarBinding λ l d s
 
    typeKind :: s (Type l l d d) -> Kind λ l d s
    groundTypeKind :: Type λ l d s

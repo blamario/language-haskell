@@ -794,16 +794,25 @@ typeVarBindingUnitTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Languag
 typeVarBindingUnitTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingUnitTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
+typeVarBindingUnitTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
+   kindedTV (mkName "_") (typeTemplate $ extract kind)
+typeVarBindingUnitTemplate WildcardTypeBinding = plainTV (mkName "_")
 
 typeVarBindingVisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
 typeVarBindingVisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTV (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingVisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
+typeVarBindingVisibleTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
+   kindedTV (mkName "_") (typeTemplate $ extract kind)
+typeVarBindingVisibleTemplate WildcardTypeBinding = plainTV (mkName "_")
 
 typeVarBindingInvisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
 typeVarBindingInvisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
    kindedTVInvis (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingInvisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTVInvis (nameTemplate name)
+typeVarBindingInvisibleTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
+   kindedTVInvis (mkName "_") (typeTemplate $ extract kind)
+typeVarBindingInvisibleTemplate WildcardTypeBinding = plainTVInvis (mkName "_")
 
 typeVarBindingSpecTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrSpec
 typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable False name kind) =
@@ -812,10 +821,15 @@ typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable False name) = plainTVSp
 typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable True name kind) =
    kindedTVInferred (nameTemplate name) (typeTemplate $ extract kind)
 typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable True name) = plainTVInferred (nameTemplate name)
+typeVarBindingSpecTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
+   kindedTVSpecified (mkName "_") (typeTemplate $ extract kind)
+typeVarBindingSpecTemplate WildcardTypeBinding = plainTVInferred (mkName "_")
 
 bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
 bindingVarName (ExplicitlyKindedTypeVariable _ name _) = nameTemplate name
 bindingVarName (ImplicitlyKindedTypeVariable _ name) = nameTemplate name
+bindingVarName (ExplicitlyKindedWildcardTypeBinding _) = mkName "_"
+bindingVarName WildcardTypeBinding = mkName "_"
 
 inContext :: TemplateWrapper f => f (ExtAST.Context Language Language f f) -> TH.Type -> TH.Type
 inContext context = case extract context
