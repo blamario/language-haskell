@@ -389,7 +389,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.Expression,
           Abstract.Expression (Target t) ~ AST.Expression (Target t)) =>
          DeeplyTranslatable t AST.FieldBinding where
    translateDeeply t (AST.FieldBinding name value) = AST.FieldBinding name (translateFully t value)
-   translateDeeply _ (AST.PunnedFieldBinding name) = AST.PunnedFieldBinding name
+   translateDeeply _ (AST.PunnedFieldBinding sup name) = AST.PunnedFieldBinding sup name
 
 instance (WrapTranslation t, FullyTranslatable t AST.Pattern,
           Abstract.FieldPattern (Origin t) ~ AST.FieldPattern (Origin t),
@@ -398,7 +398,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.Pattern,
           Abstract.Pattern (Target t) ~ AST.Pattern (Target t)) =>
          DeeplyTranslatable t AST.FieldPattern where
    translateDeeply t (AST.FieldPattern name pat) = AST.FieldPattern name (translateFully t pat)
-   translateDeeply _ (AST.PunnedFieldPattern name) = AST.PunnedFieldPattern name
+   translateDeeply _ (AST.PunnedFieldPattern sup name) = AST.PunnedFieldPattern sup name
 
 instance (WrapTranslation t, WrappedTranslation t AST.TypeLHS, DeeplyTranslatable t AST.TypeVarBinding,
           Abstract.TypeLHS (Origin t) ~ AST.TypeLHS (Origin t),

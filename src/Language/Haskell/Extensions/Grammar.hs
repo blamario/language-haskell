@@ -1635,9 +1635,9 @@ namedFieldPunsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
 namedFieldPunsMixin self super = super{
    report = super.report{
       fieldBinding = super.report.fieldBinding <|>
-         Abstract.punnedFieldBinding <$> self.report.qualifiedVariable,
+         Abstract.punnedFieldBinding Abstract.build <$> self.report.qualifiedVariable,
       fieldPattern = super.report.fieldPattern <|>
-         Abstract.punnedFieldPattern <$> self.report.qualifiedVariable}}
+         Abstract.punnedFieldPattern Abstract.build <$> self.report.qualifiedVariable}}
 
 recordWildCardsMixin :: Abstract.ExtendedWith '[ 'RecordWildCards ] l => ExtensionOverlay l g t
 recordWildCardsMixin self super = super{

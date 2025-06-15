@@ -15,7 +15,7 @@ module Language.Haskell.Extensions.Abstract (
               explicitTypeExpression, explicitTypePattern,
               RecordWildCardConstruction, wildcardRecordExpression, wildcardRecordPattern,
               MagicHashConstruction, hashLiteral',
-              NamedFieldPunsConstruction, punnedFieldBinding', punnedFieldPattern',
+              NamedFieldPunsConstruction, punnedFieldBinding, punnedFieldPattern,
               RecursiveDoConstruction, mdoExpression', recursiveStatement',
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
@@ -125,8 +125,8 @@ data instance Construct '[ 'Extensions.RecordWildCards ] λ l d s = RecordWildCa
    wildcardRecordPattern :: QualifiedName λ -> [s (FieldPattern l l d d)] -> Pattern λ l d s}
 
 data instance Construct '[ 'Extensions.NamedFieldPuns ] λ l d s = NamedFieldPunsConstruction {
-   punnedFieldBinding' :: QualifiedName λ -> FieldBinding λ l d s,
-   punnedFieldPattern' :: QualifiedName λ -> FieldPattern λ l d s}
+   punnedFieldBinding :: QualifiedName λ -> FieldBinding λ l d s,
+   punnedFieldPattern :: QualifiedName λ -> FieldPattern λ l d s}
 
 data instance Construct '[ 'Extensions.ImplicitParameters ] λ l d s = ImplicitParametersConstruction {
    implicitParameterConstraint :: Name λ -> s (Type l l d d) -> Context λ l d s,
@@ -382,11 +382,6 @@ class (Haskell λ,
    recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s
    multiplicityFunctionType :: s (Type l l d d) -> s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
    linearFunctionType :: s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
-
-   punnedFieldBinding :: QualifiedName λ -> FieldBinding λ l d s
-   punnedFieldPattern :: QualifiedName λ -> FieldPattern λ l d s
-   punnedFieldBinding = punnedFieldBinding' build
-   punnedFieldPattern = punnedFieldPattern' build
 
    dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s

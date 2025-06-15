@@ -212,6 +212,7 @@ instance (TextualMonoid s,
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
+          Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
@@ -227,18 +228,20 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
       Compose (env, (s, AST.RecordPattern con $ fields ++ implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->
-                  [ Compose (Di.Atts inherited mempty, (s, AST.PunnedFieldPattern $ qualified fieldName))
+                  [ Compose (Di.Atts inherited mempty,
+                             (s, Abstract.punnedFieldPattern Abstract.build $ qualified fieldName))
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
                Nothing -> error ("Environment lacks record constructor " ++ show con)
             explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) fields
             explicitFieldName (AST.FieldPattern name _) = Binder.baseName name
-            explicitFieldName (AST.PunnedFieldPattern name) = Binder.baseName name
+            explicitFieldName (AST.PunnedFieldPattern _ name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
 
 instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
           Abstract.Supports 'Extensions.RecordWildCards λ,
+          Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l,
           Abstract.Haskell l,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -252,14 +255,15 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
       Compose (env, (s, AST.RecordExpression conExp $ fields ++ implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->
-                  [ Compose (Di.Atts inherited mempty, (s, AST.PunnedFieldBinding $ qualified fieldName))
+                  [ Compose (Di.Atts inherited mempty,
+                             (s, Abstract.punnedFieldBinding Abstract.build $ qualified fieldName))
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
                Nothing -> error ("Environment lacks record constructor " ++ show con)
             explicitFieldNames :: [AST.Name l]
             explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) fields
             explicitFieldName (AST.FieldBinding name _) = Binder.baseName name
-            explicitFieldName (AST.PunnedFieldBinding name) = Binder.baseName name
+            explicitFieldName (AST.PunnedFieldBinding _ name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
             conExp | let (start, _, _) = s = Compose (env, ((start, mempty, start), Abstract.referenceExpression con))
    _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
@@ -362,7 +366,7 @@ mapFieldBinding :: (Abstract.Haskell λ2,
                     Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
                     Abstract.Name λ1 ~ AST.Name λ1) => AST.FieldBinding λ1 l d s -> Abstract.FieldBinding λ2 l d s
 mapFieldBinding (AST.FieldBinding name value) = Abstract.fieldBinding (mapQualifiedName name) value
-mapFieldBinding (AST.PunnedFieldBinding name) = Abstract.punnedFieldBinding' Abstract.build (mapQualifiedName name)
+mapFieldBinding (AST.PunnedFieldBinding _ name) = Abstract.punnedFieldBinding Abstract.build (mapQualifiedName name)
 
 mapQualifiedName :: (Abstract.Haskell λ2,
                      Abstract.ModuleName λ1 ~ AST.ModuleName λ1,

@@ -90,8 +90,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.MagicHash ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] Language where
    build = Abstract.NamedFieldPunsConstruction {
-      Abstract.punnedFieldBinding' = PunnedFieldBinding,
-      Abstract.punnedFieldPattern' = PunnedFieldPattern}
+      Abstract.punnedFieldBinding = PunnedFieldBinding (),
+      Abstract.punnedFieldPattern = PunnedFieldPattern ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Language where
    build = Abstract.ParallelListComprehensionConstruction {
@@ -776,7 +776,7 @@ data LambdaCasesAlternative λ l d s =
 
 data FieldBinding λ l d s =
    FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
-   | PunnedFieldBinding (Abstract.QualifiedName λ)
+   | PunnedFieldBinding !(Abstract.SupportFor 'Extensions.NamedFieldPuns λ) (Abstract.QualifiedName λ)
 
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
@@ -813,7 +813,7 @@ data PatternLHS λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type)
 
 data FieldPattern λ l d s =
   FieldPattern (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
-  | PunnedFieldPattern (Abstract.QualifiedName λ)
+  | PunnedFieldPattern !(Abstract.SupportFor 'Extensions.NamedFieldPuns λ) (Abstract.QualifiedName λ)
 
 data Statement λ l d s =
    BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
@@ -1137,11 +1137,14 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.Name λ)) => Eq (Expression λ l d s)
 
 deriving instance Typeable (FieldBinding λ l d s)
-deriving instance (Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldBinding λ l d s)
-deriving instance (Show (s (Abstract.Expression l l d d)), Show (Abstract.QualifiedName λ)) =>
+deriving instance (Show (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Show (s (Abstract.Expression l l d d)), Show (Abstract.QualifiedName λ)) =>
                   Show (FieldBinding λ l d s)
-deriving instance (Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedName λ)) =>
+deriving instance (Eq (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedName λ)) =>
                   Eq (FieldBinding λ l d s)
 
 deriving instance Typeable (LambdaCasesAlternative λ l d s)
@@ -1201,10 +1204,13 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.QualifiedName λ), Eq (Abstract.Name λ)) => Eq (Pattern λ l d s)
 
 deriving instance Typeable (FieldPattern λ l d s)
-deriving instance (Data (s (Abstract.Pattern l l d d)), Data (Abstract.QualifiedName λ),
+deriving instance (Data (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Data (s (Abstract.Pattern l l d d)), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldPattern λ l d s)
-deriving instance (Show (s (Abstract.Pattern l l d d)), Show (Abstract.QualifiedName λ)) => Show (FieldPattern λ l d s)
-deriving instance (Eq (s (Abstract.Pattern l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (FieldPattern λ l d s)
+deriving instance (Show (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Show (s (Abstract.Pattern l l d d)), Show (Abstract.QualifiedName λ)) => Show (FieldPattern λ l d s)
+deriving instance (Eq (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
+                   Eq (s (Abstract.Pattern l l d d)), Eq (Abstract.QualifiedName λ)) => Eq (FieldPattern λ l d s)
 
 deriving instance Typeable (PatternLHS λ l d s)
 deriving instance (Data (Abstract.Name λ), Data λ, Typeable l, Typeable d, Typeable s) => Data (PatternLHS λ l d s)

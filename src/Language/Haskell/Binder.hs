@@ -610,7 +610,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
    BindingVerifier l f `Transformation.At` ExtAST.FieldBinding l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (ExtAST.FieldBinding q _) = verifyValueName q env
-            verify (ExtAST.PunnedFieldBinding q) = verifyValueName q env
+            verify (ExtAST.PunnedFieldBinding _ q) = verifyValueName q env
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
@@ -623,7 +623,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
    BindingVerifier l f `Transformation.At` ExtAST.FieldPattern l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (ExtAST.FieldPattern q _) = verifyValueName q env
-            verify (ExtAST.PunnedFieldPattern q) = verifyValueName q env
+            verify (ExtAST.PunnedFieldPattern _ q) = verifyValueName q env
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>

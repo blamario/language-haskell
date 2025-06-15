@@ -597,7 +597,7 @@ freeConstructorVars (ExistentialConstructor _ _ con) = freeConstructorVars (extr
 
 fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
 fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, wrappedExpressionTemplate value)
-fieldBindingTemplate (PunnedFieldBinding name) = (qnameTemplate name, VarE $ qnameTemplate name)
+fieldBindingTemplate (PunnedFieldBinding () name) = (qnameTemplate name, VarE $ qnameTemplate name)
 
 literalTemplate :: TemplateWrapper f => Value Language Language f f -> Lit
 literalTemplate (CharLiteral c) = CharL c
@@ -641,7 +641,7 @@ patternTemplate (RecordPattern constructor fields) =
    RecP (qnameTemplate constructor) (fieldPatternTemplate . extract <$> fields)
    where
      fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
-     fieldPatternTemplate (PunnedFieldPattern q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
+     fieldPatternTemplate (PunnedFieldPattern () q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
 patternTemplate WildcardRecordPattern{} = error "TH doesn't support record wildcards"
 patternTemplate NPlusKPattern{} = error "TH doesn't support N+K patterns"
 #if MIN_VERSION_template_haskell(2,23,0)
