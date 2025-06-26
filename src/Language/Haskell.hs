@@ -137,4 +137,4 @@ unqualifiedPreludeBindings = do
        moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
        Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
-   pure prelude
+   pure (prelude <> Binder.builtinPreludeBindings)

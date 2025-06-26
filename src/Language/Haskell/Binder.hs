@@ -15,9 +15,10 @@ module Language.Haskell.Binder (
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
+   -- * Prelude
+   preludeName, builtinPreludeBindings,
    -- * Utility functions
-   lookupType, lookupValue,
-   onMap, preludeName, baseName, unqualifiedName) where
+   lookupType, lookupValue, onMap, baseName, unqualifiedName) where
 
 import Control.Applicative ((<|>))
 import Control.Exception (assert)
@@ -696,6 +697,13 @@ instance BindingMembers ExtAST.Language where
                     namedType _ _ = False
 
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (Map.lookup name $ getUnionWith imports)
+
+builtinPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                           Abstract.Associativity l ~ AST.Associativity l)
+                       => LocalEnvironment l
+builtinPreludeBindings =
+   UnionWith $
+   Map.fromList [(Abstract.name ":", ValueBinding $ InfixDeclaration Abstract.rightAssociative 5 $ Just DefinedValue)]
 
 qualifiedWith :: AST.ModuleName l -> UnionWith (Map (AST.Name l)) a -> UnionWith (Map (AST.QualifiedName l)) a
 qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
