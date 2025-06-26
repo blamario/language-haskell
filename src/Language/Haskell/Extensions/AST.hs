@@ -72,6 +72,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.RoleAnnotations,
    'Extensions.TypeAbstractions,
    'Extensions.TypeData,
+   'Extensions.DataKinds,
    'Extensions.FunctionalDependencies]
 
 instance Abstract.ExtendedWith '[ 'Extensions.ExplicitNamespaces ] Language where
@@ -225,6 +226,16 @@ instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
    build = Abstract.DefaultSignatureConstruction {
       Abstract.defaultMethodSignature = DefaultMethodSignature ()}
 
+instance Abstract.ExtendedWith '[ 'Extensions.DataKinds ] Language where
+   build = Abstract.DataKindsConstruction {
+      Abstract.promotedConstructorType = PromotedConstructorType (),
+      Abstract.promotedTupleType = PromotedTupleType (),
+      Abstract.promotedListType = PromotedListType (),
+      Abstract.promotedIntegerLiteral = PromotedIntegerLiteral (),
+      Abstract.promotedCharLiteral = PromotedCharLiteral (),
+      Abstract.promotedStringLiteral = PromotedStringLiteral (),
+      Abstract.promotedInfixTypeApplication = PromotedInfixTypeApplication ()}
+
 instance Abstract.ExtendedWith '[ 'Extensions.TypeData ] Language where
    build = Abstract.TypeDataConstruction {
       Abstract.typeDataDeclaration = TypeDataDeclaration ()}
@@ -292,13 +303,6 @@ instance Abstract.ExtendedHaskell Language where
    recordFunctionType = RecordFunctionType
    linearFunctionType = LinearFunctionType
    multiplicityFunctionType = MultiplicityFunctionType
-   promotedConstructorType = PromotedConstructorType
-   promotedTupleType = PromotedTupleType
-   promotedListType = PromotedListType
-   promotedIntegerLiteral = PromotedIntegerLiteral
-   promotedCharLiteral = PromotedCharLiteral
-   promotedStringLiteral = PromotedStringLiteral
-   promotedInfixTypeApplication = PromotedInfixTypeApplication
 
    explicitlyKindedTypeVariable = ExplicitlyKindedTypeVariable False
    implicitlyKindedTypeVariable = ImplicitlyKindedTypeVariable False
@@ -692,13 +696,14 @@ data Type λ l d s =
    | TypeKind (s (Abstract.Type l l d d))
    | GroundTypeKind
    | VisibleDependentType [TypeVarBinding λ l d s] (s (Abstract.Type l l d d))
-   | PromotedConstructorType (s (Abstract.Constructor l l d d))
-   | PromotedTupleType [s (Abstract.Type l l d d)]
-   | PromotedListType [s (Abstract.Type l l d d)]
-   | PromotedIntegerLiteral Integer
-   | PromotedCharLiteral Char
-   | PromotedStringLiteral Text
-   | PromotedInfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
+   | PromotedConstructorType !(Abstract.SupportFor 'Extensions.DataKinds λ) (s (Abstract.Constructor l l d d))
+   | PromotedTupleType !(Abstract.SupportFor 'Extensions.DataKinds λ) [s (Abstract.Type l l d d)]
+   | PromotedListType !(Abstract.SupportFor 'Extensions.DataKinds λ) [s (Abstract.Type l l d d)]
+   | PromotedIntegerLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Integer
+   | PromotedCharLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Char
+   | PromotedStringLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Text
+   | PromotedInfixTypeApplication !(Abstract.SupportFor 'Extensions.DataKinds λ)
+                                  (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | VisibleKindApplication (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
 
 data TypeVarBinding λ l d s =
@@ -1035,6 +1040,7 @@ deriving instance Typeable (Type λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Data (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Data (Abstract.SupportFor 'Extensions.StrictData λ),
+                   Data (Abstract.SupportFor 'Extensions.DataKinds λ),
                    Data (s (Abstract.Constructor l l d d)), Data (s (Abstract.Context l l d d)),
                    Data (s (Abstract.Kind l l d d)), Data (s (Abstract.Type l l d d)),
                    Data (s (Abstract.FieldDeclaration l l d d)),
@@ -1043,6 +1049,7 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.UnboxedSums λ),
 deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Show (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Show (Abstract.SupportFor 'Extensions.StrictData λ),
+                   Show (Abstract.SupportFor 'Extensions.DataKinds λ),
                    Show (s (Abstract.Constructor l l d d)), Show (s (Abstract.Context l l d d)),
                    Show (s (Abstract.Kind l l d d)), Show (s (Abstract.Type l l d d)),
                    Show (s (Abstract.FieldDeclaration l l d d)),
@@ -1050,6 +1057,7 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.UnboxedSums λ),
 deriving instance (Eq (Abstract.SupportFor 'Extensions.UnboxedSums λ),
                    Eq (Abstract.SupportFor 'Extensions.UnboxedTuples λ),
                    Eq (Abstract.SupportFor 'Extensions.StrictData λ),
+                   Eq (Abstract.SupportFor 'Extensions.DataKinds λ),
                    Eq (s (Abstract.Constructor l l d d)), Eq (s (Abstract.Context l l d d)),
                    Eq (s (Abstract.Kind l l d d)), Eq (s (Abstract.Type l l d d)),
                    Eq (s (Abstract.FieldDeclaration l l d d)),

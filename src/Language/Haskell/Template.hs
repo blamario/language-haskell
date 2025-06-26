@@ -724,23 +724,23 @@ typeTemplate (VisibleDependentType vars body) =
          varBindings = typeVarBindingUnitTemplate <$> vars
          bindingVars = bindingVarName <$> vars
 typeTemplate GroundTypeKind = StarT
-typeTemplate (PromotedConstructorType con) = case (extract con) of
+typeTemplate (PromotedConstructorType () con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
    EmptyListConstructor -> PromotedNilT
    TupleConstructor n -> PromotedTupleT n
    UnboxedTupleConstructor () n -> UnboxedTupleT n
    UnboxedSumConstructor () n -> UnboxedSumT n
    UnitConstructor -> PromotedTupleT 0
-typeTemplate (PromotedTupleType items) =
+typeTemplate (PromotedTupleType () items) =
    foldl' AppT (PromotedTupleT $! length items) (typeTemplate . extract <$> items)
-typeTemplate (PromotedListType items) =
+typeTemplate (PromotedListType () items) =
    foldr (AppT . AppT PromotedConsT) PromotedNilT (typeTemplate . extract <$> items)
-typeTemplate (PromotedIntegerLiteral n) = LitT (NumTyLit n)
-typeTemplate (PromotedStringLiteral s) = LitT (StrTyLit $ unpack s)
+typeTemplate (PromotedIntegerLiteral () n) = LitT (NumTyLit n)
+typeTemplate (PromotedStringLiteral () s) = LitT (StrTyLit $ unpack s)
 #if MIN_VERSION_template_haskell(2,18,0)
-typeTemplate (PromotedCharLiteral c) = LitT (CharTyLit c)
+typeTemplate (PromotedCharLiteral () c) = LitT (CharTyLit c)
 #endif
-typeTemplate (PromotedInfixTypeApplication left op right) =
+typeTemplate (PromotedInfixTypeApplication () left op right) =
    PromotedT (qnameTemplate op) `AppT` typeTemplate (extract left) `AppT` typeTemplate (extract right)
 typeTemplate (VisibleKindApplication t k) = AppKindT (typeTemplate $ extract t) (typeTemplate $ extract k)
 
@@ -782,9 +782,9 @@ freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . f
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t
 freeTypeVars PromotedConstructorType{} = []
-freeTypeVars (PromotedTupleType items) = nub (foldMap (freeTypeVars . extract) items)
-freeTypeVars (PromotedListType items) = nub (foldMap (freeTypeVars . extract) items)
-freeTypeVars (PromotedInfixTypeApplication left _op right) =
+freeTypeVars (PromotedTupleType () items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (PromotedListType () items) = nub (foldMap (freeTypeVars . extract) items)
+freeTypeVars (PromotedInfixTypeApplication () left _op right) =
    nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars PromotedIntegerLiteral{} = []
 freeTypeVars PromotedCharLiteral{} = []

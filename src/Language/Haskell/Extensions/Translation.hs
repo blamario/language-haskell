@@ -482,14 +482,14 @@ instance (WrapTranslation t, WrappedTranslation t AST.Type,
    translateDeeply t (AST.VisibleDependentType vars body) =
       AST.VisibleDependentType (translateDeeply t <$> vars) (translateFully t body)
    translateDeeply _ AST.GroundTypeKind = AST.GroundTypeKind
-   translateDeeply t (AST.PromotedConstructorType con) = AST.PromotedConstructorType (translateFully t con)
-   translateDeeply t (AST.PromotedTupleType items) = AST.PromotedTupleType (translateFully t <$> items)
-   translateDeeply t (AST.PromotedListType items) = AST.PromotedListType (translateFully t <$> items)
-   translateDeeply _ (AST.PromotedIntegerLiteral n) = AST.PromotedIntegerLiteral n
-   translateDeeply _ (AST.PromotedCharLiteral c) = AST.PromotedCharLiteral c
-   translateDeeply _ (AST.PromotedStringLiteral t) = AST.PromotedStringLiteral t
-   translateDeeply t (AST.PromotedInfixTypeApplication left op right) =
-      AST.PromotedInfixTypeApplication (translateFully t left) op (translateFully t right)
+   translateDeeply t (AST.PromotedConstructorType sup con) = AST.PromotedConstructorType sup (translateFully t con)
+   translateDeeply t (AST.PromotedTupleType support items) = AST.PromotedTupleType support (translateFully t <$> items)
+   translateDeeply t (AST.PromotedListType support items) = AST.PromotedListType support (translateFully t <$> items)
+   translateDeeply _ (AST.PromotedIntegerLiteral support n) = AST.PromotedIntegerLiteral support n
+   translateDeeply _ (AST.PromotedCharLiteral support c) = AST.PromotedCharLiteral support c
+   translateDeeply _ (AST.PromotedStringLiteral support t) = AST.PromotedStringLiteral support t
+   translateDeeply t (AST.PromotedInfixTypeApplication support left op right) =
+      AST.PromotedInfixTypeApplication support (translateFully t left) op (translateFully t right)
    translateDeeply t (AST.VisibleKindApplication ty kind) =
       AST.VisibleKindApplication (translateFully t ty) (translateFully t kind)
 

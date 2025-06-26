@@ -1222,41 +1222,42 @@ typeFamilyDependenciesMixin self super = super{
    where dependencies = (,) <$> (delimiter "|" *> self.report.typeVar) <* self.report.rightArrow
                             <*> someNonEmpty self.report.typeVar
 
-dataKindsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
+dataKindsMixin :: forall l g t. Abstract.ExtendedWith '[ 'DataKinds ] l => ExtensionOverlay l g t
 dataKindsMixin self super = super{
    report= super.report{
       aType = super.report.aType
          <|> self.extensions.promotedLiteral
          <|> self.extensions.promotedStructure,
       generalTypeConstructor = super.report.generalTypeConstructor
-         <|> Abstract.promotedConstructorType
+         <|> Abstract.promotedConstructorType Abstract.build
              <$ terminator "'"
              <*> wrap (Abstract.constructorReference <$> self.report.qualifiedConstructor)},
    extensions = super.extensions{
       promotedLiteral =
-         Abstract.promotedIntegerLiteral <$> self.report.integer
-         <|> Abstract.promotedCharLiteral <$> self.report.charLiteral
-         <|> Abstract.promotedStringLiteral <$> self.report.stringLiteral,
+         Abstract.promotedIntegerLiteral Abstract.build <$> self.report.integer
+         <|> Abstract.promotedCharLiteral Abstract.build <$> self.report.charLiteral
+         <|> Abstract.promotedStringLiteral Abstract.build <$> self.report.stringLiteral,
       promotedStructure =
-         Abstract.promotedTupleType <$> parens (pure []
-                                                <|> (:) <$> wrap self.report.typeTerm
-                                                        <*> some (comma *> wrap self.report.typeTerm))
-         <|> Abstract.promotedListType <$> brackets (wrap self.report.typeTerm `sepBy` comma)}}
+         Abstract.promotedTupleType Abstract.build
+            <$> parens (pure [] <|> (:) <$> wrap self.report.typeTerm <*> some (comma *> wrap self.report.typeTerm))
+         <|> Abstract.promotedListType Abstract.build <$> brackets (wrap self.report.typeTerm `sepBy` comma)}}
 
-dataKindsListTuplePunsMixin :: forall l g t. (Abstract.ExtendedHaskell l, TextualMonoid t) => ExtensionOverlay l g t
+dataKindsListTuplePunsMixin :: Abstract.ExtendedWith '[ 'DataKinds ] l => ExtensionOverlay l g t
 dataKindsListTuplePunsMixin self super = super{
    extensions = super.extensions{
       promotedStructure =
-         Abstract.promotedTupleType <$ terminator "'" <*> parens (wrap self.report.typeTerm `sepBy` comma)
-         <|> Abstract.promotedListType <$ terminator "'" <*> brackets (wrap self.report.typeTerm `sepBy` comma)
-         <|> Abstract.promotedListType <$> brackets ((:) <$> wrap self.report.typeTerm
-                                                         <*> some (comma *> wrap self.report.typeTerm))}}
+         Abstract.promotedTupleType Abstract.build <$ terminator "'"
+                                                   <*> parens (wrap self.report.typeTerm `sepBy` comma)
+         <|> Abstract.promotedListType Abstract.build <$ terminator "'"
+                                                      <*> brackets (wrap self.report.typeTerm `sepBy` comma)
+         <|> Abstract.promotedListType Abstract.build <$> brackets ((:) <$> wrap self.report.typeTerm
+                                                                        <*> some (comma *> wrap self.report.typeTerm))}}
 
-dataKindsTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+dataKindsTypeOperatorsMixin :: Abstract.ExtendedWith '[ 'DataKinds ] l => ExtensionOverlay l g t
 dataKindsTypeOperatorsMixin self super = super{
    extensions = super.extensions{
       cType = super.extensions.cType
-         <|> Abstract.promotedInfixTypeApplication
+         <|> Abstract.promotedInfixTypeApplication Abstract.build
              <$> wrap self.extensions.cType
              <* terminator "'"
              <*> self.report.qualifiedOperator
@@ -1621,11 +1622,11 @@ gadtSyntaxTypeOperatorsMixin self super = super{
                                         <*> self.report.qualifiedOperator
                                         <*> wrap (self.extensions.arg_type)}}
 
-dataKindsGadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
+dataKindsGadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedWith '[ 'DataKinds ] l => ExtensionOverlay l g t
 dataKindsGadtSyntaxTypeOperatorsMixin self super = super{
    extensions = super.extensions{
       return_type = (super.extensions.return_type) <|>
-         Abstract.promotedInfixTypeApplication
+         Abstract.promotedInfixTypeApplication Abstract.build
          <$> wrap (self.extensions.arg_type)
          <* terminator "'"
          <*> self.report.qualifiedOperator

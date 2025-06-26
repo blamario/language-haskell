@@ -54,6 +54,8 @@ module Language.Haskell.Extensions.Abstract (
               DerivingViaConstruction, deriveVia, derivingViaStrategy,
               DefaultSignatureConstruction, defaultMethodSignature,
               FunctionalDependenciesConstruction, functionalDependency, fundepClassDeclaration,
+              DataKindsConstruction, promotedConstructorType, promotedTupleType, promotedListType,
+              promotedIntegerLiteral, promotedCharLiteral, promotedStringLiteral, promotedInfixTypeApplication,
               RoleAnnotationsConstruction,
               typeRoleDeclaration, inferredRole, nominalRole, representationalRole, phantomRole),
    ExtendedHaskell(..),
@@ -299,6 +301,15 @@ data instance Construct '[ 'Extensions.RoleAnnotations ] λ l d s = RoleAnnotati
    representationalRole :: TypeRole λ,
    phantomRole :: TypeRole λ}
 
+data instance Construct '[ 'Extensions.DataKinds ] λ l d s = DataKindsConstruction {
+   promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s,
+   promotedTupleType :: [s (Type l l d d)] -> Type λ l d s,
+   promotedListType :: [s (Type l l d d)] -> Type λ l d s,
+   promotedIntegerLiteral :: Integer -> Type λ l d s,
+   promotedCharLiteral :: Char -> Type λ l d s,
+   promotedStringLiteral :: Text -> Type λ l d s,
+   promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s}
+
 -- | The big collection of all known extensions
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
@@ -315,7 +326,8 @@ class (Haskell λ,
                           'Extensions.PatternSynonyms,
                           'Extensions.ImplicitParameters,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
-                          'Extensions.DefaultSignatures, 'Extensions.TypeData, 'Extensions.TypeAbstractions,
+                          'Extensions.DefaultSignatures,
+                          'Extensions.DataKinds, 'Extensions.TypeData, 'Extensions.TypeAbstractions,
                           'Extensions.FunctionalDependencies, 'Extensions.RoleAnnotations] λ,
        ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] λ,
        ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
@@ -411,13 +423,6 @@ class (Haskell λ,
    typeConstraint :: s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s
 
-   promotedConstructorType :: s (Constructor l l d d) -> Type λ l d s
-   promotedTupleType :: [s (Type l l d d)] -> Type λ l d s
-   promotedListType :: [s (Type l l d d)] -> Type λ l d s
-   promotedIntegerLiteral :: Integer -> Type λ l d s
-   promotedCharLiteral :: Char -> Type λ l d s
-   promotedStringLiteral :: Text -> Type λ l d s
-   promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
    visibleDependentType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
 
    visibleTypeApplication :: s (Expression l l d d) -> s (Type l l d d) -> Expression λ l d s
