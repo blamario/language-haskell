@@ -458,7 +458,8 @@ data  Ordering  =  LT | EQ | GT
 -- be expressed directly in Haskell since the constructor lists would be
 -- far too large.
 
-data  Int {-  =  minBound ... -1 | 0 | 1 ... maxBound
+{-
+data  Int  =  minBound ... -1 | 0 | 1 ... maxBound
 instance  Eq       Int  where ...
 instance  Ord      Int  where ...
 instance  Num      Int  where ...
@@ -495,6 +496,11 @@ instance  Floating   Double  where ...
 instance  RealFrac   Double  where ...
 instance  RealFloat  Double  where ...
 -}
+
+data Int     deriving (Eq, Ord, Num, Real, Integral, Enum, Bounded)
+data Integer deriving (Eq, Ord, Num, Real, Integral, Enum, Bounded)
+data Float   deriving (Eq, Ord, Num, Real, Integral, Enum, Bounded)
+data Double  deriving (Eq, Ord, Num, Real, Integral, Enum, Bounded)
 
 -- The Enum instances for Floats and Doubles are slightly unusual.
 -- The `toEnum' function truncates numbers to Int.  The definitions
