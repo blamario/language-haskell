@@ -27,12 +27,16 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG.Dimorphic as Di
 
+import Control.Category ((>>>))
 import Control.Monad ((>=>))
 import Data.Either.Validation (validationToEither)
 import Data.Functor.Compose (Compose(..))
+import Data.Foldable (foldrM)
 import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.Monoid.Instances.PrefixMemory (Shadowed, content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
@@ -40,7 +44,7 @@ import Data.Semigroup.Union (UnionWith(..))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
-import System.Directory (listDirectory)
+import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath.Posix (combine)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Text.Grampa (ParseResults, ParseFailure (errorAlternatives))
@@ -120,7 +124,9 @@ instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
 
 -- | All the qualified bindings available without any import statement, such as @Prelude.id@
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
-predefinedModuleBindings = UnionWith . Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
+predefinedModuleBindings =
+   liftA2 (<>) baseModuleBindings
+   $ UnionWith . Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
 
 -- | All the @Prelude@ bindings available without any import statement
 preludeBindings :: IO (Binder.Environment AST.Language)
@@ -138,3 +144,38 @@ unqualifiedPreludeBindings = do
        Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
    pure (prelude <> Binder.builtinPreludeBindings)
+
+baseModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
+baseModuleBindings = do
+   baseModuleDir <- flip combine "base" <$> getDataDir
+   moduleFilePaths <- filter (List.isSuffixOf ".hs") <$> listDirectoryRecursively baseModuleDir
+   prelude <- preludeBindings
+   modules <- unsafeInterleaveIO predefinedModuleBindings
+   let assertSuccess ~(Right ~[parsed]) = parsed
+       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
+       bindModule :: FilePath -> IO (AST.ModuleName AST.Language, Binder.LocalEnvironment AST.Language)
+       bindModule path = do
+          moduleText <- Text.IO.readFile path
+          let parsedModule :: ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
+              parsedModule = parseModule defaultExtensions modules prelude False moduleText
+              env = Di.syn . fst . getCompose $ assertSuccess parsedModule
+              modulesFromPath :: Text -> Maybe (NonEmpty (AST.Name AST.Language))
+              modulesFromPath = Text.stripSuffix ".hs"
+                                >=> Text.stripPrefix (Text.pack baseModuleDir <> "/")
+                                >=> (Text.split (== '/') >>> (Abstract.name <$>) >>> nonEmpty)
+          pure (maybe (error $ "Module path " <> path <> " is malformed.") Abstract.moduleName (modulesFromPath $ Text.pack path), env)
+   UnionWith . Map.fromList <$> mapM (unsafeInterleaveIO . bindModule) moduleFilePaths
+
+listDirectoryRecursively :: FilePath -> IO [FilePath]
+listDirectoryRecursively path = listDirectory path >>= foldMapM (recurseDirectory path)
+
+recurseDirectory :: FilePath -> FilePath -> IO [FilePath]
+recurseDirectory ancestry name = do
+   let path = combine ancestry name
+   isDir <- doesDirectoryExist path
+   if isDir
+      then listDirectoryRecursively path
+      else pure [path]
+
+foldMapM :: (Monad m, Foldable f, Monoid b) => (a -> m b) -> f a -> m b
+foldMapM f = foldrM (\x y-> (<> y) <$> f x) mempty
