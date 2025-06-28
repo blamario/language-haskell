@@ -233,6 +233,27 @@ instance {-# OVERLAPS #-}
             export (AST.GADTNewtypeDeclaration lhs _kind _constructor _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.TypeDataDeclaration _support lhs _kind _constructors)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.TypeGADTDeclaration _support1 _support2 lhs _kind _constructors)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.DataFamilyDeclaration _support lhs _kind)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.ClosedTypeFamilyDeclaration _support lhs _kind _decls)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.OpenTypeFamilyDeclaration _support lhs _kind)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.InjectiveClosedTypeFamilyDeclaration _support lhs _var _deps _decls)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
+            export (AST.InjectiveOpenTypeFamilyDeclaration _support lhs _var _deps)
+               | [name] <- foldMap getTypeName (getCompose lhs mempty)
+               = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
             export (AST.DataFamilyInstance _support _vars context lhs _kind _constructors _derivings) = Di.syn atts
             export (AST.NewtypeFamilyInstance _support _vars context lhs _kind _constructors _derivings) = Di.syn atts
             export (AST.GADTDataFamilyInstance _support _vars lhs _kind _constructors _derivings) = Di.syn atts
@@ -555,6 +576,7 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
    BindingVerifier l f `Transformation.At` AST.Declaration l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (AST.TypeRoleDeclaration _ q _) = verifyTypeName q env
+            verify (AST.NamedDefaultDeclaration _ q _) = verifyTypeName q env
             verify _ = mempty
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -654,9 +676,25 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
 
 instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.Pattern l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.InfixPattern _ q _) = verifyValueName q env
+            verify (ExtAST.RecordPattern q _) = verifyConstructorName q env
+            verify (ExtAST.WildcardRecordPattern _ q _) = verifyConstructorName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
    BindingVerifier l f `Transformation.At` AST.Constructor l l (WithEnvironment l f) (WithEnvironment l f)  where
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (AST.ConstructorReference q) = verifyConstructorName q env
+            verify _ = mempty
+
+instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
+   BindingVerifier l f `Transformation.At` ExtAST.Constructor l l (WithEnvironment l f) (WithEnvironment l f)  where
+   _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
+      where verify (ExtAST.ConstructorReference q) = verifyConstructorName q env
             verify _ = mempty
 
 instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (BindingVerifier l f) g,

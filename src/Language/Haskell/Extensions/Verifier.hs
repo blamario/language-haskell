@@ -232,46 +232,52 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
    Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $ UnionWith $
       case dec
       of ExtAST.DataDeclaration context _lhs _kind constructors _derivings ->
-            (if null constructors
-             then Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
-             else mempty)
+            (if null constructors then emptyDataDeclarationsUse else mempty)
             <>
             (case snd . snd . getCompose $ context
              of ExtAST.NoContext -> mempty
                 _ -> Map.singleton Extensions.DatatypeContexts [(start, end)])
-         ExtAST.GADTDeclaration context _lhs constructors _derivings ->
-            Map.singleton Extensions.GADTSyntax [(start, end)]
+         ExtAST.GADTDeclaration context _lhs constructors _derivings -> gadtSyntaxUse
          ExtAST.NamedDefaultDeclaration{} ->
             Map.singleton Extensions.NamedDefaults [(start, end)]
          ExtAST.TypeDataDeclaration _sup _lhs _kind constructors ->
-            (if null constructors
-             then Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
-             else mempty)
-            <> Map.singleton Extensions.TypeData [(start, end)]
-         ExtAST.TypeGADTDeclaration{} ->
-            (Map.singleton Extensions.GADTSyntax [(start, end)]
-                         <> Map.singleton Extensions.TypeData [(start, end)])
-         ExtAST.ImplicitParameterDeclaration{} ->
-            Map.singleton Extensions.ImplicitParameters [(start, end)]
-         ExtAST.StandaloneDerivingDeclaration{} ->
-            Map.singleton Extensions.StandaloneDeriving [(start, end)]
+            (if null constructors then emptyDataDeclarationsUse else mempty) <> typeDataUse
+         ExtAST.TypeGADTDeclaration{} -> gadtSyntaxUse <> typeDataUse
+         ExtAST.ImplicitParameterDeclaration{} -> Map.singleton Extensions.ImplicitParameters [(start, end)]
+         ExtAST.StandaloneDerivingDeclaration{} -> Map.singleton Extensions.StandaloneDeriving [(start, end)]
          ExtAST.ForeignExport convention id name ty ->
-            Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
-            <> getUnionWith (getConst $ Accounting Transformation.$ (convention <$ d))
+            ffiUse <> getUnionWith (getConst $ Accounting Transformation.$ (convention <$ d))
          ExtAST.ForeignImport convention safety id name ty ->
-            Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
-            <> getUnionWith (getConst (Accounting Transformation.$ (convention <$ d))
-                             <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety))
+            ffiUse <> getUnionWith (getConst (Accounting Transformation.$ (convention <$ d))
+                                    <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety))
          ExtAST.ClassDeclaration _ lhs _ -> case Full.foldMap MPTCAccounting lhs of
             Sum 1 -> mempty
             _ -> Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
          ExtAST.FunDepClassDeclaration{} -> Map.singleton Extensions.FunctionalDependencies [(start, end)]
          ExtAST.InstanceDeclaration _vars _context lhs _methods ->
             getUnionWith (getConst $ FlexibleInstanceHeadAccounting Transformation.$ lhs)
-         ExtAST.ExplicitTypeFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
-         ExtAST.ExplicitDataFixityDeclaration{} -> Map.singleton Extensions.ExplicitNamespaces [(start, end)]
+         ExtAST.ExplicitTypeFixityDeclaration{} -> explicitNamespacesUse
+         ExtAST.ExplicitDataFixityDeclaration{} -> explicitNamespacesUse
+         ExtAST.DataFamilyDeclaration{} -> typeFamiliesUse
+         ExtAST.ClosedTypeFamilyDeclaration{} -> typeFamiliesUse
+         ExtAST.OpenTypeFamilyDeclaration{} -> typeFamiliesUse
+         ExtAST.InjectiveClosedTypeFamilyDeclaration{} -> typeFamilyDependenciesUse
+         ExtAST.InjectiveOpenTypeFamilyDeclaration{} -> typeFamilyDependenciesUse
+         ExtAST.DataFamilyInstance{} -> typeFamiliesUse
+         ExtAST.GADTDataFamilyInstance{} -> typeFamiliesUse
+         ExtAST.GADTNewtypeFamilyInstance{} -> typeFamiliesUse
+         ExtAST.NewtypeFamilyInstance{} -> typeFamiliesUse
+         ExtAST.TypeFamilyInstance{} -> typeFamiliesUse
          _ -> mempty
       <> getUnionWith (Full.foldMap UnicodeSyntaxAccounting d)
+      where
+      typeFamiliesUse = Map.singleton Extensions.TypeFamilies [(start, end)]
+      typeFamilyDependenciesUse = Map.singleton Extensions.TypeFamilyDependencies [(start, end)]
+      typeDataUse = Map.singleton Extensions.TypeData [(start, end)]
+      gadtSyntaxUse = Map.singleton Extensions.GADTSyntax [(start, end)]
+      explicitNamespacesUse = Map.singleton Extensions.ExplicitNamespaces [(start, end)]
+      emptyDataDeclarationsUse = Map.singleton Extensions.EmptyDataDeclarations [(start, end)]
+      ffiUse = Map.singleton Extensions.ForeignFunctionInterface [(start, end)]
 
 instance Accounting l pos s
          `Transformation.At` ExtAST.DataConstructor l l (Wrap l pos s) (Wrap l pos s) where
