@@ -230,19 +230,19 @@ instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilies ] Language where
    build = Abstract.TypeFamiliesConstruction {
-      Abstract.dataFamilyDeclaration = DataFamilyDeclaration,
-      Abstract.openTypeFamilyDeclaration = OpenTypeFamilyDeclaration,
-      Abstract.closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration,
-      Abstract.dataFamilyInstance = DataFamilyInstance,
-      Abstract.newtypeFamilyInstance = NewtypeFamilyInstance,
-      Abstract.gadtDataFamilyInstance = GADTDataFamilyInstance,
-      Abstract.gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance,
-      Abstract.typeFamilyInstance = TypeFamilyInstance}
+      Abstract.dataFamilyDeclaration = DataFamilyDeclaration (),
+      Abstract.openTypeFamilyDeclaration = OpenTypeFamilyDeclaration (),
+      Abstract.closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration (),
+      Abstract.dataFamilyInstance = DataFamilyInstance (),
+      Abstract.newtypeFamilyInstance = NewtypeFamilyInstance (),
+      Abstract.gadtDataFamilyInstance = GADTDataFamilyInstance (),
+      Abstract.gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance (),
+      Abstract.typeFamilyInstance = TypeFamilyInstance ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilyDependencies ] Language where
    build = Abstract.TypeFamilyDependenciesConstruction {
-      Abstract.injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration,
-      Abstract.injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration}
+      Abstract.injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration (),
+      Abstract.injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.DataKinds ] Language where
    build = Abstract.DataKindsConstruction {
@@ -593,29 +593,39 @@ data Declaration λ l d s =
                             (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
-   | DataFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-   | OpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-   | ClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+   | DataFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                           (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+   | OpenTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                               (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
+   | ClosedTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                                 (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                                  [s (Abstract.Declaration l l d d)]
-   | InjectiveOpenTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
+   | InjectiveOpenTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ)
+                                        (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
                                         (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
-   | InjectiveClosedTypeFamilyDeclaration (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
+   | InjectiveClosedTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ)
+                                          (s (Abstract.TypeLHS l l d d)) (TypeVarBinding λ l d s)
                                           (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
                                           [s (Abstract.Declaration l l d d)]
-   | DataFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+   | DataFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                        [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                         (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                         [s (Abstract.DataConstructor l l d d)]
                         [s (Abstract.DerivingClause l l d d)]
-   | NewtypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
+   | NewtypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                           [TypeVarBinding λ l d s] (s (Abstract.Context l l d d))
                            (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
                            (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
-   | GADTDataFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | GADTDataFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                            [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                             (Maybe (s (Abstract.Kind l l d d)))
                             [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
-   | GADTNewtypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | GADTNewtypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                               [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                                (Maybe (s (Abstract.Kind l l d d)))
                                (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
-   | TypeFamilyInstance [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
+   | TypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
+                        [TypeVarBinding λ l d s] (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
@@ -899,6 +909,8 @@ deriving instance (Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Data (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Data (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Data (Abstract.SupportFor 'Extensions.TypeData λ),
+                   Data (Abstract.SupportFor 'Extensions.TypeFamilies λ),
+                   Data (Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Data (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Data (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
@@ -926,6 +938,8 @@ deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Show (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Show (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Show (Abstract.SupportFor 'Extensions.TypeData λ),
+                   Show (Abstract.SupportFor 'Extensions.TypeFamilies λ),
+                   Show (Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Show (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Show (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),
@@ -953,6 +967,8 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
                    Eq (Abstract.SupportFor 'Extensions.NamedDefaults λ),
                    Eq (Abstract.SupportFor 'Extensions.RoleAnnotations λ),
                    Eq (Abstract.SupportFor 'Extensions.TypeData λ),
+                   Eq (Abstract.SupportFor 'Extensions.TypeFamilies λ),
+                   Eq (Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.FunctionalDependencies λ),
                    Eq (Abstract.SupportFor 'Extensions.ImplicitParameters λ),
                    Eq (Abstract.SupportFor 'Extensions.InterruptibleFFI λ),

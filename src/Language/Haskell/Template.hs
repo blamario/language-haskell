@@ -395,49 +395,49 @@ declarationTemplates (KindSignature name k) = [KiSigD (nameTemplate name) (typeT
 declarationTemplates (DefaultMethodSignature () name context t) =
    [DefaultSigD (nameTemplate name) (inContext context $ typeTemplate $ extract t)]
 
-declarationTemplates (DataFamilyDeclaration lhs kind)
+declarationTemplates (DataFamilyDeclaration () lhs kind)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [DataFamilyD (nameTemplate con) vars (typeTemplate . extract <$> kind)]
-declarationTemplates (OpenTypeFamilyDeclaration lhs kind)
+declarationTemplates (OpenTypeFamilyDeclaration () lhs kind)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [OpenTypeFamilyD $ TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing]
-declarationTemplates (ClosedTypeFamilyDeclaration lhs kind constructors)
+declarationTemplates (ClosedTypeFamilyDeclaration () lhs kind constructors)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
-declarationTemplates (InjectiveOpenTypeFamilyDeclaration lhs binding injectivity)
+declarationTemplates (InjectiveOpenTypeFamilyDeclaration () lhs binding injectivity)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [OpenTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
                                       (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
                                        <$> injectivity))]
-declarationTemplates (InjectiveClosedTypeFamilyDeclaration lhs binding injectivity constructors)
+declarationTemplates (InjectiveClosedTypeFamilyDeclaration () lhs binding injectivity constructors)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
                                         (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
                                          <$> injectivity))
                         (typeFamilyInstanceTemplate . extract <$> constructors)]
-declarationTemplates (DataFamilyInstance vars context lhs kind constructors derivings) =
+declarationTemplates (DataFamilyInstance () vars context lhs kind constructors derivings) =
    [DataInstD (contextTemplate $ extract context)
               (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
               (dataConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (NewtypeFamilyInstance vars context lhs kind constructor derivings) =
+declarationTemplates (NewtypeFamilyInstance () vars context lhs kind constructor derivings) =
    [NewtypeInstD (contextTemplate $ extract context)
                  (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
                  (typeTemplate . extract <$> kind)
                  (dataConstructorTemplate $ extract constructor)
                  $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (GADTDataFamilyInstance vars lhs kind constructors derivings) =
+declarationTemplates (GADTDataFamilyInstance () vars lhs kind constructors derivings) =
    [DataInstD []
               (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
               (gadtConstructorTemplate . extract <$> constructors)
               $ derivingsTemplate $ extract <$> derivings]
-declarationTemplates (GADTNewtypeFamilyInstance vars lhs kind constructor derivings) =
+declarationTemplates (GADTNewtypeFamilyInstance () vars lhs kind constructor derivings) =
    [NewtypeInstD []
                  (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
                  (lhsTypeTemplate $ extract lhs)
@@ -503,7 +503,7 @@ familyKindTemplate :: TemplateWrapper f => Maybe (f (ExtAST.Type Language Langua
 familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
 
 typeFamilyInstanceTemplate :: TemplateWrapper f => Declaration Language Language f f -> TySynEqn
-typeFamilyInstanceTemplate (TypeFamilyInstance vars lhs rhs) =
+typeFamilyInstanceTemplate (TypeFamilyInstance () vars lhs rhs) =
    TySynEqn (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
             (lhsTypeTemplate $ extract lhs)
             (typeTemplate $ extract rhs)

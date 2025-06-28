@@ -233,10 +233,10 @@ instance {-# OVERLAPS #-}
             export (AST.GADTNewtypeDeclaration lhs _kind _constructor _derivings)
                | [name] <- foldMap getTypeName (getCompose lhs mempty)
                = Di.syn atts <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ Di.syn atts)
-            export (AST.DataFamilyInstance _vars context lhs _kind _constructors _derivings) = Di.syn atts
-            export (AST.NewtypeFamilyInstance _vars context lhs _kind _constructors _derivings) = Di.syn atts
-            export (AST.GADTDataFamilyInstance _vars lhs _kind _constructors _derivings) = Di.syn atts
-            export (AST.GADTNewtypeFamilyInstance _vars lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.DataFamilyInstance _support _vars context lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.NewtypeFamilyInstance _support _vars context lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.GADTDataFamilyInstance _support _vars lhs _kind _constructors _derivings) = Di.syn atts
+            export (AST.GADTNewtypeFamilyInstance _support _vars lhs _kind _constructors _derivings) = Di.syn atts
             export (AST.TypeSignature names _context _type)
                = Di.syn atts <> UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
             export (AST.KindSignature name _type)

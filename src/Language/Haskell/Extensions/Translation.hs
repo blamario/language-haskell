@@ -203,33 +203,35 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
       AST.TypeSynonymDeclaration (translateFully t lhs) (translateFully t ty)
    translateDeeply t (AST.TypeSignature names context ty) =
       AST.TypeSignature names (translateFully t context) (translateFully t ty)
-   translateDeeply t (AST.DataFamilyDeclaration lhs kind) =
-      AST.DataFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind)
-   translateDeeply t (AST.OpenTypeFamilyDeclaration lhs kind) =
-      AST.OpenTypeFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind)
-   translateDeeply t (AST.ClosedTypeFamilyDeclaration lhs kind eqs) =
-      AST.ClosedTypeFamilyDeclaration (translateFully t lhs) (translateFully t <$> kind) (translateFully t <$> eqs)
-   translateDeeply t (AST.InjectiveOpenTypeFamilyDeclaration lhs var deps) =
-      AST.InjectiveOpenTypeFamilyDeclaration (translateFully t lhs) (translateDeeply t var) deps
-   translateDeeply t (AST.InjectiveClosedTypeFamilyDeclaration lhs var deps eqs) =
-      AST.InjectiveClosedTypeFamilyDeclaration (translateFully t lhs) (translateDeeply t var)
+   translateDeeply t (AST.DataFamilyDeclaration support lhs kind) =
+      AST.DataFamilyDeclaration support (translateFully t lhs) (translateFully t <$> kind)
+   translateDeeply t (AST.OpenTypeFamilyDeclaration support lhs kind) =
+      AST.OpenTypeFamilyDeclaration support (translateFully t lhs) (translateFully t <$> kind)
+   translateDeeply t (AST.ClosedTypeFamilyDeclaration support lhs kind eqs) =
+      AST.ClosedTypeFamilyDeclaration support (translateFully t lhs) (translateFully t <$> kind)
+                                      (translateFully t <$> eqs)
+   translateDeeply t (AST.InjectiveOpenTypeFamilyDeclaration support lhs var deps) =
+      AST.InjectiveOpenTypeFamilyDeclaration support (translateFully t lhs) (translateDeeply t var) deps
+   translateDeeply t (AST.InjectiveClosedTypeFamilyDeclaration support lhs var deps eqs) =
+      AST.InjectiveClosedTypeFamilyDeclaration support (translateFully t lhs) (translateDeeply t var)
                                                deps (translateFully t <$> eqs)
-   translateDeeply t (AST.DataFamilyInstance vars context lhs kind constructors derivings) =
-      AST.DataFamilyInstance (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
+   translateDeeply t (AST.DataFamilyInstance support vars context lhs kind constructors derivings) =
+      AST.DataFamilyInstance support (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
                              (translateFully t <$> kind) (translateFully t <$> constructors)
                              (translateFully t <$> derivings)
-   translateDeeply t (AST.NewtypeFamilyInstance vars context lhs kind constructor derivings) =
-      AST.NewtypeFamilyInstance (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
+   translateDeeply t (AST.NewtypeFamilyInstance support vars context lhs kind constructor derivings) =
+      AST.NewtypeFamilyInstance support (translateDeeply t <$> vars) (translateFully t context) (translateFully t lhs)
                                 (translateFully t <$> kind) (translateFully t constructor)
                                 (translateFully t <$> derivings)
-   translateDeeply t (AST.GADTDataFamilyInstance vars lhs kind constructors derivings) =
-      AST.GADTDataFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t <$> kind)
+   translateDeeply t (AST.GADTDataFamilyInstance support vars lhs kind constructors derivings) =
+      AST.GADTDataFamilyInstance support (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t <$> kind)
                                  (translateFully t <$> constructors) (translateFully t <$> derivings)
-   translateDeeply t (AST.GADTNewtypeFamilyInstance vars lhs kind constructor derivings) =
-      AST.GADTNewtypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t <$> kind)
-                                    (translateFully t constructor) (translateFully t <$> derivings)
-   translateDeeply t (AST.TypeFamilyInstance vars lhs rhs) =
-      AST.TypeFamilyInstance (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t rhs)
+   translateDeeply t (AST.GADTNewtypeFamilyInstance support vars lhs kind constructor derivings) =
+      AST.GADTNewtypeFamilyInstance support (translateDeeply t <$> vars) (translateFully t lhs)
+                                    (translateFully t <$> kind) (translateFully t constructor)
+                                    (translateFully t <$> derivings)
+   translateDeeply t (AST.TypeFamilyInstance support vars lhs rhs) =
+      AST.TypeFamilyInstance support (translateDeeply t <$> vars) (translateFully t lhs) (translateFully t rhs)
    translateDeeply t (AST.KindSignature name kind) = AST.KindSignature name (translateFully t kind)
    translateDeeply t (AST.DefaultMethodSignature support name context ty) =
       AST.DefaultMethodSignature support name (translateFully t context) (translateFully t ty)
