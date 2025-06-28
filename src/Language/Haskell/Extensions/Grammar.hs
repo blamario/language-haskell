@@ -1091,7 +1091,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
             <|> parens forallAndNewBody
          uncurry3 f (a, b, c) = f a b c
 
-typeFamiliesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedHaskell l,
+typeFamiliesMixin :: forall l g t. (OutlineMonoid t, Abstract.ExtendedWith '[ 'TypeFamilies ] l,
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                     Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                   => ExtensionOverlay l g t
@@ -1103,25 +1103,25 @@ typeFamiliesMixin self@ExtendedGrammar{
     report= super.report{
       declarationLevel= super.report.declarationLevel{
          topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
-            <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* keyword "family"
+            <|> Abstract.dataFamilyDeclaration Abstract.build <$ keyword "data" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
-            <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+            <|> Abstract.openTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
-            <|> Abstract.closedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+            <|> Abstract.closedTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature) <* keyword "where"
                 <*> blockOf (wrap
-                             $ Abstract.typeFamilyInstance
+                             $ Abstract.typeFamilyInstance Abstract.build
                                <$> self.extensions.optionalForall
                                <*> wrap self.report.declarationLevel.instanceDesignator <* delimiter "="
                                <*> wrap self.report.typeTerm)
-            <|> Abstract.dataFamilyInstance <$ (keyword "data" *> keyword "instance")
+            <|> Abstract.dataFamilyInstance Abstract.build <$ (keyword "data" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <*> moptional (delimiter "=" *> self.report.declarationLevel.declaredConstructors)
                 <*> moptional derivingClause
-            <|> Abstract.newtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+            <|> Abstract.newtypeFamilyInstance Abstract.build <$ (keyword "newtype" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
                 <*> wrap self.report.declarationLevel.instanceDesignator
@@ -1129,40 +1129,40 @@ typeFamiliesMixin self@ExtendedGrammar{
                 <* delimiter "="
                 <*> wrap self.report.declarationLevel.newConstructor
                 <*> moptional derivingClause
-            <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> keyword "instance")
+            <|> Abstract.gadtDataFamilyInstance Abstract.build <$ (keyword "data" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> blockOf (wrap self.extensions.gadtConstructors)
                 <*> moptional derivingClause
-            <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> keyword "instance")
+            <|> Abstract.gadtNewtypeFamilyInstance Abstract.build <$ (keyword "newtype" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> wrap self.extensions.gadtNewConstructor
                 <*> moptional derivingClause
-            <|> Abstract.typeFamilyInstance <$ (keyword "type" *> keyword "instance")
+            <|> Abstract.typeFamilyInstance Abstract.build <$ (keyword "type" *> keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <* delimiter "="
                 <*> wrap self.report.typeTerm,
          inClassDeclaration = super.report.declarationLevel.inClassDeclaration
-            <|> Abstract.dataFamilyDeclaration <$ keyword "data" <* optional (keyword "family")
+            <|> Abstract.dataFamilyDeclaration Abstract.build <$ keyword "data" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
-            <|> Abstract.openTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
+            <|> Abstract.openTypeFamilyDeclaration Abstract.build <$ keyword "type" <* optional (keyword "family")
                 <*> wrap simpleType <*> optional (wrap self.extensions.kindSignature)
             <|> self.extensions.inClassOrInstanceTypeFamilyDeclaration,
          inInstanceDeclaration = super.report.declarationLevel.inInstanceDeclaration
-            <|> Abstract.dataFamilyInstance <$ keyword "data" <* optional (keyword "instance")
+            <|> Abstract.dataFamilyInstance Abstract.build <$ keyword "data" <* optional (keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <*> moptional (delimiter "=" *> self.report.declarationLevel.declaredConstructors)
                 <*> moptional derivingClause
-            <|> Abstract.newtypeFamilyInstance <$ keyword "newtype" <* optional (keyword "instance")
+            <|> Abstract.newtypeFamilyInstance Abstract.build <$ keyword "newtype" <* optional (keyword "instance")
                 <*> self.extensions.optionalForall
                 <*> wrap optionalContext
                 <*> wrap self.report.declarationLevel.instanceDesignator
@@ -1170,14 +1170,15 @@ typeFamiliesMixin self@ExtendedGrammar{
                 <* delimiter "="
                 <*> wrap self.report.declarationLevel.newConstructor
                 <*> moptional derivingClause
-            <|> Abstract.gadtDataFamilyInstance <$ (keyword "data" *> optional (keyword "instance"))
+            <|> Abstract.gadtDataFamilyInstance Abstract.build <$ (keyword "data" *> optional (keyword "instance"))
                 <*> self.extensions.optionalForall
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
                 <* keyword "where"
                 <*> blockOf (wrap self.extensions.gadtConstructors)
                 <*> moptional derivingClause
-            <|> Abstract.gadtNewtypeFamilyInstance <$ (keyword "newtype" *> optional (keyword "instance"))
+            <|> Abstract.gadtNewtypeFamilyInstance Abstract.build
+                <$ (keyword "newtype" *> optional (keyword "instance"))
                 <*> self.extensions.optionalForall
                 <*> wrap self.report.declarationLevel.instanceDesignator
                 <*> optional (wrap self.extensions.kindSignature)
@@ -1187,13 +1188,14 @@ typeFamiliesMixin self@ExtendedGrammar{
             <|> self.extensions.inClassOrInstanceTypeFamilyDeclaration}},
   extensions = super.extensions{
     inClassOrInstanceTypeFamilyDeclaration =
-       Abstract.typeFamilyInstance <$ keyword "type" <* optional (keyword "instance")
+       Abstract.typeFamilyInstance Abstract.build <$ keyword "type" <* optional (keyword "instance")
            <*> self.extensions.optionalForall
            <*> wrap self.report.declarationLevel.instanceDesignator
            <* delimiter "="
            <*> wrap self.report.typeTerm}}
 
-typeFamilyDependenciesMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
+typeFamilyDependenciesMixin :: (OutlineMonoid t, Abstract.ExtendedWith '[ 'TypeFamilies ] l,
+                                Abstract.ExtendedWith '[ 'TypeFamilyDependencies ] l,
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
                                 Deep.Foldable (Serialization (Down Int) t) (Abstract.GADTConstructor l l))
                             => ExtensionOverlay l g t
@@ -1201,21 +1203,22 @@ typeFamilyDependenciesMixin self super = super{
    report= super.report{
       declarationLevel= super.report.declarationLevel{
          topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
-            <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+            <|> Abstract.injectiveOpenTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> optional dependencies
-            <|> Abstract.injectiveClosedTypeFamilyDeclaration <$ keyword "type" <* keyword "family"
+            <|> Abstract.injectiveClosedTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> optional dependencies
                 <* keyword "where"
-                <*> blockOf (wrap $ Abstract.typeFamilyInstance
+                <*> blockOf (wrap $ Abstract.typeFamilyInstance Abstract.build
                                     <$> self.extensions.optionalForall
                                     <*> wrap self.report.declarationLevel.instanceDesignator <* delimiter "="
                                     <*> wrap self.report.typeTerm),
          inClassDeclaration = super.report.declarationLevel.inClassDeclaration
-            <|> Abstract.injectiveOpenTypeFamilyDeclaration <$ keyword "type" <* optional (keyword "family")
+            <|> Abstract.injectiveOpenTypeFamilyDeclaration Abstract.build
+                <$ keyword "type" <* optional (keyword "family")
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
                 <*> self.extensions.typeVarBinder
                 <*> (Just <$> dependencies)}}}

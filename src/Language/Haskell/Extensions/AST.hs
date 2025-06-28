@@ -73,6 +73,8 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.TypeAbstractions,
    'Extensions.TypeData,
    'Extensions.DataKinds,
+   'Extensions.TypeFamilies,
+   'Extensions.TypeFamilyDependencies,
    'Extensions.FunctionalDependencies]
 
 instance Abstract.ExtendedWith '[ 'Extensions.ExplicitNamespaces ] Language where
@@ -226,6 +228,22 @@ instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
    build = Abstract.DefaultSignatureConstruction {
       Abstract.defaultMethodSignature = DefaultMethodSignature ()}
 
+instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilies ] Language where
+   build = Abstract.TypeFamiliesConstruction {
+      Abstract.dataFamilyDeclaration = DataFamilyDeclaration,
+      Abstract.openTypeFamilyDeclaration = OpenTypeFamilyDeclaration,
+      Abstract.closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration,
+      Abstract.dataFamilyInstance = DataFamilyInstance,
+      Abstract.newtypeFamilyInstance = NewtypeFamilyInstance,
+      Abstract.gadtDataFamilyInstance = GADTDataFamilyInstance,
+      Abstract.gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance,
+      Abstract.typeFamilyInstance = TypeFamilyInstance}
+
+instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilyDependencies ] Language where
+   build = Abstract.TypeFamilyDependenciesConstruction {
+      Abstract.injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration,
+      Abstract.injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration}
+
 instance Abstract.ExtendedWith '[ 'Extensions.DataKinds ] Language where
    build = Abstract.DataKindsConstruction {
       Abstract.promotedConstructorType = PromotedConstructorType (),
@@ -314,16 +332,6 @@ instance Abstract.ExtendedHaskell Language where
    groundTypeKind = GroundTypeKind
    typeConstraint = TypeConstraint
 
-   dataFamilyDeclaration = DataFamilyDeclaration
-   openTypeFamilyDeclaration = OpenTypeFamilyDeclaration
-   closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration
-   injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration
-   injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration
-   dataFamilyInstance = DataFamilyInstance
-   newtypeFamilyInstance = NewtypeFamilyInstance
-   gadtDataFamilyInstance = GADTDataFamilyInstance
-   gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance
-   typeFamilyInstance = TypeFamilyInstance
    classReferenceInstanceLHS = ClassReferenceInstanceLHS
    infixTypeClassInstanceLHS = InfixTypeClassInstanceLHS
    classInstanceLHSApplication = ClassInstanceLHSApplication

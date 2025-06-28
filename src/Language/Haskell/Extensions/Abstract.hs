@@ -57,7 +57,12 @@ module Language.Haskell.Extensions.Abstract (
               DataKindsConstruction, promotedConstructorType, promotedTupleType, promotedListType,
               promotedIntegerLiteral, promotedCharLiteral, promotedStringLiteral, promotedInfixTypeApplication,
               RoleAnnotationsConstruction,
-              typeRoleDeclaration, inferredRole, nominalRole, representationalRole, phantomRole),
+              typeRoleDeclaration, inferredRole, nominalRole, representationalRole, phantomRole,
+              TypeFamiliesConstruction,
+              dataFamilyDeclaration, openTypeFamilyDeclaration, closedTypeFamilyDeclaration, dataFamilyInstance,
+              newtypeFamilyInstance, gadtDataFamilyInstance, gadtNewtypeFamilyInstance, typeFamilyInstance,
+              TypeFamilyDependenciesConstruction,
+              injectiveOpenTypeFamilyDeclaration, injectiveClosedTypeFamilyDeclaration),
    ExtendedHaskell(..),
   -- * Constraint synonyms
    UniversallyApplicable, DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
@@ -310,6 +315,31 @@ data instance Construct '[ 'Extensions.DataKinds ] λ l d s = DataKindsConstruct
    promotedStringLiteral :: Text -> Type λ l d s,
    promotedInfixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s}
 
+data instance Construct '[ 'Extensions.TypeFamilies ] λ l d s = TypeFamiliesConstruction {
+   dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s,
+   openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s,
+   closedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (Declaration l l d d)]
+                               -> Declaration λ l d s,
+   dataFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
+                      -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)]
+                      -> Declaration λ l d s,
+   newtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
+                         -> Maybe (s (Kind l l d d)) -> s (DataConstructor l l d d) -> [s (DerivingClause l l d d)]
+                         -> Declaration λ l d s,
+   gadtDataFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
+                          -> [s (GADTConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s,
+   gadtNewtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
+                             -> s (GADTConstructor l l d d) -> [s (DerivingClause l l d d)] -> Declaration λ l d s,
+   typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
+                      -> Declaration λ l d s}
+
+data instance Construct '[ 'Extensions.TypeFamilyDependencies ] λ l d s = TypeFamilyDependenciesConstruction {
+   injectiveOpenTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+                                      -> Maybe (Name λ, NonEmpty (Name λ)) -> Declaration λ l d s,
+   injectiveClosedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+                                        -> Maybe (Name λ, NonEmpty (Name λ)) -> [s (Declaration l l d d)]
+                                        -> Declaration λ l d s}
+
 -- | The big collection of all known extensions
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
@@ -328,6 +358,7 @@ class (Haskell λ,
                           'Extensions.StandaloneDeriving, 'Extensions.DerivingStrategies, 'Extensions.DerivingVia,
                           'Extensions.DefaultSignatures,
                           'Extensions.DataKinds, 'Extensions.TypeData, 'Extensions.TypeAbstractions,
+                          'Extensions.TypeFamilies, 'Extensions.TypeFamilyDependencies,
                           'Extensions.FunctionalDependencies, 'Extensions.RoleAnnotations] λ,
        ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] λ,
        ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
@@ -392,27 +423,6 @@ class (Haskell λ,
    multiplicityFunctionType :: s (Type l l d d) -> s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
    linearFunctionType :: s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
 
-   dataFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
-   openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s
-   closedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (Declaration l l d d)]
-                               -> Declaration λ l d s
-   injectiveOpenTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
-                                      -> Maybe (Name λ, NonEmpty (Name λ)) -> Declaration λ l d s
-   injectiveClosedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
-                                        -> Maybe (Name λ, NonEmpty (Name λ)) -> [s (Declaration l l d d)]
-                                        -> Declaration λ l d s
-   dataFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
-                      -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)]
-                      -> Declaration λ l d s
-   newtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
-                         -> Maybe (s (Kind l l d d)) -> s (DataConstructor l l d d) -> [s (DerivingClause l l d d)]
-                         -> Declaration λ l d s
-   gadtDataFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
-                          -> [s (GADTConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s
-   gadtNewtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
-                             -> s (GADTConstructor l l d d) -> [s (DerivingClause l l d d)] -> Declaration λ l d s
-   typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
-                      -> Declaration λ l d s
    classReferenceInstanceLHS :: QualifiedName λ -> ClassInstanceLHS λ l d s
    infixTypeClassInstanceLHS :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> ClassInstanceLHS λ l d s
    classInstanceLHSApplication :: s (ClassInstanceLHS l l d d) -> s (Type l l d d) -> ClassInstanceLHS λ l d s
