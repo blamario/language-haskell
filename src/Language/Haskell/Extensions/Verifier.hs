@@ -587,7 +587,7 @@ instance (Eq s, IsString s) =>
         Const (UnionWith $ Map.singleton Extensions.UnicodeSyntax [(start, end)])
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
-            unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←"]
+            unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←", "★", "⊸"]
 
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Verification l pos s) g,
           Transformation.At (Verification l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
