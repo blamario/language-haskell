@@ -34,6 +34,7 @@ import Data.Semigroup.Union (UnionWith(..))
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import qualified Data.Set as Set
+import Data.Set (Set)
 
 import qualified Rank2
 import Transformation (Transformation)
@@ -99,9 +100,9 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     deriving (Typeable, Data, Eq, Show)
 
 -- | The list of erroneously unbound names
-data Unbound l = Unbound {types :: [AST.QualifiedName l],
-                          values :: [AST.QualifiedName l],
-                          constructors :: [AST.QualifiedName l]}
+data Unbound l = Unbound {types :: Set (AST.QualifiedName l),
+                          values :: Set (AST.QualifiedName l),
+                          constructors :: Set (AST.QualifiedName l)}
                  deriving (Eq, Show)
 
 instance Semigroup (Unbound l) where
@@ -703,15 +704,15 @@ instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (B
    foldMap = Full.foldMapDownDefault
 
 verifyConstructorName q env = case lookupType q env $> () <|> lookupValue q env $> () of
-   Nothing -> Const Unbound{types= [], constructors= [q], values= []}
+   Nothing -> Const Unbound{types= mempty, constructors= Set.singleton q, values= mempty}
    _ -> mempty
 
 verifyTypeName q env = case lookupType q env of
-   Nothing -> Const Unbound{types= [q], constructors= [], values= []}
+   Nothing -> Const Unbound{types= Set.singleton q, constructors= mempty, values= mempty}
    _ -> mempty
 
 verifyValueName q env = case lookupValue q env of
-   Nothing -> Const Unbound{types= [], constructors= [], values= [q]}
+   Nothing -> Const Unbound{types= mempty, constructors= mempty, values= Set.singleton q}
    _ -> mempty
 
 class Abstract.Haskell l => BindingMembers l where
