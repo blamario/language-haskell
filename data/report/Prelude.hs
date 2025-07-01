@@ -53,6 +53,8 @@ import PreludeIO
 {-
 import Data.Ratio( Rational )
 -}
+import Data.Functor( Functor, fmap )
+import Data.Tuple( fst, snd )
 infixr 9  .
 infixr 8  ^, ^^, **
 infixl 7  *, /, `quot`, `rem`, `div`, `mod`
@@ -296,9 +298,6 @@ realToFrac     :: (Real a, Fractional b) => a -> b
 realToFrac      =  fromRational . toRational
 
 -- Monadic classes
-
-class  Functor f  where
-    fmap              :: (a -> b) -> f a -> f b
 
 class  Monad m  where
     (>>=)  :: m a -> (a -> m b) -> m b
@@ -553,20 +552,6 @@ instance  Monad []  where
     m >>= k          = concat (map k m)
     return x         = [x]
     fail s           = []
-
--- Tuples
-
--- data  (a,b)   =  (a,b)    deriving (Eq, Ord, Bounded)
--- data  (a,b,c) =  (a,b,c)  deriving (Eq, Ord, Bounded)
-	-- Not legal Haskell; for illustration only
-
--- component projections for pairs:
--- (NB: not provided for triples, quadruples, etc.)
-fst              :: (a,b) -> a
-fst (x,y)        =  x
-
-snd              :: (a,b) -> b
-snd (x,y)        =  y
 
 -- curry converts an uncurried function to a curried function;
 -- uncurry converts a curried function to a function on pairs.
