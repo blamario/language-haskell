@@ -560,9 +560,18 @@ instance FlexibleInstanceHeadAccounting l pos s `Transformation.At` g l l (Wrap 
   FlexibleInstanceHeadAccounting $ _ = mempty
 
 instance {-# OVERLAPS #-}
-   Abstract.UniversallyApplicable (FlexibleInstanceTypeArgAccounting l pos s) l (Wrap l pos s)
+   (Abstract.Type l ~ ExtAST.Type l,
+    Abstract.UniversallyApplicable (FlexibleInstanceTypeArgAccounting l pos s) l (Wrap l pos s))
    => FlexibleInstanceTypeAccounting l pos s `Transformation.At` ExtAST.Type l l (Wrap l pos s) (Wrap l pos s) where
-   FlexibleInstanceTypeAccounting $ Compose (_, (_, node)) = Const $ Shallow.foldMap FlexibleInstanceTypeArgAccounting node
+   FlexibleInstanceTypeAccounting $ Compose (_, (_, node)) = case node of
+      ExtAST.TypeApplication left right ->
+         (FlexibleInstanceTypeAccounting Transformation.$ left)
+         <> Const (foldMap (Shallow.foldMap FlexibleInstanceTypeArgAccounting) right)
+      ExtAST.InfixTypeApplication left op right ->
+        Const (foldMap (Shallow.foldMap FlexibleInstanceTypeArgAccounting) left
+               <> foldMap (Shallow.foldMap FlexibleInstanceTypeArgAccounting) right)
+      ExtAST.KindedType t k -> FlexibleInstanceTypeAccounting Transformation.$ t
+      t -> Const $ Shallow.foldMap FlexibleInstanceTypeArgAccounting t
 
 instance FlexibleInstanceTypeAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
   FlexibleInstanceTypeAccounting $ _ = mempty
