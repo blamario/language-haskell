@@ -137,6 +137,11 @@ main' Opts{..} = do
                     ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                     (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
                  (g l l),
+              Deep.Functor
+                 (Rank2.Map
+                    (Binder.WithEnvironment' l Haskell.Parsed)
+                    (Binder.WithEnvironment l Haskell.Parsed))
+                 (g l l),
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
               Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
@@ -189,6 +194,11 @@ main' Opts{..} = do
                      (Transformation.Mapped
                         ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                         (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
+                     (g l l),
+                  Deep.Functor
+                     (Rank2.Map
+                        (Binder.WithEnvironment' l Haskell.Parsed)
+                        (Binder.WithEnvironment l Haskell.Parsed))
                      (g l l),
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),

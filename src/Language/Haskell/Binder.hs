@@ -1,5 +1,5 @@
 {-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase, MultiParamTypeClasses,
-             OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             NamedFieldPuns, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Dimorphic attribute grammar for establishing the static identifier bindings
@@ -10,7 +10,7 @@ module Language.Haskell.Binder (
    -- * Transformations
    Binder, BindingVerifier,
    -- * Node wrappers
-   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
+   Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment, WithEnvironment',
    -- * Binding types
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
@@ -67,7 +67,11 @@ type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
 type WithEnvironment l = Compose ((,) (Attributes l))
 
 -- | Tree node wrapper mapping an 'Environment' to 'Attributes'
-type FromEnvironment l f = Compose ((->) (Environment l)) (WithEnvironment l f)
+type FromEnvironment l f = Compose ((->) (Map Extension Bool, Environment l)) (WithEnvironment l f)
+
+type Attributes' l = Di.Atts (Map Extension Bool, Environment l) (LocalEnvironment l)
+type WithEnvironment' l = Compose ((,) (Attributes' l))
+type FromEnvironment' l f = Compose ((->) (Map Extension Bool, Environment l)) (WithEnvironment' l f)
 
 -- | A binding for any single name
 data Binding l = ErroneousBinding (BindingError l)
@@ -162,9 +166,14 @@ instance Monoid (Binding l) where
    mempty = ErroneousBinding NoBindings
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
-withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ WithEnvironment l p)
+withBindings :: (Full.Traversable (Di.Keep (Binder l p)) g, q ~ WithEnvironment l p,
+                 Deep.Functor (Transformation.Rank2.Map (WithEnvironment' l p) (WithEnvironment l p)) g,
+                 Functor p)
              => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
-withBindings extensions modEnv = flip (Full.traverse (Di.Keep $ Binder extensions modEnv))
+withBindings extensions modEnv env node =
+   Full.mapUpDefault (Transformation.Rank2.Map trim) $ Full.traverse (Di.Keep $ Binder modEnv) node (extensions, env)
+   where trim :: WithEnvironment' l f a -> WithEnvironment l f a
+         trim (Compose (~Di.Atts{Di.inh= (exts, env), Di.syn}, x)) = Compose (Di.Atts{Di.inh= env, Di.syn}, x)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
@@ -172,7 +181,6 @@ onMap f (UnionWith x) = UnionWith (f x)
 
 -- | The transformation type used by 'withBindings'
 data Binder l (f :: Type -> Type) = Binder {
-   extensions :: Map Extension Bool,
    modules :: ModuleEnvironment l}
 
 -- | The transformation type folds the tree wrapped 'WithEnvironment' to 'Unbound'
@@ -180,7 +188,7 @@ data BindingVerifier l (f :: Type -> Type) = BindingVerifier
 
 instance Transformation (Di.Keep (Binder l f)) where
    type Domain (Di.Keep (Binder l f)) = f
-   type Codomain (Di.Keep (Binder l f)) = FromEnvironment l f
+   type Codomain (Di.Keep (Binder l f)) = FromEnvironment' l f
 
 instance Transformation (BindingVerifier l f) where
    type Domain (BindingVerifier l f) = WithEnvironment l f
@@ -193,15 +201,16 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (AST.Declaration l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node, Di.inh= bequest}
-      where bequeath :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
-            export :: AST.Declaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where bequeath :: AST.Declaration l l (FromEnvironment' l f) (FromEnvironment' l f)
+                     -> (Map Extension Bool, Environment l)
+            export :: AST.Declaration l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.FixityDeclaration associativity precedence names) =
                UnionWith (Map.fromList [(name,
                                          ValueBinding $ InfixDeclaration associativity (fromMaybe 9 precedence) Nothing)
@@ -302,7 +311,7 @@ instance {-# OVERLAPS #-}
             getTypeName (ExtAST.SimpleTypeLHS name _) = [name]
             getTypeName (ExtAST.TypeLHSApplication lhs _) = foldMap getTypeName (getCompose lhs mempty)
             getTypeName (ExtAST.TypeLHSTypeApplication _support lhs _) = foldMap getTypeName (getCompose lhs mempty)
-            bequeath AST.EquationDeclaration{} = unqualified (Di.syn atts) <> Di.inh atts
+            bequeath AST.EquationDeclaration{} = (unqualified (Di.syn atts) <>) <$> Di.inh atts
             bequeath _ = Di.inh atts
             bequest = foldMap bequeath node
 
@@ -319,17 +328,17 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.QualifiedName l), Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (AST.Module l l)
-            (FromEnvironment l f) f
+            (FromEnvironment' l f) f
          where
-   attribution (Di.Keep (Binder exts modEnv)) node atts = foldMap moduleAttribution node
-      where moduleAttribution :: AST.Module l l (FromEnvironment l f) (FromEnvironment l f) -> Attributes l
+   attribution (Di.Keep (Binder modEnv)) node ~atts@Di.Atts{Di.inh= (exts, inhEnv)} = foldMap moduleAttribution node
+      where moduleAttribution :: AST.Module l l (FromEnvironment' l f) (FromEnvironment' l f) -> Attributes' l
             moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts''
                where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
                      exts' = Extensions.withImplications (extensionMap <> exts)
-                     atts' = Di.attribution (Di.Keep $ Binder exts' modEnv) body atts
+                     atts' = Di.attribution (Di.Keep $ Binder modEnv) body atts{Di.inh= (exts', inhEnv)}
                      atts'' = case Map.lookup Extensions.FieldSelectors exts' of
                         Just False -> atts'{Di.syn = onMap (Map.mapMaybe noFieldSelector) (Di.syn atts')}
                         _ -> atts'
@@ -338,12 +347,12 @@ instance {-# OVERLAPS #-}
                      noFieldSelector x = Just x
             moduleAttribution (AST.AnonymousModule modImports body) =
                Di.Atts{
-                  Di.inh= moduleGlobalScope,
+                  Di.inh= (exts, moduleGlobalScope),
                   Di.syn= filterEnv (== mainName) moduleGlobalScope}
                where moduleGlobalScope = importedScope modImports <> unqualified (Di.syn atts)
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
-               atts{Di.syn= exportedScope, Di.inh= moduleGlobalScope}
+               atts{Di.syn= exportedScope, Di.inh= (exts, moduleGlobalScope)}
                where exportedScope :: LocalEnvironment l
                      moduleGlobalScope :: Environment l
                      exportedScope = maybe (reexportModule moduleName) (foldMapWrapped itemExports) exports
@@ -351,7 +360,8 @@ instance {-# OVERLAPS #-}
                        | modName == moduleName = Di.syn atts
                        | otherwise = onMap (Map.mapKeys baseName) $ importsFrom modImports modName (fold $ Map.lookup modName $ getUnionWith modEnv)
                      fromModule modName (AST.QualifiedName modName' _) = modName' == Just modName
-                     itemExports :: ExtAST.Export l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+                     itemExports :: ExtAST.Export l l (FromEnvironment' l f) (FromEnvironment' l f)
+                                 -> LocalEnvironment l
                      itemExports (ExtAST.ReExportModule modName) = reexportModule modName
                      itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
                      itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
@@ -370,22 +380,24 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope = importedScope modImports
                                          <> qualifiedWith moduleName (Di.syn atts)
                                          <> unqualified (Di.syn atts)
-            importedScope :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
+            importedScope :: [FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f))]
                           -> Environment l
             importedScope modImports = fold (Map.mapWithKey (importsFrom modImports) $ getUnionWith modEnv)
-            importsFrom :: [FromEnvironment l f (ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f))]
+            importsFrom :: [FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f))]
                         -> Abstract.ModuleName l
                         -> UnionWith (Map (AST.Name l)) (Binding l)
                         -> Environment l
             importsFrom modImports moduleName moduleExports
-               | null matchingImports && moduleName == preludeName = unqualified moduleExports
+               | null matchingImports && moduleName == preludeName
+               = if withImplicitPrelude then unqualified moduleExports else mempty
                | otherwise = foldMap (importsFromModule moduleExports) matchingImports
                where matchingImports = foldMapWrapped matchingImport modImports
                      matchingImport i@(ExtAST.Import _ _ _ name _ _)
                         | name == moduleName = [i]
                         | otherwise = []
+                     withImplicitPrelude = Map.findWithDefault True Extensions.ImplicitPrelude exts
             importsFromModule :: UnionWith (Map (AST.Name l)) (Binding l)
-                              -> ExtAST.Import l l (FromEnvironment l f) (FromEnvironment l f) -> Environment l
+                              -> ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f) -> Environment l
             importsFromModule moduleExports (ExtAST.Import _ qualified _ name alias spec)
                | qualified = qualifiedWith (fromMaybe name alias) (imports spec)
                | otherwise = unqualified (imports spec)
@@ -415,7 +427,7 @@ instance {-# OVERLAPS #-}
             filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
             foldMapWrapped :: forall a g m. (Foldable g, Monoid m)
                            => (a -> m)
-                           -> g (Compose ((->) (Environment l)) (WithEnvironment l f) a)
+                           -> g (Compose ((->) (Map Extension Bool, Environment l)) (WithEnvironment' l f) a)
                            -> m
             foldMapWrapped f = foldMap (foldMap f . ($ mempty) . getCompose)
 
@@ -428,14 +440,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (AST.DataConstructor l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: AST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: AST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (AST.RecordConstructor name _flds) =
                UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
@@ -448,14 +460,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (ExtAST.DataConstructor l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: ExtAST.DataConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: ExtAST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
                UnionWith (Map.singleton name $ ValueBinding $ RecordConstructor $ Di.syn atts)
@@ -469,14 +481,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (ExtAST.GADTConstructor l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: ExtAST.GADTConstructor l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: ExtAST.GADTConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.GADTConstructors names vars _ctx t)
               | Map.null (getUnionWith $ Di.syn atts)
               = UnionWith $ Map.fromList [(name, ValueBinding DataConstructor) | name <- toList names]
@@ -491,14 +503,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (AST.FieldDeclaration l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: AST.FieldDeclaration l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: AST.FieldDeclaration l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
 
@@ -510,14 +522,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (ExtAST.PatternLHS l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: ExtAST.PatternLHS l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: ExtAST.PatternLHS l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.RecordPatternLHS con fields) =
                UnionWith (Map.singleton con $ ValueBinding $ RecordConstructor fieldEnv) <> fieldEnv
                where fieldEnv = UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- fields]
@@ -531,14 +543,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (AST.Pattern l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: AST.Pattern l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: AST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
 
@@ -550,14 +562,14 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Environment l)
+            (Map Extension Bool, Environment l)
             (LocalEnvironment l)
             (ExtAST.Pattern l l)
-            (FromEnvironment l f)
+            (FromEnvironment' l f)
             f
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
-      where export :: ExtAST.Pattern l l (FromEnvironment l f) (FromEnvironment l f) -> LocalEnvironment l
+      where export :: ExtAST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
 

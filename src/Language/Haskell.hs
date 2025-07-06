@@ -84,6 +84,11 @@ parseModule extensions modEnv env verify source =
 resolvePositions :: (Full.Traversable (Di.Keep (Binder.Binder AST.Language Parsed)) node,
                      Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) node,
                      Deep.Functor
+                        (Rank2.Map
+                           (Binder.WithEnvironment' AST.Language Parsed)
+                           (Binder.WithEnvironment AST.Language Parsed))
+                        node,
+                     Deep.Functor
                         (Transformation.Mapped
                             ((,) (Binder.Attributes AST.Language))
                             (Rank2.Map Parsed Placed))
@@ -137,11 +142,13 @@ unqualifiedPreludeBindings = do
    preludeModuleDir <- flip combine "report" <$> getDataDir
    moduleFileNames <- filter (List.isSuffixOf ".hs") <$> listDirectory preludeModuleDir
    moduleTexts <- mapM (unsafeInterleaveIO . Text.IO.readFile . combine preludeModuleDir) moduleFileNames
+   baseModuleEnv <- unsafeInterleaveIO baseModuleBindings
    let Just moduleNames = traverse (Text.stripSuffix ".hs" . Text.pack) moduleFileNames
        parsedModules = assertSuccess . parseModule defaultExtensions moduleEnv mempty False <$> moduleTexts
        assertSuccess ~(Right ~[parsed]) = parsed
-       moduleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
-       Just prelude = Map.lookup Binder.preludeName (getUnionWith moduleEnv)
+       moduleEnv = baseModuleEnv <> preludeModuleEnv
+       preludeModuleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
+       Just prelude = Map.lookup Binder.preludeName (getUnionWith preludeModuleEnv)
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
    pure (prelude <> Binder.builtinPreludeBindings)
 
