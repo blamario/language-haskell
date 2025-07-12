@@ -418,16 +418,38 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
       where hashless (ExtAST.HashLiteral _ l) = hashless l
             hashless l = l
 
-instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+instance (Eq s, IsString s, LeftReductive s, Factorial s, Abstract.Haskell l,
+          Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l) =>
+         Accounting l pos s
+         `Transformation.At` ExtAST.DerivingClause l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), t)) = Const $ UnionWith $
+      case t
+      of ExtAST.SimpleDerive c -> derivingExtensions start end c
+         _ -> mempty
+
+instance (Eq s, IsString s, LeftReductive s, Factorial s, Abstract.Haskell l,
+          Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l) =>
          Accounting l pos s
          `Transformation.At` ExtAST.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $ UnionWith $
       case t
-      of ExtAST.InfixTypeClassInstanceLHS{} -> typeOperators
-         ExtAST.TypeClassInstanceLHS{} | any isAnyDelimiter lexemes -> typeOperators
-         ExtAST.ClassReferenceInstanceLHS{} | any isAnyDelimiter lexemes -> typeOperators
+      of ExtAST.InfixTypeClassInstanceLHS _ c _ -> derivingExtensions start end c <> typeOperators
+         ExtAST.TypeClassInstanceLHS c _ -> check c
+         ExtAST.ClassReferenceInstanceLHS c -> check c
          _ -> mempty
          where typeOperators = Map.singleton Extensions.TypeOperators [(start, end)]
+               check c = derivingExtensions start end c <> if any isAnyDelimiter lexemes then typeOperators else mempty
+
+derivingExtensions :: (Abstract.Haskell l,
+                       Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
+                   => pos -> pos -> AST.QualifiedName l -> Map Extension [(pos, pos)]
+derivingExtensions start end (AST.QualifiedName _ c)
+  | c == Abstract.name "Functor" = Map.singleton Extensions.DeriveFunctor [(start, end)]
+  | c == Abstract.name "Foldable" = Map.singleton Extensions.DeriveFoldable [(start, end)]
+  | c == Abstract.name "Traversable" = Map.singleton Extensions.DeriveTraversable [(start, end)]
+  | c == Abstract.name "Data" = Map.singleton Extensions.DeriveDataTypeable [(start, end)]
+  | c == Abstract.name "Typeable" = Map.singleton Extensions.DeriveDataTypeable [(start, end)]
+  | otherwise = mempty
 
 instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
          Accounting l pos s
