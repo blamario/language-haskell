@@ -203,11 +203,7 @@ instance {-# OVERLAPS #-}
           Abstract.Pattern l ~ ExtAST.Pattern l, Abstract.FieldPattern l ~ ExtAST.FieldPattern l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (AST.Declaration l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (AST.Declaration l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node, Di.inh= bequest}
       where bequeath :: AST.Declaration l l (FromEnvironment' l f) (FromEnvironment' l f)
@@ -330,10 +326,7 @@ instance {-# OVERLAPS #-}
           Abstract.ImportItem l l ~ ExtAST.ImportItem l l,
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (AST.Module l l)
-            (FromEnvironment' l f) f
+         Di.Attribution (Di.Keep (Binder l f)) (AST.Module l l)
          where
    attribution (Di.Keep (Binder modEnv)) node ~atts@Di.Atts{Di.inh= (exts, inhEnv)} = foldMap moduleAttribution node
       where moduleAttribution :: AST.Module l l (FromEnvironment' l f) (FromEnvironment' l f) -> Attributes' l
@@ -440,11 +433,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (AST.DataConstructor l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (AST.DataConstructor l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -458,11 +447,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (ExtAST.DataConstructor l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (ExtAST.DataConstructor l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -477,11 +462,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (ExtAST.GADTConstructor l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (ExtAST.GADTConstructor l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.GADTConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -497,11 +478,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (AST.FieldDeclaration l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (AST.FieldDeclaration l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.FieldDeclaration l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -514,11 +491,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (ExtAST.PatternLHS l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (ExtAST.PatternLHS l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.PatternLHS l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -533,11 +506,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (AST.Pattern l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (AST.Pattern l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
@@ -550,11 +519,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         Di.Attribution
-            (Di.Keep (Binder l f))
-            (ExtAST.Pattern l l)
-            (FromEnvironment' l f)
-            f
+         Di.Attribution (Di.Keep (Binder l f)) (ExtAST.Pattern l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
