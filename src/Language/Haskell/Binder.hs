@@ -340,7 +340,7 @@ instance {-# OVERLAPS #-}
             moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts''
                where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
                      exts' = Extensions.withImplications (extensionMap <> exts)
-                     atts' = Di.attribution (Di.Keep $ Binder modEnv) body atts{Di.inh= (exts', inhEnv)}
+                     atts' = atts{Di.inh= (exts', inhEnv)}
                      atts'' = case Map.lookup Extensions.FieldSelectors exts' of
                         Just False -> atts'{Di.syn = onMap (Map.mapMaybe noFieldSelector) (Di.syn atts')}
                         _ -> atts'
