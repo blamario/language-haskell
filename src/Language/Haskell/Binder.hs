@@ -194,6 +194,10 @@ instance Transformation (BindingVerifier l f) where
    type Domain (BindingVerifier l f) = WithEnvironment l f
    type Codomain (BindingVerifier l f) = Const (Unbound l)
 
+instance Di.AttributeTransformation (Di.Keep (Binder l f)) where
+   type Inherited (Di.Keep (Binder l f)) = (Map Extension Bool, Environment l)
+   type Synthesized (Di.Keep (Binder l f)) = LocalEnvironment l
+
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l, Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.Pattern l ~ ExtAST.Pattern l, Abstract.FieldPattern l ~ ExtAST.FieldPattern l,
@@ -201,8 +205,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (AST.Declaration l l)
             (FromEnvironment' l f)
             f
@@ -330,8 +332,6 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.QualifiedName l), Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (AST.Module l l)
             (FromEnvironment' l f) f
          where
@@ -442,8 +442,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (AST.DataConstructor l l)
             (FromEnvironment' l f)
             f
@@ -462,8 +460,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (ExtAST.DataConstructor l l)
             (FromEnvironment' l f)
             f
@@ -483,8 +479,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (ExtAST.GADTConstructor l l)
             (FromEnvironment' l f)
             f
@@ -505,8 +499,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (AST.FieldDeclaration l l)
             (FromEnvironment' l f)
             f
@@ -524,8 +516,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (ExtAST.PatternLHS l l)
             (FromEnvironment' l f)
             f
@@ -545,8 +535,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (AST.Pattern l l)
             (FromEnvironment' l f)
             f
@@ -564,8 +552,6 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution
             (Di.Keep (Binder l f))
-            (Map Extension Bool, Environment l)
-            (LocalEnvironment l)
             (ExtAST.Pattern l l)
             (FromEnvironment' l f)
             f
