@@ -138,6 +138,11 @@ instance Transformation.Transformation (NestedPositionAdjustment f pos s) where
     type Domain (NestedPositionAdjustment f pos s) = Compose f (Wrapped pos s)
     type Codomain (NestedPositionAdjustment f pos s) = Compose (State Int) (Compose f (Wrapped pos s))
 
+instance (p ~ Wrapped pos input, Rank2.Functor (g p),
+          Deep.Functor (Transformation.Rank2.Map p (Wrapped pos' input')) g) =>
+         Full.Functor (Transformation.Rank2.Map (Wrapped pos input) (Wrapped pos' input')) g where
+  (<$>) = Full.mapUpDefault
+
 newtype PositionedLexemes pos s = PositionedLexemes (Seq (pos, ParsedLexemes s, pos))
 
 instance (Factorial s, Position pos) => Semigroup (PositionedLexemes pos s) where

@@ -19,7 +19,9 @@ import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
 
+import qualified Rank2
 import qualified Transformation
+import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
@@ -108,7 +110,13 @@ main' Opts{..} = do
               Show (g Language Language e e), Show (g Language Language w w),
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-              Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
+              Rank2.Apply (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
+              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
+              AG.Attribution (Binder.BinderWorker l w) (g l l),
+              AG.Atts (AG.Synthesized (Binder.BinderWorker Language (Grammar.NodeWrap Input))) (g l l)
+              ~ Binder.LocalEnvironment l,
+              Deep.Functor (AG.Keep (Binder.BinderWorker l w)) (g l l),
+              Deep.Functor (Rank2.Map (AG.Kept (Binder.BinderWorker l w)) (Binder.WithEnvironment l w)) (g l l),
               Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
               FullyTranslatable
                  (ReformulationOf
@@ -129,18 +137,13 @@ main' Opts{..} = do
               FullyTranslatable
                  (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
-              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
+              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
               Deep.Functor
                  (Transformation.Mapped
                     ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                     (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
-                 (g l l),
-              Deep.Functor
-                 (Rank2.Map
-                    (Binder.WithEnvironment' l Haskell.Parsed)
-                    (Binder.WithEnvironment l Haskell.Parsed))
                  (g l l),
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
@@ -166,7 +169,13 @@ main' Opts{..} = do
                   Show (g Language Language e e), Show (g Language Language w w),
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-                  Full.Traversable (Di.Keep (Binder.Binder l w)) (g l l),
+                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
+                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
+                  AG.Attribution (Binder.BinderWorker l w) (g l l),
+                  AG.Atts (AG.Synthesized (Binder.BinderWorker Language (Grammar.NodeWrap Input))) (g l l)
+                  ~ Binder.LocalEnvironment l,
+                  Deep.Functor (AG.Keep (Binder.BinderWorker l w)) (g l l),
+                  Deep.Functor (Rank2.Map (AG.Kept (Binder.BinderWorker l w)) (Binder.WithEnvironment l w)) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
@@ -184,21 +193,16 @@ main' Opts{..} = do
                          '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase]
                          Language Language Int Text)
                      g,
-                 FullyTranslatable
+                  FullyTranslatable
                      (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                      g,
-                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Bound) (g l l),
+                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
                   Deep.Functor
                      (Transformation.Mapped
                         ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
                         (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
-                     (g l l),
-                  Deep.Functor
-                     (Rank2.Map
-                        (Binder.WithEnvironment' l Haskell.Parsed)
-                        (Binder.WithEnvironment l Haskell.Parsed))
                      (g l l),
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
