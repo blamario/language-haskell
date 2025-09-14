@@ -183,7 +183,7 @@ data instance Construct '[ 'Extensions.GADTs,
                        -> Declaration λ l d s}
 
 data instance Construct '[ 'Extensions.TypeAbstractions ] λ l d s = TypeAbstractionConstruction {
-   typeLHSTypeApplication :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s -> TypeLHS λ l d s,
+   typeLHSTypeApplication :: s (TypeLHS l l d d) -> s (TypeVarBinding l l d d) -> TypeLHS λ l d s,
    invisibleTypePattern :: s (Type l l d d) -> Pattern λ l d s}
 
 data instance Construct '[ 'Extensions.UnboxedTuples ] λ l d s = UnboxedTuplesConstruction {
@@ -253,8 +253,8 @@ data instance Construct '[ 'Extensions.PatternSynonyms ] λ l d s = PatternSynon
                           -> Declaration λ l d s,
    patternSynonymSignature :: Supports 'Extensions.PatternSynonyms λ
                            => NonEmpty (Name λ)
-                           -> [TypeVarBinding λ l d s] -> s (Context l l d d)
-                           -> [TypeVarBinding λ l d s] -> s (Context l l d d)
+                           -> [s (TypeVarBinding l l d d)] -> s (Context l l d d)
+                           -> [s (TypeVarBinding l l d d)] -> s (Context l l d d)
                            -> [s (Type l l d d)]
                            -> s (Type l l d d)
                            -> Declaration λ l d s}
@@ -263,7 +263,7 @@ data instance Construct '[ 'Extensions.NamedDefaults ] λ l d s = NamedDefaultsC
    namedDefaultDeclaration :: QualifiedName λ -> [s (Type l l d d)] -> Declaration λ l d s}
 
 data instance Construct '[ 'Extensions.StandaloneDeriving ] λ l d s = StandaloneDerivingConstruction {
-   standaloneDerivingDeclaration :: [TypeVarBinding λ l d s]
+   standaloneDerivingDeclaration :: [s (TypeVarBinding l l d d)]
                                  -> s (Context l l d d)
                                  -> s (ClassInstanceLHS l l d d)
                                  -> Declaration λ l d s}
@@ -278,7 +278,7 @@ data instance Construct '[ 'Extensions.DerivingStrategies ] λ l d s = DerivingS
    strategicDerive :: s (DerivingStrategy l l d d) -> [s (Type l l d d)] -> DerivingClause λ l d s,
    standaloneStrategicDerivingDeclaration :: Supports 'Extensions.StandaloneDeriving λ
                                           => s (DerivingStrategy l l d d)
-                                          -> [TypeVarBinding λ l d s]
+                                          -> [s (TypeVarBinding l l d d)]
                                           -> s (Context l l d d)
                                           -> s (ClassInstanceLHS l l d d)
                                           -> Declaration λ l d s}
@@ -320,23 +320,23 @@ data instance Construct '[ 'Extensions.TypeFamilies ] λ l d s = TypeFamiliesCon
    openTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> Declaration λ l d s,
    closedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> [s (Declaration l l d d)]
                                -> Declaration λ l d s,
-   dataFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
+   dataFamilyInstance :: [s (TypeVarBinding l l d d)] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
                       -> Maybe (s (Kind l l d d)) -> [s (DataConstructor l l d d)] -> [s (DerivingClause l l d d)]
                       -> Declaration λ l d s,
-   newtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
+   newtypeFamilyInstance :: [s (TypeVarBinding l l d d)] -> s (Context l l d d) -> s (ClassInstanceLHS l l d d)
                          -> Maybe (s (Kind l l d d)) -> s (DataConstructor l l d d) -> [s (DerivingClause l l d d)]
                          -> Declaration λ l d s,
-   gadtDataFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
+   gadtDataFamilyInstance :: [s (TypeVarBinding l l d d)] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
                           -> [s (GADTConstructor l l d d)] -> [s (DerivingClause l l d d)] -> Declaration λ l d s,
-   gadtNewtypeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
+   gadtNewtypeFamilyInstance :: [s (TypeVarBinding l l d d)] -> s (ClassInstanceLHS l l d d) -> Maybe (s (Kind l l d d))
                              -> s (GADTConstructor l l d d) -> [s (DerivingClause l l d d)] -> Declaration λ l d s,
-   typeFamilyInstance :: [TypeVarBinding λ l d s] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
+   typeFamilyInstance :: [s (TypeVarBinding l l d d)] -> s (ClassInstanceLHS l l d d) -> s (Type l l d d)
                       -> Declaration λ l d s}
 
 data instance Construct '[ 'Extensions.TypeFamilyDependencies ] λ l d s = TypeFamilyDependenciesConstruction {
-   injectiveOpenTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+   injectiveOpenTypeFamilyDeclaration :: s (TypeLHS l l d d) -> s (TypeVarBinding l l d d)
                                       -> Maybe (Name λ, NonEmpty (Name λ)) -> Declaration λ l d s,
-   injectiveClosedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s
+   injectiveClosedTypeFamilyDeclaration :: s (TypeLHS l l d d) -> s (TypeVarBinding l l d d)
                                         -> Maybe (Name λ, NonEmpty (Name λ)) -> [s (Declaration l l d d)]
                                         -> Declaration λ l d s}
 
@@ -384,24 +384,24 @@ class (Haskell λ,
                                          -> Maybe (s (ImportSpecification l l d d))
                                          -> Import λ l d s
    infixTypeApplication :: s (Type l l d d) -> QualifiedName λ -> s (Type l l d d) -> Type λ l d s
-   infixTypeLHSApplication :: TypeVarBinding λ l d s -> Name λ -> TypeVarBinding λ l d s -> TypeLHS λ l d s
-   typeLHSApplication :: s (TypeLHS l l d d) -> TypeVarBinding λ l d s -> TypeLHS λ l d s
-   simpleKindedTypeLHS :: Name λ -> [TypeVarBinding λ l d s] -> TypeLHS λ l d s
-   existentialConstructor :: [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (DataConstructor l l d d)
+   infixTypeLHSApplication :: s (TypeVarBinding l l d d) -> Name λ -> s (TypeVarBinding l l d d) -> TypeLHS λ l d s
+   typeLHSApplication :: s (TypeLHS l l d d) -> s (TypeVarBinding l l d d) -> TypeLHS λ l d s
+   simpleKindedTypeLHS :: Name λ -> [s (TypeVarBinding l l d d)] -> TypeLHS λ l d s
+   existentialConstructor :: [s (TypeVarBinding l l d d)] -> s (Context l l d d) -> s (DataConstructor l l d d)
                           -> DataConstructor λ l d s
-   explicitlyScopedInstanceDeclaration :: [TypeVarBinding λ l d s]
+   explicitlyScopedInstanceDeclaration :: [s (TypeVarBinding l l d d)]
                                        -> s (Context l l d d)
                                        -> s (ClassInstanceLHS l l d d)
                                        -> [s (Declaration l l d d)]
                                        -> Declaration λ l d s
-   forallType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
+   forallType :: [s (TypeVarBinding l l d d)] -> s (Type l l d d) -> Type λ l d s
    constrainedType :: s (Context l l d d) -> s (Type l l d d) -> Type λ l d s
    kindedType :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s
    typeWildcard :: Type λ l d s
    groundType :: Type λ l d s
 
    explicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
-   implicitlyKindedTypeVariable :: Name λ -> TypeVarBinding λ l d s
+   implicitlyKindedTypeVariable :: λ ~ l => Name λ -> TypeVarBinding λ l d s
    inferredTypeVariable :: Name λ -> TypeVarBinding λ l d s
    inferredExplicitlyKindedTypeVariable :: Name λ -> s (Kind l l d d) -> TypeVarBinding λ l d s
    wildcardTypeBinding :: TypeVarBinding λ l d s
@@ -417,7 +417,7 @@ class (Haskell λ,
                    -> [s (DerivingClause l l d d)] -> Declaration λ l d s
    gadtNewtypeDeclaration :: s (TypeLHS l l d d) -> Maybe (s (Kind l l d d)) -> s (GADTConstructor l l d d)
                           -> [s (DerivingClause l l d d)] -> Declaration λ l d s
-   gadtConstructors :: NonEmpty (Name λ) -> [TypeVarBinding λ l d s] -> s (Context l l d d) -> s (Type l l d d)
+   gadtConstructors :: NonEmpty (Name λ) -> [s (TypeVarBinding l l d d)] -> s (Context l l d d) -> s (Type l l d d)
                    -> GADTConstructor λ l d s
    recordFunctionType :: [s (FieldDeclaration l l d d)] -> s (Type l l d d) -> Type λ l d s
    multiplicityFunctionType :: s (Type l l d d) -> s (Type l l d d) -> s (Type l l d d) -> Type λ l d s
@@ -433,7 +433,7 @@ class (Haskell λ,
    typeConstraint :: s (Type l l d d) -> Context λ l d s
    constraintType :: s (Context l l d d) -> Type λ l d s
 
-   visibleDependentType :: [TypeVarBinding λ l d s] -> s (Type l l d d) -> Type λ l d s
+   visibleDependentType :: [s (TypeVarBinding l l d d)] -> s (Type l l d d) -> Type λ l d s
 
    visibleTypeApplication :: s (Expression l l d d) -> s (Type l l d d) -> Expression λ l d s
    visibleKindApplication :: s (Type l l d d) -> s (Kind l l d d) -> Type λ l d s

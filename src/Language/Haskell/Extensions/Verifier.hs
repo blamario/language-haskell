@@ -433,15 +433,17 @@ instance (Eq s, IsString s, LeftReductive s, TextualMonoid s) =>
          `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ Compose (_, ((start, Trailing lexemes, end), t)) = Const $ UnionWith $
       case t
-      of ExtAST.SimpleTypeLHS op vars
-            -> (if any (Textual.any isSymbol . lexemeText) lexemes
-                then Map.singleton Extensions.TypeOperators [(start, end)]
-                else mempty)
-               <> foldMap (checkKindedTypevar (start, end)) vars
-         ExtAST.TypeLHSApplication _ var -> checkKindedTypevar (start, end) var
-         ExtAST.TypeLHSTypeApplication _sup _ var ->
-            Map.singleton Extensions.TypeOperators [(start, end)]
-            <> checkKindedTypevar (start, end) var
+      of ExtAST.SimpleTypeLHS{}
+            -> if any (Textual.any isSymbol . lexemeText) lexemes
+               then Map.singleton Extensions.TypeOperators [(start, end)]
+               else mempty
+         ExtAST.SimpleKindedTypeLHS{}
+            -> if any (Textual.any isSymbol . lexemeText) lexemes
+               then Map.singleton Extensions.TypeOperators [(start, end)]
+               else mempty
+         ExtAST.InfixTypeLHSApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
+         ExtAST.TypeLHSApplication{} -> mempty
+         ExtAST.TypeLHSTypeApplication{} -> Map.singleton Extensions.TypeOperators [(start, end)]
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
@@ -489,8 +491,7 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.PromotedCharLiteral{} -> Map.singleton Extensions.DataKinds [(start, end)]
          ExtAST.PromotedStringLiteral{} -> Map.singleton Extensions.DataKinds [(start, end)]
          ExtAST.RecordFunctionType{} -> Map.singleton Extensions.TraditionalRecordSyntax [(start, end)]
-         ExtAST.ForallType vars _ ->
-            Map.singleton Extensions.ExplicitForAll [(start, end)] <> foldMap (checkKindedTypevar (start, end)) vars
+         ExtAST.ForallType{} -> Map.singleton Extensions.ExplicitForAll [(start, end)]
          ExtAST.KindedType{} -> Map.singleton Extensions.KindSignatures [(start, end)]
          ExtAST.GroundTypeKind{} -> Map.singleton Extensions.StarIsType [(start, end)]
          ExtAST.StrictType{} -> Map.singleton Extensions.BangDataFields [(start, end)]
@@ -500,6 +501,18 @@ instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          ExtAST.VisibleDependentType{} -> Map.fromList [(Extensions.ExplicitForAll, [(start, end)]),
                                                         (Extensions.PolyKinds, [(start, end)])]
          _ -> mempty
+
+instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
+         Accounting l pos s
+         `Transformation.At` ExtAST.TypeVarBinding l l (Wrap l pos s) (Wrap l pos s) where
+   Accounting $ Compose (_, ((start, _, end), t)) | let span = (start, end) = Const $ UnionWith $ case t of
+      ExtAST.ExplicitlyKindedTypeVariable{} -> Map.singleton Extensions.KindSignatures [span]
+      ExtAST.ImplicitlyKindedTypeVariable{} -> mempty
+      ExtAST.WildcardTypeBinding -> Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
+      ExtAST.ExplicitlyKindedWildcardTypeBinding{} ->
+         Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
+         <>
+         Map.singleton Extensions.KindSignatures [span]
 
 instance (Eq s, IsString s, LeftReductive s, Factorial s) =>
          Accounting l pos s
@@ -522,16 +535,6 @@ instance Accounting l pos s `Transformation.At` ExtAST.CallSafety l where
        of ExtAST.InterruptibleCall{} -> Map.singleton Extensions.InterruptibleFFI [(start, end)]
           _ -> mempty)
 
-checkKindedTypevar :: (pos, pos) -> ExtAST.TypeVarBinding λ l d s -> Map Extension [(pos, pos)]
-checkKindedTypevar span ExtAST.ExplicitlyKindedTypeVariable{} = Map.singleton Extensions.KindSignatures [span]
-checkKindedTypevar _ ExtAST.ImplicitlyKindedTypeVariable{} = mempty
-checkKindedTypevar span ExtAST.WildcardTypeBinding =
-  Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
-checkKindedTypevar span ExtAST.ExplicitlyKindedWildcardTypeBinding{} =
-  Map.singleton Extensions.TypeAbstractionsOrApplicationsInConstructorPatterns [span]
-  <>
-  Map.singleton Extensions.KindSignatures [span]
-
 (|||) :: Applicative f => f Bool -> f Bool -> f Bool
 (|||) = liftA2 (||)
 
@@ -539,6 +542,8 @@ instance {-# OVERLAPS #-} MPTCAccounting l pos s
                           `Transformation.At` ExtAST.TypeLHS l l (Wrap l pos s) (Wrap l pos s) where
    MPTCAccounting $ Compose (_, (_, node)) = Const $ Sum $ case node of
       ExtAST.SimpleTypeLHS _ args -> length args
+      ExtAST.SimpleKindedTypeLHS _ args -> length args
+      ExtAST.InfixTypeLHSApplication{} -> 2
       ExtAST.TypeLHSApplication{} -> 1
       ExtAST.TypeLHSTypeApplication{} -> 0
 

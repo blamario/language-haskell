@@ -711,7 +711,7 @@ typeTemplate (ForallType vars body) =
    ForallT varBindings [] (typeTemplate type')
    where type' = extract body
          varBindings = typeVarBindingSpecTemplate <$> vars
-         bindingVars = bindingVarName <$> vars
+         bindingVars = bindingVarName . extract <$> vars
 typeTemplate (ConstrainedType context body) =
    ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
 typeTemplate (ConstraintType context) = case contextTemplate (extract context) of
@@ -722,7 +722,7 @@ typeTemplate (VisibleDependentType vars body) =
               (typeTemplate type')
    where type' = extract body
          varBindings = typeVarBindingUnitTemplate <$> vars
-         bindingVars = bindingVarName <$> vars
+         bindingVars = bindingVarName . extract <$> vars
 typeTemplate GroundTypeKind = StarT
 typeTemplate (PromotedConstructorType () con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
@@ -775,9 +775,10 @@ freeTypeVars (VisibleKindApplication t kind) = freeTypeVars (extract t) <> freeT
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
-freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName <$> vars)
+freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName . extract <$> vars)
 freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
-freeTypeVars (VisibleDependentType vars body) = nub (freeTypeVars (extract body)) \\ (bindingVarName <$> vars)
+freeTypeVars (VisibleDependentType vars body) =
+   nub (freeTypeVars (extract body)) \\ (bindingVarName . extract <$> vars)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t
@@ -790,40 +791,35 @@ freeTypeVars PromotedIntegerLiteral{} = []
 freeTypeVars PromotedCharLiteral{} = []
 freeTypeVars PromotedStringLiteral{} = []
 
-typeVarBindingUnitTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrUnit
-typeVarBindingUnitTemplate (ExplicitlyKindedTypeVariable _ name kind) =
-   kindedTV (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingUnitTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
-typeVarBindingUnitTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
-   kindedTV (mkName "_") (typeTemplate $ extract kind)
-typeVarBindingUnitTemplate WildcardTypeBinding = plainTV (mkName "_")
+typeVarBindingUnitTemplate :: TemplateWrapper f => f (ExtAST.TypeVarBinding Language Language f f) -> TyVarBndrUnit
+typeVarBindingUnitTemplate tv = case extract tv of
+   ExplicitlyKindedTypeVariable _ name kind -> kindedTV (nameTemplate name) (typeTemplate $ extract kind)
+   ImplicitlyKindedTypeVariable _ name -> plainTV (nameTemplate name)
+   ExplicitlyKindedWildcardTypeBinding kind -> kindedTV (mkName "_") (typeTemplate $ extract kind)
+   WildcardTypeBinding -> plainTV (mkName "_")
 
-typeVarBindingVisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
-typeVarBindingVisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
-   kindedTV (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingVisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTV (nameTemplate name)
-typeVarBindingVisibleTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
-   kindedTV (mkName "_") (typeTemplate $ extract kind)
-typeVarBindingVisibleTemplate WildcardTypeBinding = plainTV (mkName "_")
+typeVarBindingVisibleTemplate :: TemplateWrapper f => f (ExtAST.TypeVarBinding Language Language f f) -> TyVarBndrVis
+typeVarBindingVisibleTemplate tv = case extract tv of
+   ExplicitlyKindedTypeVariable _ name kind -> kindedTV (nameTemplate name) (typeTemplate $ extract kind)
+   ImplicitlyKindedTypeVariable _ name -> plainTV (nameTemplate name)
+   ExplicitlyKindedWildcardTypeBinding kind -> kindedTV (mkName "_") (typeTemplate $ extract kind)
+   WildcardTypeBinding -> plainTV (mkName "_")
 
-typeVarBindingInvisibleTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrVis
-typeVarBindingInvisibleTemplate (ExplicitlyKindedTypeVariable _ name kind) =
-   kindedTVInvis (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingInvisibleTemplate (ImplicitlyKindedTypeVariable _ name) = plainTVInvis (nameTemplate name)
-typeVarBindingInvisibleTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
-   kindedTVInvis (mkName "_") (typeTemplate $ extract kind)
-typeVarBindingInvisibleTemplate WildcardTypeBinding = plainTVInvis (mkName "_")
+typeVarBindingInvisibleTemplate :: TemplateWrapper f => f (ExtAST.TypeVarBinding Language Language f f) -> TyVarBndrVis
+typeVarBindingInvisibleTemplate tv = case extract tv of
+   ExplicitlyKindedTypeVariable _ name kind -> kindedTVInvis (nameTemplate name) (typeTemplate $ extract kind)
+   ImplicitlyKindedTypeVariable _ name -> plainTVInvis (nameTemplate name)
+   ExplicitlyKindedWildcardTypeBinding kind -> kindedTVInvis (mkName "_") (typeTemplate $ extract kind)
+   WildcardTypeBinding -> plainTVInvis (mkName "_")
 
-typeVarBindingSpecTemplate :: TemplateWrapper f => ExtAST.TypeVarBinding Language Language f f -> TyVarBndrSpec
-typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable False name kind) =
-   kindedTVSpecified (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable False name) = plainTVSpecified (nameTemplate name)
-typeVarBindingSpecTemplate (ExplicitlyKindedTypeVariable True name kind) =
-   kindedTVInferred (nameTemplate name) (typeTemplate $ extract kind)
-typeVarBindingSpecTemplate (ImplicitlyKindedTypeVariable True name) = plainTVInferred (nameTemplate name)
-typeVarBindingSpecTemplate (ExplicitlyKindedWildcardTypeBinding kind) =
-   kindedTVSpecified (mkName "_") (typeTemplate $ extract kind)
-typeVarBindingSpecTemplate WildcardTypeBinding = plainTVInferred (mkName "_")
+typeVarBindingSpecTemplate :: TemplateWrapper f => f (ExtAST.TypeVarBinding Language Language f f) -> TyVarBndrSpec
+typeVarBindingSpecTemplate tv = case extract tv of
+   ExplicitlyKindedTypeVariable False name kind -> kindedTVSpecified (nameTemplate name) (typeTemplate $ extract kind)
+   ImplicitlyKindedTypeVariable False name -> plainTVSpecified (nameTemplate name)
+   ExplicitlyKindedTypeVariable True name kind -> kindedTVInferred (nameTemplate name) (typeTemplate $ extract kind)
+   ImplicitlyKindedTypeVariable True name -> plainTVInferred (nameTemplate name)
+   ExplicitlyKindedWildcardTypeBinding kind -> kindedTVSpecified (mkName "_") (typeTemplate $ extract kind)
+   WildcardTypeBinding -> plainTVInferred (mkName "_")
 
 bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
 bindingVarName (ExplicitlyKindedTypeVariable _ name _) = nameTemplate name
@@ -860,7 +856,10 @@ extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.Type
                => f (ExtAST.TypeLHS l l f f) -> (AST.Name l, [TyVarBndrVis])
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrVis])
-         fromTypeLHS (SimpleTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
+         fromTypeLHS (SimpleTypeLHS con vars) = (con, plainTV . nameTemplate <$> vars)
+         fromTypeLHS (SimpleKindedTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
+         fromTypeLHS (InfixTypeLHSApplication left con right)
+            = (con, [typeVarBindingVisibleTemplate left, typeVarBindingVisibleTemplate right])
          fromTypeLHS (TypeLHSApplication t var)
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingVisibleTemplate var])
          fromTypeLHS (TypeLHSTypeApplication () t var)

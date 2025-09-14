@@ -98,7 +98,7 @@ data GrammarExtensions l t f p = GrammarExtensions {
    derivingStrategy :: p (Abstract.DerivingStrategy l l f f),
    inClassOrInstanceTypeFamilyDeclaration :: p (Abstract.Declaration l l f f),
    instanceDesignatorApplications, instanceDesignatorBase :: p (Abstract.ClassInstanceLHS l l f f),
-   optionalForall :: p [Abstract.TypeVarBinding l l f f],
+   optionalForall :: p [f (Abstract.TypeVarBinding l l f f)],
    typeVarBinder :: p (Abstract.TypeVarBinding l l f f),
    optionallyParenthesizedTypeVar :: p (Abstract.Name l),   
    optionallyKindedTypeVar, optionallyKindedAndParenthesizedTypeVar :: p (Abstract.Type l l f f),
@@ -307,14 +307,14 @@ initialOverlay self super = super{
          simpleType =
             Abstract.simpleTypeLHS <$> self.report.typeConstructor <*> pure []
             <|> Abstract.infixTypeLHSApplication
-                <$> self.extensions.typeVarBinder
+                <$> wrap self.extensions.typeVarBinder
                 <* terminator "`"
                 <*> self.report.declarationLevel.typeClass
                 <* terminator "`"
-                <*> self.extensions.typeVarBinder
+                <*> wrap self.extensions.typeVarBinder
             <|> Abstract.typeLHSApplication
                 <$> wrap self.report.declarationLevel.simpleType
-                <*> self.extensions.typeVarBinder,
+                <*> wrap self.extensions.typeVarBinder,
          optionalTypeSignatureContext = pure Abstract.noContext,
          context =
             self.report.declarationLevel.constraint
@@ -974,9 +974,9 @@ typeOperatorsMixin self super = super{
          typeClass = super.report.declarationLevel.typeClass <|> parens anyOperator,
          simpleType = super.report.declarationLevel.simpleType
             <|> Abstract.infixTypeLHSApplication
-                         <$> self.extensions.typeVarBinder
+                         <$> wrap self.extensions.typeVarBinder
                          <*> (notFollowedBy (string "`") *> anyOperator)
-                         <*> self.extensions.typeVarBinder,
+                         <*> wrap self.extensions.typeVarBinder,
          instanceDesignator =
             super.report.declarationLevel.instanceDesignator
             <|> Abstract.infixTypeClassInstanceLHS
@@ -1067,7 +1067,7 @@ gratuitouslyParenthesizedTypesMixin self super = super{
             <|> parens contextAndGadtBody
          forallAndContextAndBody =
             (,,) <$ self.extensions.keywordForall
-                 <*> many self.extensions.typeVarBinder
+                 <*> many (wrap self.extensions.typeVarBinder)
                  <* delimiter "."
                  <**> pure uncurry
                  <*> optionalContextAndGadtBody
@@ -1075,13 +1075,13 @@ gratuitouslyParenthesizedTypesMixin self super = super{
             <|> parens forallAndContextAndBody
          forallAndParenContextBody =
             (,,) <$ self.extensions.keywordForall
-                 <*> many self.extensions.typeVarBinder
+                 <*> many (wrap self.extensions.typeVarBinder)
                  <* delimiter "."
                  <**> pure uncurry
                  <*> parens contextAndGadtBody
          forallAndNewBody =
             (,,) <$ self.extensions.keywordForall
-                 <*> many self.extensions.typeVarBinder
+                 <*> many (wrap self.extensions.typeVarBinder)
                  <* delimiter "."
                  <*> wrap (pure Abstract.noContext
                            <|> self.report.declarationLevel.context
@@ -1205,11 +1205,11 @@ typeFamilyDependenciesMixin self super = super{
          topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
             <|> Abstract.injectiveOpenTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
-                <*> self.extensions.typeVarBinder
+                <*> wrap self.extensions.typeVarBinder
                 <*> optional dependencies
             <|> Abstract.injectiveClosedTypeFamilyDeclaration Abstract.build <$ keyword "type" <* keyword "family"
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
-                <*> self.extensions.typeVarBinder
+                <*> wrap self.extensions.typeVarBinder
                 <*> optional dependencies
                 <* keyword "where"
                 <*> blockOf (wrap $ Abstract.typeFamilyInstance Abstract.build
@@ -1220,7 +1220,7 @@ typeFamilyDependenciesMixin self super = super{
             <|> Abstract.injectiveOpenTypeFamilyDeclaration Abstract.build
                 <$ keyword "type" <* optional (keyword "family")
                 <*> wrap self.report.declarationLevel.simpleType <* delimiter "="
-                <*> self.extensions.typeVarBinder
+                <*> wrap self.extensions.typeVarBinder
                 <*> (Just <$> dependencies)}}}
    where dependencies = (,) <$> (delimiter "|" *> self.report.typeVar) <* self.report.rightArrow
                             <*> someNonEmpty self.report.typeVar
@@ -1294,7 +1294,7 @@ visibleDependentQuantificationMixin self super = super{
       arrowType = super.extensions.arrowType
          <|> Abstract.visibleDependentType
              <$ self.extensions.keywordForall
-             <*> many self.extensions.typeVarBinder
+             <*> many (wrap self.extensions.typeVarBinder)
              <* self.report.rightArrow
              <*> wrap self.extensions.arrowType}}
 
@@ -1405,7 +1405,7 @@ typeAbstractionsMixin self super = super{
             <|> Abstract.typeLHSTypeApplication Abstract.build
                    <$> wrap self.report.declarationLevel.simpleType
                    <* delimiter "@"
-                   <*> self.extensions.typeVarBinder},
+                   <*> wrap self.extensions.typeVarBinder},
       aPattern =
          Abstract.invisibleTypePattern Abstract.build
             <$ (filter precededByOpenSpace getInput *> delimiter "@")
@@ -1544,7 +1544,7 @@ existentialQuantificationMixin self super = super{
          declaredConstructor = super.report.declarationLevel.declaredConstructor
             <|> Abstract.existentialConstructor
                 <$ self.extensions.keywordForall
-                <*> many self.extensions.typeVarBinder <* delimiter "."
+                <*> many (wrap self.extensions.typeVarBinder) <* delimiter "."
                 <*> wrap self.report.declarationLevel.optionalContext
                 <*> wrap super.report.declarationLevel.declaredConstructor
             <|> Abstract.existentialConstructor []
@@ -1571,7 +1571,7 @@ explicitForAllMixin self super = super{
             topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
                <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
                    <* self.extensions.keywordForall
-                   <*> many self.extensions.typeVarBinder
+                   <*> many (wrap self.extensions.typeVarBinder)
                    <* delimiter "."
                    <*> wrap self.report.declarationLevel.optionalContext
                    <*> wrap self.report.declarationLevel.instanceDesignator
@@ -1582,10 +1582,10 @@ explicitForAllMixin self super = super{
    extensions = super.extensions{
       arrowType = super.extensions.arrowType
          <|> Abstract.forallType <$ self.extensions.keywordForall
-             <*> many self.extensions.typeVarBinder <* delimiter "."
+             <*> many (wrap self.extensions.typeVarBinder) <* delimiter "."
              <*> wrap self.extensions.arrowType,
       keywordForall = super.extensions.keywordForall <|> keyword "forall",
-      optionalForall = self.extensions.keywordForall *> many self.extensions.typeVarBinder <* delimiter "."
+      optionalForall = self.extensions.keywordForall *> many (wrap self.extensions.typeVarBinder) <* delimiter "."
                        <<|> pure []}}
 
 gadtSyntaxMixin :: (OutlineMonoid t, Abstract.ExtendedHaskell l,
@@ -1606,7 +1606,7 @@ gadtSyntaxMixin self super = super{
                 <*> wrap self.extensions.gadtNewConstructor
                 <*> moptional super.report.declarationLevel.derivingClause}},
    extensions = super.extensions{
-      optionalForall = self.extensions.keywordForall *> many self.extensions.typeVarBinder <* delimiter "."
+      optionalForall = self.extensions.keywordForall *> many (wrap self.extensions.typeVarBinder) <* delimiter "."
                        <<|> pure []}}
 
 gadtSyntaxTypeOperatorsMixin :: Abstract.ExtendedHaskell l => ExtensionOverlay l g t
