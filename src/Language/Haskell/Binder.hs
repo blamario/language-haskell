@@ -519,8 +519,8 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          Di.Attribution (MonoBinder l f) (AST.ImportSpecification l l) where
    attribution _ node atts = atts{Di.syn = foldMap imports node}
-      where imports (AST.ImportSpecification False _) = Di.syn atts
-            imports (AST.ImportSpecification True _) = onMaps Map.difference available (Di.syn atts)
+      where imports (AST.ImportSpecification True _) = Di.syn atts
+            imports (AST.ImportSpecification False _) = onMaps Map.difference available (Di.syn atts)
             available = onMap (Map.mapKeysMonotonic baseName) $ snd $ Di.inh atts
 
 instance {-# OVERLAPS #-}
