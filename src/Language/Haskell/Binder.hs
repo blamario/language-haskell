@@ -448,7 +448,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (AST.RecordConstructor name _flds) =
@@ -468,7 +468,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.DataConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
@@ -489,7 +489,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.GADTConstructor l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.GADTConstructors names vars _ctx t)
               | Map.null (getUnionWith $ Di.syn atts)
@@ -511,7 +511,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.FieldDeclaration l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
@@ -530,7 +530,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.PatternLHS l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.RecordPatternLHS con fields) =
                UnionWith (Map.singleton con $ ValueBinding $ RecordConstructor fieldEnv) <> fieldEnv
@@ -551,7 +551,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: AST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (AST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
@@ -570,7 +570,7 @@ instance {-# OVERLAPS #-}
             (FromEnvironment' l f)
             f
          where
-   attribution _ node atts = atts{Di.syn= foldMap export node <>  Di.syn atts, Di.inh= Di.inh atts}
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: ExtAST.Pattern l l (FromEnvironment' l f) (FromEnvironment' l f) -> LocalEnvironment l
             export (ExtAST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
