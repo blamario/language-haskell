@@ -5,7 +5,7 @@
 module Language.Haskell.Extensions.Verifier (Accounting(Accounting), Verification(Verification),
                                              Error(..), verify) where
 
-import Control.Applicative (liftA2)
+import Control.Applicative (ZipList(ZipList), liftA2)
 import Control.Monad.Trans.Accum (Accum, accum, evalAccum)
 import qualified Data.Char as Char
 import Data.Foldable (toList)
@@ -644,8 +644,8 @@ instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccount
    foldMap = Full.foldMapDownDefault
 
 checkDuplicateRecordFields :: forall l pos s node. (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
-                           => [Wrap l pos s node] -> Maybe [(pos, pos)]
-checkDuplicateRecordFields declarations
+                           => ZipList (Wrap l pos s node) -> Maybe [(pos, pos)]
+checkDuplicateRecordFields (ZipList declarations)
   | Map.null duplicateBindings = Nothing
   | otherwise = Just (map location $ filter isDuplicate declarations)
   where duplicateBindings = Map.filter duplicateRecordField allDeclarationBindings

@@ -4,6 +4,7 @@
 -- | The types of nodes forming the Abstract Syntax Tree of the standard Haskell 2010 language without extensions
 module Language.Haskell.AST where
 
+import Control.Applicative (ZipList(ZipList))
 import Control.Monad (forM)
 import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
@@ -58,8 +59,9 @@ instance Abstract.Haskell Language where
    type ModuleName Language = ModuleName Language
    type QualifiedName Language = QualifiedName Language
 
-   anonymousModule = AnonymousModule
-   namedModule = NamedModule
+   anonymousModule = \imports declarations-> AnonymousModule (ZipList imports) (ZipList declarations)
+   namedModule = \name exports imports declarations
+                 -> NamedModule name (ZipList <$> exports) (ZipList imports) (ZipList declarations)
    withLanguagePragma = ExtendedModule
 
    exportClassOrType = ExportClassOrType
@@ -67,40 +69,40 @@ instance Abstract.Haskell Language where
    reExportModule = ReExportModule
 
    importDeclaration = Import
-   excludedImports = ImportSpecification False
-   includedImports = ImportSpecification True
+   excludedImports = ImportSpecification False . ZipList
+   includedImports = ImportSpecification True . ZipList
    importClassOrType = ImportClassOrType
    importVar = ImportVar
 
    allMembers = AllMembers
    memberList = MemberList
 
-   classDeclaration = ClassDeclaration
-   dataDeclaration = DataDeclaration
-   defaultDeclaration = DefaultDeclaration
-   equationDeclaration = EquationDeclaration
+   classDeclaration = \ctx lhs declarations-> ClassDeclaration ctx lhs (ZipList declarations)
+   dataDeclaration = \ctx lhs cons derivations-> DataDeclaration ctx lhs (ZipList cons) (ZipList derivations)
+   defaultDeclaration = DefaultDeclaration . ZipList
+   equationDeclaration = \lhs rhs wheres-> EquationDeclaration lhs rhs (ZipList wheres)
    fixityDeclaration = FixityDeclaration
    foreignExport = ForeignExport
    foreignImport = ForeignImport
-   instanceDeclaration = InstanceDeclaration
-   newtypeDeclaration = NewtypeDeclaration
+   instanceDeclaration = \ctx lhs declarations-> InstanceDeclaration ctx lhs (ZipList declarations)
+   newtypeDeclaration = \ctx lhs con derivations-> NewtypeDeclaration ctx lhs con (ZipList derivations)
    typeSynonymDeclaration = TypeSynonymDeclaration
    typeSignature = TypeSignature
 
    applyExpression = ApplyExpression
    conditionalExpression = ConditionalExpression
    constructorExpression = ConstructorExpression
-   caseExpression = CaseExpression
+   caseExpression = \scrutinee branches-> CaseExpression scrutinee (ZipList branches)
    doExpression = DoExpression
    infixExpression = InfixExpression
    leftSectionExpression = LeftSectionExpression
-   lambdaExpression = LambdaExpression
-   letExpression = LetExpression
+   lambdaExpression = LambdaExpression . ZipList
+   letExpression = LetExpression . ZipList
    listComprehension = ListComprehension
-   listExpression = ListExpression
+   listExpression = ListExpression . ZipList
    literalExpression = LiteralExpression
    negate = Negate
-   recordExpression = RecordExpression
+   recordExpression = \con fields-> RecordExpression con (ZipList fields)
    referenceExpression = ReferenceExpression
    rightSectionExpression = RightSectionExpression
    sequenceExpression = SequenceExpression
@@ -108,12 +110,12 @@ instance Abstract.Haskell Language where
    typedExpression = TypedExpression
 
    asPattern = AsPattern
-   constructorPattern = ConstructorPattern
+   constructorPattern = \con args-> ConstructorPattern con (ZipList args)
    infixPattern = InfixPattern
    irrefutablePattern = IrrefutablePattern
-   listPattern = ListPattern
+   listPattern = ListPattern . ZipList
    literalPattern = LiteralPattern
-   recordPattern = RecordPattern
+   recordPattern = \con fields-> RecordPattern con (ZipList fields)
    tuplePattern = TuplePattern
    variablePattern = VariablePattern
    wildcardPattern = WildcardPattern
@@ -132,8 +134,8 @@ instance Abstract.Haskell Language where
    tupleConstructor = TupleConstructor
    unitConstructor = UnitConstructor
 
-   constructor = Constructor
-   recordConstructor = RecordConstructor
+   constructor = \con params-> Constructor con (ZipList params)
+   recordConstructor = \con fields-> RecordConstructor con (ZipList fields)
    constructorFields = ConstructorFields
 
    fieldBinding = FieldBinding
@@ -149,20 +151,20 @@ instance Abstract.Haskell Language where
    patternLHS = PatternLHS
    variableLHS = VariableLHS
 
-   caseAlternative = CaseAlternative
+   caseAlternative = \lhs rhs wheres-> CaseAlternative lhs rhs (ZipList wheres)
 
    guardedRHS = GuardedRHS
    normalRHS = NormalRHS
 
-   guardedExpression = GuardedExpression
+   guardedExpression = GuardedExpression . ZipList
 
    classConstraint = ClassConstraint
-   constraints = Constraints
+   constraints = Constraints . ZipList
    noContext = NoContext
 
    bindStatement = BindStatement
    expressionStatement = ExpressionStatement
-   letStatement = LetStatement
+   letStatement = LetStatement . ZipList
 
    charLiteral = CharLiteral
    floatingLiteral = FloatingLiteral
@@ -187,26 +189,27 @@ instance Abstract.Haskell Language where
    unsafeCall = UnsafeCall
 
 data Module λ l d s =
-   NamedModule (Abstract.ModuleName λ) (Maybe [s (Abstract.Export l l d d)]) [s (Abstract.Import l l d d)]
-               [s (Abstract.Declaration l l d d)]
-   | AnonymousModule [s (Abstract.Import l l d d)] [s (Abstract.Declaration l l d d)]
+   NamedModule (Abstract.ModuleName λ) (Maybe (ZipList (s (Abstract.Export l l d d))))
+               (ZipList (s (Abstract.Import l l d d))) (ZipList (s (Abstract.Declaration l l d d)))
+   | AnonymousModule (ZipList (s (Abstract.Import l l d d))) (ZipList (s (Abstract.Declaration l l d d)))
    | ExtendedModule [ExtensionSwitch] (s (Abstract.Module l l d d))
 
 data Declaration λ l d s =
-   ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
+   ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
+                    (ZipList (s (Abstract.Declaration l l d d)))
    | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
-                     [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
-   | DefaultDeclaration [s (Abstract.Type l l d d)]
+                     (ZipList (s (Abstract.DataConstructor l l d d))) (ZipList (s (Abstract.DerivingClause l l d d)))
+   | DefaultDeclaration (ZipList (s (Abstract.Type l l d d)))
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
-                         [s (Abstract.Declaration l l d d)]
+                         (ZipList (s (Abstract.Declaration l l d d)))
    | FixityDeclaration (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
    | InstanceDeclaration (s (Abstract.Context l l d d)) (s (Abstract.ClassInstanceLHS l l d d))
-                         ([s (Abstract.Declaration l l d d)])
+                         ((ZipList (s (Abstract.Declaration l l d d))))
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
-                        (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
+                        (s (Abstract.DataConstructor l l d d)) (ZipList (s (Abstract.DerivingClause l l d d)))
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
@@ -215,18 +218,18 @@ data Expression λ l d s =
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                            (s (Abstract.Expression l l d d))
    | ConstructorExpression (s (Abstract.Constructor l l d d))
-   | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
+   | CaseExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.CaseAlternative l l d d)))
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
-   | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
-   | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
+   | LambdaExpression (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
+   | LetExpression (ZipList (s (Abstract.Declaration l l d d))) (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
-   | ListExpression [s (Abstract.Expression l l d d)]
+   | ListExpression (ZipList (s (Abstract.Expression l l d d)))
    | LiteralExpression (s (Abstract.Value l l d d))
    | Negate
-   | RecordExpression (s (Abstract.Expression l l d d)) [s (Abstract.FieldBinding l l d d)]
+   | RecordExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.FieldBinding l l d d)))
    | ReferenceExpression (Abstract.QualifiedName λ)
    | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
@@ -254,16 +257,17 @@ data EquationRHS λ l d s =
    GuardedRHS (NonEmpty (s (Abstract.GuardedExpression l l d d)))
    | NormalRHS (s (Abstract.Expression l l d d))
 
-data GuardedExpression λ l d s = GuardedExpression [s (Abstract.Statement l l d d)] (s (Abstract.Expression  l l d d))
+data GuardedExpression λ l d s =
+   GuardedExpression (ZipList (s (Abstract.Statement l l d d))) (s (Abstract.Expression  l l d d))
 
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
-   | ConstructorPattern (s (Abstract.Constructor l l d d)) [s (Abstract.Pattern l l d d)]
+   | ConstructorPattern (s (Abstract.Constructor l l d d)) (ZipList (s (Abstract.Pattern l l d d)))
    | InfixPattern (s (Abstract.Pattern l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
    | IrrefutablePattern (s (Abstract.Pattern l l d d))
-   | ListPattern [s (Abstract.Pattern l l d d)]
+   | ListPattern (ZipList (s (Abstract.Pattern l l d d)))
    | LiteralPattern (s (Abstract.Value l l d d))
-   | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | RecordPattern (Abstract.QualifiedName λ) (ZipList (s (Abstract.FieldPattern l l d d)))
    | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
@@ -271,7 +275,7 @@ data Pattern λ l d s =
 data Statement λ l d s =
    BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
    | ExpressionStatement (s (Abstract.Expression l l d d))
-   | LetStatement [s (Abstract.Declaration l l d d)]
+   | LetStatement (ZipList (s (Abstract.Declaration l l d d)))
 
 data ClassInstanceLHS λ l d s =
    TypeClassInstanceLHS (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
@@ -282,7 +286,7 @@ data TypeLHS λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
 data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
-data ImportSpecification λ l d s = ImportSpecification Bool [s (Abstract.ImportItem l l d d)]
+data ImportSpecification λ l d s = ImportSpecification Bool (ZipList (s (Abstract.ImportItem l l d d)))
 
 data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
@@ -295,21 +299,23 @@ data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
 
 data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | Constraints [s (Abstract.Context l l d d)]
+   | Constraints (ZipList (s (Abstract.Context l l d d)))
    | NoContext
 
 data DataConstructor λ l d s =
-   Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
-   | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
+   Constructor (Abstract.Name λ) (ZipList (s (Abstract.Type l l d d)))
+   | RecordConstructor (Abstract.Name λ) (ZipList (s (Abstract.FieldDeclaration l l d d)))
 
-data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) = SimpleDerive (Abstract.QualifiedName λ)
+data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
+   SimpleDerive (Abstract.QualifiedName λ)
 
 data FieldDeclaration λ l d s = ConstructorFields (NonEmpty (Abstract.Name λ)) (s (Abstract.Type l l d d))
 data FieldBinding λ l d s = FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
 data FieldPattern λ l d s = FieldPattern (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
 
 data CaseAlternative λ l d s =
-   CaseAlternative (s (Abstract.Pattern l l d d)) (s (Abstract.EquationRHS l l d d)) [s (Abstract.Declaration l l d d)]
+   CaseAlternative (s (Abstract.Pattern l l d d)) (s (Abstract.EquationRHS l l d d))
+                   (ZipList (s (Abstract.Declaration l l d d)))
 
 data Constructor λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ConstructorReference (Abstract.QualifiedName λ)

@@ -6,6 +6,7 @@
 -- Template Haskell AST, then printed using its pretty-printer.
 module Language.Haskell.Template (PrettyViaTH, pprint) where
 
+import Control.Applicative (ZipList(getZipList))
 import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
@@ -109,11 +110,11 @@ instance (Foldable f, PrettyViaTH a) => PrettyViaTH (Compose f ((,) x) a) where
 
 instance TemplateWrapper f => PrettyViaTH (Module Language Language f f) where
    prettyViaTH (AnonymousModule imports declarations) =
-      Ppr.vcat ((prettyViaTH . extract <$> imports) ++ (prettyViaTH . extract <$> declarations))
+      Ppr.vcat ((prettyViaTH . extract <$> toList imports) ++ (prettyViaTH . extract <$> toList declarations))
    prettyViaTH (NamedModule name exports imports declarations) =
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
       $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language f f)
-      where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH . extract <$> xs))
+      where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH . extract <$> toList xs))
    prettyViaTH (ExtendedModule extensions body) =
       Ppr.vcat [Ppr.text "{-# LANGUAGE" <+> Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> extensions)
                 <+> Ppr.text "#-}",
@@ -151,7 +152,7 @@ instance TemplateWrapper f => PrettyViaTH (Import Language Language f f) where
 instance TemplateWrapper f => PrettyViaTH (ImportSpecification Language Language f f) where
    prettyViaTH (ImportSpecification inclusive items) =
       (if inclusive then id else (Ppr.text "hiding" <+>))
-      $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH . extract <$> items)
+      $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH . extract <$> toList items)
 
 instance PrettyViaTH (ImportItem Language Language f f) where
    prettyViaTH (ImportClassOrType name@(AST.Name local) members)
@@ -275,10 +276,10 @@ expressionTemplate (FieldProjection fields) = ProjectionE (nameString <$> fields
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
 guardedTemplate (GuardedExpression statements result) =
-   (statementTemplate . extract <$> statements) ++ [NoBindS $ wrappedExpressionTemplate result]
+   (statementTemplate . extract <$> toList statements) ++ [NoBindS $ wrappedExpressionTemplate result]
 
 guardedTemplatePair :: TemplateWrapper f => GuardedExpression λ Language f f -> (Guard, Exp)
-guardedTemplatePair (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> statements,
+guardedTemplatePair (GuardedExpression statements result) = (PatG $ statementTemplate . extract <$> toList statements,
                                                              wrappedExpressionTemplate result)
 
 wrappedExpressionTemplate :: TemplateWrapper f => f (Expression Language Language f f) -> Exp

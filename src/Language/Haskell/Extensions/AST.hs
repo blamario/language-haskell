@@ -17,6 +17,7 @@ module Language.Haskell.Extensions.AST (Language(Language),
                                         CallSafety(..), CallingConvention(..),
                                         module Report) where
 
+import Control.Applicative (ZipList(ZipList))
 import Control.Monad (forM)
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty, toList)
@@ -385,8 +386,9 @@ instance Abstract.Haskell Language where
    type ModuleName Language = ModuleName Language
    type QualifiedName Language = QualifiedName Language
 
-   anonymousModule = AnonymousModule
-   namedModule = NamedModule
+   anonymousModule = \imports declarations-> AnonymousModule (ZipList imports) (ZipList declarations)
+   namedModule = \name exports imports declarations
+                 -> NamedModule name (ZipList <$> exports) (ZipList imports) (ZipList declarations)
    withLanguagePragma = ExtendedModule
 
    exportClassOrType = ExportClassOrType
@@ -394,8 +396,8 @@ instance Abstract.Haskell Language where
    reExportModule = ReExportModule
 
    importDeclaration q = Import False q Nothing
-   excludedImports = ImportSpecification False
-   includedImports = ImportSpecification True
+   excludedImports = ImportSpecification False . ZipList
+   includedImports = ImportSpecification True . ZipList
    importClassOrType = ImportClassOrType
    importVar = ImportVar
 
@@ -476,12 +478,12 @@ instance Abstract.Haskell Language where
    patternLHS = PatternLHS
    variableLHS = VariableLHS
 
-   caseAlternative = CaseAlternative
+   caseAlternative = \lhs rhs wheres-> CaseAlternative lhs rhs (ZipList wheres)
 
    guardedRHS = GuardedRHS
    normalRHS = NormalRHS
 
-   guardedExpression = GuardedExpression
+   guardedExpression = GuardedExpression . ZipList
 
    classConstraint cls t = ClassConstraint cls t
    constraints = Constraints

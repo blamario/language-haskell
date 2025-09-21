@@ -20,7 +20,7 @@ module Language.Haskell.Binder (
    -- * Utility functions
    lookupType, lookupValue, onMap, baseName, unqualifiedName) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), ZipList(ZipList))
 import Control.Exception (assert)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
@@ -382,10 +382,10 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope = importedScope modImports
                                          <> qualifiedWith moduleName (Di.syn atts)
                                          <> unqualified (Di.syn atts)
-            importedScope :: [FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f))]
+            importedScope :: ZipList (FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f)))
                           -> Environment l
             importedScope modImports = fold (Map.mapWithKey (importsFrom modImports) $ getUnionWith modEnv)
-            importsFrom :: [FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f))]
+            importsFrom :: ZipList (FromEnvironment' l f (ExtAST.Import l l (FromEnvironment' l f) (FromEnvironment' l f)))
                         -> Abstract.ModuleName l
                         -> UnionWith (Map (AST.Name l)) (Binding l)
                         -> Environment l
