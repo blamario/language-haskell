@@ -6,7 +6,7 @@
 -- Template Haskell AST, then printed using its pretty-printer.
 module Language.Haskell.Template (PrettyViaTH, pprint) where
 
-import Control.Applicative (ZipList(getZipList))
+import Control.Applicative (ZipList(ZipList))
 import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
@@ -207,14 +207,15 @@ expressionTemplate (ConstructorExpression con) = case (extract con)
       UnboxedSumConstructor{} -> error "Unboxed sum constructor can't appear in an expression"
       UnitConstructor -> TupE []
 expressionTemplate (CaseExpression scrutinee alternatives) =
-   CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> alternatives)
-expressionTemplate (MultiWayIfExpression alternatives) = MultiIfE (guardedTemplatePair . extract <$> alternatives)
+   CaseE (wrappedExpressionTemplate scrutinee) (caseAlternativeTemplate . extract <$> toList alternatives)
+expressionTemplate (MultiWayIfExpression alternatives) =
+   MultiIfE (guardedTemplatePair . extract <$> toList alternatives)
 expressionTemplate (LambdaCaseExpression () alternatives) =
-   LamCaseE (caseAlternativeTemplate . extract <$> alternatives)
+   LamCaseE (caseAlternativeTemplate . extract <$> toList alternatives)
 expressionTemplate (LambdaCasesExpression () alternatives) =
-   LamCasesE (casesAlternativeTemplate . extract <$> alternatives)
+   LamCasesE (casesAlternativeTemplate . extract <$> toList alternatives)
    where casesAlternativeTemplate (LambdaCasesAlternative () lhs rhs) =
-            Clause (patternTemplate . extract <$> lhs) (rhsTemplate $ extract rhs) []
+            Clause (patternTemplate . extract <$> toList lhs) (rhsTemplate $ extract rhs) []
 expressionTemplate (DoExpression statements) = doE (guardedTemplate $ extract statements)
 expressionTemplate (MDoExpression statements) = mdoE (guardedTemplate $ extract statements)
 
@@ -231,7 +232,7 @@ expressionTemplate (InfixExpression left op right) =
 expressionTemplate (LeftSectionExpression left op) =
    InfixE (Just $ wrappedExpressionTemplate left) (nameReferenceTemplate op) Nothing
 expressionTemplate (LambdaExpression patterns body) =
-   LamE (patternTemplate . extract <$> patterns) (wrappedExpressionTemplate body)
+   LamE (patternTemplate . extract <$> toList patterns) (wrappedExpressionTemplate body)
 expressionTemplate (LetExpression bindings body) =
    LetE (foldMap (declarationTemplates . extract) bindings) (wrappedExpressionTemplate body)
 expressionTemplate (ListComprehension element guards) =
@@ -240,14 +241,14 @@ expressionTemplate (ParallelListComprehension () element guards1 guards2 guardse
    CompE [ParS (branch guards1 : branch guards2 : map branch guardses),
           statementTemplate (ExpressionStatement element)]
    where branch statements = statementTemplate <$> (extract <$> toList statements)
-expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> items)
+expressionTemplate (ListExpression items) = ListE (expressionTemplate . extract <$> toList items)
 expressionTemplate (LiteralExpression value) = LitE (literalTemplate $ extract value)
 expressionTemplate Negate = VarE (mkName "Prelude.negate")
 expressionTemplate (RecordExpression record fields) =
    (case extract record
     of ConstructorExpression con | ConstructorReference name <- extract con -> RecConE (qnameTemplate name)
        e -> RecUpdE $ expressionTemplate e)
-   (fieldBindingTemplate . extract <$> fields)
+   (fieldBindingTemplate . extract <$> toList fields)
 expressionTemplate WildcardRecordExpression{} = error "TH doesn't support record wildcards"
 expressionTemplate (ReferenceExpression name) = VarE (qnameTemplate name)
 expressionTemplate (RightSectionExpression op right) =
@@ -303,37 +304,37 @@ declarationTemplates (ClassDeclaration context lhs members)
              (foldMap (declarationTemplates . extract) members)]
 declarationTemplates (FunDepClassDeclaration () context lhs fundeps members)
    | (con, vars) <- extractSimpleTypeLHS lhs =
-     [ClassD (contextTemplate $ extract context) (nameTemplate con) vars (fundepTemplate . extract <$> fundeps)
+     [ClassD (contextTemplate $ extract context) (nameTemplate con) vars (fundepTemplate . extract <$> toList fundeps)
              (foldMap (declarationTemplates . extract) members)]
 declarationTemplates (DataDeclaration context lhs kind constructors derivings)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [DataD (contextTemplate $ extract context) (nameTemplate con) vars
-            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> constructors)
-            $ derivingsTemplate $ extract <$> derivings]
+            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> toList constructors)
+            $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates (GADTDeclaration lhs kind constructors derivings)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [DataD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
-            (gadtConstructorTemplate . extract <$> constructors)
-            (derivingsTemplate $ extract <$> derivings)]
+            (gadtConstructorTemplate . extract <$> toList constructors)
+            (derivingsTemplate $ extract <$> toList derivings)]
 #if MIN_VERSION_template_haskell(2,20,0)
 declarationTemplates (TypeDataDeclaration () lhs kind constructors)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [TypeDataD (nameTemplate con) vars
-            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> constructors)]
+            (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract <$> toList constructors)]
 declarationTemplates (TypeGADTDeclaration () () lhs kind constructors)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [TypeDataD (nameTemplate con) vars (typeTemplate . extract <$> kind)
-            (gadtConstructorTemplate . extract <$> constructors)]
+            (gadtConstructorTemplate . extract <$> toList constructors)]
 #endif
 declarationTemplates (DefaultDeclaration types) =
 #if MIN_VERSION_template_haskell(2,19,0)
-   [DefaultD (typeTemplate . extract <$> types)]
+   [DefaultD (typeTemplate . extract <$> toList types)]
 #else
    error "Template Haskell <2.19 can't represent a default declaration"
 #endif
 declarationTemplates (NamedDefaultDeclaration () name types) =
 #if MIN_VERSION_template_haskell(2,19,0)
-   [DefaultD (typeTemplate . extract <$> types)]
+   [DefaultD (typeTemplate . extract <$> toList types)]
 #else
    error "Template Haskell <2.19 can't represent a default declaration"
 #endif
@@ -382,12 +383,12 @@ declarationTemplates (NewtypeDeclaration context lhs kind constructor derivings)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [NewtypeD (contextTemplate $ extract context) (nameTemplate con) vars
                (typeTemplate . extract <$> kind) (dataConstructorTemplate . extract $ constructor)
-               $ derivingsTemplate $ extract <$> derivings]
+               $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates (GADTNewtypeDeclaration lhs kind constructor derivings)
    | (con, vars) <- extractSimpleTypeLHS lhs =
      [NewtypeD [] (nameTemplate con) vars (typeTemplate . extract <$> kind)
             (gadtConstructorTemplate . extract $ constructor)
-            (derivingsTemplate $ extract <$> derivings)]
+            (derivingsTemplate $ extract <$> toList derivings)]
 declarationTemplates (TypeSynonymDeclaration lhs t)
    | (con, vars) <- extractSimpleTypeLHS lhs = [TySynD (nameTemplate con) vars (typeTemplate $ extract t)]
 declarationTemplates (TypeSignature names context t) =
@@ -405,7 +406,7 @@ declarationTemplates (OpenTypeFamilyDeclaration () lhs kind)
 declarationTemplates (ClosedTypeFamilyDeclaration () lhs kind constructors)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (familyKindTemplate kind) Nothing)
-                        (typeFamilyInstanceTemplate . extract <$> constructors)]
+                        (typeFamilyInstanceTemplate . extract <$> toList constructors)]
 declarationTemplates (InjectiveOpenTypeFamilyDeclaration () lhs binding injectivity)
    | (con, vars) <- extractSimpleTypeLHS lhs
    = [OpenTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
@@ -416,35 +417,35 @@ declarationTemplates (InjectiveClosedTypeFamilyDeclaration () lhs binding inject
    = [ClosedTypeFamilyD (TypeFamilyHead (nameTemplate con) vars (TyVarSig $ typeVarBindingUnitTemplate binding)
                                         (uncurry InjectivityAnn . bimap nameTemplate (map nameTemplate . toList)
                                          <$> injectivity))
-                        (typeFamilyInstanceTemplate . extract <$> constructors)]
+                        (typeFamilyInstanceTemplate . extract <$> toList constructors)]
 declarationTemplates (DataFamilyInstance () vars context lhs kind constructors derivings) =
    [DataInstD (contextTemplate $ extract context)
-              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
+              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> toList vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
-              (dataConstructorTemplate . extract <$> constructors)
-              $ derivingsTemplate $ extract <$> derivings]
+              (dataConstructorTemplate . extract <$> toList constructors)
+              $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates (NewtypeFamilyInstance () vars context lhs kind constructor derivings) =
    [NewtypeInstD (contextTemplate $ extract context)
-                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
+                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> toList vars)
                  (lhsTypeTemplate $ extract lhs)
                  (typeTemplate . extract <$> kind)
                  (dataConstructorTemplate $ extract constructor)
-                 $ derivingsTemplate $ extract <$> derivings]
+                 $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates (GADTDataFamilyInstance () vars lhs kind constructors derivings) =
    [DataInstD []
-              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
+              (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> toList vars)
               (lhsTypeTemplate $ extract lhs)
               (typeTemplate . extract <$> kind)
-              (gadtConstructorTemplate . extract <$> constructors)
-              $ derivingsTemplate $ extract <$> derivings]
+              (gadtConstructorTemplate . extract <$> toList constructors)
+              $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates (GADTNewtypeFamilyInstance () vars lhs kind constructor derivings) =
    [NewtypeInstD []
-                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
+                 (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> toList vars)
                  (lhsTypeTemplate $ extract lhs)
                  (typeTemplate . extract <$> kind)
                  (gadtConstructorTemplate $ extract constructor)
-                 $ derivingsTemplate $ extract <$> derivings]
+                 $ derivingsTemplate $ extract <$> toList derivings]
 declarationTemplates d@TypeFamilyInstance{} = [TySynInstD $ typeFamilyInstanceTemplate d]
 declarationTemplates (TypeRoleDeclaration () name roles) =
    [RoleAnnotD (qnameTemplate name) (roleTemplate <$> roles)]
@@ -465,18 +466,18 @@ declarationTemplates (UnidirectionalPatternSynonym () lhs rhs) =
    [PatSynD name args TH.Unidir $ patternTemplate $ extract rhs]
    where (name, args) = lhsPatternTemplate (extract lhs)
 declarationTemplates (ExplicitPatternSynonym () lhs rhs clauses) =
-   [PatSynD name args (TH.ExplBidir $ clauseTemplate . extract <$> clauses) $ patternTemplate $ extract rhs]
+   [PatSynD name args (TH.ExplBidir $ clauseTemplate . extract <$> toList clauses) $ patternTemplate $ extract rhs]
    where (name, args) = lhsPatternTemplate (extract lhs)
          clauseTemplate (PatternEquationClause () lhs rhs wheres) =
             TH.Clause (patternTemplate . extract <$> patterns) (rhsTemplate $ extract rhs)
                       (foldMap (declarationTemplates . extract) wheres)
             where patterns = case extract lhs
-                             of PrefixPatternEquationLHS _ pats -> pats
+                             of PrefixPatternEquationLHS _ pats -> toList pats
                                 InfixPatternEquationLHS l _ r -> [l, r]
 declarationTemplates (PatternSynonymSignature () names vars1 ctx1 vars2 ctx2 args result) =
    [PatSynSigD (nameTemplate name) $
-    ForallT (typeVarBindingSpecTemplate <$> vars1) (contextTemplate $ extract ctx1) $
-    ForallT (typeVarBindingSpecTemplate <$> vars2) (contextTemplate $ extract ctx2) $
+    ForallT (typeVarBindingSpecTemplate <$> toList vars1) (contextTemplate $ extract ctx1) $
+    ForallT (typeVarBindingSpecTemplate <$> toList vars2) (contextTemplate $ extract ctx2) $
     foldr (TH.AppT . TH.AppT TH.ArrowT . typeTemplate . extract) (typeTemplate $ extract result) args
    | name <- toList names]
 
@@ -505,7 +506,7 @@ familyKindTemplate = maybe NoSig (KindSig . typeTemplate . extract)
 
 typeFamilyInstanceTemplate :: TemplateWrapper f => Declaration Language Language f f -> TySynEqn
 typeFamilyInstanceTemplate (TypeFamilyInstance () vars lhs rhs) =
-   TySynEqn (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> vars)
+   TySynEqn (if null vars then Nothing else Just $ typeVarBindingUnitTemplate <$> toList vars)
             (lhsTypeTemplate $ extract lhs)
             (typeTemplate $ extract rhs)
 typeFamilyInstanceTemplate d = error ("Expected a type family instance, got " <> show (const (Const ()) Rank2.<$> d))
@@ -519,9 +520,9 @@ derivingsTemplate = foldr derived []
             DerivClause Nothing (ConT (qnameTemplate name) : ctx) : rest
          derived (SimpleDerive name) templates = DerivClause Nothing [ConT $ qnameTemplate name] : templates
          derived (StrategicDerive () strategy types) templates =
-            DerivClause (strategyTemplate $ extract strategy) (typeTemplate . extract <$> types) : templates
+            DerivClause (strategyTemplate $ extract strategy) (typeTemplate . extract <$> toList types) : templates
          derived (DeriveVia () types viaType) templates =
-            DerivClause (strategyTemplate $ Via () viaType) (typeTemplate . extract <$> types) : templates
+            DerivClause (strategyTemplate $ Via () viaType) (typeTemplate . extract <$> toList types) : templates
 
 strategyTemplate :: TemplateWrapper f => DerivingStrategy Language Language f f -> Maybe DerivStrategy
 strategyTemplate Default = Nothing
@@ -556,14 +557,14 @@ conventionTemplate (ExtAST.CApiCall ()) = TH.CApi
 conventionTemplate convention = error ("Calling Convention " ++ show convention ++ " is not supported by GHC")
 
 dataConstructorTemplate :: TemplateWrapper f => DataConstructor Language Language f f -> Con
-dataConstructorTemplate (Constructor name@(AST.Name local) [left, right]) | ":" `Text.isPrefixOf` local =
+dataConstructorTemplate (Constructor name@(AST.Name local) (ZipList [left, right])) | ":" `Text.isPrefixOf` local =
    InfixC (bangTypeTemplate $ extract left) (nameTemplate name) (bangTypeTemplate $ extract right)
 dataConstructorTemplate (Constructor name argTypes) =
-   NormalC (nameTemplate name) (bangTypeTemplate . extract <$> argTypes)
+   NormalC (nameTemplate name) (bangTypeTemplate . extract <$> toList argTypes)
 dataConstructorTemplate (RecordConstructor recName fieldTypes) =
    RecC (nameTemplate recName) (foldMap (fieldTypeTemplate . extract) fieldTypes)
 dataConstructorTemplate (ExistentialConstructor vars context con) =
-  ForallC (nub $ typeVarBindingSpecTemplate <$> vars)
+  ForallC (nub $ typeVarBindingSpecTemplate <$> toList vars)
           (contextTemplate $ extract context)
           (dataConstructorTemplate con')
   where con' = extract con
@@ -574,9 +575,9 @@ gadtConstructorTemplate (GADTConstructors names vars context t)
       FunctionType arg result -> normalTemplate (extract arg :) (extract result)
       RecordFunctionType fields result -> recordTemplate (extract <$> fields) (extract result)
       result -> normalTemplate id result
-   | otherwise = ForallC (nub $ typeVarBindingSpecTemplate <$> vars)
+   | otherwise = ForallC (nub $ typeVarBindingSpecTemplate <$> toList vars)
                          (contextTemplate $ extract context)
-                         (gadtConstructorTemplate $ GADTConstructors names [] (NoContext <$ context) t)
+                         (gadtConstructorTemplate $ GADTConstructors names (ZipList []) (NoContext <$ context) t)
    where normalTemplate args (FunctionType arg result) = normalTemplate (args . (extract arg :)) (extract result)
          normalTemplate args result =
             GadtC (nameTemplate <$> toList names) (bangTypeTemplate <$> args []) (typeTemplate result)
@@ -621,11 +622,11 @@ patternTemplate (AsPattern name pat) = AsP (nameTemplate name) (patternTemplate 
 patternTemplate (ConstructorPattern con typeApps args) = case (extract con) of
    ConstructorReference name ->
 #if MIN_VERSION_template_haskell(2,18,0)
-      ConP (qnameTemplate name) (typeTemplate .extract <$> typeApps) (patternTemplate . extract <$> args)
+      ConP (qnameTemplate name) (typeTemplate . extract <$> toList typeApps) (patternTemplate . extract <$> toList args)
 #else
-      ConP (qnameTemplate name) (patternTemplate . extract <$> args)
+      ConP (qnameTemplate name) (patternTemplate . extract <$> toList args)
 #endif
-   EmptyListConstructor -> ListP (patternTemplate . extract <$> args)
+   EmptyListConstructor -> ListP (patternTemplate . extract <$> toList args)
    TupleConstructor{} -> TupP (patternTemplate . extract <$> toList args)
    UnboxedTupleConstructor{} -> UnboxedTupP (patternTemplate . extract <$> toList args)
    UnboxedSumConstructor{} -> error "Unboxed sum constructor can't appear in a pattern"
@@ -636,10 +637,10 @@ patternTemplate (IrrefutablePattern pat) = TildeP (patternTemplate $ extract pat
 patternTemplate (LazyPattern () pat) = TildeP (patternTemplate $ extract pat)
 patternTemplate (BangPattern () pat) = BangP (patternTemplate $ extract pat)
 patternTemplate (ViewPattern () view pat) = ViewP (wrappedExpressionTemplate view) (patternTemplate $ extract pat)
-patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> items)
+patternTemplate (ListPattern items) = ListP (patternTemplate . extract <$> toList items)
 patternTemplate (LiteralPattern value) = LitP (literalTemplate $ extract value)
 patternTemplate (RecordPattern constructor fields) =
-   RecP (qnameTemplate constructor) (fieldPatternTemplate . extract <$> fields)
+   RecP (qnameTemplate constructor) (fieldPatternTemplate . extract <$> toList fields)
    where
      fieldPatternTemplate (FieldPattern name pat) = (qnameTemplate name, patternTemplate $ extract pat)
      fieldPatternTemplate (PunnedFieldPattern () q@(QualifiedName _ name)) = (qnameTemplate q, VarP $ nameTemplate name)
@@ -669,7 +670,7 @@ statementTemplate (BindStatement left right) =
    BindS (patternTemplate $ extract left) (wrappedExpressionTemplate right)
 statementTemplate (ExpressionStatement test) = NoBindS (wrappedExpressionTemplate test)
 statementTemplate (LetStatement declarations) = LetS (foldMap (declarationTemplates . extract) declarations)
-statementTemplate (RecursiveStatement statements) = RecS (statementTemplate . extract <$> statements)
+statementTemplate (RecursiveStatement statements) = RecS (statementTemplate . extract <$> toList statements)
 
 bangTypeTemplate :: TemplateWrapper f => ExtAST.Type Language Language f f -> (TH.Bang, TH.Type)
 bangTypeTemplate (StrictType t) = (Bang NoSourceUnpackedness SourceStrict, typeTemplate $ extract t)
@@ -711,8 +712,8 @@ typeTemplate (KindedType t kind) = SigT (typeTemplate $ extract t) (typeTemplate
 typeTemplate (ForallType vars body) =
    ForallT varBindings [] (typeTemplate type')
    where type' = extract body
-         varBindings = typeVarBindingSpecTemplate <$> vars
-         bindingVars = bindingVarName . extract <$> vars
+         varBindings = typeVarBindingSpecTemplate <$> toList vars
+         bindingVars = bindingVarName . extract <$> toList vars
 typeTemplate (ConstrainedType context body) =
    ForallT [] (contextTemplate $ extract context) (typeTemplate $ extract body)
 typeTemplate (ConstraintType context) = case contextTemplate (extract context) of
@@ -722,8 +723,8 @@ typeTemplate (VisibleDependentType vars body) =
    ForallVisT (varBindings <> (plainTV <$> nub (freeTypeVars type') \\ bindingVars))
               (typeTemplate type')
    where type' = extract body
-         varBindings = typeVarBindingUnitTemplate <$> vars
-         bindingVars = bindingVarName . extract <$> vars
+         varBindings = typeVarBindingUnitTemplate <$> toList vars
+         bindingVars = bindingVarName . extract <$> toList vars
 typeTemplate GroundTypeKind = StarT
 typeTemplate (PromotedConstructorType () con) = case (extract con) of
    ConstructorReference name -> PromotedT (qnameTemplate name)
@@ -776,10 +777,10 @@ freeTypeVars (VisibleKindApplication t kind) = freeTypeVars (extract t) <> freeT
 freeTypeVars (InfixTypeApplication left _op right) = nub (freeTypeVars (extract left) <> freeTypeVars (extract right))
 freeTypeVars (TypeVariable name) = [nameTemplate name]
 freeTypeVars (KindedType t kind) = freeTypeVars (extract t) <> freeTypeVars (extract kind)
-freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName . extract <$> vars)
+freeTypeVars (ForallType vars body) = nub (freeTypeVars $ extract body) \\ (bindingVarName . extract <$> toList vars)
 freeTypeVars (ConstrainedType context body) = nub (freeContextVars (extract context) <> freeTypeVars (extract body))
 freeTypeVars (VisibleDependentType vars body) =
-   nub (freeTypeVars (extract body)) \\ (bindingVarName . extract <$> vars)
+   nub (freeTypeVars (extract body)) \\ (bindingVarName . extract <$> toList vars)
 freeTypeVars (RecordFunctionType fields result) = nub (foldMap (freeTypeVars . fieldType . extract) fields
                                                        <> freeTypeVars (extract result))
    where fieldType (ConstructorFields _names t) = extract t
@@ -857,8 +858,8 @@ extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.Type
                => f (ExtAST.TypeLHS l l f f) -> (AST.Name l, [TyVarBndrVis])
 extractSimpleTypeLHS = fromTypeLHS . extract
    where fromTypeLHS :: ExtAST.TypeLHS l l f f -> (AST.Name l, [TyVarBndrVis])
-         fromTypeLHS (SimpleTypeLHS con vars) = (con, plainTV . nameTemplate <$> vars)
-         fromTypeLHS (SimpleKindedTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> vars)
+         fromTypeLHS (SimpleTypeLHS con vars) = (con, plainTV . nameTemplate <$> toList vars)
+         fromTypeLHS (SimpleKindedTypeLHS con vars) = (con, typeVarBindingVisibleTemplate <$> toList vars)
          fromTypeLHS (InfixTypeLHSApplication left con right)
             = (con, [typeVarBindingVisibleTemplate left, typeVarBindingVisibleTemplate right])
          fromTypeLHS (TypeLHSApplication t var)

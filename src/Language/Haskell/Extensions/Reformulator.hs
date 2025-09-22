@@ -8,6 +8,7 @@ module Language.Haskell.Extensions.Reformulator (
     dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, dropMultilineStrings, orToViewPatterns)
 where
 
+import Control.Applicative (ZipList(ZipList))
 import Data.Coerce (coerce)
 import qualified Data.Foldable1 as Foldable1
 import Data.Foldable (toList)
@@ -225,15 +226,16 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
       Reformulation{}
       (Compose (env@(Di.Atts inherited _),
                (s, AST.WildcardRecordPattern () con@(AST.QualifiedName modName _) fields))) =
-      Compose (env, (s, AST.RecordPattern con $ fields ++ implicitFields))
+      Compose (env, (s, AST.RecordPattern con $ ZipList $ toList fields ++ toList implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->
+                  ZipList $
                   [ Compose (Di.Atts inherited mempty,
                              (s, Abstract.punnedFieldPattern Abstract.build $ qualified fieldName))
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
                Nothing -> error ("Environment lacks record constructor " ++ show con)
-            explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) fields
+            explicitFieldNames = explicitFieldName . snd . snd . getCompose <$> fields
             explicitFieldName (AST.FieldPattern name _) = Binder.baseName name
             explicitFieldName (AST.PunnedFieldPattern _ name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
@@ -252,16 +254,17 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
   where
    _ `translateWrapped` Compose (env@(Di.Atts inherited _),
                                  (s, AST.WildcardRecordExpression () con@(AST.QualifiedName modName _) fields)) =
-      Compose (env, (s, AST.RecordExpression conExp $ fields ++ implicitFields))
+      Compose (env, (s, AST.RecordExpression conExp $ ZipList $ toList fields ++ toList implicitFields))
       where implicitFields = case Binder.lookupValue con inherited of
                Just (Binder.RecordConstructor (UnionWith declaredFields)) ->
+                  ZipList $
                   [ Compose (Di.Atts inherited mempty,
                              (s, Abstract.punnedFieldBinding Abstract.build $ qualified fieldName))
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
                Nothing -> error ("Environment lacks record constructor " ++ show con)
             explicitFieldNames :: [AST.Name l]
-            explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) fields
+            explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) (toList fields)
             explicitFieldName (AST.FieldBinding name _) = Binder.baseName name
             explicitFieldName (AST.PunnedFieldBinding _ name) = Binder.baseName name
             qualified name = AST.QualifiedName modName name
@@ -289,10 +292,10 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
       Compose (env,
                (s,
                 Abstract.viewPattern Abstract.build (justGreaterOrEqual k)
-                 $ rewrap $ AST.ConstructorPattern just [] [rewrap $ AST.VariablePattern n]))
+                 $ rewrap $ AST.ConstructorPattern just (ZipList []) (ZipList [rewrap $ AST.VariablePattern n])))
       where justGreaterOrEqual k =
                rewrap
-               $ AST.LambdaExpression [rewrap $ AST.VariablePattern n]
+               $ AST.LambdaExpression (ZipList [rewrap $ AST.VariablePattern n])
                $ rewrap $ AST.ConditionalExpression
                     (nOpK ">=")
                     (rewrap $ rewrap (AST.ConstructorExpression just) `AST.ApplyExpression` nOpK "-")

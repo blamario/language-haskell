@@ -104,13 +104,13 @@ instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Langu
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
    build = Abstract.RecordWildCardConstruction {
-      Abstract.wildcardRecordExpression = WildcardRecordExpression (),
-      Abstract.wildcardRecordPattern = WildcardRecordPattern ()}
+      Abstract.wildcardRecordExpression = \name fields-> WildcardRecordExpression () name (ZipList fields),
+      Abstract.wildcardRecordPattern = \name fields-> WildcardRecordPattern () name (ZipList fields)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecursiveDo ] Language where
    build = Abstract.RecursiveDoConstruction {
       Abstract.mdoExpression = MDoExpression,
-      Abstract.recursiveStatement = RecursiveStatement}
+      Abstract.recursiveStatement = RecursiveStatement . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo ] Language where
    build = Abstract.QualifiedDoConstruction {
@@ -122,9 +122,9 @@ instance Abstract.ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.Recursive
 
 instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
    build = Abstract.LambdaCaseConstruction {
-      Abstract.lambdaCaseExpression = LambdaCaseExpression (),
-      Abstract.lambdaCasesExpression = LambdaCasesExpression (),
-      Abstract.lambdaCasesAlternative = LambdaCasesAlternative ()}
+      Abstract.lambdaCaseExpression = LambdaCaseExpression () . ZipList,
+      Abstract.lambdaCasesExpression = LambdaCasesExpression () . ZipList,
+      Abstract.lambdaCasesAlternative = LambdaCasesAlternative () . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
@@ -195,21 +195,24 @@ instance Abstract.ExtendedWith '[ 'Extensions.PatternSynonyms ] Language where
       Abstract.prefixPatternLHS = PrefixPatternLHS,
       Abstract.infixPatternLHS = InfixPatternLHS,
       Abstract.recordPatternLHS = RecordPatternLHS,
-      Abstract.prefixPatternEquationLHS = PrefixPatternEquationLHS,
+      Abstract.prefixPatternEquationLHS = \name args-> PrefixPatternEquationLHS name (ZipList args),
       Abstract.infixPatternEquationLHS = InfixPatternEquationLHS,
-      Abstract.patternEquationClause = PatternEquationClause (),
+      Abstract.patternEquationClause = \lhs rhs wheres-> PatternEquationClause () lhs rhs (ZipList wheres),
       Abstract.implicitPatternSynonym = ImplicitPatternSynonym (),
       Abstract.unidirectionalPatternSynonym = UnidirectionalPatternSynonym (),
-      Abstract.explicitPatternSynonym = ExplicitPatternSynonym (),
-      Abstract.patternSynonymSignature = PatternSynonymSignature ()}
+      Abstract.explicitPatternSynonym = \lhs rhs clauses-> ExplicitPatternSynonym () lhs rhs (ZipList clauses),
+      Abstract.patternSynonymSignature =
+         \names leftParams leftCtx rightParams rightCtx argTypes resultType
+         -> PatternSynonymSignature () names (ZipList leftParams) leftCtx (ZipList rightParams) rightCtx
+                                    (ZipList argTypes) resultType}
 
 instance Abstract.ExtendedWith '[ 'Extensions.NamedDefaults ] Language where
    build = Abstract.NamedDefaultsConstruction {
-      Abstract.namedDefaultDeclaration = NamedDefaultDeclaration ()}
+      Abstract.namedDefaultDeclaration = \cl types-> NamedDefaultDeclaration () cl (ZipList types)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.StandaloneDeriving ] Language where
    build = Abstract.StandaloneDerivingConstruction {
-      Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration ()}
+      Abstract.standaloneDerivingDeclaration = StandaloneDerivingDeclaration () . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.DerivingStrategies ] Language where
    build = Abstract.DerivingStrategiesConstruction {
@@ -217,13 +220,14 @@ instance Abstract.ExtendedWith '[ 'Extensions.DerivingStrategies ] Language wher
       Abstract.stockStrategy = Stock,
       Abstract.newtypeStrategy = Newtype,
       Abstract.anyClassStrategy = AnyClass,
-      Abstract.strategicDerive = StrategicDerive (),
-      Abstract.standaloneStrategicDerivingDeclaration = StandaloneStrategicDerivingDeclaration () ()}
+      Abstract.strategicDerive = \strategy classes-> StrategicDerive () strategy (ZipList classes),
+      Abstract.standaloneStrategicDerivingDeclaration =
+         \strategy-> StandaloneStrategicDerivingDeclaration () () strategy . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.DerivingVia ] Language where
    build = Abstract.DerivingViaConstruction {
       Abstract.derivingViaStrategy = Via (),
-      Abstract.deriveVia = DeriveVia ()}
+      Abstract.deriveVia = DeriveVia () . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.DefaultSignatures ] Language where
    build = Abstract.DefaultSignatureConstruction {
@@ -233,23 +237,33 @@ instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilies ] Language where
    build = Abstract.TypeFamiliesConstruction {
       Abstract.dataFamilyDeclaration = DataFamilyDeclaration (),
       Abstract.openTypeFamilyDeclaration = OpenTypeFamilyDeclaration (),
-      Abstract.closedTypeFamilyDeclaration = ClosedTypeFamilyDeclaration (),
-      Abstract.dataFamilyInstance = DataFamilyInstance (),
-      Abstract.newtypeFamilyInstance = NewtypeFamilyInstance (),
-      Abstract.gadtDataFamilyInstance = GADTDataFamilyInstance (),
-      Abstract.gadtNewtypeFamilyInstance = GADTNewtypeFamilyInstance (),
-      Abstract.typeFamilyInstance = TypeFamilyInstance ()}
+      Abstract.closedTypeFamilyDeclaration =
+         \lhs var declarations -> ClosedTypeFamilyDeclaration () lhs var (ZipList declarations),
+      Abstract.dataFamilyInstance =
+         \params ctx lhs kind cons derivings
+         -> DataFamilyInstance () (ZipList params) ctx lhs kind (ZipList cons) (ZipList derivings),
+      Abstract.newtypeFamilyInstance =
+         \params ctx lhs kind con derivings
+         -> NewtypeFamilyInstance () (ZipList params) ctx lhs kind con (ZipList derivings),
+      Abstract.gadtDataFamilyInstance =
+         \params lhs kind cons derivings
+         -> GADTDataFamilyInstance () (ZipList params) lhs kind (ZipList cons) (ZipList derivings),
+      Abstract.gadtNewtypeFamilyInstance =
+         \params lhs kind con derivings
+         -> GADTNewtypeFamilyInstance () (ZipList params) lhs kind con (ZipList derivings),
+      Abstract.typeFamilyInstance = TypeFamilyInstance () . ZipList}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TypeFamilyDependencies ] Language where
    build = Abstract.TypeFamilyDependenciesConstruction {
       Abstract.injectiveOpenTypeFamilyDeclaration = InjectiveOpenTypeFamilyDeclaration (),
-      Abstract.injectiveClosedTypeFamilyDeclaration = InjectiveClosedTypeFamilyDeclaration ()}
+      Abstract.injectiveClosedTypeFamilyDeclaration =
+         \lhs var deps declarations -> InjectiveClosedTypeFamilyDeclaration () lhs var deps (ZipList declarations)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.DataKinds ] Language where
    build = Abstract.DataKindsConstruction {
       Abstract.promotedConstructorType = PromotedConstructorType (),
-      Abstract.promotedTupleType = PromotedTupleType (),
-      Abstract.promotedListType = PromotedListType (),
+      Abstract.promotedTupleType = PromotedTupleType () . ZipList,
+      Abstract.promotedListType = PromotedListType () . ZipList,
       Abstract.promotedIntegerLiteral = PromotedIntegerLiteral (),
       Abstract.promotedCharLiteral = PromotedCharLiteral (),
       Abstract.promotedStringLiteral = PromotedStringLiteral (),
@@ -257,11 +271,11 @@ instance Abstract.ExtendedWith '[ 'Extensions.DataKinds ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.TypeData ] Language where
    build = Abstract.TypeDataConstruction {
-      Abstract.typeDataDeclaration = TypeDataDeclaration ()}
+      Abstract.typeDataDeclaration = \lhs kind cons-> TypeDataDeclaration () lhs kind (ZipList cons)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] Language where
    build = Abstract.TypeGADTConstruction {
-      Abstract.typeGADTDeclaration = TypeGADTDeclaration () ()}
+      Abstract.typeGADTDeclaration = \lhs kind cons-> TypeGADTDeclaration () () lhs kind (ZipList cons)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.TypeAbstractions ] Language where
    build = Abstract.TypeAbstractionConstruction {
@@ -271,7 +285,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.TypeAbstractions ] Language where
 instance Abstract.ExtendedWith '[ 'Extensions.FunctionalDependencies ] Language where
    build = Abstract.FunctionalDependenciesConstruction {
       Abstract.functionalDependency = FunctionalDependency,
-      Abstract.fundepClassDeclaration = FunDepClassDeclaration ()}
+      Abstract.fundepClassDeclaration = \ctx lhs deps declarations
+                                        -> FunDepClassDeclaration () ctx lhs (ZipList deps) (ZipList declarations)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.RoleAnnotations ] Language where
    build = Abstract.RoleAnnotationsConstruction {
@@ -294,18 +309,19 @@ instance Abstract.ExtendedHaskell Language where
    type Kind Language = Type Language
    type TypeVarBinding Language = TypeVarBinding Language
    type ModuleMember Language = ModuleMember Language
-   multiWayIfExpression = MultiWayIfExpression
+   multiWayIfExpression = MultiWayIfExpression . ZipList
    safeImportDeclaration q = Import True q Nothing 
    packageQualifiedImportDeclaration q p = Import False q (Just p)
    safePackageQualifiedImportDeclaration q p = Import True q (Just p)
    infixTypeApplication = InfixTypeApplication
-   simpleKindedTypeLHS = SimpleKindedTypeLHS
+   simpleKindedTypeLHS name params = SimpleKindedTypeLHS name (ZipList params)
    infixTypeLHSApplication = InfixTypeLHSApplication
    typeLHSApplication = TypeLHSApplication
-   visibleDependentType = VisibleDependentType
-   existentialConstructor = ExistentialConstructor
-   explicitlyScopedInstanceDeclaration = InstanceDeclaration
-   forallType = ForallType
+   visibleDependentType = VisibleDependentType . ZipList
+   existentialConstructor = ExistentialConstructor . ZipList
+   explicitlyScopedInstanceDeclaration vars ctx lhs declarations =
+      InstanceDeclaration (ZipList vars) ctx lhs (ZipList declarations)
+   forallType = ForallType . ZipList
    kindedType = KindedType
    constrainedType = ConstrainedType
    constraintType = ConstraintType
@@ -314,12 +330,14 @@ instance Abstract.ExtendedHaskell Language where
    groundType = GroundTypeKind
    typeEquality = TypeEquality
 
-   kindedDataDeclaration context lhs = DataDeclaration context lhs . Just
-   kindedNewtypeDeclaration context lhs = NewtypeDeclaration context lhs . Just
-   gadtDeclaration = GADTDeclaration
-   gadtNewtypeDeclaration = GADTNewtypeDeclaration
-   gadtConstructors = GADTConstructors
-   recordFunctionType = RecordFunctionType
+   kindedDataDeclaration context lhs kind cons derivations =
+      DataDeclaration context lhs (Just kind) (ZipList cons) (ZipList derivations)
+   kindedNewtypeDeclaration context lhs kind con derivations =
+      NewtypeDeclaration context lhs (Just kind) con (ZipList derivations)
+   gadtDeclaration lhs kind cons derivings = GADTDeclaration lhs kind (ZipList cons) (ZipList derivings)
+   gadtNewtypeDeclaration lhs kind con derivings = GADTNewtypeDeclaration lhs kind con (ZipList derivings)
+   gadtConstructors names = GADTConstructors names . ZipList
+   recordFunctionType = RecordFunctionType . ZipList
    linearFunctionType = LinearFunctionType
    multiplicityFunctionType = MultiplicityFunctionType
 
@@ -342,7 +360,7 @@ instance Abstract.ExtendedHaskell Language where
    visibleTypeApplication = VisibleTypeApplication
    visibleKindApplication = VisibleKindApplication
    typedPattern = TypedPattern
-   constructorPatternWithTypeApplications = ConstructorPattern
+   constructorPatternWithTypeApplications con types args = ConstructorPattern con (ZipList types) (ZipList args)
 
    overloadedLabel = OverloadedLabel
    getField = GetField
@@ -386,9 +404,9 @@ instance Abstract.Haskell Language where
    type ModuleName Language = ModuleName Language
    type QualifiedName Language = QualifiedName Language
 
-   anonymousModule = \imports declarations-> AnonymousModule (ZipList imports) (ZipList declarations)
-   namedModule = \name exports imports declarations
-                 -> NamedModule name (ZipList <$> exports) (ZipList imports) (ZipList declarations)
+   anonymousModule imports declarations = AnonymousModule (ZipList imports) (ZipList declarations)
+   namedModule name exports imports declarations =
+      NamedModule name (ZipList <$> exports) (ZipList imports) (ZipList declarations)
    withLanguagePragma = ExtendedModule
 
    exportClassOrType = ExportClassOrType
@@ -404,32 +422,32 @@ instance Abstract.Haskell Language where
    allMembers = AllMembers
    memberList = MemberList
 
-   classDeclaration = ClassDeclaration
-   dataDeclaration context lhs = DataDeclaration context lhs Nothing
-   defaultDeclaration = DefaultDeclaration
-   equationDeclaration = EquationDeclaration
+   classDeclaration ctx lhs declarations = ClassDeclaration ctx lhs (ZipList declarations)
+   dataDeclaration ctx lhs cons derivations = DataDeclaration ctx lhs Nothing (ZipList cons) (ZipList derivations)
+   defaultDeclaration = DefaultDeclaration . ZipList
+   equationDeclaration lhs rhs wheres = EquationDeclaration lhs rhs (ZipList wheres)
    fixityDeclaration = FixityDeclaration
    foreignExport = ForeignExport
    foreignImport = ForeignImport
-   instanceDeclaration = InstanceDeclaration []
-   newtypeDeclaration context lhs = NewtypeDeclaration context lhs Nothing
+   instanceDeclaration ctx lhs declarations = InstanceDeclaration (ZipList []) ctx lhs (ZipList declarations)
+   newtypeDeclaration context lhs con derivations = NewtypeDeclaration context lhs Nothing con (ZipList derivations)
    typeSynonymDeclaration = TypeSynonymDeclaration
    typeSignature = TypeSignature
 
    applyExpression = ApplyExpression
    conditionalExpression = ConditionalExpression
    constructorExpression = ConstructorExpression
-   caseExpression = CaseExpression
+   caseExpression scrutinee branches = CaseExpression scrutinee (ZipList branches)
    doExpression = DoExpression
    infixExpression = InfixExpression
    leftSectionExpression = LeftSectionExpression
-   lambdaExpression = LambdaExpression
-   letExpression = LetExpression
+   lambdaExpression = LambdaExpression . ZipList
+   letExpression = LetExpression . ZipList
    listComprehension = ListComprehension
-   listExpression = ListExpression
+   listExpression = ListExpression . ZipList
    literalExpression = LiteralExpression
    negate = Negate
-   recordExpression = RecordExpression
+   recordExpression con fields = RecordExpression con (ZipList fields)
    referenceExpression = ReferenceExpression
    rightSectionExpression = RightSectionExpression
    sequenceExpression = SequenceExpression
@@ -437,12 +455,12 @@ instance Abstract.Haskell Language where
    typedExpression = TypedExpression
 
    asPattern = AsPattern
-   constructorPattern = flip ConstructorPattern []
+   constructorPattern con args = ConstructorPattern con (ZipList []) (ZipList args)
    infixPattern = InfixPattern
    irrefutablePattern = IrrefutablePattern
-   listPattern = ListPattern
+   listPattern = ListPattern . ZipList
    literalPattern = LiteralPattern
-   recordPattern = RecordPattern
+   recordPattern con fields = RecordPattern con (ZipList fields)
    tuplePattern = TuplePattern
    variablePattern = VariablePattern
    wildcardPattern = WildcardPattern
@@ -461,8 +479,8 @@ instance Abstract.Haskell Language where
    tupleConstructor = TupleConstructor
    unitConstructor = UnitConstructor
 
-   constructor = Constructor
-   recordConstructor = RecordConstructor
+   constructor con params = Constructor con (ZipList params)
+   recordConstructor con fields = RecordConstructor con (ZipList fields)
    constructorFields = ConstructorFields
 
    fieldBinding = FieldBinding
@@ -478,7 +496,7 @@ instance Abstract.Haskell Language where
    patternLHS = PatternLHS
    variableLHS = VariableLHS
 
-   caseAlternative = \lhs rhs wheres-> CaseAlternative lhs rhs (ZipList wheres)
+   caseAlternative lhs rhs wheres = CaseAlternative lhs rhs (ZipList wheres)
 
    guardedRHS = GuardedRHS
    normalRHS = NormalRHS
@@ -486,12 +504,12 @@ instance Abstract.Haskell Language where
    guardedExpression = GuardedExpression . ZipList
 
    classConstraint cls t = ClassConstraint cls t
-   constraints = Constraints
+   constraints = Constraints . ZipList
    noContext = NoContext
 
    bindStatement = BindStatement
    expressionStatement = ExpressionStatement
-   letStatement = LetStatement
+   letStatement = LetStatement . ZipList
 
    charLiteral = CharLiteral
    floatingLiteral = FloatingLiteral
@@ -546,28 +564,28 @@ data TypeRole λ = InferredRole !(Abstract.SupportFor 'Extensions.RoleAnnotation
                 | PhantomRole !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
 
 data Declaration λ l d s =
-   ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) [s (Abstract.Declaration l l d d)]
+   ClassDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) (ZipList (s (Abstract.Declaration l l d d)))
    | FunDepClassDeclaration !(Abstract.SupportFor 'Extensions.FunctionalDependencies λ)
                             (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
-                            [s (Abstract.FunctionalDependency l l d d)] [s (Abstract.Declaration l l d d)]
+                            (ZipList (s (Abstract.FunctionalDependency l l d d))) (ZipList (s (Abstract.Declaration l l d d)))
    | DataDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                     [s (Abstract.DataConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
+                     (ZipList (s (Abstract.DataConstructor l l d d))) (ZipList (s (Abstract.DerivingClause l l d d)))
    | GADTDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                     [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
+                     (ZipList (s (Abstract.GADTConstructor l l d d))) (ZipList (s (Abstract.DerivingClause l l d d)))
    | TypeDataDeclaration !(Abstract.SupportFor 'Extensions.TypeData λ)
                          (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                         [s (Abstract.DataConstructor l l d d)]
+                         (ZipList (s (Abstract.DataConstructor l l d d)))
    | TypeGADTDeclaration !(Abstract.SupportFor 'Extensions.GADTs λ)
                          !(Abstract.SupportFor 'Extensions.TypeData λ)
                          (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                         [s (Abstract.GADTConstructor l l d d)]
-   | DefaultDeclaration [s (Abstract.Type l l d d)]
+                         (ZipList (s (Abstract.GADTConstructor l l d d)))
+   | DefaultDeclaration (ZipList (s (Abstract.Type l l d d)))
    | NamedDefaultDeclaration !(Abstract.SupportFor 'Extensions.NamedDefaults λ)
-                             (Abstract.QualifiedName λ) [s (Abstract.Type l l d d)]
+                             (Abstract.QualifiedName λ) (ZipList (s (Abstract.Type l l d d)))
    | DefaultMethodSignature !(Abstract.SupportFor 'Extensions.DefaultSignatures λ)
                              (Name λ) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | EquationDeclaration (s (Abstract.EquationLHS l l d d)) (s (Abstract.EquationRHS l l d d))
-                         [s (Abstract.Declaration l l d d)]
+                         (ZipList (s (Abstract.Declaration l l d d)))
    | FixityDeclaration (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
    | ExplicitTypeFixityDeclaration !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)
                                    (Associativity λ) (Maybe Int) (NonEmpty (Abstract.Name λ))
@@ -576,23 +594,23 @@ data Declaration λ l d s =
    | ForeignExport (CallingConvention λ) (Maybe Text) (Abstract.Name λ) (s (Abstract.Type l l d d))
    | ForeignImport (CallingConvention λ) (Maybe (CallSafety λ)) (Maybe Text) (Abstract.Name λ)
                    (s (Abstract.Type l l d d))
-   | InstanceDeclaration [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d))
-                         (s (Abstract.ClassInstanceLHS l l d d)) [s (Abstract.Declaration l l d d)]
+   | InstanceDeclaration (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d))
+                         (s (Abstract.ClassInstanceLHS l l d d)) (ZipList (s (Abstract.Declaration l l d d)))
    | StandaloneDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
-                                   [s (Abstract.TypeVarBinding l l d d)]
+                                   (ZipList (s (Abstract.TypeVarBinding l l d d)))
                                    (s (Abstract.Context l l d d))
                                    (s (Abstract.ClassInstanceLHS l l d d))
    | StandaloneStrategicDerivingDeclaration !(Abstract.SupportFor 'Extensions.StandaloneDeriving λ)
                                             !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
                                             (s (Abstract.DerivingStrategy l l d d))
-                                            [s (Abstract.TypeVarBinding l l d d)]
+                                            (ZipList (s (Abstract.TypeVarBinding l l d d)))
                                             (s (Abstract.Context l l d d))
                                             (s (Abstract.ClassInstanceLHS l l d d))
    | NewtypeDeclaration (s (Abstract.Context l l d d)) (s (Abstract.TypeLHS l l d d))
                         (Maybe (s (Abstract.Kind l l d d))) (s (Abstract.DataConstructor l l d d))
-                        [s (Abstract.DerivingClause l l d d)]
+                        (ZipList (s (Abstract.DerivingClause l l d d)))
    | GADTNewtypeDeclaration (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                            (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
+                            (s (Abstract.GADTConstructor l l d d)) (ZipList (s (Abstract.DerivingClause l l d d)))
    | TypeSynonymDeclaration (s (Abstract.TypeLHS l l d d)) (s (Abstract.Type l l d d))
    | TypeSignature (NonEmpty (Abstract.Name λ)) (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | DataFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
@@ -601,33 +619,33 @@ data Declaration λ l d s =
                                (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
    | ClosedTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
                                  (s (Abstract.TypeLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                                 [s (Abstract.Declaration l l d d)]
+                                 (ZipList (s (Abstract.Declaration l l d d)))
    | InjectiveOpenTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ)
                                         (s (Abstract.TypeLHS l l d d)) (s (Abstract.TypeVarBinding l l d d))
                                         (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
    | InjectiveClosedTypeFamilyDeclaration !(Abstract.SupportFor 'Extensions.TypeFamilyDependencies λ)
                                           (s (Abstract.TypeLHS l l d d)) (s (Abstract.TypeVarBinding l l d d))
                                           (Maybe (Abstract.Name λ, NonEmpty (Abstract.Name λ)))
-                                          [s (Abstract.Declaration l l d d)]
+                                          (ZipList (s (Abstract.Declaration l l d d)))
    | DataFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
-                        [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d))
+                        (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d))
                         (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                        [s (Abstract.DataConstructor l l d d)]
-                        [s (Abstract.DerivingClause l l d d)]
+                        (ZipList (s (Abstract.DataConstructor l l d d)))
+                        (ZipList (s (Abstract.DerivingClause l l d d)))
    | NewtypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
-                           [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d))
+                           (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d))
                            (s (Abstract.ClassInstanceLHS l l d d)) (Maybe (s (Abstract.Kind l l d d)))
-                           (s (Abstract.DataConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
+                           (s (Abstract.DataConstructor l l d d)) (ZipList (s (Abstract.DerivingClause l l d d)))
    | GADTDataFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
-                            [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.ClassInstanceLHS l l d d))
+                            (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.ClassInstanceLHS l l d d))
                             (Maybe (s (Abstract.Kind l l d d)))
-                            [s (Abstract.GADTConstructor l l d d)] [s (Abstract.DerivingClause l l d d)]
+                            (ZipList (s (Abstract.GADTConstructor l l d d))) (ZipList (s (Abstract.DerivingClause l l d d)))
    | GADTNewtypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
-                               [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.ClassInstanceLHS l l d d))
+                               (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.ClassInstanceLHS l l d d))
                                (Maybe (s (Abstract.Kind l l d d)))
-                               (s (Abstract.GADTConstructor l l d d)) [s (Abstract.DerivingClause l l d d)]
+                               (s (Abstract.GADTConstructor l l d d)) (ZipList (s (Abstract.DerivingClause l l d d)))
    | TypeFamilyInstance !(Abstract.SupportFor 'Extensions.TypeFamilies λ)
-                        [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.ClassInstanceLHS l l d d))
+                        (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.ClassInstanceLHS l l d d))
                         (s (Abstract.Type l l d d))
    | KindSignature (Abstract.Name λ) (s (Abstract.Kind l l d d))
    | TypeRoleDeclaration !(Abstract.SupportFor 'Extensions.RoleAnnotations λ)
@@ -638,12 +656,12 @@ data Declaration λ l d s =
                                   (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
    | ExplicitPatternSynonym !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
                             (s (Abstract.PatternLHS l l d d)) (s (Abstract.Pattern l l d d))
-                            [s (Abstract.PatternEquationClause l l d d)]
+                            (ZipList (s (Abstract.PatternEquationClause l l d d)))
    | PatternSynonymSignature !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
                              (NonEmpty (Abstract.Name λ))
-                             [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d))
-                             [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d))
-                             [s (Abstract.Type l l d d)]
+                             (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d))
+                             (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d))
+                             (ZipList (s (Abstract.Type l l d d)))
                              (s (Abstract.Type l l d d))
    | ImplicitParameterDeclaration !(Abstract.SupportFor 'Extensions.ImplicitParameters λ)
                                   (Abstract.Name λ)
@@ -653,30 +671,30 @@ data PatternEquationClause λ l d s =
    PatternEquationClause !(Abstract.SupportFor 'Extensions.PatternSynonyms λ)
                          (s (Abstract.PatternEquationLHS l l d d))
                          (s (Abstract.EquationRHS l l d d))
-                         [s (Abstract.Declaration l l d d)]
+                         (ZipList (s (Abstract.Declaration l l d d)))
 
 data PatternEquationLHS λ l d s =
-   PrefixPatternEquationLHS (Abstract.Name λ) [s (Abstract.Pattern l l d d)]
+   PrefixPatternEquationLHS (Abstract.Name λ) (ZipList (s (Abstract.Pattern l l d d)))
    | InfixPatternEquationLHS (s (Abstract.Pattern l l d d)) (Abstract.Name λ) (s (Abstract.Pattern l l d d))
 
 data FunctionalDependency λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    FunctionalDependency [Abstract.Name λ] [Abstract.Name λ]
 
 data GADTConstructor λ l d s =
-   GADTConstructors (NonEmpty (Abstract.Name λ)) [s (Abstract.TypeVarBinding l l d d)]
+   GADTConstructors (NonEmpty (Abstract.Name λ)) (ZipList (s (Abstract.TypeVarBinding l l d d)))
                     (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
 
 data DataConstructor λ l d s =
-   Constructor (Abstract.Name λ) [s (Abstract.Type l l d d)]
-   | RecordConstructor (Abstract.Name λ) [s (Abstract.FieldDeclaration l l d d)]
-   | ExistentialConstructor [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
+   Constructor (Abstract.Name λ) (ZipList (s (Abstract.Type l l d d)))
+   | RecordConstructor (Abstract.Name λ) (ZipList (s (Abstract.FieldDeclaration l l d d)))
+   | ExistentialConstructor (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Context l l d d)) (s (Abstract.DataConstructor l l d d))
 
 data DerivingClause λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    SimpleDerive (Abstract.QualifiedName λ)
    | StrategicDerive !(Abstract.SupportFor 'Extensions.DerivingStrategies λ)
-                     (s (Abstract.DerivingStrategy l l d d)) [s (Abstract.Type l l d d)]
+                     (s (Abstract.DerivingStrategy l l d d)) (ZipList (s (Abstract.Type l l d d)))
    | DeriveVia !(Abstract.SupportFor 'Extensions.DerivingVia λ)
-               [s (Abstract.Type l l d d)] (s (Abstract.Type l l d d))
+               (ZipList (s (Abstract.Type l l d d))) (s (Abstract.Type l l d d))
 
 data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    Default | Stock | AnyClass | Newtype
@@ -684,7 +702,7 @@ data DerivingStrategy λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind
 
 data Context λ l d s =
    ClassConstraint (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
-   | Constraints [s (Abstract.Context l l d d)]
+   | Constraints (ZipList (s (Abstract.Context l l d d)))
    | TypeConstraint (s (Abstract.Type l l d d))
    | TypeEquality (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | ImplicitParameterConstraint !(Abstract.SupportFor 'Extensions.ImplicitParameters λ)
@@ -698,7 +716,7 @@ data Type λ l d s =
    | FunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | LinearFunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | MultiplicityFunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
-   | RecordFunctionType [s (Abstract.FieldDeclaration l l d d)] (s (Abstract.Type l l d d))
+   | RecordFunctionType (ZipList (s (Abstract.FieldDeclaration l l d d))) (s (Abstract.Type l l d d))
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))
    | LazyType !(Abstract.SupportFor 'Extensions.StrictData λ) (s (Abstract.Type l l d d))
@@ -708,17 +726,17 @@ data Type λ l d s =
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
-   | ForallType [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Type l l d d))
+   | ForallType (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Type l l d d))
    | ConstrainedType (s (Abstract.Context l l d d)) (s (Abstract.Type l l d d))
    | ConstraintType (s (Abstract.Context l l d d))
    | KindedType (s (Abstract.Type l l d d)) (s (Abstract.Kind l l d d))
    | TypeWildcard
    | TypeKind (s (Abstract.Type l l d d))
    | GroundTypeKind
-   | VisibleDependentType [s (Abstract.TypeVarBinding l l d d)] (s (Abstract.Type l l d d))
+   | VisibleDependentType (ZipList (s (Abstract.TypeVarBinding l l d d))) (s (Abstract.Type l l d d))
    | PromotedConstructorType !(Abstract.SupportFor 'Extensions.DataKinds λ) (s (Abstract.Constructor l l d d))
-   | PromotedTupleType !(Abstract.SupportFor 'Extensions.DataKinds λ) [s (Abstract.Type l l d d)]
-   | PromotedListType !(Abstract.SupportFor 'Extensions.DataKinds λ) [s (Abstract.Type l l d d)]
+   | PromotedTupleType !(Abstract.SupportFor 'Extensions.DataKinds λ) (ZipList (s (Abstract.Type l l d d)))
+   | PromotedListType !(Abstract.SupportFor 'Extensions.DataKinds λ) (ZipList (s (Abstract.Type l l d d)))
    | PromotedIntegerLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Integer
    | PromotedCharLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Char
    | PromotedStringLiteral !(Abstract.SupportFor 'Extensions.DataKinds λ) Text
@@ -734,7 +752,7 @@ data TypeVarBinding λ l d s =
 
 data TypeLHS λ l d s =
    SimpleTypeLHS (Abstract.Name λ) [Abstract.Name λ]
-   | SimpleKindedTypeLHS (Abstract.Name λ) [s (Abstract.TypeVarBinding l l d d)]
+   | SimpleKindedTypeLHS (Abstract.Name λ) (ZipList (s (Abstract.TypeVarBinding l l d d)))
    | InfixTypeLHSApplication (s (Abstract.TypeVarBinding l l d d)) (Name λ) (s (Abstract.TypeVarBinding l l d d))
    | TypeLHSApplication (s (Abstract.TypeLHS l l d d)) (s (Abstract.TypeVarBinding l l d d))
    | TypeLHSTypeApplication !(Abstract.SupportFor 'Extensions.TypeAbstractions λ)
@@ -753,11 +771,11 @@ data Expression λ l d s =
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                            (s (Abstract.Expression l l d d))
    | ConstructorExpression (s (Abstract.Constructor l l d d))
-   | CaseExpression (s (Abstract.Expression l l d d)) [s (Abstract.CaseAlternative l l d d)]
-   | LambdaCaseExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) [s (Abstract.CaseAlternative l l d d)]
+   | CaseExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.CaseAlternative l l d d)))
+   | LambdaCaseExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ) (ZipList (s (Abstract.CaseAlternative l l d d)))
    | LambdaCasesExpression !(Abstract.SupportFor 'Extensions.LambdaCase λ)
-                           [s (Abstract.LambdaCasesAlternative l l d d)]
-   | MultiWayIfExpression [s (Abstract.GuardedExpression l l d d)]
+                           (ZipList (s (Abstract.LambdaCasesAlternative l l d d)))
+   | MultiWayIfExpression (ZipList (s (Abstract.GuardedExpression l l d d)))
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | MDoExpression (s (Abstract.GuardedExpression l l d d))
    | QualifiedDoExpression !(Abstract.SupportFor 'Extensions.QualifiedDo λ)
@@ -768,16 +786,16 @@ data Expression λ l d s =
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
-   | LambdaExpression [s (Abstract.Pattern l l d d)] (s (Abstract.Expression l l d d))
-   | LetExpression [s (Abstract.Declaration l l d d)] (s (Abstract.Expression l l d d))
+   | LambdaExpression (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
+   | LetExpression (ZipList (s (Abstract.Declaration l l d d))) (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
    | ParallelListComprehension !(Abstract.SupportFor 'Extensions.ParallelListComprehensions λ)
                                (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
                                (NonEmpty (s (Abstract.Statement l l d d))) [NonEmpty (s (Abstract.Statement l l d d))]
-   | ListExpression [s (Abstract.Expression l l d d)]
+   | ListExpression (ZipList (s (Abstract.Expression l l d d)))
    | LiteralExpression (s (Abstract.Value l l d d))
    | Negate
-   | RecordExpression (s (Abstract.Expression l l d d)) [s (Abstract.FieldBinding l l d d)]
+   | RecordExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.FieldBinding l l d d)))
    | ReferenceExpression (Abstract.QualifiedName λ)
    | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
@@ -800,11 +818,11 @@ data Expression λ l d s =
    | FieldProjection (NonEmpty (Abstract.Name λ))
    | WildcardRecordExpression !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
                                (Abstract.QualifiedName λ)
-                               [s (Abstract.FieldBinding l l d d)]
+                               (ZipList (s (Abstract.FieldBinding l l d d)))
 
 data LambdaCasesAlternative λ l d s =
    LambdaCasesAlternative !(Abstract.SupportFor 'Extensions.LambdaCase λ)
-                          [s (Abstract.Pattern l l d d)] (s (Abstract.EquationRHS l l d d))
+                          (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.EquationRHS l l d d))
 
 data FieldBinding λ l d s =
    FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
@@ -812,15 +830,15 @@ data FieldBinding λ l d s =
 
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
-   | ConstructorPattern (s (Abstract.Constructor l l d d)) [s (Abstract.Type l l d d)] [s (Abstract.Pattern l l d d)]
+   | ConstructorPattern (s (Abstract.Constructor l l d d)) (ZipList (s (Abstract.Type l l d d))) (ZipList (s (Abstract.Pattern l l d d)))
    | InfixPattern (s (Abstract.Pattern l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Pattern l l d d))
    | IrrefutablePattern (s (Abstract.Pattern l l d d))
-   | ListPattern [s (Abstract.Pattern l l d d)]
+   | ListPattern (ZipList (s (Abstract.Pattern l l d d)))
    | LiteralPattern (s (Abstract.Value l l d d))
-   | RecordPattern (Abstract.QualifiedName λ) [s (Abstract.FieldPattern l l d d)]
+   | RecordPattern (Abstract.QualifiedName λ) (ZipList (s (Abstract.FieldPattern l l d d)))
    | WildcardRecordPattern !(Abstract.SupportFor 'Extensions.RecordWildCards λ)
                             (Abstract.QualifiedName λ)
-                            [s (Abstract.FieldPattern l l d d)]
+                            (ZipList (s (Abstract.FieldPattern l l d d)))
    | TypedPattern (s (Abstract.Pattern l l d d)) (s (Abstract.Type l l d d))
    | InvisibleTypePattern !(Abstract.SupportFor 'Extensions.TypeAbstractions λ) (s (Abstract.Type l l d d))
    | ExplicitTypePattern !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
@@ -850,8 +868,8 @@ data FieldPattern λ l d s =
 data Statement λ l d s =
    BindStatement (s (Abstract.Pattern l l d d)) (s (Abstract.Expression l l d d))
    | ExpressionStatement (s (Abstract.Expression l l d d))
-   | LetStatement [s (Abstract.Declaration l l d d)]
-   | RecursiveStatement [s (Abstract.Statement l l d d)]
+   | LetStatement (ZipList (s (Abstract.Declaration l l d d)))
+   | RecursiveStatement (ZipList (s (Abstract.Statement l l d d)))
 
 data Constructor λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    ConstructorReference (Abstract.QualifiedName λ)

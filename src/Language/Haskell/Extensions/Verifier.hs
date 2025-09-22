@@ -171,7 +171,8 @@ instance (Full.Foldable (Accounting l pos s) (Abstract.DataConstructor l l),
      | ExtAST.TypeDataDeclaration _sup _lhs _kind constructors <- d = verifyTypeData constructors
      | ExtAST.TypeGADTDeclaration _sup1 _sup2 _lhs _kind constructors <- d = verifyTypeData constructors
      | otherwise = mempty
-     where verifyTypeData :: (w ~ Wrap l pos s, Full.Foldable (Accounting l pos s) g) => [w (g w w)] -> Verified pos x
+     where verifyTypeData :: (w ~ Wrap l pos s, Foldable f, Full.Foldable (Accounting l pos s) g)
+                          => f (w (g w w)) -> Verified pos x
            verifyTypeData =
               Const
               . Ap
@@ -324,7 +325,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
       (case e
        of ExtAST.ApplyExpression _ (Compose (_, ((_, Trailing (lexeme1 : _), _), r)))
              | isBlock r && not (isToken "(" lexeme1) -> Map.singleton Extensions.BlockArguments
-          ExtAST.CaseExpression _ [] -> Map.singleton Extensions.EmptyCase
+          ExtAST.CaseExpression _ branches | null branches -> Map.singleton Extensions.EmptyCase
           ExtAST.LambdaCaseExpression{} -> Map.singleton Extensions.LambdaCase
           ExtAST.MultiWayIfExpression{} -> Map.singleton Extensions.MultiWayIf
           -- negative end of the range means not really PatternGuards follow
