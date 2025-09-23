@@ -242,18 +242,6 @@ type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Statement l l)
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Constructor l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Value l l) = LocalEnvironment l
 
-instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder l f, t' ~ AG.Keep (BinderWorker l f),
-                               sem ~ AG.Semantics (Binder l f),
-                               Rank2.Traversable (g (AG.Semantics (Di.Auto (MonoBinder l f)))),
-                               Rank2.Traversable (g (AG.Semantics (AG.Keep (BinderWorker l f)))),
-                               Rank2.Traversable (g (AG.Semantics (Di.Auto (BinderWorker l f)))), Traversable f) =>
-         AG.Attribution (Binder l f) g where
-   attribution :: forall f' sem. (Rank2.Functor (g f'), Rank2.Traversable (g sem))
-               => Binder l f -> f (g f' f')
-               -> (AG.Inherited   (Binder l f) (g sem sem), g sem (AG.Synthesized (Binder l f)))
-               -> (AG.Synthesized (Binder l f) (g sem sem), g sem (AG.Inherited (Binder l f)))
-   attribution (BinderMono t) x (inh, chSyn) = unsafeCoerce (AG.attribution (AG.Keep (BinderWorker t)) x (unsafeCoerce inh :: AG.Inherited t' (g (AG.Semantics t') (AG.Semantics t')), unsafeCoerce chSyn :: g (AG.Semantics t') (AG.Synthesized t'))) :: (AG.Synthesized (Binder l f) (g sem sem), g sem (AG.Inherited (Binder l f)))
-
 instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder l f,
                                sem ~ AG.Semantics (BinderWorker l f), Foldable f,
                                Rank2.Traversable (g (AG.Semantics (Di.Auto (MonoBinder l f))))) =>
