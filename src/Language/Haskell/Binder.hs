@@ -426,7 +426,7 @@ instance {-# OVERLAPS #-}
                      noFieldSelector x = Just x
             moduleAttribution (AST.AnonymousModule modImports body) =
                (AG.Synthesized $ filterEnv (== mainName) moduleGlobalScope,
-                AST.AnonymousModule [AG.Inherited childInh] [AG.Inherited childInh])
+                AST.AnonymousModule (AG.Inherited childInh <$ modImports) (AG.Inherited childInh <$ body))
                where moduleGlobalScope = importedScope importSyn <> unqualified bodySyn
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
                      AST.AnonymousModule importSyn declsSyn = childSyn
@@ -434,8 +434,9 @@ instance {-# OVERLAPS #-}
                      childInh = (exts, moduleGlobalScope)
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
                (AG.Synthesized $ foldMap AG.syn (Compose exportSyn),
-                AST.NamedModule moduleName (Just [AG.Inherited childInh]) [AG.Inherited childInh]
-                                [AG.Inherited childInh])
+                AST.NamedModule moduleName ((AG.Inherited childInh <$) <$> exports)
+                                (AG.Inherited childInh <$ modImports)
+                                (AG.Inherited childInh <$ body))
                where bodySyn :: LocalEnvironment l
                      moduleGlobalScope :: Environment l
                      childInh = (exts, moduleGlobalScope)
