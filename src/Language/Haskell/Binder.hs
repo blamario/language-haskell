@@ -183,7 +183,7 @@ withBindings extensions modEnv env node =
    $ AG.syn
    $ (AG.Keep (BinderWorker $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
-         trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original} = Compose (Di.Atts{Di.inh= env, Di.syn= mempty}, original)
+         trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original} = Compose (Di.Atts{Di.inh= env, Di.syn= unsafeCoerce synthesized}, original)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
@@ -226,25 +226,26 @@ type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternEquatio
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.DerivingClause l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.DerivingStrategy l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Type l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.TypeLHS l l) = Abstract.Name l
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.TypeLHS l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.TypeVarBinding l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.ClassInstanceLHS l l) = Abstract.Name l
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.ClassInstanceLHS l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Context l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.EquationLHS l l) = [Abstract.Name l]
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.EquationLHS l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Expression l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.FieldBinding l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.LambdaCasesAlternative l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Pattern l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternLHS l l) = [Abstract.Name l]
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternEquationLHS l l) = Abstract.Name l
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternLHS l l) = LocalEnvironment l
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternEquationLHS l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.FieldPattern l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Statement l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Constructor l l) = LocalEnvironment l
 type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Value l l) = LocalEnvironment l
 
 instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder l f,
-                               sem ~ AG.Semantics (BinderWorker l f), Foldable f,
-                               Rank2.Traversable (g (AG.Semantics (Di.Auto (MonoBinder l f))))) =>
+                               Rank2.Traversable (g (AG.Semantics (Di.Auto (MonoBinder l f)))),
+                               -- forall sem. g sem (AG.Synthesized (BinderWorker l f)) ~ g sem (AG.Synthesized (MonoBinder l f)),
+                               Foldable f) =>
          AG.Attribution (BinderWorker l f) g where
    attribution :: forall f' sem. (Rank2.Functor (g f'), Rank2.Traversable (g sem))
                => BinderWorker l f -> f (g f' f')
@@ -295,8 +296,7 @@ instance {-# OVERLAPS #-}
                -> (AG.Inherited   (BinderWorker l f) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (BinderWorker l f)))
                -> (AG.Synthesized (BinderWorker l f) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (BinderWorker l f)))
    attribution _ node (inh, chSyn) = (AG.Synthesized $ foldMap (`export` chSyn) node,
-                                      unsafeCoerce
-                                      $ const (AG.Inherited @(BinderWorker l f) bequest) Rank2.<$> foldr1 const node)
+                                      unsafeCoerce $ const bequest Rank2.<$> foldr1 const node)
       where bequeath :: forall d.
                         AST.Declaration l l d d
                      -> AST.Declaration l l sem (AG.Synthesized (BinderWorker l f))
@@ -309,10 +309,10 @@ instance {-# OVERLAPS #-}
                UnionWith (Map.fromList [(name,
                                          ValueBinding $ InfixDeclaration associativity (fromMaybe 9 precedence) Nothing)
                                         | name <- toList names])
-            export ExtAST.ClassDeclaration{} (ExtAST.ClassDeclaration _ lhs decls)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn decls
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ TypeClass $ childExports)
-            export ExtAST.InstanceDeclaration{} (ExtAST.InstanceDeclaration _vars _context _lhs decls) =
+            export ExtAST.ClassDeclaration{} ~(ExtAST.ClassDeclaration _ lhs decls)
+               = onMap (knowType (TypeClass methodEnv) <$>) (AG.syn lhs) <> methodEnv
+               where methodEnv = foldMap AG.syn decls
+            export ExtAST.InstanceDeclaration{} ~(ExtAST.InstanceDeclaration _vars _context _lhs decls) =
                onMap (Map.mapMaybe constructorOrField) (foldMap AG.syn decls)
                where constructorOrField b@(ValueBinding DataConstructor{}) = Just b
                      constructorOrField b@(ValueBinding RecordConstructor{}) = Just b
@@ -321,45 +321,28 @@ instance {-# OVERLAPS #-}
                         Just (ValueBinding RecordFieldAndValue)
                      constructorOrField (TypeAndValueBinding _ v) = constructorOrField (ValueBinding v)
                      constructorOrField _ = Nothing
-            export AST.EquationDeclaration{} (AST.EquationDeclaration lhs _ _) =
-              UnionWith
-              $ Map.fromList
-              $ ((,) `flip` ValueBinding DefinedValue) <$> AG.syn lhs
+            export AST.EquationDeclaration{} ~(AST.EquationDeclaration lhs _ _) = AG.syn lhs
             export AST.DataDeclaration{} ~(AST.DataDeclaration _context lhs _kind constructors _derivings)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn constructors
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType childExports)
-            export AST.NewtypeDeclaration{} (AST.NewtypeDeclaration _context lhs _kind constructor _derivings)
-               | name <- AG.syn lhs, childExports <- AG.syn constructor
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.GADTDeclaration{} (AST.GADTDeclaration lhs _kind constructors _derivings)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn constructors
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.GADTNewtypeDeclaration{} (AST.GADTNewtypeDeclaration lhs _kind constructor _derivings)
-               | name <- AG.syn lhs, childExports <- AG.syn constructor
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.TypeDataDeclaration{} (AST.TypeDataDeclaration _support lhs _kind constructors)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn constructors
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.TypeGADTDeclaration{} (AST.TypeGADTDeclaration _support1 _support2 lhs _kind constructors)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn constructors
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.DataFamilyDeclaration{} (AST.DataFamilyDeclaration _support lhs _kind)
-               | name <- AG.syn lhs
-               = UnionWith (Map.singleton name $ TypeBinding $ DataType mempty)
-            export AST.ClosedTypeFamilyDeclaration{} (AST.ClosedTypeFamilyDeclaration _support lhs _kind decls)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn decls
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
-            export AST.OpenTypeFamilyDeclaration{} (AST.OpenTypeFamilyDeclaration _support lhs _kind)
-               | name <- AG.syn lhs
-               = UnionWith (Map.singleton name $ TypeBinding $ DataType mempty)
+               = onMap (knowType (DataType conEnv) <$>) (AG.syn lhs) <> conEnv
+               where conEnv = foldMap AG.syn constructors
+            export AST.NewtypeDeclaration{} ~(AST.NewtypeDeclaration _context lhs _kind constructor _derivings)
+               = AG.syn lhs <> AG.syn constructor
+            export AST.GADTDeclaration{} ~(AST.GADTDeclaration lhs _kind constructors _derivings)
+               = AG.syn lhs <> foldMap AG.syn constructors
+            export AST.GADTNewtypeDeclaration{} ~(AST.GADTNewtypeDeclaration lhs _kind constructor _derivings)
+               = AG.syn lhs <> AG.syn constructor
+            export AST.TypeDataDeclaration{} ~(AST.TypeDataDeclaration _support lhs _kind constructors)
+               = AG.syn lhs <> foldMap AG.syn constructors
+            export AST.TypeGADTDeclaration{} ~(AST.TypeGADTDeclaration _support1 _support2 lhs _kind constructors)
+               = AG.syn lhs <> foldMap AG.syn constructors
+            export AST.DataFamilyDeclaration{} ~(AST.DataFamilyDeclaration _support lhs _kind) = AG.syn lhs
+            export AST.ClosedTypeFamilyDeclaration{} ~(AST.ClosedTypeFamilyDeclaration _support lhs _kind decls)
+               = AG.syn lhs
+            export AST.OpenTypeFamilyDeclaration{} ~(AST.OpenTypeFamilyDeclaration _support lhs _kind) = AG.syn lhs
             export AST.InjectiveClosedTypeFamilyDeclaration{}
-                   (AST.InjectiveClosedTypeFamilyDeclaration _support lhs _var _deps decls)
-               | name <- AG.syn lhs, childExports <- foldMap AG.syn decls
-               = childExports <> UnionWith (Map.singleton name $ TypeBinding $ DataType $ childExports)
+                   ~(AST.InjectiveClosedTypeFamilyDeclaration _support lhs _var _deps decls) = AG.syn lhs
             export AST.InjectiveOpenTypeFamilyDeclaration{}
-                   (AST.InjectiveOpenTypeFamilyDeclaration _support lhs _var _deps)
-               | name <- AG.syn lhs
-               = UnionWith (Map.singleton name $ TypeBinding $ DataType mempty)
+                   ~(AST.InjectiveOpenTypeFamilyDeclaration _support lhs _var _deps) = AG.syn lhs
             export AST.DataFamilyInstance{}
                    (AST.DataFamilyInstance _support _vars context _lhs _kind constructors _derivings)
                = foldMap AG.syn constructors
@@ -372,22 +355,22 @@ instance {-# OVERLAPS #-}
             export AST.GADTNewtypeFamilyInstance{}
                    (AST.GADTNewtypeFamilyInstance _support _vars _lhs _kind constructor _derivings)
                = AG.syn constructor
-            export (AST.TypeSignature names _context _type) chSyn
+            export AST.TypeSynonymDeclaration{} ~(AST.TypeSynonymDeclaration lhs _type) = AG.syn lhs
+            export (AST.TypeSignature names _context _type) _chSyn
                = UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
-            export (AST.KindSignature name _type) chSyn
+            export (AST.KindSignature name _type) _chSyn
                = UnionWith (Map.singleton name $ TypeBinding UnknownType)
-            export ExtAST.ImplicitPatternSynonym{} (ExtAST.ImplicitPatternSynonym _ lhs _)
-               = UnionWith (Map.fromList [(name, PatternBinding) | name <- AG.syn lhs])
-            export ExtAST.ExplicitPatternSynonym{} (ExtAST.ExplicitPatternSynonym _ lhs _ _)
-               = UnionWith (Map.fromList [(name, PatternBinding) | name <- AG.syn lhs])
-            export ExtAST.UnidirectionalPatternSynonym{} (ExtAST.UnidirectionalPatternSynonym _ lhs _)
-               = UnionWith (Map.fromList [(name, PatternBinding) | name <- AG.syn lhs])
+            export ExtAST.ImplicitPatternSynonym{} ~(ExtAST.ImplicitPatternSynonym _ lhs _) = AG.syn lhs
+            export ExtAST.ExplicitPatternSynonym{} ~(ExtAST.ExplicitPatternSynonym _ lhs _ _) = AG.syn lhs
+            export ExtAST.UnidirectionalPatternSynonym{} ~(ExtAST.UnidirectionalPatternSynonym _ lhs _) = AG.syn lhs
             export _ _ = mempty
             bequeath AST.EquationDeclaration{} (AST.EquationDeclaration _ _ wheres) =
                (unqualified (foldMap AG.syn wheres) <>) <$> AG.inh inh
             bequeath _ _ = AG.inh inh
-            bequest :: forall g. AG.Atts (AG.Inherited (BinderWorker l f)) g
-            bequest = foldMap (`bequeath` chSyn) node
+            bequest :: forall a. AG.Inherited (BinderWorker l f) a
+            bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
+            knowType :: TypeBinding l -> Binding l -> Binding l
+            knowType tb (TypeBinding UnknownType) = TypeBinding tb
 
 -- | Resolve ambiguities in a single module. The imports are resolved using the given map of already resolved
 -- modules. Note that all class constraints in the function's type signature are satisfied by the Haskell
@@ -615,14 +598,44 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
+         Di.Attribution (MonoBinder l f) (ExtAST.TypeLHS l l)
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
+      where export :: forall d. ExtAST.TypeLHS l l d d -> LocalEnvironment l
+            export (ExtAST.SimpleTypeLHS name _vars) = UnionWith (Map.singleton name $ TypeBinding UnknownType)
+            export (ExtAST.SimpleKindedTypeLHS name _vars) = UnionWith (Map.singleton name $ TypeBinding UnknownType)
+            export (ExtAST.InfixTypeLHSApplication _ name _) = UnionWith (Map.singleton name $ TypeBinding UnknownType)
+            export _ = mempty
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         Di.Attribution (MonoBinder l f) (AST.EquationLHS l l)
+         where
+   attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
+      where export :: forall d. ExtAST.EquationLHS l l d d -> LocalEnvironment l
+            export (ExtAST.InfixLHS _ name _) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
+            export (ExtAST.VariableLHS name) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
+            export _ = mempty
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
          Di.Attribution (MonoBinder l f) (ExtAST.PatternLHS l l)
          where
    attribution _ node atts = atts{Di.syn= foldMap export node <> Di.syn atts, Di.inh= Di.inh atts}
       where export :: forall d. ExtAST.PatternLHS l l d d -> LocalEnvironment l
+            export (ExtAST.PrefixPatternLHS name _) = UnionWith (Map.singleton name PatternBinding)
+            export (ExtAST.InfixPatternLHS _ name _) = UnionWith (Map.singleton name PatternBinding)
             export (ExtAST.RecordPatternLHS con fields) =
                UnionWith (Map.singleton con $ ValueBinding $ RecordConstructor fieldEnv) <> fieldEnv
                where fieldEnv = UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- fields]
-            export _ = mempty
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
