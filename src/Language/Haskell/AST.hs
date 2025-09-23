@@ -8,6 +8,7 @@ import Control.Applicative (ZipList(ZipList))
 import Control.Monad (forM)
 import qualified Data.Kind as Kind
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
@@ -17,6 +18,26 @@ import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 import Language.Haskell.Extensions (ExtensionSwitch)
+
+newtype ZipNonEmpty a = ZipNonEmpty (NonEmpty a) deriving (Eq, Ord, Show, Read)
+
+instance Functor ZipNonEmpty where
+   fmap f (ZipNonEmpty xs) = ZipNonEmpty (fmap f xs)
+
+instance Foldable ZipNonEmpty where
+   foldMap f (ZipNonEmpty xs) = foldMap f xs
+
+instance Traversable ZipNonEmpty where
+   traverse f (ZipNonEmpty xs) = ZipNonEmpty <$> traverse f xs
+
+instance Applicative ZipNonEmpty where
+   pure = ZipNonEmpty . NonEmpty.repeat
+   liftA2 f (ZipNonEmpty xs) (ZipNonEmpty ys) = ZipNonEmpty (NonEmpty.zipWith f xs ys)
+
+instance Semigroup (ZipNonEmpty a) where
+   ZipNonEmpty xs <> ZipNonEmpty ys = ZipNonEmpty (xs <> ys)
+
+deriving instance Data a => Data (ZipNonEmpty a)
 
 -- | The Haskell 2010 language node parameter type
 data Language = Language deriving (Data, Eq, Show)
@@ -98,7 +119,7 @@ instance Abstract.Haskell Language where
    leftSectionExpression = LeftSectionExpression
    lambdaExpression = LambdaExpression . ZipList
    letExpression = LetExpression . ZipList
-   listComprehension = ListComprehension
+   listComprehension generator statements = ListComprehension generator (ZipNonEmpty statements)
    listExpression = ListExpression . ZipList
    literalExpression = LiteralExpression
    negate = Negate
@@ -106,7 +127,7 @@ instance Abstract.Haskell Language where
    referenceExpression = ReferenceExpression
    rightSectionExpression = RightSectionExpression
    sequenceExpression = SequenceExpression
-   tupleExpression = TupleExpression
+   tupleExpression = TupleExpression . ZipNonEmpty
    typedExpression = TypedExpression
 
    asPattern = AsPattern
@@ -116,7 +137,7 @@ instance Abstract.Haskell Language where
    listPattern = ListPattern . ZipList
    literalPattern = LiteralPattern
    recordPattern = \con fields-> RecordPattern con (ZipList fields)
-   tuplePattern = TuplePattern
+   tuplePattern = TuplePattern . ZipNonEmpty
    variablePattern = VariablePattern
    wildcardPattern = WildcardPattern
 
@@ -125,7 +146,7 @@ instance Abstract.Haskell Language where
    functionType = FunctionType
    listType = ListType
    strictType = StrictType
-   tupleType = TupleType
+   tupleType = TupleType . ZipNonEmpty
    typeApplication = TypeApplication
    typeVariable = TypeVariable
 
@@ -146,14 +167,14 @@ instance Abstract.Haskell Language where
    typeClassInstanceLHS = TypeClassInstanceLHS
    simpleTypeLHS = SimpleTypeLHS
 
-   prefixLHS = PrefixLHS
+   prefixLHS prefix args = PrefixLHS prefix (ZipNonEmpty args)
    infixLHS = InfixLHS
    patternLHS = PatternLHS
    variableLHS = VariableLHS
 
    caseAlternative = \lhs rhs wheres-> CaseAlternative lhs rhs (ZipList wheres)
 
-   guardedRHS = GuardedRHS
+   guardedRHS = GuardedRHS . ZipNonEmpty
    normalRHS = NormalRHS
 
    guardedExpression = GuardedExpression . ZipList
@@ -225,7 +246,7 @@ data Expression λ l d s =
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
    | LambdaExpression (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
    | LetExpression (ZipList (s (Abstract.Declaration l l d d))) (s (Abstract.Expression l l d d))
-   | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+   | ListComprehension (s (Abstract.Expression l l d d)) (ZipNonEmpty (s (Abstract.Statement l l d d)))
    | ListExpression (ZipList (s (Abstract.Expression l l d d)))
    | LiteralExpression (s (Abstract.Value l l d d))
    | Negate
@@ -234,7 +255,7 @@ data Expression λ l d s =
    | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
-   | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
+   | TupleExpression (ZipNonEmpty (s (Abstract.Expression l l d d)))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
 
 data Type λ l d s =
@@ -243,18 +264,18 @@ data Type λ l d s =
    | FunctionType (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))
-   | TupleType (NonEmpty (s (Abstract.Type l l d d)))
+   | TupleType (ZipNonEmpty (s (Abstract.Type l l d d)))
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
 
 data EquationLHS λ l d s =
-   PrefixLHS (s (Abstract.EquationLHS l l d d)) (NonEmpty (s (Abstract.Pattern l l d d)))
+   PrefixLHS (s (Abstract.EquationLHS l l d d)) (ZipNonEmpty (s (Abstract.Pattern l l d d)))
    | InfixLHS (s (Abstract.Pattern l l d d)) (Abstract.Name λ) (s (Abstract.Pattern l l d d))
    | PatternLHS (s (Abstract.Pattern l l d d))
    | VariableLHS (Abstract.Name λ)
 
 data EquationRHS λ l d s =
-   GuardedRHS (NonEmpty (s (Abstract.GuardedExpression l l d d)))
+   GuardedRHS (ZipNonEmpty (s (Abstract.GuardedExpression l l d d)))
    | NormalRHS (s (Abstract.Expression l l d d))
 
 data GuardedExpression λ l d s =
@@ -268,7 +289,7 @@ data Pattern λ l d s =
    | ListPattern (ZipList (s (Abstract.Pattern l l d d)))
    | LiteralPattern (s (Abstract.Value l l d d))
    | RecordPattern (Abstract.QualifiedName λ) (ZipList (s (Abstract.FieldPattern l l d d)))
-   | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
+   | TuplePattern (ZipNonEmpty (s (Abstract.Pattern l l d d)))
    | VariablePattern (Abstract.Name λ)
    | WildcardPattern
 

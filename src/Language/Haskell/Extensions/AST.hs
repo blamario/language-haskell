@@ -32,7 +32,8 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), Guard
                              FieldDeclaration(..), CaseAlternative(..),
                              Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
-                             ImportSpecification(..))
+                             ImportSpecification(..),
+                             ZipNonEmpty(ZipNonEmpty))
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
@@ -100,7 +101,8 @@ instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Language where
    build = Abstract.ParallelListComprehensionConstruction {
-      Abstract.parallelListComprehension = ParallelListComprehension ()}
+      Abstract.parallelListComprehension = \gen stats1 stats2 statses->
+         ParallelListComprehension () gen (ZipNonEmpty stats1) (ZipNonEmpty stats2) (ZipList $ ZipNonEmpty <$> statses)}
 
 instance Abstract.ExtendedWith '[ 'Extensions.RecordWildCards ] Language where
    build = Abstract.RecordWildCardConstruction {
@@ -132,15 +134,15 @@ instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.UnboxedTuples ] Language where
    build = Abstract.UnboxedTuplesConstruction {
-      Abstract.unboxedTupleType = UnboxedTupleType (),
+      Abstract.unboxedTupleType = UnboxedTupleType () . ZipNonEmpty,
       Abstract.unboxedTupleConstructor = UnboxedTupleConstructor (),
-      Abstract.unboxedTupleExpression = UnboxedTupleExpression (),
+      Abstract.unboxedTupleExpression = UnboxedTupleExpression () . ZipNonEmpty,
       Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression (),
-      Abstract.unboxedTuplePattern = UnboxedTuplePattern ()}
+      Abstract.unboxedTuplePattern = UnboxedTuplePattern () . ZipNonEmpty}
 
 instance Abstract.ExtendedWith '[ 'Extensions.UnboxedSums ] Language where
    build = Abstract.UnboxedSumsConstruction {
-      Abstract.unboxedSumType = UnboxedSumType (),
+      Abstract.unboxedSumType = UnboxedSumType () . ZipNonEmpty,
       Abstract.unboxedSumConstructor = UnboxedSumConstructor (),
       Abstract.unboxedSumExpression = UnboxedSumExpression (),
       Abstract.unboxedSumPattern = UnboxedSumPattern ()}
@@ -177,7 +179,7 @@ instance Abstract.ExtendedWith '[ 'Extensions.BangPatterns ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.OrPatterns ] Language where
    build = Abstract.OrPatternConstruction {
-      Abstract.orPattern = OrPattern ()}
+      Abstract.orPattern = OrPattern () . ZipNonEmpty}
 
 instance Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] Language where
    build = Abstract.ViewPatternConstruction {
@@ -443,7 +445,7 @@ instance Abstract.Haskell Language where
    leftSectionExpression = LeftSectionExpression
    lambdaExpression = LambdaExpression . ZipList
    letExpression = LetExpression . ZipList
-   listComprehension = ListComprehension
+   listComprehension generator statements = ListComprehension generator (ZipNonEmpty statements)
    listExpression = ListExpression . ZipList
    literalExpression = LiteralExpression
    negate = Negate
@@ -451,7 +453,7 @@ instance Abstract.Haskell Language where
    referenceExpression = ReferenceExpression
    rightSectionExpression = RightSectionExpression
    sequenceExpression = SequenceExpression
-   tupleExpression = TupleExpression
+   tupleExpression = TupleExpression . ZipNonEmpty
    typedExpression = TypedExpression
 
    asPattern = AsPattern
@@ -461,7 +463,7 @@ instance Abstract.Haskell Language where
    listPattern = ListPattern . ZipList
    literalPattern = LiteralPattern
    recordPattern con fields = RecordPattern con (ZipList fields)
-   tuplePattern = TuplePattern
+   tuplePattern = TuplePattern . ZipNonEmpty
    variablePattern = VariablePattern
    wildcardPattern = WildcardPattern
 
@@ -470,7 +472,7 @@ instance Abstract.Haskell Language where
    functionType = FunctionType
    listType = ListType
    strictType = StrictType
-   tupleType = TupleType
+   tupleType = TupleType . ZipNonEmpty
    typeApplication = TypeApplication
    typeVariable = TypeVariable
 
@@ -491,14 +493,14 @@ instance Abstract.Haskell Language where
    typeClassInstanceLHS = TypeClassInstanceLHS
    simpleTypeLHS = SimpleTypeLHS
 
-   prefixLHS = PrefixLHS
+   prefixLHS prefix args = PrefixLHS prefix (ZipNonEmpty args)
    infixLHS = InfixLHS
    patternLHS = PatternLHS
    variableLHS = VariableLHS
 
    caseAlternative lhs rhs wheres = CaseAlternative lhs rhs (ZipList wheres)
 
-   guardedRHS = GuardedRHS
+   guardedRHS = GuardedRHS . ZipNonEmpty
    normalRHS = NormalRHS
 
    guardedExpression = GuardedExpression . ZipList
@@ -720,9 +722,9 @@ data Type λ l d s =
    | ListType (s (Abstract.Type l l d d))
    | StrictType (s (Abstract.Type l l d d))
    | LazyType !(Abstract.SupportFor 'Extensions.StrictData λ) (s (Abstract.Type l l d d))
-   | TupleType (NonEmpty (s (Abstract.Type l l d d)))
-   | UnboxedTupleType !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (NonEmpty (s (Abstract.Type l l d d)))
-   | UnboxedSumType !(Abstract.SupportFor 'Extensions.UnboxedSums λ) (NonEmpty (s (Abstract.Type l l d d)))
+   | TupleType (ZipNonEmpty (s (Abstract.Type l l d d)))
+   | UnboxedTupleType !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (ZipNonEmpty (s (Abstract.Type l l d d)))
+   | UnboxedSumType !(Abstract.SupportFor 'Extensions.UnboxedSums λ) (ZipNonEmpty (s (Abstract.Type l l d d)))
    | TypeApplication (s (Abstract.Type l l d d)) (s (Abstract.Type l l d d))
    | InfixTypeApplication (s (Abstract.Type l l d d)) (Abstract.QualifiedName λ) (s (Abstract.Type l l d d))
    | TypeVariable (Abstract.Name λ)
@@ -788,10 +790,12 @@ data Expression λ l d s =
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
    | LambdaExpression (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
    | LetExpression (ZipList (s (Abstract.Declaration l l d d))) (s (Abstract.Expression l l d d))
-   | ListComprehension (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
+   | ListComprehension (s (Abstract.Expression l l d d)) (ZipNonEmpty (s (Abstract.Statement l l d d)))
    | ParallelListComprehension !(Abstract.SupportFor 'Extensions.ParallelListComprehensions λ)
-                               (s (Abstract.Expression l l d d)) (NonEmpty (s (Abstract.Statement l l d d)))
-                               (NonEmpty (s (Abstract.Statement l l d d))) [NonEmpty (s (Abstract.Statement l l d d))]
+                               (s (Abstract.Expression l l d d))
+                               (ZipNonEmpty (s (Abstract.Statement l l d d)))
+                               (ZipNonEmpty (s (Abstract.Statement l l d d)))
+                               (ZipList (ZipNonEmpty (s (Abstract.Statement l l d d))))
    | ListExpression (ZipList (s (Abstract.Expression l l d d)))
    | LiteralExpression (s (Abstract.Value l l d d))
    | Negate
@@ -800,13 +804,13 @@ data Expression λ l d s =
    | RightSectionExpression (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | SequenceExpression (s (Abstract.Expression l l d d)) (Maybe (s (Abstract.Expression l l d d)))
                         (Maybe (s (Abstract.Expression l l d d)))
-   | TupleExpression (NonEmpty (s (Abstract.Expression l l d d)))
+   | TupleExpression (ZipNonEmpty (s (Abstract.Expression l l d d)))
    | TupleSectionExpression !(Abstract.SupportFor 'Extensions.TupleSections λ)
                             (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | UnboxedSumExpression !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
                           Int (s (Abstract.Expression l l d d)) Int
    | UnboxedTupleExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
-                            (NonEmpty (s (Abstract.Expression l l d d)))
+                            (ZipNonEmpty (s (Abstract.Expression l l d d)))
    | UnboxedTupleSectionExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
                                    (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
@@ -844,13 +848,13 @@ data Pattern λ l d s =
    | ExplicitTypePattern !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
    | BangPattern !(Abstract.SupportFor 'Extensions.BangPatterns λ) (s (Abstract.Pattern l l d d))
    | LazyPattern !(Abstract.SupportFor 'Extensions.Strict λ) (s (Abstract.Pattern l l d d))
-   | OrPattern !(Abstract.SupportFor 'Extensions.OrPatterns λ) (NonEmpty (s (Abstract.Pattern l l d d)))
+   | OrPattern !(Abstract.SupportFor 'Extensions.OrPatterns λ) (ZipNonEmpty (s (Abstract.Pattern l l d d)))
    | ViewPattern !(Abstract.SupportFor 'Extensions.ViewPatterns λ)
                   (s (Abstract.Expression l l d d))
                   (s (Abstract.Pattern l l d d))
    | NPlusKPattern !(Abstract.SupportFor 'Extensions.NPlusKPatterns λ) (Abstract.Name λ) Integer
-   | TuplePattern (NonEmpty (s (Abstract.Pattern l l d d)))
-   | UnboxedTuplePattern !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (NonEmpty (s (Abstract.Pattern l l d d)))
+   | TuplePattern (ZipNonEmpty (s (Abstract.Pattern l l d d)))
+   | UnboxedTuplePattern !(Abstract.SupportFor 'Extensions.UnboxedTuples λ) (ZipNonEmpty (s (Abstract.Pattern l l d d)))
    | UnboxedSumPattern !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
                        Int (s (Abstract.Pattern l l d d)) Int
    | VariablePattern (Abstract.Name λ)
