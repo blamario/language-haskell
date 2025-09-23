@@ -80,6 +80,7 @@ data Binding l = ErroneousBinding (BindingError l)
                | TypeBinding (TypeBinding l)
                | ValueBinding (ValueBinding l)
                | TypeAndValueBinding (TypeBinding l) (ValueBinding l)
+               | TypeAndPatternBinding (TypeBinding l)
                | PatternBinding
                deriving (Typeable, Data, Eq, Show)
 
@@ -129,6 +130,7 @@ lookupType :: AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
 lookupType name (UnionWith env) = Map.lookup name env >>= \case
   TypeBinding t -> Just t
   TypeAndValueBinding t _ -> Just t
+  TypeAndPatternBinding t -> Just t
   _ -> Nothing
 
 -- | Look up a value name in the environment
@@ -145,6 +147,7 @@ deriving instance (Show k, Show v) => Show (UnionWith (Map k) v)
 instance Semigroup (Binding l) where
    ValueBinding v <> TypeBinding t = TypeAndValueBinding t v
    TypeBinding t <> ValueBinding v = TypeAndValueBinding t v
+   TypeBinding t <> PatternBinding = TypeAndPatternBinding t
    b@ErroneousBinding{} <> _ = b
    _ <> b@ErroneousBinding{} = b
    ValueBinding a@InfixDeclaration{} <> ValueBinding b@InfixDeclaration{} =
@@ -483,10 +486,16 @@ instance {-# OVERLAPS #-}
                onMap (Map.insert (baseName parent) b) (filterMembers members env)
             Just (TypeAndValueBinding b@(TypeClass env) _) ->
                onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
+            Just (TypeAndPatternBinding b@(TypeClass env)) ->
+               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
             Just b@(TypeBinding (DataType env)) ->
                onMap (Map.insert (baseName parent) b) (filterMembers members env)
             Just (TypeAndValueBinding b@(DataType env) _) ->
                onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
+            Just (TypeAndPatternBinding b@(DataType env)) ->
+               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
+            Just b -> error (show (parent, b))
+            Nothing -> error (show parent)
       reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
       unqualifiedAndQualifiedWith modName qn@(AST.QualifiedName modName' localName) =
         modName' == Just modName
@@ -540,9 +549,13 @@ instance {-# OVERLAPS #-}
                      onMap (Map.insert parent b) (filterMembers members env)
                   Just (TypeAndValueBinding b@(TypeClass env) _) ->
                      onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                  Just (TypeAndPatternBinding b@(TypeClass env)) ->
+                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
                   Just b@(TypeBinding (DataType env)) ->
                      onMap (Map.insert parent b) (filterMembers members env)
                   Just (TypeAndValueBinding b@(DataType env) _) ->
+                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
+                  Just (TypeAndPatternBinding b@(DataType env)) ->
                      onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
                   _ -> nameImport parent available
             itemImports (ExtAST.ImportPattern name) = nameImport name available
