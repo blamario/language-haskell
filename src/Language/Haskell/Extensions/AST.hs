@@ -130,14 +130,14 @@ instance Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] Language where
 
 instance Abstract.ExtendedWith '[ 'Extensions.TupleSections ] Language where
    build = Abstract.TupleSectionConstruction {
-      Abstract.tupleSectionExpression = TupleSectionExpression ()}
+      Abstract.tupleSectionExpression = TupleSectionExpression () . ZipNonEmpty}
 
 instance Abstract.ExtendedWith '[ 'Extensions.UnboxedTuples ] Language where
    build = Abstract.UnboxedTuplesConstruction {
       Abstract.unboxedTupleType = UnboxedTupleType () . ZipNonEmpty,
       Abstract.unboxedTupleConstructor = UnboxedTupleConstructor (),
       Abstract.unboxedTupleExpression = UnboxedTupleExpression () . ZipNonEmpty,
-      Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression (),
+      Abstract.unboxedTupleSectionExpression = UnboxedTupleSectionExpression () . ZipNonEmpty,
       Abstract.unboxedTuplePattern = UnboxedTuplePattern () . ZipNonEmpty}
 
 instance Abstract.ExtendedWith '[ 'Extensions.UnboxedSums ] Language where
@@ -806,13 +806,13 @@ data Expression λ l d s =
                         (Maybe (s (Abstract.Expression l l d d)))
    | TupleExpression (ZipNonEmpty (s (Abstract.Expression l l d d)))
    | TupleSectionExpression !(Abstract.SupportFor 'Extensions.TupleSections λ)
-                            (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
+                            (ZipNonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | UnboxedSumExpression !(Abstract.SupportFor 'Extensions.UnboxedSums λ)
                           Int (s (Abstract.Expression l l d d)) Int
    | UnboxedTupleExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
                             (ZipNonEmpty (s (Abstract.Expression l l d d)))
    | UnboxedTupleSectionExpression !(Abstract.SupportFor 'Extensions.UnboxedTuples λ)
-                                   (NonEmpty (Maybe (s (Abstract.Expression l l d d))))
+                                   (ZipNonEmpty (Maybe (s (Abstract.Expression l l d d))))
    | TypedExpression (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | VisibleTypeApplication (s (Abstract.Expression l l d d)) (s (Abstract.Type l l d d))
    | ExplicitTypeExpression !(Abstract.SupportFor 'Extensions.ExplicitNamespaces λ) (s (Abstract.Type l l d d))
