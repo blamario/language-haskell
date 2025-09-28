@@ -23,7 +23,7 @@ module Language.Haskell.Binder (
 import Control.Applicative ((<|>), ZipList(ZipList))
 import Control.Exception (assert)
 import Data.Coerce (coerce)
-import Unsafe.Coerce (unsafeCoerce)
+import Data.Bifunctor (first)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
 import Data.Functor (($>))
@@ -31,13 +31,14 @@ import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(Const))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (fromMaybe)
-import Data.Semigroup.Union (UnionWith(..))
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Any(Any))
+import Data.Semigroup.Union (UnionWith(..))
 import qualified Data.Set as Set
 import Data.Set (Set)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import Transformation (Transformation)
@@ -171,19 +172,20 @@ instance Monoid (Binding l) where
    mempty = ErroneousBinding NoBindings
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
-withBindings :: forall l g p w q. (q ~ WithEnvironment l p, w ~ BinderWorker l p, Traversable p, AG.Attribution w g,
-                                   AG.Atts (AG.Synthesized w) g ~ LocalEnvironment l,
-                                   Rank2.Apply (g (AG.Semantics (AG.Keep w))),
-                                   Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
-                                   Deep.Functor (AG.Keep w) g,
-                                   Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
+withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ BinderWorker l p, Traversable p, AG.Attribution w g,
+                                     AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
+                                     Rank2.Apply (g (AG.Semantics (AG.Keep w))),
+                                     Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
+                                     Deep.Functor (AG.Keep w) g,
+                                     Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
              => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings extensions modEnv env node =
    Full.mapDownDefault (Transformation.Rank2.Map trim)
    $ AG.syn
    $ (AG.Keep (BinderWorker $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
-         trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original} = Compose (Di.Atts{Di.inh= env, Di.syn= unsafeCoerce synthesized}, original)
+         trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original}
+            = Compose (Di.Atts{Di.inh= env, Di.syn= snd synthesized}, original)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
@@ -212,38 +214,15 @@ type instance AG.Atts (AG.Inherited (Binder l f)) g = Di.Inherited (MonoBinder l
 type instance AG.Atts (AG.Synthesized (Binder l f)) g = AG.Kept (MonoBinder l f) (g (AG.Kept (MonoBinder l f)) (AG.Kept (MonoBinder l f)))
 
 type instance AG.Atts (AG.Inherited (BinderWorker l f)) g = (Map Extension Bool, Environment l)
---type instance AG.Atts (AG.Synthesized (BinderWorker l f)) g = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Module l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Export l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Import l l) = (Any, Environment l)
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.ImportSpecification l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.ImportItem l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Declaration l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.FunctionalDependency l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.DataConstructor l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.GADTConstructor l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternEquationClause l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.DerivingClause l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.DerivingStrategy l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Type l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.TypeLHS l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.TypeVarBinding l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.ClassInstanceLHS l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Context l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.EquationLHS l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Expression l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.FieldBinding l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.LambdaCasesAlternative l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Pattern l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternLHS l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.PatternEquationLHS l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.FieldPattern l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Statement l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Constructor l l) = LocalEnvironment l
-type instance AG.Atts (AG.Synthesized (BinderWorker l f)) (ExtAST.Value l l) = LocalEnvironment l
+type instance AG.Atts (AG.Synthesized (BinderWorker l f)) g = (OtherSynAtts l g, LocalEnvironment l)
+
+type family OtherSynAtts l g where
+  OtherSynAtts l (ExtAST.Import l l) = (Any, Environment l)
+  OtherSynAtts l _ = ()
 
 instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder l f,
                                Rank2.Traversable (g (AG.Semantics (Di.Auto (MonoBinder l f)))),
+                               OtherSynAtts l g ~ (),
                                -- forall sem. g sem (AG.Synthesized (BinderWorker l f)) ~ g sem (AG.Synthesized (MonoBinder l f)),
                                Foldable f) =>
          AG.Attribution (BinderWorker l f) g where
@@ -251,7 +230,12 @@ instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder
                => BinderWorker l f -> f (g f' f')
                -> (AG.Inherited   (BinderWorker l f) (g sem sem), g sem (AG.Synthesized (BinderWorker l f)))
                -> (AG.Synthesized (BinderWorker l f) (g sem sem), g sem (AG.Inherited (BinderWorker l f)))
-   attribution (BinderWorker t) x (inh, chSyn) = unsafeCoerce (AG.attribution (Di.Auto t) x (unsafeCoerce inh :: AG.Inherited (Di.Auto t) (g (AG.Semantics (Di.Auto t)) (AG.Semantics (Di.Auto t))), unsafeCoerce chSyn :: g (AG.Semantics (Di.Auto t)) (AG.Synthesized (Di.Auto t)))) :: (AG.Synthesized (BinderWorker l f) (g sem sem), g sem (AG.Inherited (BinderWorker l f)))
+   attribution (BinderWorker t) x (inh, chSyn) = (AG.Synthesized ((), unsafeCoerce autoDiSyn), unsafeCoerce autoDiInh) :: (AG.Synthesized (BinderWorker l f) (g sem sem), g sem (AG.Inherited (BinderWorker l f)))
+      where autoDiSyn :: AG.Atts (AG.Synthesized (Di.Auto t)) g
+            autoDiInh :: g (AG.Semantics (Di.Auto t)) (AG.Inherited (Di.Auto t))
+            (AG.Synthesized autoDiSyn, autoDiInh) = AG.attribution (Di.Auto t) x (unsafeCoerce inh :: AG.Inherited (Di.Auto t) (g (AG.Semantics (Di.Auto t)) (AG.Semantics (Di.Auto t))), unsafeCoerce (toLocalEnv Rank2.<$> chSyn) :: g (AG.Semantics (Di.Auto t)) (AG.Synthesized (Di.Auto t)))
+            toLocalEnv :: forall a. AG.Synthesized (BinderWorker l f) a -> AG.Synthesized (Di.Auto t) a
+            toLocalEnv (AG.Synthesized (_, env)) = AG.Synthesized env
 
 -- | The transformation type used by 'Di.Attribution' rules
 data MonoBinder l (f :: Type -> Type) = Binder {
@@ -304,16 +288,18 @@ instance {-# OVERLAPS #-}
             export :: forall d.
                       AST.Declaration l l d d
                    -> AST.Declaration l l sem (AG.Synthesized (BinderWorker l f))
-                   -> LocalEnvironment l
+                   -> ((), LocalEnvironment l)
             export (AST.FixityDeclaration associativity precedence names) chSyn =
-               UnionWith (Map.fromList [(name,
-                                         ValueBinding $ InfixDeclaration associativity (fromMaybe 9 precedence) Nothing)
-                                        | name <- toList names])
+               ((),
+                UnionWith (Map.fromList [(name,
+                                          ValueBinding
+                                          $ InfixDeclaration associativity (fromMaybe 9 precedence) Nothing)
+                                        | name <- toList names]))
             export ExtAST.ClassDeclaration{} ~(ExtAST.ClassDeclaration _ lhs decls)
-               = onMap (knowType (TypeClass methodEnv) <$>) (AG.syn lhs) <> methodEnv
+               = (onMap (knowType (TypeClass $ snd methodEnv) <$>) <$> AG.syn lhs) <> methodEnv
                where methodEnv = foldMap AG.syn decls
             export ExtAST.InstanceDeclaration{} ~(ExtAST.InstanceDeclaration _vars _context _lhs decls) =
-               onMap (Map.mapMaybe constructorOrField) (foldMap AG.syn decls)
+               onMap (Map.mapMaybe constructorOrField) <$> foldMap AG.syn decls
                where constructorOrField b@(ValueBinding DataConstructor{}) = Just b
                      constructorOrField b@(ValueBinding RecordConstructor{}) = Just b
                      constructorOrField b@(ValueBinding RecordField{}) = Just b
@@ -323,7 +309,7 @@ instance {-# OVERLAPS #-}
                      constructorOrField _ = Nothing
             export AST.EquationDeclaration{} ~(AST.EquationDeclaration lhs _ _) = AG.syn lhs
             export AST.DataDeclaration{} ~(AST.DataDeclaration _context lhs _kind constructors _derivings)
-               = onMap (knowType (DataType conEnv) <$>) (AG.syn lhs) <> conEnv
+               = (onMap (knowType (DataType $ snd conEnv) <$>) <$> AG.syn lhs) <> conEnv
                where conEnv = foldMap AG.syn constructors
             export AST.NewtypeDeclaration{} ~(AST.NewtypeDeclaration _context lhs _kind constructor _derivings)
                = AG.syn lhs <> AG.syn constructor
@@ -357,15 +343,15 @@ instance {-# OVERLAPS #-}
                = AG.syn constructor
             export AST.TypeSynonymDeclaration{} ~(AST.TypeSynonymDeclaration lhs _type) = AG.syn lhs
             export (AST.TypeSignature names _context _type) _chSyn
-               = UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names)
+               = ((), UnionWith (Map.fromList $ flip (,) (ValueBinding DefinedValue) <$> toList names))
             export (AST.KindSignature name _type) _chSyn
-               = UnionWith (Map.singleton name $ TypeBinding UnknownType)
+               = ((), UnionWith (Map.singleton name $ TypeBinding UnknownType))
             export ExtAST.ImplicitPatternSynonym{} ~(ExtAST.ImplicitPatternSynonym _ lhs _) = AG.syn lhs
             export ExtAST.ExplicitPatternSynonym{} ~(ExtAST.ExplicitPatternSynonym _ lhs _ _) = AG.syn lhs
             export ExtAST.UnidirectionalPatternSynonym{} ~(ExtAST.UnidirectionalPatternSynonym _ lhs _) = AG.syn lhs
             export _ _ = mempty
             bequeath AST.EquationDeclaration{} (AST.EquationDeclaration _ _ wheres) =
-               (unqualified (foldMap AG.syn wheres) <>) <$> AG.inh inh
+               (unqualified (foldMap (snd . AG.syn) wheres) <>) <$> AG.inh inh
             bequeath _ _ = AG.inh inh
             bequest :: forall a. AG.Inherited (BinderWorker l f) a
             bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
@@ -401,19 +387,19 @@ instance {-# OVERLAPS #-}
                      AST.ExtendedModule _ bodySyn = childSyn
                      atts' = case Map.lookup Extensions.FieldSelectors exts' of
                         Just False ->
-                           (AG.mapSynthesized (onMap (Map.mapMaybe noFieldSelector)) bodySyn, inheritance)
+                           (AG.mapSynthesized (onMap (Map.mapMaybe noFieldSelector) <$>) bodySyn, inheritance)
                         _ -> (bodySyn, inheritance)
                      inheritance = AST.ExtendedModule modExts $ AG.Inherited (exts', inhEnv)
                      noFieldSelector (ValueBinding RecordField) = Nothing
                      noFieldSelector (ValueBinding RecordFieldAndValue) = Just (ValueBinding DefinedValue)
                      noFieldSelector x = Just x
             moduleAttribution (AST.AnonymousModule modImports body) =
-               (AG.Synthesized $ filterEnv (== mainName) moduleGlobalScope,
+               (AG.Synthesized ((), filterEnv (== mainName) moduleGlobalScope),
                 AST.AnonymousModule (AG.Inherited childInh <$ modImports) (AG.Inherited childInh <$ body))
                where moduleGlobalScope = importedScope importSyn <> unqualified bodySyn
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
                      AST.AnonymousModule importSyn declsSyn = childSyn
-                     bodySyn = foldMap AG.syn declsSyn
+                     bodySyn = foldMap (snd . AG.syn) declsSyn
                      childInh = (exts, moduleGlobalScope)
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
                (AG.Synthesized $ foldMap AG.syn (Compose exportSyn),
@@ -424,7 +410,7 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope :: Environment l
                      childInh = (exts, moduleGlobalScope)
                      AST.NamedModule _ exportSyn importSyn declsSyn = childSyn
-                     bodySyn = foldMap AG.syn declsSyn
+                     (_, bodySyn) = foldMap AG.syn declsSyn
                      moduleGlobalScope = importedScope importSyn
                                          <> qualifiedWith moduleName bodySyn
                                          <> unqualified bodySyn
@@ -435,7 +421,7 @@ instance {-# OVERLAPS #-}
                <> if not importsPrelude && Map.findWithDefault True Extensions.ImplicitPrelude exts
                   then qualifiedWith preludeName preludeEnv <> unqualified preludeEnv
                   else mempty
-              where (Any importsPrelude, allImports) = foldMap AG.syn importSyns
+              where ((Any importsPrelude, allImports), _) = foldMap AG.syn importSyns
             preludeEnv = fold $ lookupEnv preludeName modEnv
 
 instance {-# OVERLAPS #-}
@@ -467,7 +453,7 @@ instance {-# OVERLAPS #-}
             Just (TypeAndPatternBinding b@(DataType env)) ->
                onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
             Just b -> error (show (parent, b))
-            Nothing -> error (show parent)
+            Nothing -> error (show (parent, moduleGlobalScope))
       reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
       unqualifiedAndQualifiedWith modName qn@(AST.QualifiedName modName' localName) =
         modName' == Just modName
@@ -477,17 +463,17 @@ instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l, Abstract.Name l ~ AST.Name l,
-          AG.Atts (AG.Synthesized (BinderWorker l f)) (Abstract.ImportSpecification l l) ~ LocalEnvironment l,
+          AG.Atts (AG.Synthesized (BinderWorker l f)) (Abstract.ImportSpecification l l) ~ ((), LocalEnvironment l),
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
          AG.Attribution (BinderWorker l f) (ExtAST.Import l l) where
    attribution (BinderWorker (Binder modEnv)) node (AG.Inherited (exts, _), ExtAST.Import _ _ _ _ _ specSyn) =
-      (AG.Synthesized (Any (name == preludeName), scope),
+      (AG.Synthesized ((Any (name == preludeName), scope), mempty),
        ExtAST.Import False qualified Nothing name alias (Just $ AG.Inherited (exts, unqualified available)))
       where ExtAST.Import _ qualified _ name alias _ = foldr1 const node
             available = fold $ lookupEnv name modEnv
-            used = maybe available AG.syn specSyn
+            used = maybe available (snd . AG.syn) specSyn
             scope
                | qualified = qualifiedWith (fromMaybe name alias) used
                | otherwise = qualifiedWith (fromMaybe name alias) used <> unqualified used

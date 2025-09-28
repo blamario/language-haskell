@@ -114,7 +114,7 @@ main' Opts{..} = do
               Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
               AG.Attribution (Binder.BinderWorker l w) (g l l),
               AG.Atts (AG.Synthesized (Binder.BinderWorker Language (Grammar.NodeWrap Input))) (g l l)
-              ~ Binder.LocalEnvironment l,
+              ~ (x, Binder.LocalEnvironment l),
               Deep.Functor (AG.Keep (Binder.BinderWorker l w)) (g l l),
               Deep.Functor (Rank2.Map (AG.Kept (Binder.BinderWorker l w)) (Binder.WithEnvironment l w)) (g l l),
               Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
@@ -157,7 +157,7 @@ main' Opts{..} = do
           => (Input -> ParseResults Input [w (g l l w w)])
           -> String -> Text -> IO ()
        go parser _filename contents = report contents (parser $ fromText contents)
-       report :: forall g l a e w.
+       report :: forall g l a e w x.
                  (Data a, Show a, Template.PrettyViaTH a, Typeable g,
                   a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
                   e ~ Binder.WithEnvironment Language w,
@@ -173,7 +173,7 @@ main' Opts{..} = do
                   Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Binder.BinderWorker l w)))),
                   AG.Attribution (Binder.BinderWorker l w) (g l l),
                   AG.Atts (AG.Synthesized (Binder.BinderWorker Language (Grammar.NodeWrap Input))) (g l l)
-                  ~ Binder.LocalEnvironment l,
+                  ~ (x, Binder.LocalEnvironment l),
                   Deep.Functor (AG.Keep (Binder.BinderWorker l w)) (g l l),
                   Deep.Functor (Rank2.Map (AG.Kept (Binder.BinderWorker l w)) (Binder.WithEnvironment l w)) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),

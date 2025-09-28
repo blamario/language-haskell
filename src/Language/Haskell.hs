@@ -85,7 +85,7 @@ parseModule extensions modEnv env verify source =
 resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) node,
                      AG.Attribution (Binder.BinderWorker AST.Language Parsed) node,
                      AG.Atts (AG.Synthesized (Binder.BinderWorker AST.Language Parsed)) node
-                     ~ Binder.LocalEnvironment AST.Language,
+                     ~ (x, Binder.LocalEnvironment AST.Language),
                      Rank2.Apply (node (AG.Semantics (AG.Keep (Binder.BinderWorker AST.Language Parsed)))),
                      Rank2.Traversable (node (AG.Semantics (AG.Keep (Binder.BinderWorker AST.Language Parsed)))),
                      Deep.Functor (AG.Keep (Binder.BinderWorker AST.Language Parsed)) node,
