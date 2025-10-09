@@ -27,6 +27,7 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
+import qualified Transformation.AG.Generics as AG (Auto)
 
 import Control.Category ((>>>))
 import Control.Monad ((>=>))
@@ -83,15 +84,15 @@ parseModule extensions modEnv env verify source =
 -- | Resolve identifiers in the given parsed AST, and replace the stored positions in the entire tree with
 -- offsets from the start of the given source text.
 resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) node,
-                     AG.Attribution (Binder.BinderWorker AST.Language Parsed) node,
+                     AG.Attribution (AG.Auto (Binder.BinderWorker AST.Language Parsed)) node,
                      AG.Atts (AG.Synthesized (Binder.BinderWorker AST.Language Parsed)) node
                      ~ (x, Binder.LocalEnvironment AST.Language),
-                     Rank2.Apply (node (AG.Semantics (AG.Keep (Binder.BinderWorker AST.Language Parsed)))),
-                     Rank2.Traversable (node (AG.Semantics (AG.Keep (Binder.BinderWorker AST.Language Parsed)))),
-                     Deep.Functor (AG.Keep (Binder.BinderWorker AST.Language Parsed)) node,
+                     Rank2.Apply (node (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker AST.Language Parsed))))),
+                     Rank2.Traversable (node (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker AST.Language Parsed))))),
+                     Deep.Functor (AG.Keep (AG.Auto (Binder.BinderWorker AST.Language Parsed))) node,
                      Deep.Functor
                         (Rank2.Map
-                           (AG.Kept (Binder.BinderWorker AST.Language Parsed))
+                           (AG.Kept (AG.Auto (Binder.BinderWorker AST.Language Parsed)))
                            (Binder.WithEnvironment AST.Language Parsed))
                         node,
                      Deep.Functor

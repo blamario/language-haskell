@@ -45,6 +45,7 @@ import Transformation (Transformation)
 import qualified Transformation
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
+import qualified Transformation.AG.Generics as AG (Auto(Auto), Revelation(reveal))
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
@@ -172,7 +173,8 @@ instance Monoid (Binding l) where
    mempty = ErroneousBinding NoBindings
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
-withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ BinderWorker l p, Traversable p, AG.Attribution w g,
+withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (BinderWorker l p),
+                                     AG.Attribution w g, Traversable p,
                                      AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
                                      Rank2.Apply (g (AG.Semantics (AG.Keep w))),
                                      Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
@@ -182,7 +184,7 @@ withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ BinderWorker l
 withBindings extensions modEnv env node =
    Full.mapDownDefault (Transformation.Rank2.Map trim)
    $ AG.syn
-   $ (AG.Keep (BinderWorker $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
+   $ (AG.Keep (AG.Auto $ BinderWorker $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
          trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original}
             = Compose (Di.Atts{Di.inh= env, Di.syn= snd synthesized}, original)
@@ -210,6 +212,13 @@ instance Transformation (BinderWorker l f) where
    type Domain (BinderWorker l f) = f
    type Codomain (BinderWorker l f) = AG.Semantics (BinderWorker l f)
 
+instance Foldable f => AG.Revelation (BinderWorker l f) where
+  reveal _ = foldr1 const
+
+instance Transformation (AG.Auto (BinderWorker l f)) where
+   type Domain (AG.Auto (BinderWorker l f)) = f
+   type Codomain (AG.Auto (BinderWorker l f)) = AG.Semantics (AG.Auto (BinderWorker l f))
+
 type instance AG.Atts (AG.Inherited (Binder l f)) g = Di.Inherited (MonoBinder l f)
 type instance AG.Atts (AG.Synthesized (Binder l f)) g = AG.Kept (MonoBinder l f) (g (AG.Kept (MonoBinder l f)) (AG.Kept (MonoBinder l f)))
 
@@ -225,16 +234,16 @@ instance {-# OVERLAPPABLE #-} (Di.Attribution (MonoBinder l f) g, t ~ MonoBinder
                                OtherSynAtts l g ~ (),
                                -- forall sem. g sem (AG.Synthesized (BinderWorker l f)) ~ g sem (AG.Synthesized (MonoBinder l f)),
                                Foldable f) =>
-         AG.Attribution (BinderWorker l f) g where
+         AG.Attribution (AG.Auto (BinderWorker l f)) g where
    attribution :: forall f' sem. (Rank2.Functor (g f'), Rank2.Traversable (g sem))
-               => BinderWorker l f -> f (g f' f')
-               -> (AG.Inherited   (BinderWorker l f) (g sem sem), g sem (AG.Synthesized (BinderWorker l f)))
-               -> (AG.Synthesized (BinderWorker l f) (g sem sem), g sem (AG.Inherited (BinderWorker l f)))
-   attribution (BinderWorker t) x (inh, chSyn) = (AG.Synthesized ((), unsafeCoerce autoDiSyn), unsafeCoerce autoDiInh) :: (AG.Synthesized (BinderWorker l f) (g sem sem), g sem (AG.Inherited (BinderWorker l f)))
+               => AG.Auto (BinderWorker l f) -> f (g f' f')
+               -> (AG.Inherited   (AG.Auto (BinderWorker l f)) (g sem sem), g sem (AG.Synthesized (AG.Auto (BinderWorker l f))))
+               -> (AG.Synthesized (AG.Auto (BinderWorker l f)) (g sem sem), g sem (AG.Inherited (AG.Auto (BinderWorker l f))))
+   attribution (AG.Auto (BinderWorker t)) x (inh, chSyn) = (AG.Synthesized ((), unsafeCoerce autoDiSyn), unsafeCoerce autoDiInh) :: (AG.Synthesized (AG.Auto (BinderWorker l f)) (g sem sem), g sem (AG.Inherited (AG.Auto (BinderWorker l f))))
       where autoDiSyn :: AG.Atts (AG.Synthesized (Di.Auto t)) g
             autoDiInh :: g (AG.Semantics (Di.Auto t)) (AG.Inherited (Di.Auto t))
             (AG.Synthesized autoDiSyn, autoDiInh) = AG.attribution (Di.Auto t) x (unsafeCoerce inh :: AG.Inherited (Di.Auto t) (g (AG.Semantics (Di.Auto t)) (AG.Semantics (Di.Auto t))), unsafeCoerce (toLocalEnv Rank2.<$> chSyn) :: g (AG.Semantics (Di.Auto t)) (AG.Synthesized (Di.Auto t)))
-            toLocalEnv :: forall a. AG.Synthesized (BinderWorker l f) a -> AG.Synthesized (Di.Auto t) a
+            toLocalEnv :: forall a. AG.Synthesized (AG.Auto (BinderWorker l f)) a -> AG.Synthesized (Di.Auto t) a
             toLocalEnv (AG.Synthesized (_, env)) = AG.Synthesized env
 
 -- | The transformation type used by 'Di.Attribution' rules
@@ -253,10 +262,10 @@ instance Di.AttributeTransformation (MonoBinder l f) where
    type Inherited (MonoBinder l f) = (Map Extension Bool, Environment l)
    type Synthesized (MonoBinder l f) = LocalEnvironment l
 
-instance (Traversable f, Rank2.Functor (g f), Rank2.Apply (g (AG.Semantics (AG.Keep (BinderWorker l f)))),
-          Rank2.Traversable (g (AG.Semantics (AG.Keep (BinderWorker l f)))),
-          Deep.Functor (AG.Keep (BinderWorker l f)) g, AG.Attribution (AG.Keep (BinderWorker l f)) g) =>
-         Full.Functor (AG.Keep (BinderWorker l f)) g where
+instance (Traversable f, Rank2.Functor (g f), Rank2.Apply (g (AG.Semantics (AG.Keep (AG.Auto (BinderWorker l f))))),
+          Rank2.Traversable (g (AG.Semantics (AG.Keep (AG.Auto (BinderWorker l f))))),
+          Deep.Functor (AG.Keep (AG.Auto (BinderWorker l f))) g, AG.Attribution (AG.Keep (AG.Auto (BinderWorker l f))) g) =>
+         Full.Functor (AG.Keep (AG.Auto (BinderWorker l f))) g where
    t <$> x = AG.fullMapDefault (foldr1 const) t x
 
 instance (Rank2.Functor (g p), Rank2.Functor (g (WithEnvironment l f)), Functor f,
@@ -273,21 +282,21 @@ instance {-# OVERLAPS #-}
           Abstract.GADTConstructor l ~ ExtAST.GADTConstructor l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Foldable f) =>
-         AG.Attribution (BinderWorker l f) (AST.Declaration l l)
+         AG.Attribution (AG.Auto (BinderWorker l f)) (AST.Declaration l l)
          where
    attribution :: forall f' sem. (Rank2.Functor (AST.Declaration l l f), Rank2.Traversable (AST.Declaration l l sem))
-               => BinderWorker l f -> f (AST.Declaration l l f' f')
-               -> (AG.Inherited   (BinderWorker l f) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (BinderWorker l f)))
-               -> (AG.Synthesized (BinderWorker l f) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (BinderWorker l f)))
+               => AG.Auto (BinderWorker l f) -> f (AST.Declaration l l f' f')
+               -> (AG.Inherited   (AG.Auto (BinderWorker l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (AG.Auto (BinderWorker l f))))
+               -> (AG.Synthesized (AG.Auto (BinderWorker l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (AG.Auto (BinderWorker l f))))
    attribution _ node (inh, chSyn) = (AG.Synthesized $ foldMap (`export` chSyn) node,
                                       unsafeCoerce $ const bequest Rank2.<$> foldr1 const node)
       where bequeath :: forall d.
                         AST.Declaration l l d d
-                     -> AST.Declaration l l sem (AG.Synthesized (BinderWorker l f))
+                     -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (BinderWorker l f)))
                      -> (Map Extension Bool, Environment l)
             export :: forall d.
                       AST.Declaration l l d d
-                   -> AST.Declaration l l sem (AG.Synthesized (BinderWorker l f))
+                   -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (BinderWorker l f)))
                    -> ((), LocalEnvironment l)
             export (AST.FixityDeclaration associativity precedence names) chSyn =
                ((),
@@ -353,7 +362,7 @@ instance {-# OVERLAPS #-}
             bequeath AST.EquationDeclaration{} (AST.EquationDeclaration _ _ wheres) =
                (unqualified (foldMap (snd . AG.syn) wheres) <>) <$> AG.inh inh
             bequeath _ _ = AG.inh inh
-            bequest :: forall a. AG.Inherited (BinderWorker l f) a
+            bequest :: forall a. AG.Inherited (AG.Auto (BinderWorker l f)) a
             bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
             knowType :: TypeBinding l -> Binding l -> Binding l
             knowType tb (TypeBinding UnknownType) = TypeBinding tb
@@ -370,15 +379,15 @@ instance {-# OVERLAPS #-}
           Abstract.Declaration l l ~ ExtAST.Declaration l l,
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable f) =>
-         AG.Attribution (BinderWorker l f) (AST.Module l l)
+         AG.Attribution (AG.Auto (BinderWorker l f)) (AST.Module l l)
          where
    attribution :: forall f' sem. (Rank2.Functor (AST.Module l l f), Rank2.Traversable (AST.Module l l sem))
-               => BinderWorker l f -> f (AST.Module l l f' f')
-               -> (AG.Inherited   (BinderWorker l f) (AST.Module l l sem sem), AST.Module l l sem (AG.Synthesized (BinderWorker l f)))
-               -> (AG.Synthesized (BinderWorker l f) (AST.Module l l sem sem), AST.Module l l sem (AG.Inherited (BinderWorker l f)))
-   attribution (BinderWorker (Binder modEnv)) node (AG.Inherited inh@(exts, inhEnv), childSyn) =
+               => AG.Auto (BinderWorker l f) -> f (AST.Module l l f' f')
+               -> (AG.Inherited   (AG.Auto (BinderWorker l f)) (AST.Module l l sem sem), AST.Module l l sem (AG.Synthesized (AG.Auto (BinderWorker l f))))
+               -> (AG.Synthesized (AG.Auto (BinderWorker l f)) (AST.Module l l sem sem), AST.Module l l sem (AG.Inherited (AG.Auto (BinderWorker l f))))
+   attribution (AG.Auto (BinderWorker (Binder modEnv))) node (AG.Inherited inh@(exts, inhEnv), childSyn) =
       moduleAttribution $ foldr1 const node
-      where moduleAttribution :: forall t d. (t ~ BinderWorker l f)
+      where moduleAttribution :: forall t d. (t ~ AG.Auto (BinderWorker l f))
                               => AST.Module l l d d -> (AG.Synthesized t (AST.Module l l sem sem),
                                                         AST.Module l l sem (AG.Inherited t))
             moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts'
@@ -414,7 +423,7 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope = importedScope importSyn
                                          <> qualifiedWith moduleName bodySyn
                                          <> unqualified bodySyn
-            importedScope :: forall d sem. ZipList (AG.Synthesized (BinderWorker l f) (ExtAST.Import l l sem sem))
+            importedScope :: forall d sem. ZipList (AG.Synthesized (AG.Auto (BinderWorker l f)) (ExtAST.Import l l sem sem))
                           -> Environment l
             importedScope importSyns =
                allImports
@@ -467,8 +476,8 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (BinderWorker l f) (ExtAST.Import l l) where
-   attribution (BinderWorker (Binder modEnv)) node (AG.Inherited (exts, _), ExtAST.Import _ _ _ _ _ specSyn) =
+         AG.Attribution (AG.Auto (BinderWorker l f)) (ExtAST.Import l l) where
+   attribution (AG.Auto (BinderWorker (Binder modEnv))) node (AG.Inherited (exts, _), ExtAST.Import _ _ _ _ _ specSyn) =
       (AG.Synthesized ((Any (name == preludeName), scope), mempty),
        ExtAST.Import False qualified Nothing name alias (Just $ AG.Inherited (exts, unqualified available)))
       where ExtAST.Import _ qualified _ name alias _ = foldr1 const node
