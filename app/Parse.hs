@@ -111,13 +111,13 @@ main' Opts{..} = do
               Show (g Language Language e e), Show (g Language Language w w),
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-              Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker l w))))),
-              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker l w))))),
-              AG.Attribution (AG.Auto (Binder.BinderWorker l w)) (g l l),
-              AG.Atts (AG.Synthesized (Binder.BinderWorker Language (Grammar.NodeWrap Input))) (g l l)
+              Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+              AG.Attribution (AG.Auto (Binder.Binder l w)) (g l l),
+              AG.Atts (AG.Synthesized (Binder.Binder Language (Grammar.NodeWrap Input))) (g l l)
               ~ (x, Binder.LocalEnvironment l),
-              Deep.Functor (AG.Keep (AG.Auto (Binder.BinderWorker l w))) (g l l),
-              Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.BinderWorker l w))) (Binder.WithEnvironment l w)) (g l l),
+              Deep.Functor (AG.Keep (AG.Auto (Binder.Binder l w))) (g l l),
+              Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
               Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
               FullyTranslatable
                  (ReformulationOf
@@ -170,13 +170,13 @@ main' Opts{..} = do
                   Show (g Language Language e e), Show (g Language Language w w),
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
-                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker l w))))),
-                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.BinderWorker l w))))),
-                  AG.Attribution (AG.Auto (Binder.BinderWorker l w)) (g l l),
-                  AG.Atts (AG.Synthesized (AG.Auto (Binder.BinderWorker Language (Grammar.NodeWrap Input)))) (g l l)
+                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+                  AG.Attribution (AG.Auto (Binder.Binder l w)) (g l l),
+                  AG.Atts (AG.Synthesized (AG.Auto (Binder.Binder Language (Grammar.NodeWrap Input)))) (g l l)
                   ~ (x, Binder.LocalEnvironment l),
-                  Deep.Functor (AG.Keep (AG.Auto (Binder.BinderWorker l w))) (g l l),
-                  Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.BinderWorker l w))) (Binder.WithEnvironment l w)) (g l l),
+                  Deep.Functor (AG.Keep (AG.Auto (Binder.Binder l w))) (g l l),
+                  Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
