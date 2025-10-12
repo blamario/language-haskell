@@ -646,6 +646,37 @@ instance {-# OVERLAPS #-}
             export (ExtAST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
 
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         AG.Attribution (AG.Auto (Binder l f)) (AST.Expression l l)
+         where
+   attribution _ node (AG.Inherited i, chSyn) =
+      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ foldr1 const node)
+      where bequest :: forall d. AST.Expression l l d d -> LocalEnvironment l
+            bequest AST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
+            bequest AST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
+            bequest _ = mempty
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
+         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.Expression l l)
+         where
+   attribution _ node (AG.Inherited i, chSyn) =
+      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ foldr1 const node)
+      where bequest :: forall d. ExtAST.Expression l l d d -> LocalEnvironment l
+            bequest ExtAST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
+            bequest ExtAST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
+            bequest ExtAST.ParallelListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
+            bequest _ = mempty
+
 instance {-# OVERLAPPABLE #-} BindingVerifier l f `Transformation.At` g where
    _ $ _ = mempty
 
