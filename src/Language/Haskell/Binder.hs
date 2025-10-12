@@ -377,7 +377,7 @@ instance {-# OVERLAPS #-}
                      bodySyn = foldMap (snd . AG.syn) declsSyn
                      childInh = (exts, moduleGlobalScope)
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
-               (AG.Synthesized $ foldMap AG.syn (Compose exportSyn),
+               (AG.Synthesized $ maybe ((), bodySyn) (const $ foldMap AG.syn (Compose exportSyn)) exports,
                 AST.NamedModule moduleName ((AG.Inherited childInh <$) <$> exports)
                                 (AG.Inherited childInh <$ modImports)
                                 (AG.Inherited childInh <$ body))
