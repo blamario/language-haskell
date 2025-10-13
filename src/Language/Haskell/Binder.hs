@@ -213,6 +213,7 @@ type instance AG.Atts (AG.Synthesized (Binder l f)) g = (OtherSynAtts l g, Local
 
 type family OtherSynAtts l g where
   OtherSynAtts l (ExtAST.Import l l) = (Any, Environment l)
+  OtherSynAtts l (ExtAST.EquationLHS l l) = LocalEnvironment l
   OtherSynAtts l _ = ()
 
 instance {-# OVERLAPPABLE #-} (OtherSynAtts l g ~ (),
@@ -282,7 +283,7 @@ instance {-# OVERLAPS #-}
                         Just (ValueBinding RecordFieldAndValue)
                      constructorOrField (TypeAndValueBinding _ v) = constructorOrField (ValueBinding v)
                      constructorOrField _ = Nothing
-            export AST.EquationDeclaration{} ~(AST.EquationDeclaration lhs _ _) = AG.syn lhs
+            export AST.EquationDeclaration{} ~(AST.EquationDeclaration lhs _ _) = ((), fst (AG.syn lhs))
             export AST.DataDeclaration{} ~(AST.DataDeclaration _context lhs _kind constructors _derivings)
                = (onMap (knowType (DataType $ snd conEnv) <$>) <$> AG.syn lhs) <> conEnv
                where conEnv = foldMap AG.syn constructors
@@ -325,8 +326,8 @@ instance {-# OVERLAPS #-}
             export ExtAST.ExplicitPatternSynonym{} ~(ExtAST.ExplicitPatternSynonym _ lhs _ _) = AG.syn lhs
             export ExtAST.UnidirectionalPatternSynonym{} ~(ExtAST.UnidirectionalPatternSynonym _ lhs _) = AG.syn lhs
             export _ _ = mempty
-            bequeath AST.EquationDeclaration{} (AST.EquationDeclaration _ _ wheres) =
-               (unqualified (foldMap (snd . AG.syn) wheres) <>) <$> AG.inh inh
+            bequeath AST.EquationDeclaration{} (AST.EquationDeclaration lhs _ wheres) =
+               (unqualified (snd (AG.syn lhs) <> foldMap (snd . AG.syn) wheres) <>) <$> AG.inh inh
             bequeath _ _ = AG.inh inh
             bequest :: forall a. AG.Inherited (AG.Auto (Binder l f)) a
             bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
@@ -587,14 +588,20 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          OtherSynAtts l (Abstract.EquationLHS l l) ~ LocalEnvironment l,
           Foldable f) =>
          AG.Attribution (AG.Auto (Binder l f)) (AST.EquationLHS l l)
          where
    attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
+      (AG.Synthesized (equationExports, equationExports <> Rank2.foldMap (snd . AG.syn) chSyn),
        AG.passDown i $ foldr1 const node)
-      where export :: forall d. ExtAST.EquationLHS l l d d -> LocalEnvironment l
+      where equationExports :: LocalEnvironment l
+            equationExports = foldMap export node
+            export :: forall d. ExtAST.EquationLHS l l d d -> LocalEnvironment l
             export (ExtAST.InfixLHS _ name _) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
+            export (ExtAST.PatternLHS p) = Rank2.foldMap (snd . AG.syn) chSyn
+            export ExtAST.PrefixLHS{}
+              | ExtAST.PrefixLHS (AG.Synthesized (prefixExports, _)) _ <- chSyn = prefixExports
             export (ExtAST.VariableLHS name) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
             export _ = mempty
 
