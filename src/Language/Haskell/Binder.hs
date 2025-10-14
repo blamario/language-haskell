@@ -20,7 +20,7 @@ module Language.Haskell.Binder (
    -- * Utility functions
    lookupType, lookupValue, onMap, baseName, unqualifiedName) where
 
-import Control.Applicative ((<|>), ZipList(ZipList))
+import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
 import Data.Coerce (coerce)
 import Data.Bifunctor (first)
@@ -30,7 +30,7 @@ import Data.Functor (($>))
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(Const))
 import Data.Kind (Type)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import Data.Maybe (fromMaybe)
@@ -659,6 +659,22 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
+         AG.Attribution (AG.Auto (Binder l f)) (AST.GuardedExpression l l)
+         where
+   attribution _ node (AG.Inherited i, ~(AST.GuardedExpression guardsSyn _)) =
+      (AG.Synthesized mempty, AST.GuardedExpression guardsInh resultInh)
+      where guardsInh = ZipList $ AG.Inherited <$> init allInh
+            resultInh = AG.Inherited (last allInh)
+            allInh = scanl acc i $ sameShape (getZipList guards) (getZipList guardsSyn)
+            acc old (AG.Synthesized (_, new)) = (unqualified new <>) <$> old
+            AST.GuardedExpression guards result = foldr1 const node
+
+instance {-# OVERLAPS #-}
+         (Abstract.Haskell l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
+          Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Foldable f) =>
          AG.Attribution (AG.Auto (Binder l f)) (AST.Expression l l)
          where
    attribution _ node (AG.Inherited i, chSyn) =
@@ -857,6 +873,10 @@ instance BindingMembers ExtAST.Language where
            memberImport (ExtAST.TypeMember name) = onMap (Map.filterWithKey namedType) env
               where namedType name' TypeBinding{} = name == name'
                     namedType _ _ = False
+
+sameShape :: [a] -> [b] -> [b]
+sameShape [] _ = []
+sameShape (x:xs) ~(y:ys) = y : sameShape xs ys
 
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
 
