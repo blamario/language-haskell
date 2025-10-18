@@ -22,8 +22,6 @@ module Language.Haskell.Binder (
 
 import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
-import Data.Coerce (coerce)
-import Data.Bifunctor (first)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
 import Data.Functor (($>))
@@ -56,7 +54,6 @@ import Language.Haskell.Extensions (Extension)
 import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
-import Transformation.Deep (Const2)
 
 -- | Bindings of all names in scope
 type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
@@ -72,9 +69,6 @@ type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
 
 -- | Tree node wrapper carrying the 'Attributes'
 type WithEnvironment l = Compose ((,) (Attributes l))
-
--- | Tree node wrapper mapping an 'Environment' to 'Attributes'
-type FromEnvironment l f = Compose ((->) (Map Extension Bool, Environment l)) (WithEnvironment l f)
 
 -- | A binding for any single name
 data Binding l = ErroneousBinding (BindingError l)
@@ -185,8 +179,8 @@ withBindings extensions modEnv env node =
    $ AG.syn
    $ (AG.Keep (AG.Auto $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
-         trim AG.Kept{AG.inherited= (exts, env), AG.synthesized, AG.original}
-            = Compose (Di.Atts{Di.inh= env, Di.syn= snd synthesized}, original)
+         trim AG.Kept{AG.inherited= (_exts, env'), AG.synthesized, AG.original}
+            = Compose (Di.Atts{Di.inh= env', Di.syn= snd synthesized}, original)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
@@ -219,7 +213,7 @@ instance {-# OVERLAPPABLE #-} (OtherSynAtts l g ~ (),
                                forall sem. Rank2.Foldable (g sem),
                                Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) g where
-   synthesis (AG.Auto (Binder t)) node _ chSyn = ((), Rank2.foldMap (snd . AG.syn) chSyn)
+   synthesis _ _ _ chSyn = ((), Rank2.foldMap (snd . AG.syn) chSyn)
 
 -- | The transformation type folds the tree wrapped 'WithEnvironment' to 'Unbound'
 data BindingVerifier l (f :: Type -> Type) = BindingVerifier
@@ -256,15 +250,13 @@ instance {-# OVERLAPS #-}
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (AG.Auto (Binder l f))))
    attribution _ node (AG.Inherited inh, chSyn) =
       (AG.Synthesized $ foldMap (`export` chSyn) node, const bequest Rank2.<$> foldr1 const node)
-      where bequeath :: forall d.
-                        AST.Declaration l l d d
+      where bequeath :: AST.Declaration l l sem sem
                      -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f)))
                      -> (Map Extension Bool, Environment l)
-            export :: forall d.
-                      AST.Declaration l l d d
+            export :: AST.Declaration l l sem sem
                    -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f)))
                    -> ((), LocalEnvironment l)
-            export (AST.FixityDeclaration associativity precedence names) chSyn =
+            export (AST.FixityDeclaration associativity precedence names) _chSyn =
                ((),
                 UnionWith (Map.fromList [(name,
                                           ValueBinding
@@ -278,8 +270,7 @@ instance {-# OVERLAPS #-}
                where constructorOrField b@(ValueBinding DataConstructor{}) = Just b
                      constructorOrField b@(ValueBinding RecordConstructor{}) = Just b
                      constructorOrField b@(ValueBinding RecordField{}) = Just b
-                     constructorOrField b@(ValueBinding RecordFieldAndValue{}) =
-                        Just (ValueBinding RecordFieldAndValue)
+                     constructorOrField (ValueBinding RecordFieldAndValue{}) = Just (ValueBinding RecordFieldAndValue)
                      constructorOrField (TypeAndValueBinding _ v) = constructorOrField (ValueBinding v)
                      constructorOrField _ = Nothing
             export AST.EquationDeclaration{} ~(AST.EquationDeclaration lhs _ _) = ((), fst (AG.syn lhs))
@@ -297,15 +288,15 @@ instance {-# OVERLAPS #-}
             export AST.TypeGADTDeclaration{} ~(AST.TypeGADTDeclaration _support1 _support2 lhs _kind constructors)
                = AG.syn lhs <> foldMap AG.syn constructors
             export AST.DataFamilyDeclaration{} ~(AST.DataFamilyDeclaration _support lhs _kind) = AG.syn lhs
-            export AST.ClosedTypeFamilyDeclaration{} ~(AST.ClosedTypeFamilyDeclaration _support lhs _kind decls)
+            export AST.ClosedTypeFamilyDeclaration{} ~(AST.ClosedTypeFamilyDeclaration _support lhs _kind _decls)
                = AG.syn lhs
             export AST.OpenTypeFamilyDeclaration{} ~(AST.OpenTypeFamilyDeclaration _support lhs _kind) = AG.syn lhs
             export AST.InjectiveClosedTypeFamilyDeclaration{}
-                   ~(AST.InjectiveClosedTypeFamilyDeclaration _support lhs _var _deps decls) = AG.syn lhs
+                   ~(AST.InjectiveClosedTypeFamilyDeclaration _support lhs _var _deps _decls) = AG.syn lhs
             export AST.InjectiveOpenTypeFamilyDeclaration{}
                    ~(AST.InjectiveOpenTypeFamilyDeclaration _support lhs _var _deps) = AG.syn lhs
             export AST.DataFamilyInstance{}
-                   (AST.DataFamilyInstance _support _vars context _lhs _kind constructors _derivings)
+                   (AST.DataFamilyInstance _support _vars _context _lhs _kind constructors _derivings)
                = foldMap AG.syn constructors
             export AST.NewtypeFamilyInstance{}
                    (AST.NewtypeFamilyInstance _support _vars _context _lhs _kind constructor _derivings)
@@ -332,6 +323,7 @@ instance {-# OVERLAPS #-}
             bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
             knowType :: TypeBinding l -> Binding l -> Binding l
             knowType tb (TypeBinding UnknownType) = TypeBinding tb
+            knowType _ b = b
 
 -- | Resolve ambiguities in a single module. The imports are resolved using the given map of already resolved
 -- modules. Note that all class constraints in the function's type signature are satisfied by the Haskell
@@ -347,16 +339,18 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.QualifiedName l), Foldable f) =>
          AG.Attribution (AG.Auto (Binder l f)) (AST.Module l l)
          where
-   attribution :: forall f' sem. (Rank2.Functor (AST.Module l l f), Rank2.Traversable (AST.Module l l sem))
-               => AG.Auto (Binder l f) -> f (AST.Module l l f' f')
-               -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Module l l sem sem), AST.Module l l sem (AG.Synthesized (AG.Auto (Binder l f))))
-               -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Module l l sem sem), AST.Module l l sem (AG.Inherited (AG.Auto (Binder l f))))
-   attribution (AG.Auto (Binder modEnv)) node (AG.Inherited inh@(exts, inhEnv), childSyn) =
+   attribution :: forall sem. Rank2.Traversable (AST.Module l l sem)
+               => AG.Auto (Binder l f) -> f (AST.Module l l sem sem)
+               -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Module l l sem sem),
+                   AST.Module l l sem (AG.Synthesized (AG.Auto (Binder l f))))
+               -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Module l l sem sem),
+                   AST.Module l l sem (AG.Inherited (AG.Auto (Binder l f))))
+   attribution (AG.Auto (Binder modEnv)) node (AG.Inherited (exts, inhEnv), childSyn) =
       moduleAttribution $ foldr1 const node
-      where moduleAttribution :: forall t d. (t ~ AG.Auto (Binder l f))
-                              => AST.Module l l d d -> (AG.Synthesized t (AST.Module l l sem sem),
-                                                        AST.Module l l sem (AG.Inherited t))
-            moduleAttribution (AST.ExtendedModule modExts body) = assert (Set.null contradictions) atts'
+      where moduleAttribution :: (t ~ AG.Auto (Binder l f))
+                              => AST.Module l l sem sem -> (AG.Synthesized t (AST.Module l l sem sem),
+                                                            AST.Module l l sem (AG.Inherited t))
+            moduleAttribution (AST.ExtendedModule modExts _body) = assert (Set.null contradictions) atts'
                where (contradictions, extensionMap) = Extensions.partitionContradictory (Set.fromList modExts)
                      exts' = Extensions.withImplications (extensionMap <> exts)
                      AST.ExtendedModule _ bodySyn = childSyn
@@ -389,8 +383,7 @@ instance {-# OVERLAPS #-}
                      moduleGlobalScope = importedScope importSyn
                                          <> qualifiedWith moduleName bodySyn
                                          <> unqualified bodySyn
-            importedScope :: forall d sem. ZipList (AG.Synthesized (AG.Auto (Binder l f)) (ExtAST.Import l l sem sem))
-                          -> Environment l
+            importedScope :: ZipList (AG.Synthesized (AG.Auto (Binder l f)) (ExtAST.Import l l sem sem)) -> Environment l
             importedScope importSyns =
                allImports
                <> if not importsPrelude && Map.findWithDefault True Extensions.ImplicitPrelude exts
@@ -407,7 +400,7 @@ instance {-# OVERLAPS #-}
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Export l l) where
-   synthesis _ node i@(_, moduleGlobalScope) _ = ((), foldMap itemExports node) where
+   synthesis _ node (_, moduleGlobalScope) _ = ((), foldMap itemExports node) where
       itemExports :: forall d. ExtAST.Export l l d d -> LocalEnvironment l
       itemExports (ExtAST.ReExportModule modName) = reexportModule modName
       itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
@@ -460,7 +453,7 @@ instance {-# OVERLAPS #-}
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.ImportSpecification l l) where
-   synthesis t node i chSyn = ((), foldMap imports node)
+   synthesis _ node i chSyn = ((), foldMap imports node)
       where imports (AST.ImportSpecification True _) = listed
             imports (AST.ImportSpecification False _) = onMaps Map.difference available listed
             listed = Rank2.foldMap (snd . AG.syn) chSyn
@@ -474,7 +467,7 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.ImportItem l l)
          where
-   synthesis _ node i chSyn = ((), foldMap itemImports node)
+   synthesis _ node i _ = ((), foldMap itemImports node)
       where itemImports :: forall d. ExtAST.ImportItem l l d d -> LocalEnvironment l
             itemImports (ExtAST.ImportClassOrType name Nothing) = nameImport name available
             itemImports (ExtAST.ImportClassOrType parent (Just members)) =
@@ -504,7 +497,7 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.DataConstructor l l)
          where
-   synthesis _ node i chSyn = ((), foldMap export node <> childEnv)
+   synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. AST.DataConstructor l l d d -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (AST.RecordConstructor name _flds) =
@@ -519,7 +512,7 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.DataConstructor l l)
          where
-   synthesis _ node i chSyn = ((), foldMap export node <> childEnv)
+   synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. ExtAST.DataConstructor l l d d -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
@@ -537,7 +530,7 @@ instance {-# OVERLAPS #-}
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. ExtAST.GADTConstructor l l d d -> LocalEnvironment l
-            export (ExtAST.GADTConstructors names vars _ctx t)
+            export (ExtAST.GADTConstructors names _vars _ctx _type)
               | Map.null (getUnionWith childEnv)
               = UnionWith $ Map.fromList [(name, ValueBinding DataConstructor) | name <- toList names]
               | otherwise
@@ -554,7 +547,7 @@ instance {-# OVERLAPS #-}
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. AST.FieldDeclaration l l d d -> LocalEnvironment l
-            export (AST.ConstructorFields names t) =
+            export (AST.ConstructorFields names _type) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
 
 instance {-# OVERLAPS #-}
@@ -586,7 +579,7 @@ instance {-# OVERLAPS #-}
             equationExports = foldMap export node
             export :: forall d. ExtAST.EquationLHS l l d d -> LocalEnvironment l
             export (ExtAST.InfixLHS _ name _) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
-            export (ExtAST.PatternLHS p) = Rank2.foldMap (snd . AG.syn) chSyn
+            export ExtAST.PatternLHS{} = Rank2.foldMap (snd . AG.syn) chSyn
             export ExtAST.PrefixLHS{}
               | ExtAST.PrefixLHS (AG.Synthesized (prefixExports, _)) _ <- chSyn = prefixExports
             export (ExtAST.VariableLHS name) = UnionWith (Map.singleton name $ ValueBinding DefinedValue)
@@ -648,7 +641,7 @@ instance {-# OVERLAPS #-}
             resultInh = AG.Inherited (last allInh)
             allInh = scanl acc i $ sameShape (getZipList guards) (getZipList guardsSyn)
             acc old (AG.Synthesized (_, new)) = (unqualified new <>) <$> old
-            AST.GuardedExpression guards result = foldr1 const node
+            AST.GuardedExpression guards _result = foldr1 const node
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -823,14 +816,17 @@ instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (B
          Full.Foldable (BindingVerifier l f) g where
    foldMap = Full.foldMapDownDefault
 
+verifyConstructorName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyConstructorName q env = case lookupType q env $> () <|> lookupValue q env $> () of
    Nothing -> Const Unbound{types= mempty, constructors= Set.singleton q, values= mempty}
    _ -> mempty
 
+verifyTypeName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyTypeName q env = case lookupType q env of
    Nothing -> Const Unbound{types= Set.singleton q, constructors= mempty, values= mempty}
    _ -> mempty
 
+verifyValueName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyValueName q env = case lookupValue q env of
    Nothing -> Const Unbound{types= mempty, constructors= mempty, values= Set.singleton q}
    _ -> mempty
@@ -857,8 +853,9 @@ instance BindingMembers ExtAST.Language where
 
 sameShape :: [a] -> [b] -> [b]
 sameShape [] _ = []
-sameShape (x:xs) ~(y:ys) = y : sameShape xs ys
+sameShape (_:xs) ~(y:ys) = y : sameShape xs ys
 
+nameImport :: AST.Name l -> LocalEnvironment l -> LocalEnvironment l
 nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
 
 builtinPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
