@@ -38,7 +38,6 @@ import Data.Monoid (Any(Any))
 import Data.Semigroup.Union (UnionWith(..))
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import Transformation (Transformation)
@@ -251,12 +250,12 @@ instance {-# OVERLAPS #-}
           Foldable f) =>
          AG.Attribution (AG.Auto (Binder l f)) (AST.Declaration l l)
          where
-   attribution :: forall f' sem. (Rank2.Functor (AST.Declaration l l f), Rank2.Traversable (AST.Declaration l l sem))
-               => AG.Auto (Binder l f) -> f (AST.Declaration l l f' f')
+   attribution :: forall sem. (Rank2.Functor (AST.Declaration l l f), Rank2.Traversable (AST.Declaration l l sem))
+               => AG.Auto (Binder l f) -> f (AST.Declaration l l sem sem)
                -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f))))
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (AG.Auto (Binder l f))))
-   attribution _ node (inh, chSyn) = (AG.Synthesized $ foldMap (`export` chSyn) node,
-                                      unsafeCoerce $ const bequest Rank2.<$> foldr1 const node)
+   attribution _ node (AG.Inherited inh, chSyn) =
+      (AG.Synthesized $ foldMap (`export` chSyn) node, const bequest Rank2.<$> foldr1 const node)
       where bequeath :: forall d.
                         AST.Declaration l l d d
                      -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f)))
@@ -327,8 +326,8 @@ instance {-# OVERLAPS #-}
             export ExtAST.UnidirectionalPatternSynonym{} ~(ExtAST.UnidirectionalPatternSynonym _ lhs _) = AG.syn lhs
             export _ _ = mempty
             bequeath AST.EquationDeclaration{} (AST.EquationDeclaration lhs _ wheres) =
-               (unqualified (snd (AG.syn lhs) <> foldMap (snd . AG.syn) wheres) <>) <$> AG.inh inh
-            bequeath _ _ = AG.inh inh
+               (unqualified (snd (AG.syn lhs) <> foldMap (snd . AG.syn) wheres) <>) <$> inh
+            bequeath _ _ = inh
             bequest :: forall a. AG.Inherited (AG.Auto (Binder l f)) a
             bequest = AG.Inherited (foldMap (`bequeath` chSyn) node)
             knowType :: TypeBinding l -> Binding l -> Binding l
