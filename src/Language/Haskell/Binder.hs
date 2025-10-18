@@ -406,9 +406,8 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.Export l l) where
-   attribution _ node (AG.Inherited i@(_, moduleGlobalScope), _) = (AG.Synthesized ((), foldMap itemExports node),
-                                                                    coerce $ foldr1 const node) where
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Export l l) where
+   synthesis _ node i@(_, moduleGlobalScope) _ = ((), foldMap itemExports node) where
       itemExports :: forall d. ExtAST.Export l l d d -> LocalEnvironment l
       itemExports (ExtAST.ReExportModule modName) = reexportModule modName
       itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
@@ -460,9 +459,8 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.ImportSpecification l l) where
-   attribution t node (AG.Inherited i, chSyn) = (AG.Synthesized ((), foldMap imports node),
-                                                 AG.passDown i $ foldr1 const node)
+         AG.Synthesizer (AG.Auto (Binder l f)) (AST.ImportSpecification l l) where
+   synthesis t node i chSyn = ((), foldMap imports node)
       where imports (AST.ImportSpecification True _) = listed
             imports (AST.ImportSpecification False _) = onMaps Map.difference available listed
             listed = Rank2.foldMap (snd . AG.syn) chSyn
@@ -474,10 +472,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.ImportItem l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.ImportItem l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized ((), foldMap itemImports node),
-                                                 AG.passDown i $ foldr1 const node)
+   synthesis _ node i chSyn = ((), foldMap itemImports node)
       where itemImports :: forall d. ExtAST.ImportItem l l d d -> LocalEnvironment l
             itemImports (ExtAST.ImportClassOrType name Nothing) = nameImport name available
             itemImports (ExtAST.ImportClassOrType parent (Just members)) =
@@ -505,10 +502,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.DataConstructor l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (AST.DataConstructor l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized ((), foldMap export node <> childEnv),
-                                                 AG.passDown i $ foldr1 const node)
+   synthesis _ node i chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. AST.DataConstructor l l d d -> LocalEnvironment l
             export (AST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (AST.RecordConstructor name _flds) =
@@ -521,10 +517,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.DataConstructor l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.DataConstructor l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized ((), foldMap export node <> childEnv),
-                                                 AG.passDown i $ foldr1 const node)
+   synthesis _ node i chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. ExtAST.DataConstructor l l d d -> LocalEnvironment l
             export (ExtAST.Constructor name _types) = UnionWith (Map.singleton name $ ValueBinding DataConstructor)
             export (ExtAST.RecordConstructor name _fields) =
@@ -538,10 +533,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.GADTConstructor l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.GADTConstructor l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized ((), foldMap export node <> childEnv),
-                                                 AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
       where export :: forall d. ExtAST.GADTConstructor l l d d -> LocalEnvironment l
             export (ExtAST.GADTConstructors names vars _ctx t)
               | Map.null (getUnionWith childEnv)
@@ -556,11 +550,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.FieldDeclaration l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (AST.FieldDeclaration l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. AST.FieldDeclaration l l d d -> LocalEnvironment l
             export (AST.ConstructorFields names t) =
                UnionWith $ Map.fromList [(name, ValueBinding RecordField) | name <- toList names]
@@ -571,11 +563,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.TypeLHS l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.TypeLHS l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. ExtAST.TypeLHS l l d d -> LocalEnvironment l
             export (ExtAST.SimpleTypeLHS name _vars) = UnionWith (Map.singleton name $ TypeBinding UnknownType)
             export (ExtAST.SimpleKindedTypeLHS name _vars) = UnionWith (Map.singleton name $ TypeBinding UnknownType)
@@ -589,11 +579,9 @@ instance {-# OVERLAPS #-}
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           OtherSynAtts l (Abstract.EquationLHS l l) ~ LocalEnvironment l,
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.EquationLHS l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (AST.EquationLHS l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized (equationExports, equationExports <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = (equationExports, equationExports <> Rank2.foldMap (snd . AG.syn) chSyn)
       where equationExports :: LocalEnvironment l
             equationExports = foldMap export node
             export :: forall d. ExtAST.EquationLHS l l d d -> LocalEnvironment l
@@ -610,11 +598,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.PatternLHS l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.PatternLHS l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. ExtAST.PatternLHS l l d d -> LocalEnvironment l
             export (ExtAST.PrefixPatternLHS name _) = UnionWith (Map.singleton name PatternBinding)
             export (ExtAST.InfixPatternLHS _ name _) = UnionWith (Map.singleton name PatternBinding)
@@ -628,11 +614,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.Pattern l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (AST.Pattern l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. AST.Pattern l l d d -> LocalEnvironment l
             export (AST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
@@ -643,11 +627,9 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.Pattern l l)
+         AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Pattern l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn),
-       AG.passDown i $ foldr1 const node)
+   synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
       where export :: forall d. ExtAST.Pattern l l d d -> LocalEnvironment l
             export (ExtAST.VariablePattern name) = UnionWith $ Map.singleton name (ValueBinding DefinedValue)
             export _ = mempty
