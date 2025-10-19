@@ -24,10 +24,12 @@ import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
+import Data.Foldable1 as Foldable1
 import Data.Functor (($>))
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(Const))
 import Data.Kind (Type)
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
@@ -42,7 +44,7 @@ import Transformation (Transformation)
 import qualified Transformation
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
-import qualified Transformation.AG.Generics as AG (Auto(Auto), Revelation(reveal), Synthesizer(synthesis), passDown)
+import qualified Transformation.AG.Generics as AG (Auto(Auto), Synthesizer(synthesis), passDown)
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
@@ -167,17 +169,18 @@ instance Monoid (Binding l) where
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
 withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p),
-                                     AG.Attribution w g, Traversable p,
+                                     AG.At w g, Traversable p,
                                      AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
+                                     Rank2.Functor (g p),
                                      Rank2.Apply (g (AG.Semantics (AG.Keep w))),
                                      Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
-                                     Deep.Functor (AG.Keep w) g,
+                                     Deep.Functor (AG.Knit (AG.Keep w)) g,
                                      Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
              => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings extensions modEnv env node =
    Full.mapDownDefault (Transformation.Rank2.Map trim)
    $ AG.syn
-   $ (AG.Keep (AG.Auto $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
+   $ ((AG.Knit $ AG.Keep $ AG.Auto $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
          trim AG.Kept{AG.inherited= (_exts, env'), AG.synthesized, AG.original}
             = Compose (Di.Atts{Di.inh= env', Di.syn= snd synthesized}, original)
@@ -194,12 +197,9 @@ onMaps f (UnionWith x) (UnionWith y) = UnionWith (f x y)
 -- | The transformation type used by 'withBindings'
 newtype Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
 
-instance Foldable f => AG.Revelation (AG.Auto (Binder l f)) where
-  reveal _ = foldr1 const
-
-instance Transformation (AG.Auto (Binder l f)) where
-   type Domain (AG.Auto (Binder l f)) = f
-   type Codomain (AG.Auto (Binder l f)) = AG.Semantics (AG.Auto (Binder l f))
+instance Foldable1 f => AG.Attribution (Binder l f) where
+   type Origin (Binder l f) = f
+   unwrap _ = Foldable1.head
 
 type instance AG.Atts (AG.Inherited (Binder l f)) g = (Map Extension Bool, Environment l)
 type instance AG.Atts (AG.Synthesized (Binder l f)) g = (OtherSynAtts l g, LocalEnvironment l)
@@ -211,7 +211,7 @@ type family OtherSynAtts l g where
 
 instance {-# OVERLAPPABLE #-} (OtherSynAtts l g ~ (),
                                forall sem. Rank2.Foldable (g sem),
-                               Foldable f) =>
+                               Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) g where
    synthesis _ _ _ chSyn = ((), Rank2.foldMap (snd . AG.syn) chSyn)
 
@@ -221,12 +221,6 @@ data BindingVerifier l (f :: Type -> Type) = BindingVerifier
 instance Transformation (BindingVerifier l f) where
    type Domain (BindingVerifier l f) = WithEnvironment l f
    type Codomain (BindingVerifier l f) = Const (Unbound l)
-
-instance (Traversable f, Rank2.Functor (g f), Rank2.Apply (g (AG.Semantics (AG.Keep (AG.Auto (Binder l f))))),
-          Rank2.Traversable (g (AG.Semantics (AG.Keep (AG.Auto (Binder l f))))),
-          Deep.Functor (AG.Keep (AG.Auto (Binder l f))) g, AG.Attribution (AG.Keep (AG.Auto (Binder l f))) g) =>
-         Full.Functor (AG.Keep (AG.Auto (Binder l f))) g where
-   t <$> x = AG.fullMapDefault (foldr1 const) t x
 
 instance (Rank2.Functor (g p), Rank2.Functor (g (WithEnvironment l f)), Functor f,
           Deep.Functor (Transformation.Rank2.Map p (WithEnvironment l f)) g) =>
@@ -241,15 +235,15 @@ instance {-# OVERLAPS #-}
           Abstract.DataConstructor l ~ ExtAST.DataConstructor l,
           Abstract.GADTConstructor l ~ ExtAST.GADTConstructor l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
-          Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.Declaration l l)
+          Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (AST.Declaration l l)
          where
    attribution :: forall sem. (Rank2.Functor (AST.Declaration l l f), Rank2.Traversable (AST.Declaration l l sem))
                => AG.Auto (Binder l f) -> f (AST.Declaration l l sem sem)
                -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f))))
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (AG.Auto (Binder l f))))
    attribution _ node (AG.Inherited inh, chSyn) =
-      (AG.Synthesized $ foldMap (`export` chSyn) node, const bequest Rank2.<$> foldr1 const node)
+      (AG.Synthesized $ foldMap (`export` chSyn) node, const bequest Rank2.<$> Foldable1.head node)
       where bequeath :: AST.Declaration l l sem sem
                      -> AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f)))
                      -> (Map Extension Bool, Environment l)
@@ -336,8 +330,8 @@ instance {-# OVERLAPS #-}
           Abstract.ImportItem l l ~ ExtAST.ImportItem l l,
           Abstract.Declaration l l ~ ExtAST.Declaration l l,
           BindingMembers l,
-          Ord (Abstract.QualifiedName l), Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.Module l l)
+          Ord (Abstract.QualifiedName l), Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (AST.Module l l)
          where
    attribution :: forall sem. Rank2.Traversable (AST.Module l l sem)
                => AG.Auto (Binder l f) -> f (AST.Module l l sem sem)
@@ -346,7 +340,7 @@ instance {-# OVERLAPS #-}
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Module l l sem sem),
                    AST.Module l l sem (AG.Inherited (AG.Auto (Binder l f))))
    attribution (AG.Auto (Binder modEnv)) node (AG.Inherited (exts, inhEnv), childSyn) =
-      moduleAttribution $ foldr1 const node
+      moduleAttribution $ Foldable1.head node
       where moduleAttribution :: (t ~ AG.Auto (Binder l f))
                               => AST.Module l l sem sem -> (AG.Synthesized t (AST.Module l l sem sem),
                                                             AST.Module l l sem (AG.Inherited t))
@@ -398,7 +392,7 @@ instance {-# OVERLAPS #-}
           Abstract.ModuleName l ~ AST.ModuleName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Export l l) where
    synthesis _ node (_, moduleGlobalScope) _ = ((), foldMap itemExports node) where
       itemExports :: forall d. ExtAST.Export l l d d -> LocalEnvironment l
@@ -434,12 +428,12 @@ instance {-# OVERLAPS #-}
           AG.Atts (AG.Synthesized (Binder l f)) (Abstract.ImportSpecification l l) ~ ((), LocalEnvironment l),
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.Import l l) where
+          Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (ExtAST.Import l l) where
    attribution (AG.Auto (Binder modEnv)) node (AG.Inherited (exts, _), ExtAST.Import _ _ _ _ _ specSyn) =
       (AG.Synthesized ((Any (name == preludeName), scope), mempty),
        ExtAST.Import False qualified Nothing name alias (Just $ AG.Inherited (exts, unqualified available)))
-      where ExtAST.Import _ qualified _ name alias _ = foldr1 const node
+      where ExtAST.Import _ qualified _ name alias _ = Foldable1.head node
             available = fold $ lookupEnv name modEnv
             used = maybe available (snd . AG.syn) specSyn
             scope
@@ -451,7 +445,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.ImportSpecification l l) where
    synthesis _ node i chSyn = ((), foldMap imports node)
       where imports (AST.ImportSpecification True _) = listed
@@ -464,7 +458,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.ImportItem l l)
          where
    synthesis _ node i _ = ((), foldMap itemImports node)
@@ -494,7 +488,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.DataConstructor l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
@@ -509,7 +503,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.DataConstructor l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
@@ -525,7 +519,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.GADTConstructor l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> childEnv)
@@ -542,7 +536,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.FieldDeclaration l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -555,7 +549,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.TypeLHS l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -571,7 +565,7 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           OtherSynAtts l (Abstract.EquationLHS l l) ~ LocalEnvironment l,
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.EquationLHS l l)
          where
    synthesis _ node _ chSyn = (equationExports, equationExports <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -590,7 +584,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.PatternLHS l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -606,7 +600,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (AST.Pattern l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -619,7 +613,7 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
+          Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Pattern l l)
          where
    synthesis _ node _ chSyn = ((), foldMap export node <> Rank2.foldMap (snd . AG.syn) chSyn)
@@ -632,27 +626,27 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.GuardedExpression l l)
+          Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (AST.GuardedExpression l l)
          where
    attribution _ node (AG.Inherited i, ~(AST.GuardedExpression guardsSyn _)) =
       (AG.Synthesized mempty, AST.GuardedExpression guardsInh resultInh)
       where guardsInh = ZipList $ AG.Inherited <$> init allInh
-            resultInh = AG.Inherited (last allInh)
+            resultInh = AG.Inherited (List.last allInh)
             allInh = scanl acc i $ sameShape (getZipList guards) (getZipList guardsSyn)
             acc old (AG.Synthesized (_, new)) = (unqualified new <>) <$> old
-            AST.GuardedExpression guards _result = foldr1 const node
+            AST.GuardedExpression guards _result = Foldable1.head node
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (AST.Expression l l)
+          Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (AST.Expression l l)
          where
    attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ foldr1 const node)
+      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ Foldable1.head node)
       where bequest :: forall d. AST.Expression l l d d -> LocalEnvironment l
             bequest AST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest AST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
@@ -663,11 +657,11 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
-          Foldable f) =>
-         AG.Attribution (AG.Auto (Binder l f)) (ExtAST.Expression l l)
+          Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (ExtAST.Expression l l)
          where
    attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ foldr1 const node)
+      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ Foldable1.head node)
       where bequest :: forall d. ExtAST.Expression l l d d -> LocalEnvironment l
             bequest ExtAST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest ExtAST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn

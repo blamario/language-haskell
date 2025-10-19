@@ -113,10 +113,10 @@ main' Opts{..} = do
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
-              AG.Attribution (AG.Auto (Binder.Binder l w)) (g l l),
+              AG.At (AG.Auto (Binder.Binder l w)) (g l l),
               AG.Atts (AG.Synthesized (Binder.Binder Language (Grammar.NodeWrap Input))) (g l l)
               ~ (x, Binder.LocalEnvironment l),
-              Deep.Functor (AG.Keep (AG.Auto (Binder.Binder l w))) (g l l),
+              Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
               Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
               Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
               FullyTranslatable
@@ -172,10 +172,10 @@ main' Opts{..} = do
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
-                  AG.Attribution (AG.Auto (Binder.Binder l w)) (g l l),
+                  AG.At (AG.Auto (Binder.Binder l w)) (g l l),
                   AG.Atts (AG.Synthesized (AG.Auto (Binder.Binder Language (Grammar.NodeWrap Input)))) (g l l)
                   ~ (x, Binder.LocalEnvironment l),
-                  Deep.Functor (AG.Keep (AG.Auto (Binder.Binder l w))) (g l l),
+                  Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
                   Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
