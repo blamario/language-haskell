@@ -1,5 +1,6 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, OverloadedRecordDot, RankNTypes, RecordWildCards,
-             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+             OverloadedRecordDot, QuantifiedConstraints, RankNTypes, RecordWildCards,
+             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Main where
 
@@ -30,6 +31,7 @@ import qualified Transformation.Full as Full
 
 import Control.Monad
 import Data.Data (Data)
+import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid.Instances.PrefixMemory (content)
@@ -43,7 +45,7 @@ import Data.Typeable (Typeable)
 import Options.Applicative
 import Text.Grampa (ParseResults, parseComplete, failureDescription)
 import Text.Parser.Input.Position (offset)
-import ReprTree
+import ReprTree (reprTreeString)
 
 import Prelude hiding (getLine, getContents, readFile)
 
@@ -105,12 +107,13 @@ main' Opts{..} = do
               e ~ Binder.WithEnvironment Language w,
               Abstract.ExtendedHaskell l,
               Abstract.QualifiedName l ~ AST.QualifiedName l,
-              Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
               Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-              Data (g Language Language e e), Data (g Language Language w w),
+              Data (g l l [] []),
               Show (g Language Language e e), Show (g Language Language w w),
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
+              forall f. Rank2.Functor (g l l f),
+              forall f. Functor f => Deep.Functor (Rank2.Map f []) (g l l),
               Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               AG.At (AG.Auto (Binder.Binder l w)) (g l l),
@@ -138,6 +141,7 @@ main' Opts{..} = do
               FullyTranslatable
                  (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
+              Deep.Functor (Rank2.Map w []) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
@@ -164,12 +168,13 @@ main' Opts{..} = do
                   e ~ Binder.WithEnvironment Language w,
                   Abstract.ExtendedHaskell l,
                   Abstract.QualifiedName l ~ AST.QualifiedName l,
-                  Data (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
                   Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
-                  Data (g Language Language e e), Data (g Language Language w w),
+                  Data (g l l [] []),
                   Show (g Language Language e e), Show (g Language Language w w),
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
+                  forall f. Rank2.Functor (g l l f),
+                  forall f. Functor f => Deep.Functor (Rank2.Map f []) (g l l),
                   Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   AG.At (AG.Auto (Binder.Binder l w)) (g l l),
@@ -177,6 +182,7 @@ main' Opts{..} = do
                   ~ (x, Binder.LocalEnvironment l),
                   Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
                   Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
+                  Full.Functor (Rank2.Map w []) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
@@ -231,10 +237,10 @@ main' Opts{..} = do
             Verified -> verifyBefore (putStrLn . Template.pprint)
             _ -> error "Can't pretty-print an unresolved parse tree."
           Tree -> case optsStage of
-             Parsed -> putStrLn $ reprTreeString parsed
-             Bound -> putStrLn $ reprTreeString bound
-             Resolved -> putStrLn $ reprTreeString resolved
-             Verified -> verifyBefore (putStrLn . reprTreeString)
+             Parsed -> printTree parsed
+             Bound -> printTree bound
+             Resolved -> printTree resolved
+             Verified -> verifyBefore printTree
           where verifyBefore :: (a -> IO ()) -> IO ()
                 verifyBefore action = case Verifier.verify mempty resolved of
                    [] -> let unbounds = Binder.unboundNames resolved
@@ -248,6 +254,10 @@ main' Opts{..} = do
                 bound = Binder.withBindings defaultExtensions predefinedModules preludeBindings parsed
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
                 rewrap = Reserializer.mapWrapping (offset contents) content
+                printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w) => w (g l l w w) -> IO ()
+                printTree = putStrLn . reprTreeString . unwrap
+                   where unwrap :: w (g l l w w) -> [g l l [] []]
+                         unwrap = (Rank2.Map toList Full.<$>)
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])
@@ -277,3 +287,6 @@ main' Opts{..} = do
       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
 
 type NodeWrap = ((,) Int)
+
+instance (Rank2.Functor (g p), Deep.Functor (Rank2.Map p []) g, Functor p) => Full.Functor (Rank2.Map p []) g where
+  (<$>) = Full.mapUpDefault
