@@ -4,7 +4,8 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, predefinedModuleBindings, preludeBindings, resolvePositions, Input,
+module Language.Haskell (parseModule, resolvePositions, Input,
+                         predefinedModuleBindings, preludeBindings, directoryModuleBindings,
                          -- * Node wrappers
                          -- | An abstract syntax tree produced by this library contains nodes of different types
                          -- (declarations, types, expressions, patterns, etc), but every node is contained by the
@@ -29,7 +30,7 @@ import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.AG.Generics as AG (Auto)
 
-import Control.Category ((>>>))
+import Control.Arrow ((&&&), (>>>))
 import Control.Monad ((>=>))
 import Data.Either.Validation (validationToEither)
 import Data.Functor.Compose (Compose(..))
@@ -38,12 +39,13 @@ import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid.Instances.PrefixMemory (Shadowed, content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
 import Data.Semigroup.Union (UnionWith(..))
 import Data.Text (Text)
+import Data.Tuple (swap)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import System.Directory (doesDirectoryExist, listDirectory)
@@ -135,7 +137,7 @@ instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
          Full.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g where
    (<$>) = Full.mapDownDefault
 
--- | All the qualified bindings available without any import statement, such as @Prelude.id@
+-- | All the predefined modules available for import
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 predefinedModuleBindings =
    liftA2 (<>) baseModuleBindings
@@ -162,24 +164,34 @@ unqualifiedPreludeBindings = do
 
 baseModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 baseModuleBindings = do
-   baseModuleDir <- flip combine "base" <$> getDataDir
-   moduleFilePaths <- filter (List.isSuffixOf ".hs") <$> listDirectoryRecursively baseModuleDir
    prelude <- preludeBindings
    modules <- unsafeInterleaveIO predefinedModuleBindings
+   dataDir <- getDataDir
+   directoryModuleBindings prelude modules (combine dataDir "base")
+
+-- | The module environment from the given directory path. The first two arguments are the modules available for
+-- import and the @Prelude@ environment available without any import.
+directoryModuleBindings :: Binder.Environment AST.Language -> Binder.ModuleEnvironment AST.Language -> FilePath
+                        -> IO (Binder.ModuleEnvironment AST.Language)
+directoryModuleBindings prelude moduleEnv rootModuleDir = do
+   moduleFilePaths <- filter (List.isSuffixOf ".hs") <$> listDirectoryRecursively rootModuleDir
    let assertSuccess ~(Right ~[parsed]) = parsed
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
-       bindModule :: FilePath -> IO (AST.ModuleName AST.Language, Binder.LocalEnvironment AST.Language)
+       moduleNameFromPath :: Text -> Maybe (AST.ModuleName AST.Language)
+       moduleNameFromPath = Text.stripSuffix ".hs"
+                            >=> Text.stripPrefix (Text.pack rootModuleDir <> "/")
+                            >=> (Text.split (== '/') >>> (Abstract.name <$>) >>> nonEmpty)
+                            >=> (Abstract.moduleName >>> pure)
+       bindModule :: FilePath -> IO (Binder.LocalEnvironment AST.Language)
        bindModule path = do
           moduleText <- Text.IO.readFile path
           let parsedModule :: ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
-              parsedModule = parseModule defaultExtensions modules prelude False moduleText
+              parsedModule = parseModule defaultExtensions moduleEnv prelude False moduleText
               env = Di.syn . fst . getCompose $ assertSuccess parsedModule
-              modulesFromPath :: Text -> Maybe (NonEmpty (AST.Name AST.Language))
-              modulesFromPath = Text.stripSuffix ".hs"
-                                >=> Text.stripPrefix (Text.pack baseModuleDir <> "/")
-                                >=> (Text.split (== '/') >>> (Abstract.name <$>) >>> nonEmpty)
-          pure (maybe (error $ "Module path " <> path <> " is malformed.") Abstract.moduleName (modulesFromPath $ Text.pack path), env)
-   UnionWith . Map.fromList <$> mapM (unsafeInterleaveIO . bindModule) moduleFilePaths
+          pure env
+       pathEnv :: [(AST.ModuleName AST.Language, FilePath)]
+       pathEnv = map swap $ mapMaybe (sequenceA . (id &&& moduleNameFromPath . Text.pack)) moduleFilePaths
+   UnionWith . Map.fromList <$> traverse (traverse bindModule) pathEnv
 
 listDirectoryRecursively :: FilePath -> IO [FilePath]
 listDirectoryRecursively path = listDirectory path >>= foldMapM (recurseDirectory path)
