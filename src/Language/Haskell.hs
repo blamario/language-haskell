@@ -50,6 +50,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath.Posix (combine)
+import System.IO (fixIO)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Text.Grampa (ParseResults, ParseFailure (errorAlternatives))
 import Text.Parser.Input.Position (offset)
@@ -167,13 +168,20 @@ baseModuleBindings = do
    prelude <- preludeBindings
    modules <- unsafeInterleaveIO predefinedModuleBindings
    dataDir <- getDataDir
-   directoryModuleBindings prelude modules (combine dataDir "base")
+   nonRecursiveDirectoryModuleBindings prelude modules (combine dataDir "base")
 
 -- | The module environment from the given directory path. The first two arguments are the modules available for
 -- import and the @Prelude@ environment available without any import.
 directoryModuleBindings :: Binder.Environment AST.Language -> Binder.ModuleEnvironment AST.Language -> FilePath
                         -> IO (Binder.ModuleEnvironment AST.Language)
-directoryModuleBindings prelude moduleEnv rootModuleDir = do
+directoryModuleBindings prelude moduleEnv rootModuleDir =
+   fixIO $ \dirModules-> nonRecursiveDirectoryModuleBindings prelude (dirModules <> moduleEnv) rootModuleDir
+
+-- | Create a module environment for the given directory without allowing imports from the same directory, only from
+-- the given @moduleEnv@.
+nonRecursiveDirectoryModuleBindings :: Binder.Environment AST.Language -> Binder.ModuleEnvironment AST.Language -> FilePath
+                                    -> IO (Binder.ModuleEnvironment AST.Language)
+nonRecursiveDirectoryModuleBindings prelude moduleEnv rootModuleDir = do
    moduleFilePaths <- filter (List.isSuffixOf ".hs") <$> listDirectoryRecursively rootModuleDir
    let assertSuccess ~(Right ~[parsed]) = parsed
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
