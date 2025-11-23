@@ -150,17 +150,10 @@ preludeBindings = Binder.onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName No
 unqualifiedPreludeBindings :: IO (Binder.LocalEnvironment AST.Language)
 unqualifiedPreludeBindings = do
    preludeModuleDir <- flip combine "report" <$> getDataDir
-   moduleFileNames <- filter (List.isSuffixOf ".hs") <$> listDirectory preludeModuleDir
-   moduleTexts <- mapM (unsafeInterleaveIO . Text.IO.readFile . combine preludeModuleDir) moduleFileNames
    baseModuleEnv <- unsafeInterleaveIO baseModuleBindings
-   let Just moduleNames = traverse (Text.stripSuffix ".hs" . Text.pack) moduleFileNames
-       parsedModules = assertSuccess . parseModule defaultExtensions moduleEnv mempty False <$> moduleTexts
-       assertSuccess ~(Right ~[parsed]) = parsed
-       moduleEnv = baseModuleEnv <> preludeModuleEnv
-       preludeModuleEnv = Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
-       Just prelude = Map.lookup Binder.preludeName preludeModuleEnv
-       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
-   pure (prelude <> Binder.builtinPreludeBindings)
+   preludeModuleEnv <- nonRecursiveDirectoryModuleBindings mempty baseModuleEnv preludeModuleDir
+   preludeModuleEnv' <- nonRecursiveDirectoryModuleBindings mempty (preludeModuleEnv <> baseModuleEnv) preludeModuleDir
+   pure (preludeModuleEnv' Map.! Binder.preludeName <> Binder.builtinPreludeBindings)
 
 baseModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 baseModuleBindings = do
@@ -188,18 +181,14 @@ nonRecursiveDirectoryModuleBindings prelude moduleEnv rootModuleDir = do
        moduleNameFromPath :: Text -> Maybe (AST.ModuleName AST.Language)
        moduleNameFromPath = Text.stripSuffix ".hs"
                             >=> Text.stripPrefix (Text.pack rootModuleDir <> "/")
-                            >=> (Text.split (== '/') >>> (Abstract.name <$>) >>> nonEmpty)
+                            >=> (Text.split (== '/') >>> map Abstract.name >>> nonEmpty)
                             >=> (Abstract.moduleName >>> pure)
-       bindModule :: FilePath -> IO (Binder.LocalEnvironment AST.Language)
-       bindModule path = do
-          moduleText <- Text.IO.readFile path
-          let parsedModule :: ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
-              parsedModule = parseModule defaultExtensions moduleEnv prelude False moduleText
-              env = Di.syn . fst . getCompose $ assertSuccess parsedModule
-          pure env
+       bindings :: Text -> Binder.LocalEnvironment AST.Language
+       bindings = Di.syn . fst . getCompose . assertSuccess . parseModule defaultExtensions moduleEnv prelude False
        pathEnv :: [(AST.ModuleName AST.Language, FilePath)]
-       pathEnv = map swap $ mapMaybe (sequenceA . (id &&& moduleNameFromPath . Text.pack)) moduleFilePaths
-   Map.fromList <$> traverse (traverse bindModule) pathEnv
+       pathEnv = map (fromMaybe (error "Bad module file name") . moduleNameFromPath . Text.pack &&& id) moduleFilePaths
+   textEnv <- traverse Text.IO.readFile (Map.fromList pathEnv)
+   pure (bindings <$> textEnv)
 
 listDirectoryRecursively :: FilePath -> IO [FilePath]
 listDirectoryRecursively path = listDirectory path >>= foldMapM (recurseDirectory path)
