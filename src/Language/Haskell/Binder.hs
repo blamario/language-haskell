@@ -64,7 +64,7 @@ type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
 type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
 
 -- | Bindings of all names exported by the available modules
-type ModuleEnvironment l = UnionWith (Map (AST.ModuleName l)) (LocalEnvironment l)
+type ModuleEnvironment l = Map (AST.ModuleName l) (LocalEnvironment l)
 
 -- | The inherited attributes are an 'Environment', the synthesized attributes a 'LocalEnvironment'
 type Attributes l = Di.Atts (Environment l) (LocalEnvironment l)
@@ -384,7 +384,7 @@ instance {-# OVERLAPS #-}
                   then qualifiedWith preludeName preludeEnv <> unqualified preludeEnv
                   else mempty
               where ((Any importsPrelude, allImports), _) = foldMap AG.syn importSyns
-            preludeEnv = fold $ lookupEnv preludeName modEnv
+            preludeEnv = fold $ Map.lookup preludeName modEnv
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, BindingMembers l,
@@ -434,7 +434,7 @@ instance {-# OVERLAPS #-}
       (AG.Synthesized ((Any (name == preludeName), scope), mempty),
        ExtAST.Import False qualified Nothing name alias (Just $ AG.Inherited (exts, unqualified available)))
       where ExtAST.Import _ qualified _ name alias _ = Foldable1.head node
-            available = fold $ lookupEnv name modEnv
+            available = fold $ Map.lookup name modEnv
             used = maybe available (snd . AG.syn) specSyn
             scope
                | qualified = qualifiedWith (fromMaybe name alias) used

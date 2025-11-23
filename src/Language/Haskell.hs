@@ -141,8 +141,7 @@ instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
 -- | All the predefined modules available for import
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 predefinedModuleBindings =
-   liftA2 (<>) baseModuleBindings
-   $ UnionWith . Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
+   liftA2 (<>) baseModuleBindings $ Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
 
 -- | All the @Prelude@ bindings available without any import statement
 preludeBindings :: IO (Binder.Environment AST.Language)
@@ -158,8 +157,8 @@ unqualifiedPreludeBindings = do
        parsedModules = assertSuccess . parseModule defaultExtensions moduleEnv mempty False <$> moduleTexts
        assertSuccess ~(Right ~[parsed]) = parsed
        moduleEnv = baseModuleEnv <> preludeModuleEnv
-       preludeModuleEnv = UnionWith $ Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
-       Just prelude = Map.lookup Binder.preludeName (getUnionWith preludeModuleEnv)
+       preludeModuleEnv = Map.fromList $ zip (Abstract.moduleName @AST.Language . pure . Abstract.name <$> moduleNames) (Di.syn . fst . getCompose <$> parsedModules)
+       Just prelude = Map.lookup Binder.preludeName preludeModuleEnv
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
    pure (prelude <> Binder.builtinPreludeBindings)
 
@@ -171,7 +170,8 @@ baseModuleBindings = do
    nonRecursiveDirectoryModuleBindings prelude modules (combine dataDir "base")
 
 -- | The module environment from the given directory path. The first two arguments are the modules available for
--- import and the @Prelude@ environment available without any import.
+-- import and the @Prelude@ environment available without any import. The modules from the directory itself are also
+-- made available for import, and override the modules from @moduleEnv@.
 directoryModuleBindings :: Binder.Environment AST.Language -> Binder.ModuleEnvironment AST.Language -> FilePath
                         -> IO (Binder.ModuleEnvironment AST.Language)
 directoryModuleBindings prelude moduleEnv rootModuleDir =
@@ -199,7 +199,7 @@ nonRecursiveDirectoryModuleBindings prelude moduleEnv rootModuleDir = do
           pure env
        pathEnv :: [(AST.ModuleName AST.Language, FilePath)]
        pathEnv = map swap $ mapMaybe (sequenceA . (id &&& moduleNameFromPath . Text.pack)) moduleFilePaths
-   UnionWith . Map.fromList <$> traverse (traverse bindModule) pathEnv
+   Map.fromList <$> traverse (traverse bindModule) pathEnv
 
 listDirectoryRecursively :: FilePath -> IO [FilePath]
 listDirectoryRecursively path = listDirectory path >>= foldMapM (recurseDirectory path)
