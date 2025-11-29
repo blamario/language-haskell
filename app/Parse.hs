@@ -34,6 +34,7 @@ import Data.Data (Data)
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
+import Data.Maybe (fromMaybe)
 import Data.Monoid.Instances.PrefixMemory (content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
@@ -82,6 +83,7 @@ main = execParser opts >>= main'
         <*> (flag' Pretty (long "pretty" <> help "Pretty-print output")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
+             <|> flag' Plain (long "plain" <> help "Print the output as a long Haskell expression")
              <|> pure Plain)
         <*> (flag' Parsed (long "parsed" <> help "show raw ambiguous parse tree")
              <|> flag' Bound (long "bound" <> help "show ambiguous parse tree with identifier bindings")
@@ -102,7 +104,9 @@ main' :: Opts -> IO ()
 main' Opts{..} = do
    (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
    (predefinedModules :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
-   let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+   includeModules <- traverse (Haskell.directoryModuleBindings preludeBindings predefinedModules) optsInclude
+   let importableModules = fromMaybe predefinedModules includeModules
+       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
               e ~ Binder.WithEnvironment Language w,
               Abstract.ExtendedHaskell l,
@@ -250,8 +254,8 @@ main' Opts{..} = do
                 t :: Verifier.Verification l Int Text
                 t = Verifier.Verification
                 resolved :: Bound (g l l Bound Bound)
-                resolved = Haskell.resolvePositions defaultExtensions predefinedModules preludeBindings contents parsed
-                bound = Binder.withBindings defaultExtensions predefinedModules preludeBindings parsed
+                resolved = Haskell.resolvePositions defaultExtensions importableModules preludeBindings contents parsed
+                bound = Binder.withBindings defaultExtensions importableModules preludeBindings parsed
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
                 rewrap = Reserializer.mapWrapping (offset contents) content
                 printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w) => w (g l l w w) -> IO ()

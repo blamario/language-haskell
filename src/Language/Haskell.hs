@@ -177,16 +177,20 @@ nonRecursiveDirectoryModuleBindings :: Binder.Environment AST.Language -> Binder
 nonRecursiveDirectoryModuleBindings prelude moduleEnv rootModuleDir = do
    moduleFilePaths <- filter (List.isSuffixOf ".hs") <$> listDirectoryRecursively rootModuleDir
    let assertSuccess ~(Right ~[parsed]) = parsed
+       rootDirPrefix = Text.dropWhileEnd (== '/') (Text.pack rootModuleDir) <> "/"
        defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
        moduleNameFromPath :: Text -> Maybe (AST.ModuleName AST.Language)
        moduleNameFromPath = Text.stripSuffix ".hs"
-                            >=> Text.stripPrefix (Text.pack rootModuleDir <> "/")
+                            >=> Text.stripPrefix rootDirPrefix
                             >=> (Text.split (== '/') >>> map Abstract.name >>> nonEmpty)
                             >=> (Abstract.moduleName >>> pure)
        bindings :: Text -> Binder.LocalEnvironment AST.Language
        bindings = Di.syn . fst . getCompose . assertSuccess . parseModule defaultExtensions moduleEnv prelude False
        pathEnv :: [(AST.ModuleName AST.Language, FilePath)]
-       pathEnv = map (fromMaybe (error "Bad module file name") . moduleNameFromPath . Text.pack &&& id) moduleFilePaths
+       pathEnv = map (toModuleName . Text.pack &&& id) moduleFilePaths
+       toModuleName p = case moduleNameFromPath p of
+         Nothing -> error ("Bad module file name " ++ show p)
+         Just m -> m
    textEnv <- traverse Text.IO.readFile (Map.fromList pathEnv)
    pure (bindings <$> textEnv)
 
