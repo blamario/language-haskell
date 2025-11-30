@@ -409,7 +409,9 @@ instance {-# OVERLAPS #-}
             Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
             Just (TypeAndPatternBinding b@(TypeClass env)) -> (TypeBinding b, env)
             Just b@(TypeBinding (DataType env)) -> (b, env)
-            Just (TypeAndValueBinding b@(DataType env) _) -> (TypeBinding b, env)
+            Just (TypeAndValueBinding t@(DataType envT) v@(RecordConstructor envV))
+              -> (TypeAndValueBinding t v, envT <> envV)
+            Just (TypeAndValueBinding t@(DataType envT) v) -> (TypeAndValueBinding t v, envT)
             Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
             Just b -> (ErroneousBinding (NonExportableBinding b), mempty)
             Nothing -> (ErroneousBinding (MissingBinding parent), mempty)
@@ -462,23 +464,22 @@ instance {-# OVERLAPS #-}
       where itemImports :: forall d. ExtAST.ImportItem l l d d -> LocalEnvironment l
             itemImports (ExtAST.ImportClassOrType name Nothing) = nameImport name available
             itemImports (ExtAST.ImportClassOrType parent (Just members)) =
+               (\(b, e)-> onMap (Map.insert parent b) (filterMembers members e)) $
                case lookupEnv parent available
-               of Just b@(TypeBinding (TypeClass env)) ->
-                     onMap (Map.insert parent b) (filterMembers members env)
-                  Just (TypeAndValueBinding b@(TypeClass env) _) ->
-                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                  Just (TypeAndPatternBinding b@(TypeClass env)) ->
-                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                  Just b@(TypeBinding (DataType env)) ->
-                     onMap (Map.insert parent b) (filterMembers members env)
-                  Just (TypeAndValueBinding b@(DataType env) _) ->
-                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                  Just (TypeAndPatternBinding b@(DataType env)) ->
-                     onMap (Map.insert parent $ TypeBinding b) (filterMembers members env)
-                  _ -> nameImport parent available
+               of Just b@(TypeBinding (TypeClass env)) -> (b, env)
+                  Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
+                  Just (TypeAndPatternBinding b@(TypeClass env)) -> (TypeBinding b, env)
+                  Just b@(TypeBinding (DataType env)) -> (b, env)
+                  Just (TypeAndValueBinding t@(DataType envT) v@(RecordConstructor envV))
+                    -> (TypeAndValueBinding t v, envT <> envV)
+                  Just (TypeAndValueBinding t@(DataType env) v) -> (TypeAndValueBinding t v, env)
+                  Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
+                  _ -> (ErroneousBinding (MissingBinding $ unqualifiedName parent), mempty)
             itemImports (ExtAST.ImportPattern name) = nameImport name available
             itemImports (ExtAST.ImportVar name) = nameImport name available
             available = onMap (Map.mapKeysMonotonic baseName) (snd i)
+            nameImport :: AST.Name l -> LocalEnvironment l -> LocalEnvironment l
+            nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -845,9 +846,6 @@ instance BindingMembers ExtAST.Language where
 sameShape :: [a] -> [b] -> [b]
 sameShape [] _ = []
 sameShape (_:xs) ~(y:ys) = y : sameShape xs ys
-
-nameImport :: AST.Name l -> LocalEnvironment l -> LocalEnvironment l
-nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
 
 builtinPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
                            Abstract.Associativity l ~ AST.Associativity l)

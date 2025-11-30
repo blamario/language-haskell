@@ -262,7 +262,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
                              (s, Abstract.punnedFieldBinding Abstract.build $ qualified fieldName))
                   | fieldName <- Map.keys declaredFields, fieldName `notElem` explicitFieldNames]
                Just _ -> error ("Environment misaattributes record constructor " ++ show con)
-               Nothing -> error ("Environment lacks record constructor " ++ show con)
+               Nothing -> error ("Environment lacks record constructor " ++ show con ++ " in " ++ show inherited)
             explicitFieldNames :: [AST.Name l]
             explicitFieldNames = map (explicitFieldName . snd . snd . getCompose) (toList fields)
             explicitFieldName (AST.FieldBinding name _) = Binder.baseName name
