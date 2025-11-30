@@ -26,21 +26,25 @@ import Prelude hiding (readFile)
 main = do
    predefinedModuleBindings <- Haskell.predefinedModuleBindings
    preludeBindings <- Haskell.preludeBindings
-   exampleTree predefinedModuleBindings preludeBindings "" "test/" >>= defaultMain . testGroup "positive"
+   exampleTree predefinedModuleBindings predefinedModuleBindings preludeBindings "" "test/"
+     >>= defaultMain . testGroup "positive"
 
 width = 80
 contextLines = 3
 
 exampleTree :: Binder.ModuleEnvironment Language
+            -> Binder.ModuleEnvironment Language
             -> Binder.Environment Language
             -> FilePath -> FilePath -> IO [TestTree]
-exampleTree moduleBindings preludeBindings ancestry path =
+exampleTree globalModuleBindings moduleBindings preludeBindings ancestry path =
    do let fullPath = combine ancestry path
           treeLeaf = prettyFile moduleBindings preludeBindings fullPath
       isDir <- doesDirectoryExist fullPath
       if isDir
-         then (:[]) . testGroup path . concat
-              <$> (listDirectory fullPath >>= mapM (exampleTree moduleBindings preludeBindings fullPath) . sort)
+         then do modules <- Haskell.directoryModuleBindings preludeBindings globalModuleBindings fullPath
+                 contents <- listDirectory fullPath
+                 results <- mapM (exampleTree globalModuleBindings modules preludeBindings fullPath) (sort contents)
+                 pure [testGroup path $ concat results]
          else return . (:[]) . testCase path $
               do moduleSource <- readFile fullPath
                  (originalModule, prettyModule) <- treeLeaf moduleSource

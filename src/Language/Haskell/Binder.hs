@@ -85,6 +85,8 @@ data Binding l = ErroneousBinding (BindingError l)
 data BindingError l = ClashingBindings (Binding l) (Binding l)
                     | DuplicateInfixDeclaration (ValueBinding l) (ValueBinding l)
                     | DuplicateRecordField
+                    | MissingBinding (AST.QualifiedName l)
+                    | NonExportableBinding (Binding l)
                     | NoBindings
                     deriving (Typeable, Data, Eq, Show)
 
@@ -401,21 +403,16 @@ instance {-# OVERLAPS #-}
       itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportClassOrType parent (Just members)) =
+         (\(b, e)-> onMap (Map.insert (baseName parent) b) (filterMembers members e)) $
          case lookupEnv parent moduleGlobalScope
-         of Just b@(TypeBinding (TypeClass env)) ->
-               onMap (Map.insert (baseName parent) b) (filterMembers members env)
-            Just (TypeAndValueBinding b@(TypeClass env) _) ->
-               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
-            Just (TypeAndPatternBinding b@(TypeClass env)) ->
-               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
-            Just b@(TypeBinding (DataType env)) ->
-               onMap (Map.insert (baseName parent) b) (filterMembers members env)
-            Just (TypeAndValueBinding b@(DataType env) _) ->
-               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
-            Just (TypeAndPatternBinding b@(DataType env)) ->
-               onMap (Map.insert (baseName parent) (TypeBinding b)) (filterMembers members env)
-            Just b -> error (show (parent, b))
-            Nothing -> error (show (parent, moduleGlobalScope))
+         of Just b@(TypeBinding (TypeClass env)) -> (b, env)
+            Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
+            Just (TypeAndPatternBinding b@(TypeClass env)) -> (TypeBinding b, env)
+            Just b@(TypeBinding (DataType env)) -> (b, env)
+            Just (TypeAndValueBinding b@(DataType env) _) -> (TypeBinding b, env)
+            Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
+            Just b -> (ErroneousBinding (NonExportableBinding b), mempty)
+            Nothing -> (ErroneousBinding (MissingBinding parent), mempty)
       reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
       unqualifiedAndQualifiedWith modName qn@(AST.QualifiedName modName' localName) =
         modName' == Just modName
