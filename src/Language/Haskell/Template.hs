@@ -23,8 +23,8 @@ import qualified GHC.Types
 import qualified Rank2
 import Text.PrettyPrint (render)
 
-import Language.Haskell (Bound, Placed)
-import Language.Haskell.Reserializer (ParsedLexemes(Trailing), lexemeText)
+import Language.Haskell.Reserializer as Reserializer (ParsedLexemes(Trailing), Wrapped, lexemeText)
+import qualified Language.Haskell.Binder as Binder
 import Language.Haskell.Extensions (ExtensionSwitch(..))
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
@@ -45,7 +45,7 @@ import qualified Language.Haskell.AST as AST
 import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
--- | Pretty-print the AST.
+-- | Pretty-print the Haskell AST via Template Haskell prettyprinter
 pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
            FullyTranslatable
               (Reformulator.ReformulationOf
@@ -93,11 +93,11 @@ class Functor f => TemplateWrapper f where
    extract :: f a -> a
    isParenthesized :: f a -> Bool
 
-instance TemplateWrapper Bound where
-   extract = snd . snd . getCompose
+instance TemplateWrapper w => TemplateWrapper (Binder.WithEnvironment l w) where
+   extract = extract . snd . getCompose
    isParenthesized = isParenthesized . snd . getCompose
 
-instance TemplateWrapper Placed where
+instance TemplateWrapper (Reserializer.Wrapped Int Text) where
    extract = snd
    isParenthesized ((_, Trailing (lexeme:_), _), _) = "(" `Text.isPrefixOf` lexemeText lexeme
    isParenthesized _ = False

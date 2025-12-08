@@ -4,7 +4,7 @@
 
 -- | The programming language Haskell
 
-module Language.Haskell (parseModule, resolvePositions, Input,
+module Language.Haskell (parseModule, resolvePositions, pprint, Input,
                          predefinedModuleBindings, preludeBindings, directoryModuleBindings,
                          -- * Node wrappers
                          -- | An abstract syntax tree produced by this library contains nodes of different types
@@ -20,6 +20,7 @@ import qualified Language.Haskell.Extensions.Grammar as Grammar
 import qualified Language.Haskell.Extensions.Verifier as Verifier
 import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
+import Language.Haskell.Template (pprint)
 
 import qualified Rank2
 import qualified Transformation
@@ -68,14 +69,14 @@ type Placed = Reserializer.Wrapped Int Text
 -- | Every node in a parsed and resolved AST is wrapped with this functor
 type Bound = Binder.WithEnvironment AST.Language Placed
 
--- | The input monoid type
+-- | The input monoid type to parse
 type Input = Shadowed Text
 
 -- | Parse the given text of a single module according to the specified language extensions and resolve all
 -- identifiers inside the module.
 parseModule :: Map Extension Bool                      -- ^ language extension switches
             -> Binder.ModuleEnvironment AST.Language   -- ^ modules available for import
-            -> Binder.Environment AST.Language         -- ^ names available without import
+            -> Binder.Environment AST.Language         -- ^ names available without import, /i.e./ @Prelude@
             -> Bool                                    -- ^ verify if the identifiers are bound and extensions used?
             -> Text                                    -- ^ the module's source code
             -> ParseResults Input [Bound (AST.Module AST.Language AST.Language Bound Bound)]
