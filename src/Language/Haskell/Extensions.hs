@@ -24,14 +24,14 @@ data Extension = AllowAmbiguousTypes
                | ApplicativeDo
                | Arrows
                | AutoDeriveTypeable
-               | BangDataFields -- | active but unnamed in GHC and Report
+               | BangDataFields -- ^ active but nameless in GHC and Report
                | BangPatterns
                | BinaryLiterals
                | BlockArguments
                | CApiFFI
                | CUSKs
                | ConstrainedClassMethods
-               | ConstraintsAreTypes -- | active but unnamed in GHC
+               | ConstraintsAreTypes -- ^ active but nameless in GHC
                | ConstraintKinds
                | Cpp
                | DataKinds
@@ -53,7 +53,7 @@ data Extension = AllowAmbiguousTypes
                | EmptyCase
                | EmptyDataDeclarations
                | EmptyDataDeriving
-               | EqualityConstraints -- | unnamed in GHC
+               | EqualityConstraints -- ^ nameless in GHC
                | ExistentialQuantification
                | ExplicitForAll
                | ExplicitNamespaces
@@ -73,13 +73,13 @@ data Extension = AllowAmbiguousTypes
                | Haskell2010
                | Haskell98
                | HexFloatLiterals
-               | IdentifierSyntax -- | active but unnamed in GHC
+               | IdentifierSyntax -- ^ active but nameless in GHC
                | ImplicitParameters
                | ImplicitPrelude
                | ImportQualifiedPost
                | ImpredicativeTypes
                | IncoherentInstances
-               | InferredTypeVariables -- | unnamed in GHC
+               | InferredTypeVariables -- ^ nameless in GHC
                | InstanceSigs
                | InterruptibleFFI
                | JavaScriptFFI
@@ -97,7 +97,7 @@ data Extension = AllowAmbiguousTypes
                | MonomorphismRestriction
                | MultilineStrings
                | MultiParamTypeClasses
-               | MultiParameterConstraints -- | active unnamed in GHC
+               | MultiParameterConstraints -- ^ active, nameless in GHC
                | MultiWayIf
                | NPlusKPatterns
                | NamedDefaults
@@ -119,8 +119,8 @@ data Extension = AllowAmbiguousTypes
                | ParallelArrays
                | ParallelListComp
                | ParallelListComprehensions
-               | ParenthesizedTypeOperators     -- | active but unnamed in GHC
-               | GratuitouslyParenthesizedTypes -- | active but unnamed in GHC
+               | ParenthesizedTypeOperators     -- ^ active but nameless in GHC
+               | GratuitouslyParenthesizedTypes -- ^ active but nameless in GHC
                | PartialTypeSignatures
                | PatternGuards
                | PatternSynonyms
@@ -154,7 +154,7 @@ data Extension = AllowAmbiguousTypes
                | Trustworthy
                | TupleSections
                | TypeAbstractions
-               | TypeAbstractionsOrApplicationsInConstructorPatterns -- | nameless
+               | TypeAbstractionsOrApplicationsInConstructorPatterns -- ^ nameless
                | TypeApplications
                | TypeData
                | TypeFamilies
@@ -162,7 +162,7 @@ data Extension = AllowAmbiguousTypes
                | TypeInType
                | TypeOperators
                | TypeSynonymInstances
-               | TypeVariableConstraints -- | active but unnamed in GHC
+               | TypeVariableConstraints -- ^ active but nameless in GHC
                | UnboxedSums
                | UnboxedTuples
                | UndecidableInstances
@@ -173,7 +173,7 @@ data Extension = AllowAmbiguousTypes
                | UnliftedNewtypes
                | Unsafe
                | ViewPatterns
-               | VisibleDependedentQuantification -- | nameless
+               | VisibleDependentQuantification -- ^ nameless
                deriving (Bounded, Data, Enum, Eq, Ord, Read, Show)
 
 -- | An extension together with an on/off boolean
@@ -271,12 +271,12 @@ directImplications = Map.fromList <$> Map.fromList [
   (MultiParamTypeClasses, [(ConstrainedClassMethods, True), (MultiParameterConstraints, True)]),
   (ParallelArrays, [(ParallelListComprehensions, True)]),
   (ParallelListComp, [(ParallelListComprehensions, True)]),
-  (PolyKinds, [(KindSignatures, True), (VisibleDependedentQuantification, True)]),
+  (PolyKinds, [(KindSignatures, True), (VisibleDependentQuantification, True)]),
   (QuantifiedConstraints, [(ExplicitForAll, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
   (RebindableSyntax, [(ImplicitPrelude, False)]),
   (RecordWildCards, [(DisambiguateRecordFields, True)]),
-  (RequiredTypeArguments, [(VisibleDependedentQuantification, True)]),
+  (RequiredTypeArguments, [(VisibleDependentQuantification, True)]),
   (Safe, [(SafeImports, True)]),
   (ScopedTypeVariables, [(ExplicitForAll, True)]),
   (StandaloneKindSignatures, [(CUSKs, False)]),

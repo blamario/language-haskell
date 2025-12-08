@@ -2,7 +2,7 @@
              NamedFieldPuns, OverloadedStrings, QuantifiedConstraints, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
--- | Dimorphic attribute grammar for establishing the static identifier bindings
+-- | Attribute grammar for statically binding the identifier uses to their definitions
 
 module Language.Haskell.Binder (
    -- * Main functions
@@ -15,6 +15,7 @@ module Language.Haskell.Binder (
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
+   Unbound(Unbound, types, values, constructors),
    -- * Prelude
    preludeName, builtinPreludeBindings,
    -- * Utility functions
@@ -105,7 +106,7 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     | RecordFieldAndValue
                     deriving (Typeable, Data, Eq, Show)
 
--- | The list of erroneously unbound names
+-- | The sets of erroneously unbound names
 data Unbound l = Unbound {types :: Set (AST.QualifiedName l),
                           values :: Set (AST.QualifiedName l),
                           constructors :: Set (AST.QualifiedName l)}
@@ -847,6 +848,7 @@ sameShape :: [a] -> [b] -> [b]
 sameShape [] _ = []
 sameShape (_:xs) ~(y:ys) = y : sameShape xs ys
 
+-- | The @Prelude@ bindings that must be defined outside the language
 builtinPreludeBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
                            Abstract.Associativity l ~ AST.Associativity l)
                        => LocalEnvironment l

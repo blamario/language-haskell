@@ -28,8 +28,16 @@ import Language.Haskell.Extensions (ExtensionSwitch)
 -- * the wrapper for the node's subtrees' subtrees
 -- * the wrapper for the node's subtrees
 type TreeNodeKind = Language -> TreeNodeSubKind
+
+-- | Partially applied 'TreeNodeKind'
 type TreeNodeSubKind = Language -> NodeWrap -> NodeWrap -> Kind.Type
+
+-- | The kind of a tree node wrapper type, varying from t'Language.Haskell.Parsed' for just parsed nodes to
+-- t'Language.Haskell.Bound' for nodes with resolved identifier bindings
 type NodeWrap = Kind.Type -> Kind.Type
+
+-- | The kind of a language type: either the standard Haskell 2010 'Language.Haskell.AST.Language'
+-- or the fully extended 'Language.Haskell.Extensions.AST.Language'
 type Language = Kind.Type
 
 -- | An abstract finally-tagless specification of a Haskell 2010 language

@@ -227,8 +227,7 @@ extensionMixins =
      (Set.fromList [DataKinds, TypeOperators],       [(9, dataKindsTypeOperatorsMixin)]),
      (Set.fromList [DataKinds, TypeOperators,
                     GADTSyntax],                     [(9, dataKindsGadtSyntaxTypeOperatorsMixin)]),
-     (Set.fromList [VisibleDependedentQuantification],
-                                                     [(9, visibleDependentQuantificationMixin)]),
+     (Set.fromList [VisibleDependentQuantification], [(9, visibleDependentQuantificationMixin)]),
      (Set.fromList [RequiredTypeArguments],          [(9, requiredTypeArgumentsMixin)]),
      (Set.fromList [ConstraintsAreTypes],            [(9, constraintsAreTypesMixin)]),
      (Set.fromList [SpaceSensitiveOperators],        [(9, spaceSensitiveOperatorsMixin)])]
