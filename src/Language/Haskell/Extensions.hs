@@ -91,7 +91,7 @@ data Extension = AllowAmbiguousTypes
                | ListTuplePuns
                | MagicHash
                | MonadComprehensions
-               | MonadFailDesugaring
+               | MonadFailDesugaring -- ^ temporary from GHC 8.0, removed in 9.2
                | MonoLocalBinds
                | MonoPatBinds
                | MonomorphismRestriction
@@ -117,7 +117,6 @@ data Extension = AllowAmbiguousTypes
                | OverloadedStrings
                | PackageImports
                | ParallelArrays
-               | ParallelListComp
                | ParallelListComprehensions
                | ParenthesizedTypeOperators     -- ^ active but nameless in GHC
                | GratuitouslyParenthesizedTypes -- ^ active but nameless in GHC
@@ -270,7 +269,6 @@ directImplications = Map.fromList <$> Map.fromList [
   (LinearTypes, [(SpaceSensitiveOperators, True)]),
   (MultiParamTypeClasses, [(ConstrainedClassMethods, True), (MultiParameterConstraints, True)]),
   (ParallelArrays, [(ParallelListComprehensions, True)]),
-  (ParallelListComp, [(ParallelListComprehensions, True)]),
   (PolyKinds, [(KindSignatures, True), (VisibleDependentQuantification, True)]),
   (QuantifiedConstraints, [(ExplicitForAll, True)]),
   (RankNTypes, [(ExplicitForAll, True)]),
@@ -423,7 +421,6 @@ byName = Map.fromList [
   ("OverloadedStrings", OverloadedStrings),
   ("PackageImports", PackageImports),
   ("ParallelArrays", ParallelArrays),
-  ("ParallelListComp", ParallelListComp),
   ("ParallelListComp", ParallelListComprehensions),
   ("ParallelListComprehensions", ParallelListComprehensions),
   ("GratuitouslyParenthesizedTypes", GratuitouslyParenthesizedTypes),
