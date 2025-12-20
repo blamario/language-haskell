@@ -869,7 +869,7 @@ lexicalNegationMixin self super = super{
       qualifiedVariableSymbol = notFollowedBy (filter precededByOpenSpace getInput
                                                *> string "-"
                                                *> satisfyCharInput (\c-> Char.isAlphaNum c || c == '(' || c == '['))
-                                *> token (nameQualifier <*> self.report.variableSymbol),
+                                *> super.report.qualifiedVariableSymbol,
       prefixNegation = empty,
       bareExpression = super.report.bareExpression
          <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> self.report.aExpression

@@ -139,7 +139,7 @@ data Extension = AllowAmbiguousTypes
                | Safe
                | SafeImports
                | ScopedTypeVariables
-               | SpaceSensitiveOperators
+               | SpaceSensitiveOperators  -- ^ active but nameless in GHC
                | StandaloneDeriving
                | StandaloneKindSignatures
                | StarIsType
