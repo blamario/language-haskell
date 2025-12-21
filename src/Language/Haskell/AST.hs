@@ -99,7 +99,7 @@ instance Abstract.Haskell Language where
    doExpression = DoExpression
    infixExpression = InfixExpression
    leftSectionExpression = LeftSectionExpression
-   lambdaExpression = LambdaExpression . ZipList
+   lambdaExpression = LambdaExpression . ZipNonEmpty
    letExpression = LetExpression . ZipList
    listComprehension generator statements = ListComprehension generator (ZipNonEmpty statements)
    listExpression = ListExpression . ZipList
@@ -226,7 +226,7 @@ data Expression λ l d s =
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))
    | LeftSectionExpression (s (Abstract.Expression l l d d)) (Abstract.QualifiedName λ)
-   | LambdaExpression (ZipList (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
+   | LambdaExpression (ZipNonEmpty (s (Abstract.Pattern l l d d))) (s (Abstract.Expression l l d d))
    | LetExpression (ZipList (s (Abstract.Declaration l l d d))) (s (Abstract.Expression l l d d))
    | ListComprehension (s (Abstract.Expression l l d d)) (ZipNonEmpty (s (Abstract.Statement l l d d)))
    | ListExpression (ZipList (s (Abstract.Expression l l d d)))

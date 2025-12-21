@@ -295,7 +295,7 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
                  $ rewrap $ AST.ConstructorPattern just (ZipList []) (ZipList [rewrap $ AST.VariablePattern n])))
       where justGreaterOrEqual k =
                rewrap
-               $ AST.LambdaExpression (ZipList [rewrap $ AST.VariablePattern n])
+               $ AST.LambdaExpression (pure $ rewrap $ AST.VariablePattern n)
                $ rewrap $ AST.ConditionalExpression
                     (nOpK ">=")
                     (rewrap $ rewrap (AST.ConstructorExpression just) `AST.ApplyExpression` nOpK "-")

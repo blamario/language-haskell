@@ -469,7 +469,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                          <|> dExpression,
    prefixNegation = Abstract.negate <$ delimiter "-",
    lExpression = wrap openBlockExpression <|> dExpression,
-   openBlockExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> some (wrap aPattern) <* rightArrow
+   openBlockExpression = Abstract.lambdaExpression <$ delimiter "\\" <*> someNonEmpty (wrap aPattern) <* rightArrow
                                                    <*> expression
                          <|> Abstract.letExpression <$ keyword "let" <*> declarations <* keyword "in" <*> expression
                          <|> Abstract.conditionalExpression <$ keyword "if" <*> expression <* optional semi

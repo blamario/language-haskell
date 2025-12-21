@@ -122,7 +122,7 @@ class Haskell λ where
    doExpression :: s (GuardedExpression l l d d) -> Expression λ l d s
    infixExpression :: s (Expression l l d d) -> s (Expression l l d d) -> s (Expression l l d d) -> Expression λ l d s
    leftSectionExpression :: s (Expression l l d d) -> QualifiedName λ -> Expression λ l d s
-   lambdaExpression :: [s (Pattern l l d d)] -> s (Expression l l d d) -> Expression λ l d s
+   lambdaExpression :: NonEmpty (s (Pattern l l d d)) -> s (Expression l l d d) -> Expression λ l d s
    letExpression :: [s (Declaration l l d d)] -> s (Expression l l d d) -> Expression λ l d s
    listComprehension :: s (Expression l l d d) -> NonEmpty (s (Statement l l d d)) -> Expression λ l d s
    listExpression :: [s (Expression l l d d)] -> Expression λ l d s
