@@ -5,7 +5,8 @@
 -- | The module exports functions that reformulate an AST in terms of the language extensions it uses.
 module Language.Haskell.Extensions.Reformulator (
   ReformulationOf, Wrap,
-    dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, dropMultilineStrings, orToViewPatterns)
+    dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, dropMultilineStrings,
+    dropTupleSections, orToViewPatterns)
 where
 
 import Control.Applicative (ZipList(ZipList))
@@ -15,15 +16,19 @@ import Data.Foldable (toList)
 import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Lazy as Map
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup.Union (UnionWith(..))
+import qualified Data.Text as Text
 
 import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
 import qualified Transformation.AG.Dimorphic as Di
 import qualified Transformation.Full as Full
+
+import Data.ZipNonEmpty as ZipNonEmpty
 
 import Language.Haskell.Extensions.Abstract (DeeplyFunctor, ExtendedWithAllOf)
 import Language.Haskell.Extensions (Extension, ExtensionSwitch (ExtensionSwitch), On, Off)
@@ -185,6 +190,17 @@ dropMultilineStrings :: forall l1 l2 node pos s.
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropMultilineStrings = coerce
+
+dropTupleSections :: forall l1 l2 node pos s.
+                     (Abstract.Haskell l2,
+                      SameWrap 'Extensions.TupleSections '[] pos s l1 l2,
+                      FullyTranslatable (ReformulationOf (On 'Extensions.TupleSections) '[] l1 l2 pos s) node)
+                  => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
+                  -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
+dropTupleSections =
+   Translation.translateFully
+      (Reformulation (Extensions.on Extensions.TupleSections) []
+       :: ReformulationOf (On 'Extensions.TupleSections) '[] l1 l2 pos s)
 
 -- Generic instance to adjust the LANGUAGE pragma
 
@@ -348,6 +364,34 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
             rewrap :: node -> Wrap l2 pos s node
             rewrap node = Compose (env, ((start, mempty, end), node))
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
+
+-- TupleSections instances
+
+instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
+          Abstract.Supports 'Extensions.TupleSections λ,
+          Abstract.Haskell l,
+          Abstract.FieldBinding l ~ AST.FieldBinding l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.ModuleName l ~ AST.ModuleName l,
+          Abstract.Name l ~ AST.Name l) =>
+   ReformulationOf (On 'Extensions.TupleSections) '[] λ l pos s
+   `WrappedTranslation` AST.Expression
+  where
+    _ `translateWrapped` Compose (env, (s, AST.TupleSectionExpression () items)) =
+      Compose (env, (s, Abstract.lambdaExpression (NonEmpty.fromList vars)
+                        $ Compose (env, (s, Abstract.tupleExpression items'))))
+     where
+       vars = ZipNonEmpty.mapMaybe leftPattern itemsAssigned
+       ZipNonEmpty items' = assignExpression <$> itemsAssigned
+       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Abstract.Name l) (f (Abstract.Expression l l f f)))
+       itemsAssigned = assign <$> items <*> ZipNonEmpty.fromList ['a' ..]
+       assign Nothing letter = Left (Abstract.name $ Text.singleton letter)
+       assign (Just e) _ = Right e
+       assignExpression (Left var) = Compose (env, (s, Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
+       assignExpression (Right e) = e
+       leftPattern (Left var) = Just (Compose (env, (s, Abstract.variablePattern var)))
+       leftPattern _ = Nothing
+    _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 
 -- auxiliary functions
 

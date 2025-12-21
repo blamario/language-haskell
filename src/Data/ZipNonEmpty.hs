@@ -3,7 +3,10 @@
 module Data.ZipNonEmpty where
 
 import Data.Data (Data)
-import Data.List.NonEmpty as NonEmpty
+import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Maybe as Maybe
 import GHC.Stack (HasCallStack)
 
 -- | A 'NonEmpty' list with 'ZipList' instance semantics
@@ -30,3 +33,6 @@ deriving instance Data a => Data (ZipNonEmpty a)
 -- | Converts a normal list to a 'ZipNonEmpty' one, raising an error if given an empty list.
 fromList :: HasCallStack => [a] -> ZipNonEmpty a
 fromList = ZipNonEmpty . NonEmpty.fromList
+
+mapMaybe :: (a -> Maybe b) -> ZipNonEmpty a -> [b]
+mapMaybe p xs = Maybe.mapMaybe p $ toList xs
