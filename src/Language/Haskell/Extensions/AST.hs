@@ -25,6 +25,8 @@ import Data.Data (Data, Typeable)
 import qualified Data.Kind as Kind
 import Data.Text (Text)
 
+import Data.ZipNonEmpty (ZipNonEmpty(ZipNonEmpty))
+
 import qualified Language.Haskell.Extensions as Extensions
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.AST as Report
@@ -32,8 +34,7 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), Guard
                              FieldDeclaration(..), CaseAlternative(..),
                              Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
-                             ImportSpecification(..),
-                             ZipNonEmpty(ZipNonEmpty))
+                             ImportSpecification(..))
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH

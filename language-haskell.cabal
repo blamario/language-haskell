@@ -23,7 +23,9 @@ source-repository head
    location: https://github.com/blamario/language-Haskell/
 
 library
-  exposed-modules:     Language.Haskell, Language.Haskell.Abstract, Language.Haskell.AST,
+  exposed-modules:     Data.ZipNonEmpty,
+                       Language.Haskell,
+                       Language.Haskell.Abstract, Language.Haskell.AST,
                        Language.Haskell.Binder, Language.Haskell.Reserializer,
                        Language.Haskell.Grammar, Language.Haskell.Reorganizer, Language.Haskell.Template,
                        Language.Haskell.Extensions,

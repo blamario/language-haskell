@@ -12,32 +12,14 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
 
+import Data.ZipNonEmpty (ZipNonEmpty(ZipNonEmpty))
+
 import qualified Language.Haskell.Abstract as Abstract
 import qualified Rank2.TH
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 import Language.Haskell.Extensions (ExtensionSwitch)
-
-newtype ZipNonEmpty a = ZipNonEmpty (NonEmpty a) deriving (Eq, Ord, Show, Read)
-
-instance Functor ZipNonEmpty where
-   fmap f (ZipNonEmpty xs) = ZipNonEmpty (fmap f xs)
-
-instance Foldable ZipNonEmpty where
-   foldMap f (ZipNonEmpty xs) = foldMap f xs
-
-instance Traversable ZipNonEmpty where
-   traverse f (ZipNonEmpty xs) = ZipNonEmpty <$> traverse f xs
-
-instance Applicative ZipNonEmpty where
-   pure = ZipNonEmpty . NonEmpty.repeat
-   liftA2 f (ZipNonEmpty xs) (ZipNonEmpty ys) = ZipNonEmpty (NonEmpty.zipWith f xs ys)
-
-instance Semigroup (ZipNonEmpty a) where
-   ZipNonEmpty xs <> ZipNonEmpty ys = ZipNonEmpty (xs <> ys)
-
-deriving instance Data a => Data (ZipNonEmpty a)
 
 -- | The Haskell 2010 language node parameter type
 data Language = Language deriving (Data, Eq, Show)
