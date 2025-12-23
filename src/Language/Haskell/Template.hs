@@ -23,6 +23,7 @@ import qualified GHC.Types
 import qualified Rank2
 import Text.PrettyPrint (render)
 
+import Data.ZipNonEmpty (ZipNonEmpty(ZipNonEmpty))
 import Language.Haskell.Reserializer as Reserializer (ParsedLexemes(Trailing), Wrapped, lexemeText)
 import qualified Language.Haskell.Binder as Binder
 import Language.Haskell.Extensions (ExtensionSwitch(..))
