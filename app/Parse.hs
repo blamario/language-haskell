@@ -13,6 +13,7 @@ import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Grammar (HaskellGrammar(expression))
 import qualified Language.Haskell.Extensions.Grammar as Grammar
+import qualified Language.Haskell.Extensions.Reformulator as Reformulator
 import Language.Haskell.Extensions.Reformulator (ReformulationOf)
 import Language.Haskell.Extensions.Translation (FullyTranslatable)
 import qualified Language.Haskell.Extensions.Verifier as Verifier
@@ -62,6 +63,7 @@ data Stage = Parsed | Bound | Resolved | Verified
 data Opts = Opts
     { optsMode         :: GrammarMode
     , optsIndex        :: Int
+    , optsReformulate  :: [Extensions.Extension]
     , optsOutput       :: Output
     , optsStage        :: Stage
     , optsInclude      :: Maybe FilePath
@@ -80,6 +82,7 @@ main = execParser opts >>= main'
     p = Opts
         <$> mode
         <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
+        <*> many (option auto (long "reformulate" <> help "Reformulate and eliminate given language extensions"))
         <*> (flag' Pretty (long "pretty" <> help "Pretty-print output")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
@@ -145,6 +148,9 @@ main' Opts{..} = do
               FullyTranslatable
                  (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
+              FullyTranslatable
+                 (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
+                 g,
               Deep.Functor (Rank2.Map w []) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
@@ -207,6 +213,9 @@ main' Opts{..} = do
                   FullyTranslatable
                      (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                      g,
+                  FullyTranslatable
+                     (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
+                     g,
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
@@ -229,35 +238,42 @@ main' Opts{..} = do
           Original -> case optsStage of
              Parsed -> Text.putStr (content $ Reserializer.reserialize parsed)
              Bound -> Text.putStr $ Reserializer.reserializeNested $ Transformation.Mapped (Rank2.Map rewrap) Full.<$> bound
-             Resolved -> Text.putStr $ Reserializer.reserializeNested resolved
+             Resolved -> Text.putStr $ Reserializer.reserializeNested reformulated
              Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
           Plain -> case optsStage of
              Parsed -> print parsed
              Bound -> print bound
-             Resolved -> print resolved
+             Resolved -> print reformulated
              Verified -> verifyBefore print
           Pretty -> case optsStage of
-            Resolved -> putStrLn $ Template.pprint resolved
+            Resolved -> putStrLn $ Template.pprint reformulated
             Verified -> verifyBefore (putStrLn . Template.pprint)
             _ -> error "Can't pretty-print an unresolved parse tree."
           Tree -> case optsStage of
              Parsed -> printTree parsed
              Bound -> printTree bound
-             Resolved -> printTree resolved
+             Resolved -> printTree reformulated
              Verified -> verifyBefore printTree
           where verifyBefore :: (a -> IO ()) -> IO ()
-                verifyBefore action = case Verifier.verify mempty resolved of
-                   [] -> let unbounds = Binder.unboundNames resolved
-                         in if unbounds == mempty then action resolved
+                verifyBefore action = case Verifier.verify mempty reformulated of
+                   [] -> let unbounds = Binder.unboundNames reformulated
+                         in if unbounds == mempty then action reformulated
                             else print unbounds
                    errors -> mapM_ (putStrLn . show) errors
                 t :: Verifier.Verification l Int Text
                 t = Verifier.Verification
-                resolved :: Bound (g l l Bound Bound)
+                resolved, reformulated :: Bound (g l l Bound Bound)
+                reformulated = foldr reformulate resolved (reverse optsReformulate)
                 resolved = Haskell.resolvePositions defaultExtensions importableModules preludeBindings contents parsed
                 bound = Binder.withBindings defaultExtensions importableModules preludeBindings parsed
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
                 rewrap = Reserializer.mapWrapping (offset contents) content
+                reformulate :: Extensions.Extension -> Bound (g l l Bound Bound) -> Bound (g l l Bound Bound)
+                reformulate Extensions.NPlusKPatterns = Reformulator.dropNPlusKPatterns
+                reformulate Extensions.RecordWildCards = Reformulator.dropRecordWildCards
+                reformulate Extensions.TupleSections = Reformulator.dropTupleSections
+                reformulate Extensions.ViewPatterns = Reformulator.orToViewPatterns
+                reformulate ext = error ("Can't reformulate " <> show ext <> " yet")
                 printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w) => w (g l l w w) -> IO ()
                 printTree = putStrLn . reprTreeString . unwrap
                    where unwrap :: w (g l l w w) -> [g l l [] []]
