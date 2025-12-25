@@ -290,7 +290,8 @@ directImplications = Map.fromList <$> Map.fromList [
   (TypeOperators, [(ExplicitNamespaces, True), (ParenthesizedTypeOperators, True)]),
   (UnboxedTuples, [(UnboxedSums, True)]),
   (UnliftedDatatypes, [(DataKinds, True), (StandaloneKindSignatures, True)]),
-  (Unsafe, [(SafeImports, True)])]
+  (Unsafe, [(SafeImports, True)]),
+  (VisibleDependentQuantification, [(ExplicitForAll, True)])]
 
 -- | Inverse of the 'implications' map
 inverseImplications :: Map Extension (Set Extension)
