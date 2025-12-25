@@ -5,7 +5,7 @@
 -- | This module exports functions for reserializing the parsed tree from the tokens stored with every node.
 
 module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..), Wrapped,
-                                      adjustPositions, lexemes, reserialize, reserializeNested,
+                                      adjustPositions, adjustNestedPositions, lexemes, reserialize, reserializeNested,
                                       sourceLength, joinWrapped, mergeLexemes, mapWrapping, mapWrappings,
                                       PositionAdjustment (PositionAdjustment),
                                       NestedPositionAdjustment (NestedPositionAdjustment), Serialization) where
@@ -53,6 +53,15 @@ adjustPositions :: (Factorial s, Position pos, Rank2.Foldable (g (Const (Sum Int
                 => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
                 -> Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
 adjustPositions node = evalState (Full.traverse PositionAdjustment node) 0
+
+-- | Like adjustPositions, but working with a composed node wrap
+adjustNestedPositions :: (Factorial s, Position pos, Rank2.Foldable (g (Const (Sum Int))),
+                          f ~ Compose f' (Wrapped pos s), Traversable f',
+                          Deep.Foldable (Transformation.Rank2.Fold f (Sum Int)) g,
+                          Deep.Traversable (NestedPositionAdjustment f' pos s) g)
+                      => f (g f f)
+                      -> f (g f f)
+adjustNestedPositions node = evalState (Full.traverse NestedPositionAdjustment node) 0
 
 -- | Serializes the tree back into the text it was parsed from.
 reserialize :: (Monoid s, Factorial s, Position pos, Deep.Foldable (Serialization pos s) g)

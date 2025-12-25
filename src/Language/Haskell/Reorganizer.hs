@@ -64,7 +64,8 @@ instance {-# overlappable #-} Reorganization l pos s
 instance {-# overlaps #-} forall l pos s f.
          (Eq s, Factorial s, IsString s, Eq pos, Position pos, f ~ Wrap l pos s,
           Show pos, Show s, Show (ExtAST.Expression l l f f),
-          Full.Traversable (NestedAdjustment l pos s) (ExtAST.Expression l l),
+          Deep.Foldable (Transformation.Rank2.Fold f (Sum Int)) (Abstract.Expression l l),
+          Deep.Traversable (NestedAdjustment l pos s) (ExtAST.Expression l l),
           Rank2.Foldable (Abstract.Expression l l (Const (Sum Int))),
           Abstract.Expression l ~ ExtAST.Expression l,
           Abstract.ModuleName l ~ ExtAST.ModuleName l,
@@ -91,7 +92,7 @@ instance {-# overlaps #-} forall l pos s f.
                then Failure (pure ContradictoryAssociativity)
                else reorganizeExpression ((lrStart, mempty, rEnd), ExtAST.InfixExpression middle rOp right)
                     >>= reorganizeExpression . (,) root . ExtAST.InfixExpression left lOp
-                    >>= pure . adjustPositions
+                    >>= pure . Reserializer.adjustNestedPositions
           reorganizeExpression
              (root,
               ExtAST.InfixExpression
@@ -108,7 +109,7 @@ instance {-# overlaps #-} forall l pos s f.
                then Failure (pure ContradictoryAssociativity)
                else reorganizeExpression ((lStart, mempty, rlEnd), ExtAST.InfixExpression left lOp middle)
                     >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l rOp right)
-                    >>= pure . adjustPositions
+                    >>= pure . Reserializer.adjustNestedPositions
           reorganizeExpression
              (root,
               ExtAST.ApplyExpression
@@ -123,8 +124,6 @@ instance {-# overlaps #-} forall l pos s f.
                else reorganizeExpression ((negStart, mempty, middleEnd), ExtAST.ApplyExpression neg left)
                     >>= \l-> reorganizeExpression (root, ExtAST.InfixExpression l op right)
           reorganizeExpression e = Success (Compose (atts, e))
-          adjustPositions :: f (ExtAST.Expression l l f f) -> f (ExtAST.Expression l l f f)
-          adjustPositions node = evalState (Full.traverse Reserializer.NestedPositionAdjustment node) 0
           resolve (Compose (_, ((_, lexemes, _), ExtAST.ReferenceExpression name))) =
              Binder.lookupValue name bindings <|> defaultInfixDeclaration lexemes
       in Compose (reorganizeExpression expression)
