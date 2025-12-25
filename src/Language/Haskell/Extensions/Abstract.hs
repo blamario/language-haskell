@@ -448,6 +448,7 @@ type UniversallyApplicable t l d = (Transformation.At t (GADTConstructor l l d d
                                     Transformation.At t (TypeVarBinding l l d d),
                                     Transformation.At t (DerivingStrategy l l d d),
                                     Transformation.At t (FunctionalDependency l l d d),
+                                    Transformation.At t (LambdaCasesAlternative l l d d),
                                     Transformation.At t (PatternLHS l l d d),
                                     Transformation.At t (PatternEquationLHS l l d d),
                                     Transformation.At t (PatternEquationClause l l d d),
@@ -458,6 +459,7 @@ type UniversallyApplicable t l d = (Transformation.At t (GADTConstructor l l d d
 type DeeplyFunctor t l = (Deep.Functor t (GADTConstructor l l), Deep.Functor t (Kind l l),
                           Deep.Functor t (TypeVarBinding l l), Deep.Functor t (DerivingStrategy l l),
                           Deep.Functor t (FunctionalDependency l l),
+                          Deep.Functor t (LambdaCasesAlternative l l),
                           Deep.Functor t (PatternLHS l l), Deep.Functor t (PatternEquationLHS l l),
                           Deep.Functor t (PatternEquationClause l l),
                           Report.DeeplyFunctor t l)
@@ -477,6 +479,7 @@ type DeeplyFoldable t l = (Deep.Foldable t (GADTConstructor l l), Deep.Foldable 
 type DeeplyTraversable t l = (Deep.Traversable t (GADTConstructor l l), Deep.Traversable t (Kind l l),
                               Deep.Traversable t (TypeVarBinding l l), Deep.Traversable t (DerivingStrategy l l),
                               Deep.Traversable t (FunctionalDependency l l),
+                              Deep.Traversable t (LambdaCasesAlternative l l),
                               Deep.Traversable t (PatternLHS l l), Deep.Traversable t (PatternEquationLHS l l),
                               Deep.Traversable t (PatternEquationClause l l),
                               Report.DeeplyTraversable t l)
