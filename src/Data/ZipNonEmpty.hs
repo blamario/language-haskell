@@ -34,5 +34,11 @@ deriving instance Data a => Data (ZipNonEmpty a)
 fromList :: HasCallStack => [a] -> ZipNonEmpty a
 fromList = ZipNonEmpty . NonEmpty.fromList
 
+-- | List all items the function maps to 'Just'.
 mapMaybe :: (a -> Maybe b) -> ZipNonEmpty a -> [b]
 mapMaybe p xs = Maybe.mapMaybe p $ toList xs
+
+-- | A 'ZipNonEmpty' list with a single item
+singleton :: a -> ZipNonEmpty a
+singleton = ZipNonEmpty . NonEmpty.singleton
+
