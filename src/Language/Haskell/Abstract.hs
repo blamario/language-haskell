@@ -8,7 +8,6 @@ module Language.Haskell.Abstract (
   Haskell(..),
   -- * Constraint synonyms
   DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
-  Rank2lyFunctor, Rank2lyFoldable, Rank2lyTraversable,
   UniversallyApplicable)
 where
 
@@ -315,84 +314,3 @@ type DeeplyTraversable t l = (Deep.Traversable t (Module l l),
                               Deep.Traversable t (CaseAlternative l l),
                               Deep.Traversable t (Constructor l l),
                               Deep.Traversable t (Value l l))
-
--- | Named collection of constraints @Rank2lyFunctor l f@ means that every AST node of language @l@ with subtrees
--- wrapped in @f@ is a 'Rank2.Functor'.
-type Rank2lyFunctor l f = (Rank2.Functor (Module l l f),
-                           Rank2.Functor (Declaration l l f),
-                           Rank2.Functor (Expression l l f),
-                           Rank2.Functor (Type l l f),
-                           Rank2.Functor (EquationLHS l l f),
-                           Rank2.Functor (EquationRHS l l f),
-                           Rank2.Functor (GuardedExpression l l f),
-                           Rank2.Functor (Pattern l l f),
-                           Rank2.Functor (Statement l l f),
-                           Rank2.Functor (ClassInstanceLHS l l f),
-                           Rank2.Functor (TypeLHS l l f),
-                           Rank2.Functor (Import l l f),
-                           Rank2.Functor (ImportSpecification l l f),
-                           Rank2.Functor (ImportItem l l f),
-                           Rank2.Functor (Export l l f),
-                           Rank2.Functor (Context l l f),
-                           Rank2.Functor (DataConstructor l l f),
-                           Rank2.Functor (DerivingClause l l f),
-                           Rank2.Functor (FieldDeclaration l l f),
-                           Rank2.Functor (FieldBinding l l f),
-                           Rank2.Functor (FieldPattern l l f),
-                           Rank2.Functor (CaseAlternative l l f),
-                           Rank2.Functor (Constructor l l f),
-                           Rank2.Functor (Value l l f))
-
--- | Named collection of constraints @Rank2lyFoldable l f@ means that every AST node of language @l@ with subtrees
--- wrapped in @f@ is 'Rank2.Foldable'.
-type Rank2lyFoldable l f = (Rank2.Foldable (Module l l f),
-                            Rank2.Foldable (Declaration l l f),
-                            Rank2.Foldable (Expression l l f),
-                            Rank2.Foldable (Type l l f),
-                            Rank2.Foldable (EquationLHS l l f),
-                            Rank2.Foldable (EquationRHS l l f),
-                            Rank2.Foldable (GuardedExpression l l f),
-                            Rank2.Foldable (Pattern l l f),
-                            Rank2.Foldable (Statement l l f),
-                            Rank2.Foldable (ClassInstanceLHS l l f),
-                            Rank2.Foldable (TypeLHS l l f),
-                            Rank2.Foldable (Import l l f),
-                            Rank2.Foldable (ImportSpecification l l f),
-                            Rank2.Foldable (ImportItem l l f),
-                            Rank2.Foldable (Export l l f),
-                            Rank2.Foldable (Context l l f),
-                            Rank2.Foldable (DataConstructor l l f),
-                            Rank2.Foldable (DerivingClause l l f),
-                            Rank2.Foldable (FieldDeclaration l l f),
-                            Rank2.Foldable (FieldBinding l l f),
-                            Rank2.Foldable (FieldPattern l l f),
-                            Rank2.Foldable (CaseAlternative l l f),
-                            Rank2.Foldable (Constructor l l f),
-                            Rank2.Foldable (Value l l f))
-
--- | Named collection of constraints @Rank2lyTraversable l f@ means that every AST node of language @l@ with subtrees
--- wrapped in @f@ is 'Rank2.Traversable'.
-type Rank2lyTraversable l f = (Rank2.Traversable (Module l l f),
-                               Rank2.Traversable (Declaration l l f),
-                               Rank2.Traversable (Expression l l f),
-                               Rank2.Traversable (Type l l f),
-                               Rank2.Traversable (EquationLHS l l f),
-                               Rank2.Traversable (EquationRHS l l f),
-                               Rank2.Traversable (GuardedExpression l l f),
-                               Rank2.Traversable (Pattern l l f),
-                               Rank2.Traversable (Statement l l f),
-                               Rank2.Traversable (ClassInstanceLHS l l f),
-                               Rank2.Traversable (TypeLHS l l f),
-                               Rank2.Traversable (Import l l f),
-                               Rank2.Traversable (ImportSpecification l l f),
-                               Rank2.Traversable (ImportItem l l f),
-                               Rank2.Traversable (Export l l f),
-                               Rank2.Traversable (Context l l f),
-                               Rank2.Traversable (DataConstructor l l f),
-                               Rank2.Traversable (DerivingClause l l f),
-                               Rank2.Traversable (FieldDeclaration l l f),
-                               Rank2.Traversable (FieldBinding l l f),
-                               Rank2.Traversable (FieldPattern l l f),
-                               Rank2.Traversable (CaseAlternative l l f),
-                               Rank2.Traversable (Constructor l l f),
-                               Rank2.Traversable (Value l l f))

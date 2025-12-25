@@ -65,7 +65,7 @@ instance {-# overlaps #-} forall l pos s f.
          (Eq s, Factorial s, IsString s, Eq pos, Position pos, f ~ Wrap l pos s,
           Show pos, Show s, Show (ExtAST.Expression l l f f),
           Full.Traversable (NestedAdjustment l pos s) (ExtAST.Expression l l),
-          Abstract.Rank2lyFoldable l (Const (Sum Int)),
+          Rank2.Foldable (Abstract.Expression l l (Const (Sum Int))),
           Abstract.Expression l ~ ExtAST.Expression l,
           Abstract.ModuleName l ~ ExtAST.ModuleName l,
           Abstract.QualifiedName l ~ ExtAST.QualifiedName l,
