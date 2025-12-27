@@ -644,9 +644,16 @@ instance {-# OVERLAPS #-}
           Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (AST.Expression l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ Foldable1.head node)
-      where bequest :: forall d. AST.Expression l l d d -> LocalEnvironment l
+   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized mempty, bequeath $ Foldable1.head node)
+      where bequeath :: forall d. AST.Expression l l d d
+                     -> AST.Expression l l d (AG.Inherited (AG.Auto (Binder l f)))
+            bequest :: forall d. AST.Expression l l d d -> LocalEnvironment l
+            bequeath (AST.LambdaExpression lhs rhs)
+              | AST.LambdaExpression vars _ <- chSyn =
+                  AST.LambdaExpression (AG.Inherited i <$ lhs)
+                  $ AG.Inherited $ (unqualified (foldMap (snd . AG.syn) vars) <>) <$> i
+            bequeath e = AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) e
+            bequest AST.LambdaExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest AST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest AST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest _ = mempty
@@ -656,12 +663,19 @@ instance {-# OVERLAPS #-}
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
+          Show (OtherSynAtts l (Abstract.Pattern l l)),
           Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (ExtAST.Expression l l)
          where
-   attribution _ node (AG.Inherited i, chSyn) =
-      (AG.Synthesized mempty, AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) $ Foldable1.head node)
-      where bequest :: forall d. ExtAST.Expression l l d d -> LocalEnvironment l
+   attribution _ node (AG.Inherited i, chSyn) = (AG.Synthesized mempty, bequeath $ Foldable1.head node)
+      where bequeath :: forall d. ExtAST.Expression l l d d
+                     -> ExtAST.Expression l l d (AG.Inherited (AG.Auto (Binder l f)))
+            bequest :: forall d. ExtAST.Expression l l d d -> LocalEnvironment l
+            bequeath (ExtAST.LambdaExpression lhs rhs)
+              | ExtAST.LambdaExpression vars _ <- chSyn =
+                  ExtAST.LambdaExpression (AG.Inherited i <$ lhs)
+                  $ AG.Inherited $ (unqualified (foldMap (snd . AG.syn) vars) <>) <$> i
+            bequeath e = AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) e
             bequest ExtAST.LetExpression{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest ExtAST.ListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
             bequest ExtAST.ParallelListComprehension{} = Rank2.foldMap (snd . AG.syn) chSyn
