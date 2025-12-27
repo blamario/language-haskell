@@ -10,6 +10,7 @@ module Language.Haskell.Extensions.Reformulator (
 where
 
 import Control.Applicative (ZipList(ZipList))
+import Data.Char (ord)
 import Data.Coerce (coerce)
 import qualified Data.Foldable1 as Foldable1
 import Data.Foldable (toList)
@@ -380,6 +381,7 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
           Abstract.DeeplyFoldable (Transformation.Rank2.Fold (Binder.WithEnvironment l (Reserializer.Wrapped pos s)) (Sum Int)) l,
           TextualMonoid s,
           Position pos,
+          Integral pos,
           Abstract.Supports 'Extensions.TupleSections λ,
           Abstract.Haskell l,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
@@ -395,22 +397,27 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
    ReformulationOf (On 'Extensions.TupleSections) '[] λ l pos s
    `WrappedTranslation` AST.Expression
   where
-    _ `translateWrapped` Compose (env, (s@(start, _, end), AST.TupleSectionExpression () items)) =
+    _ `translateWrapped` Compose (env, (s@(start, _, end),
+                                        AST.TupleSectionExpression () items)) =
       Binder.rebind mempty mempty
       $ Reserializer.adjustNestedPositions
-      $ Compose (env, (s, Abstract.lambdaExpression (NonEmpty.fromList vars)
-                          $ Compose (env, (s, Abstract.tupleExpression items'))))
+      $ Compose (env, ((start,
+                        Reserializer.Trailing $ Reserializer.Token Reserializer.Delimiter <$> [ "(", "\\", "->", ")"],
+                        end),
+                       Abstract.lambdaExpression (NonEmpty.fromList vars)
+                       $ Compose (env, ((mid, mempty, end), Abstract.tupleExpression items'))))
      where
        vars = ZipNonEmpty.mapMaybe leftPattern itemsAssigned
        ZipNonEmpty items' = assignExpression <$> itemsAssigned
-       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Abstract.Name l) (f (Abstract.Expression l l f f)))
+       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Int, Abstract.Name l) (f (Abstract.Expression l l f f)))
        itemsAssigned = assign <$> items <*> ZipNonEmpty.fromList ['a' ..]
-       assign Nothing letter = Left (Abstract.name $ Text.singleton letter)
+       assign Nothing letter = Left (ord letter - ord 'a', Abstract.name $ Text.singleton letter)
        assign (Just e) _ = Right e
-       assignExpression (Left var) = Compose (env, (s, Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
+       assignExpression (Left (_, var)) = Compose (env, (s, Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
        assignExpression (Right e) = e
-       leftPattern (Left var) = Just (Compose (env, ((start, Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var], end), Abstract.variablePattern var)))
+       leftPattern (Left (offset, var)) = Just (Compose (env, ((start + fromIntegral (offset + 2), Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var], mid), Abstract.variablePattern var)))
        leftPattern _ = Nothing
+       mid = (start + end) `div` 2
     _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 
 -- auxiliary functions
