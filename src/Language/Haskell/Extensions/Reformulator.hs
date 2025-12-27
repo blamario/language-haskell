@@ -10,7 +10,9 @@ module Language.Haskell.Extensions.Reformulator (
 where
 
 import Control.Applicative (ZipList(ZipList))
+import Data.Char (ord)
 import Data.Coerce (coerce)
+import Data.Either (lefts)
 import qualified Data.Foldable1 as Foldable1
 import Data.Foldable (toList)
 import Data.Foldable1 (Foldable1)
@@ -22,9 +24,10 @@ import qualified Data.Map.Lazy as Map
 import Data.Monoid (Sum)
 import Data.Monoid.Textual (TextualMonoid, fromText)
 import Data.Semigroup.Union (UnionWith(..))
+import Data.String (IsString)
 import qualified Data.Text as Text
 
-import Text.Parser.Input.Position (Position)
+import Text.Parser.Input.Position (Position, move)
 import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
@@ -395,25 +398,63 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
    ReformulationOf (On 'Extensions.TupleSections) '[] λ l pos s
    `WrappedTranslation` AST.Expression
   where
-    _ `translateWrapped` Compose (env, (s@(start, _, end), AST.TupleSectionExpression () items)) =
+    _ `translateWrapped` Compose (env, ((start, original, end), AST.TupleSectionExpression () items)) =
       Binder.rebind mempty mempty
       $ Reserializer.adjustNestedPositions
-      $ Compose (env, (s, Abstract.lambdaExpression (NonEmpty.fromList vars)
-                          $ Compose (env, (s, Abstract.tupleExpression items'))))
+      $ Compose (env, ((start,
+                        Reserializer.Trailing (Reserializer.Token Reserializer.Delimiter
+                                               <$> [ "(", "\\", "->", ")"])
+                        <> trailingWhiteSpace original,
+                        end'),
+                       Abstract.lambdaExpression (NonEmpty.fromList vars)
+                       $ Compose (env, ((mid,
+                                         parens $ Reserializer.Trailing $ concat $ replicate (length items - 1)
+                                          [Reserializer.Token Reserializer.Delimiter ",",
+                                           Reserializer.WhiteSpace " "],
+                                         end'),
+                                        Abstract.tupleExpression items'))))
      where
-       vars = ZipNonEmpty.mapMaybe leftPattern itemsAssigned
+       vars = zipWith leftPattern [0..] (snd <$> lefts (toList itemsAssigned))
        ZipNonEmpty items' = assignExpression <$> itemsAssigned
-       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Abstract.Name l) (f (Abstract.Expression l l f f)))
+       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Int, Abstract.Name l) (f (Abstract.Expression l l f f)))
        itemsAssigned = assign <$> items <*> ZipNonEmpty.fromList ['a' ..]
-       assign Nothing letter = Left (Abstract.name $ Text.singleton letter)
+       assign Nothing letter = Left (ord letter - ord 'a', Abstract.name $ Text.singleton letter)
        assign (Just e) _ = Right e
-       assignExpression (Left var) = Compose (env, (s, Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
-       assignExpression (Right e) = e
-       leftPattern (Left var) = Just (Compose (env, ((start, Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var], end), Abstract.variablePattern var)))
-       leftPattern _ = Nothing
+       assignExpression (Left (offset, var)) =
+         Compose (env, ((move (1 + 3*offset) mid,
+                         Reserializer.Trailing [Reserializer.Token Reserializer.Other
+                                                $ fromText $ AST.getName var,
+                                                Reserializer.WhiteSpace " "],
+                         move (3 + 3*offset) mid),
+                        Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
+       assignExpression (Right e) = moveNode (2 * length vars + 4) e
+       leftPattern offset var =
+         Compose (env, ((move (2*offset + 2) start,
+                         Reserializer.Trailing [Reserializer.Token Reserializer.Other
+                                                $ fromText $ AST.getName var, Reserializer.WhiteSpace " "],
+                         move (2*offset + 4) start),
+                        Abstract.variablePattern var))
+       mid = move (2 * length vars + 4) start
+       end' = move (4 * length vars + 5) end
     _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 
 -- auxiliary functions
+
+parens :: IsString s => Reserializer.ParsedLexemes s -> Reserializer.ParsedLexemes s
+parens (Reserializer.Trailing tokens) =
+  Reserializer.Trailing ([Reserializer.Token Reserializer.Delimiter "("]
+                         <> tokens
+                         <> [Reserializer.Token Reserializer.Delimiter ")"])
+
+trailingWhiteSpace :: Reserializer.ParsedLexemes s -> Reserializer.ParsedLexemes s
+trailingWhiteSpace (Reserializer.Trailing tokens) = Reserializer.Trailing $ trailing id tokens
+  where trailing acc [] = acc []
+        trailing acc (x@Reserializer.WhiteSpace{} : xs) = trailing (acc . (x:)) xs
+        trailing acc (_ : xs) = trailing id xs
+
+moveNode :: Position pos => Int -> Wrap l pos s node -> Wrap l pos s node
+moveNode n (Compose (env, ((start, tokens, end), node))) =
+  Compose (env, ((move n start, tokens, move n end), node))
 
 mapImport :: (Abstract.ExtendedHaskell λ2,
               Abstract.ModuleName λ1 ~ AST.ModuleName λ1,
