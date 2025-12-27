@@ -120,7 +120,6 @@ main' Opts{..} = do
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               forall f. Rank2.Functor (g l l f),
-              forall f. Functor f => Deep.Functor (Rank2.Map f []) (g l l),
               Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               AG.At (AG.Auto (Binder.Binder l w)) (g l l),
@@ -151,8 +150,9 @@ main' Opts{..} = do
               FullyTranslatable
                  (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
                  g,
-              Deep.Functor (Rank2.Map w []) (g l l),
-              Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
+              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
+              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
+              Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
               Deep.Functor
@@ -184,7 +184,6 @@ main' Opts{..} = do
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   forall f. Rank2.Functor (g l l f),
-                  forall f. Functor f => Deep.Functor (Rank2.Map f []) (g l l),
                   Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   AG.At (AG.Auto (Binder.Binder l w)) (g l l),
@@ -192,7 +191,6 @@ main' Opts{..} = do
                   ~ (x, Binder.LocalEnvironment l),
                   Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
                   Deep.Functor (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)) (g l l),
-                  Full.Functor (Rank2.Map w []) (g l l),
                   Full.Traversable (Reorganizer.Reorganization l (Down Int) Input) (g l l),
                   FullyTranslatable
                      (ReformulationOf
@@ -216,7 +214,9 @@ main' Opts{..} = do
                   FullyTranslatable
                      (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
                      g,
-                  Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input) e) (g l l),
+                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
+                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
+                  Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
                   Deep.Functor
@@ -274,7 +274,8 @@ main' Opts{..} = do
                 reformulate Extensions.TupleSections = Reformulator.dropTupleSections
                 reformulate Extensions.ViewPatterns = Reformulator.orToViewPatterns
                 reformulate ext = error ("Can't reformulate " <> show ext <> " yet")
-                printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w) => w (g l l w w) -> IO ()
+                printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w, Full.Functor (Rank2.Map w []) (g l l))
+                          => w (g l l w w) -> IO ()
                 printTree = putStrLn . reprTreeString . unwrap
                    where unwrap :: w (g l l w w) -> [g l l [] []]
                          unwrap = (Rank2.Map toList Full.<$>)

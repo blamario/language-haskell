@@ -15,18 +15,25 @@ import qualified Data.Foldable1 as Foldable1
 import Data.Foldable (toList)
 import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
+import Data.Functor.Const (Const)
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Lazy as Map
-import Data.Monoid.Textual (TextualMonoid)
+import Data.Monoid (Sum)
+import Data.Monoid.Textual (TextualMonoid, fromText)
 import Data.Semigroup.Union (UnionWith(..))
 import qualified Data.Text as Text
 
+import Text.Parser.Input.Position (Position)
 import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation)
+import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
+import qualified Transformation.AG.Generics as AG.Generics
+import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+import qualified Transformation.Rank2
 
 import Data.ZipNonEmpty as ZipNonEmpty
 
@@ -39,6 +46,7 @@ import Language.Haskell.Extensions.Translation (
    NameTranslation, Translation, WrapTranslation, WrappedTranslation, FullyTranslatable)
 import qualified Language.Haskell.Extensions.Translation as Translation
 import Language.Haskell.Extensions.Verifier (Accounting (Accounting))
+import Language.Haskell.Binder (Binder)
 import qualified Language.Haskell.Binder as Binder
 import qualified Language.Haskell.Reserializer as Reserializer
 
@@ -368,18 +376,30 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
 -- TupleSections instances
 
 instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
+          Abstract.DeeplyTraversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) pos s) l,
+          Abstract.DeeplyFoldable (Transformation.Rank2.Fold (Binder.WithEnvironment l (Reserializer.Wrapped pos s)) (Sum Int)) l,
+          TextualMonoid s,
+          Position pos,
           Abstract.Supports 'Extensions.TupleSections λ,
           Abstract.Haskell l,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,
-          Abstract.Name l ~ AST.Name l) =>
+          Abstract.Name l ~ AST.Name l,
+          q ~ Binder.WithEnvironment l p, w ~ AG.Generics.Auto (Binder l p),
+          p ~ Reserializer.Wrapped pos s, g ~ AST.Expression l l,
+          AG.At w g,
+          Deep.Functor (AG.Knit (AG.Keep w)) g,
+          Deep.Functor (Transformation.Rank2.Map q p) g,
+          Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g) =>
    ReformulationOf (On 'Extensions.TupleSections) '[] λ l pos s
    `WrappedTranslation` AST.Expression
   where
-    _ `translateWrapped` Compose (env, (s, AST.TupleSectionExpression () items)) =
-      Compose (env, (s, Abstract.lambdaExpression (NonEmpty.fromList vars)
-                        $ Compose (env, (s, Abstract.tupleExpression items'))))
+    _ `translateWrapped` Compose (env, (s@(start, _, end), AST.TupleSectionExpression () items)) =
+      Binder.rebind mempty mempty
+      $ Reserializer.adjustNestedPositions
+      $ Compose (env, (s, Abstract.lambdaExpression (NonEmpty.fromList vars)
+                          $ Compose (env, (s, Abstract.tupleExpression items'))))
      where
        vars = ZipNonEmpty.mapMaybe leftPattern itemsAssigned
        ZipNonEmpty items' = assignExpression <$> itemsAssigned
@@ -389,7 +409,7 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
        assign (Just e) _ = Right e
        assignExpression (Left var) = Compose (env, (s, Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
        assignExpression (Right e) = e
-       leftPattern (Left var) = Just (Compose (env, (s, Abstract.variablePattern var)))
+       leftPattern (Left var) = Just (Compose (env, ((start, Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var], end), Abstract.variablePattern var)))
        leftPattern _ = Nothing
     _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 

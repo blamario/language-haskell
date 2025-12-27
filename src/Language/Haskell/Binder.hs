@@ -6,7 +6,7 @@
 
 module Language.Haskell.Binder (
    -- * Main functions
-   withBindings, unboundNames,
+   withBindings, rebind, unboundNames,
    -- * Transformations
    Binder, BindingVerifier,
    -- * Node wrappers
@@ -188,6 +188,21 @@ withBindings extensions modEnv env node =
          trim AG.Kept{AG.inherited= (_exts, env'), AG.synthesized, AG.original}
             = Compose (Di.Atts{Di.inh= env', Di.syn= snd synthesized}, original)
 
+-- | Recalculate the bindings within the given subtree. The 'ModuleEnvironment' only matters if the function is
+-- applied to the module itself or its imports, otherwise it's easiest to supply 'mempty'.
+rebind :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p),
+                               AG.At w g, Traversable p,
+                               AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
+                               Rank2.Functor (g p),
+                               Rank2.Apply (g (AG.Semantics (AG.Keep w))),
+                               Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
+                               Deep.Functor (AG.Knit (AG.Keep w)) g,
+                               Deep.Functor (Transformation.Rank2.Map q p) g,
+                               Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
+       => Map Extension Bool -> ModuleEnvironment l -> q (g q q) -> q (g q q)
+rebind extensions modEnv root@(Compose (Di.Atts{Di.inh= env}, _)) =
+  withBindings extensions modEnv env $ (Transformation.Rank2.Map $ snd . getCompose) Full.<$> root
+
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
 onMap f (UnionWith x) = UnionWith (f x)
@@ -225,9 +240,9 @@ instance Transformation (BindingVerifier l f) where
    type Domain (BindingVerifier l f) = WithEnvironment l f
    type Codomain (BindingVerifier l f) = Const (Unbound l)
 
-instance (Rank2.Functor (g p), Rank2.Functor (g (WithEnvironment l f)), Functor f,
-          Deep.Functor (Transformation.Rank2.Map p (WithEnvironment l f)) g) =>
-         Full.Functor (Transformation.Rank2.Map p (WithEnvironment l f)) g where
+instance (Rank2.Functor (g (AG.Kept a)), Rank2.Functor (g (WithEnvironment l f)), Functor f,
+          Deep.Functor (Transformation.Rank2.Map (AG.Kept a) (WithEnvironment l f)) g) =>
+         Full.Functor (Transformation.Rank2.Map (AG.Kept a) (WithEnvironment l f)) g where
   (<$>) = Full.mapDownDefault
 
 instance {-# OVERLAPS #-}
@@ -241,7 +256,7 @@ instance {-# OVERLAPS #-}
           Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (AST.Declaration l l)
          where
-   attribution :: forall sem. (Rank2.Functor (AST.Declaration l l f), Rank2.Traversable (AST.Declaration l l sem))
+   attribution :: forall sem. (Rank2.Functor (AST.Declaration l l f))
                => AG.Auto (Binder l f) -> f (AST.Declaration l l sem sem)
                -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Synthesized (AG.Auto (Binder l f))))
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Declaration l l sem sem), AST.Declaration l l sem (AG.Inherited (AG.Auto (Binder l f))))
@@ -336,8 +351,8 @@ instance {-# OVERLAPS #-}
           Ord (Abstract.QualifiedName l), Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (AST.Module l l)
          where
-   attribution :: forall sem. Rank2.Traversable (AST.Module l l sem)
-               => AG.Auto (Binder l f) -> f (AST.Module l l sem sem)
+   attribution :: forall sem.
+                  AG.Auto (Binder l f) -> f (AST.Module l l sem sem)
                -> (AG.Inherited   (AG.Auto (Binder l f)) (AST.Module l l sem sem),
                    AST.Module l l sem (AG.Synthesized (AG.Auto (Binder l f))))
                -> (AG.Synthesized (AG.Auto (Binder l f)) (AST.Module l l sem sem),
@@ -822,6 +837,11 @@ instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (B
           Transformation.At (BindingVerifier l f) (g (WithEnvironment l f) (WithEnvironment l f))) =>
          Full.Foldable (BindingVerifier l f) g where
    foldMap = Full.foldMapDownDefault
+
+instance (Deep.Functor (Transformation.Rank2.Map (WithEnvironment l p) p) g,
+          Rank2.Functor (g (WithEnvironment l p)), Functor p) =>
+         Full.Functor (Transformation.Rank2.Map (WithEnvironment l p) p) g where
+   (<$>) = Full.mapDownDefault
 
 verifyConstructorName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyConstructorName q env = case lookupType q env $> () <|> lookupValue q env $> () of
