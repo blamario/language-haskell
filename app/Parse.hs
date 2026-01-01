@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, NoMonomorphismRestriction,
              OverloadedRecordDot, QuantifiedConstraints, RankNTypes, RecordWildCards,
              ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
@@ -54,7 +54,7 @@ import Prelude hiding (getLine, getContents, readFile)
 data GrammarMode = ModuleMode | ExpressionMode
     deriving Show
 
-data Output = Original | Plain | Pretty | Tree
+data Output = Original | Plain | Stripped | Pretty | Tree
             deriving Show
 
 data Stage = Parsed | Bound | Resolved | Verified
@@ -81,13 +81,18 @@ main = execParser opts >>= main'
     p :: Parser Opts
     p = Opts
         <$> mode
-        <*> (option auto (long "index" <> help "Index of ambiguous parse" <> showDefault <> value 0 <> metavar "INT"))
+        <*> (option auto (long "index" <> help "Index of ambiguous parse"
+                          <> showDefault <> value 0 <> metavar "INT"))
         <*> many (option auto (long "reformulate" <> help "Reformulate and eliminate given language extensions"))
         <*> (flag' Pretty (long "pretty" <> help "Pretty-print output")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
-             <|> flag' Original (long "original" <> help "Print the output with the original tokens and whitespace")
+             <|> flag' Original (long "original"
+                                 <> help "Print the output with the original tokens and whitespace")
              <|> flag' Plain (long "plain" <> help "Print the output as a long Haskell expression")
-             <|> pure Plain)
+             <|> flag' Stripped
+                    (long "stripped"
+                     <> help "Print the output as a long Haskell expression with the bindings stripped")
+             <|> pure Stripped)
         <*> (flag' Parsed (long "parsed" <> help "show raw ambiguous parse tree")
              <|> flag' Bound (long "bound" <> help "show ambiguous parse tree with identifier bindings")
              <|> flag' Resolved (long "resolved" <> help "show parse tree with all ambiguities resolved")
@@ -116,7 +121,7 @@ main' Opts{..} = do
               Abstract.QualifiedName l ~ AST.QualifiedName l,
               Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
               Data (g l l [] []),
-              Show (g Language Language e e), Show (g Language Language w w),
+              Show (g Language Language e e), Show (g Language Language w w), Show (g Language Language Placed Placed),
               Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               forall f. Rank2.Functor (g l l f),
@@ -153,6 +158,8 @@ main' Opts{..} = do
               Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
               Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
               Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
+              Deep.Functor (Rank2.Map Bound Placed) (g l l),
+              Deep.Functor (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed) (g l l),
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
               Deep.Functor
@@ -181,6 +188,7 @@ main' Opts{..} = do
                   Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
                   Data (g l l [] []),
                   Show (g Language Language e e), Show (g Language Language w w),
+                  Show (g Language Language Placed Placed),
                   Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   forall f. Rank2.Functor (g l l f),
@@ -216,6 +224,8 @@ main' Opts{..} = do
                      g,
                   Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
                   Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
+                  Deep.Functor (Rank2.Map Bound Placed) (g l l),
+                  Deep.Functor (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed) (g l l),
                   Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
@@ -245,6 +255,11 @@ main' Opts{..} = do
              Bound -> print bound
              Resolved -> print reformulated
              Verified -> verifyBefore print
+          Stripped -> case optsStage of
+             Parsed -> print parsed
+             Bound -> print (Binder.unbind bound)
+             Resolved -> print (Binder.unbind reformulated)
+             Verified -> verifyBefore (print . Binder.unbind)
           Pretty -> case optsStage of
             Resolved -> putStrLn $ Template.pprint reformulated
             Verified -> verifyBefore (putStrLn . Template.pprint)
@@ -274,7 +289,8 @@ main' Opts{..} = do
                 reformulate Extensions.TupleSections = Reformulator.dropTupleSections
                 reformulate Extensions.ViewPatterns = Reformulator.orToViewPatterns
                 reformulate ext = error ("Can't reformulate " <> show ext <> " yet")
-                printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w, Full.Functor (Rank2.Map w []) (g l l))
+                printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w,
+                                        Full.Functor (Rank2.Map w []) (g l l))
                           => w (g l l w w) -> IO ()
                 printTree = putStrLn . reprTreeString . unwrap
                    where unwrap :: w (g l l w w) -> [g l l [] []]

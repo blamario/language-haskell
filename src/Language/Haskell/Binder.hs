@@ -6,7 +6,7 @@
 
 module Language.Haskell.Binder (
    -- * Main functions
-   withBindings, rebind, unboundNames,
+   withBindings, rebind, unbind, unboundNames,
    -- * Transformations
    Binder, BindingVerifier,
    -- * Node wrappers
@@ -200,8 +200,13 @@ rebind :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p)
                                Deep.Functor (Transformation.Rank2.Map q p) g,
                                Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
        => Map Extension Bool -> ModuleEnvironment l -> q (g q q) -> q (g q q)
-rebind extensions modEnv root@(Compose (Di.Atts{Di.inh= env}, _)) =
-  withBindings extensions modEnv env $ (Transformation.Rank2.Map $ snd . getCompose) Full.<$> root
+rebind extensions modEnv root@(Compose (Di.Atts{Di.inh= env}, _)) = withBindings extensions modEnv env $ unbind root
+
+-- | Remove the bindings within the given subtree.
+unbind :: forall l g p w q x. (q ~ WithEnvironment l p, Rank2.Functor (g p), Functor p,
+                               Deep.Functor (Transformation.Rank2.Map q p) g)
+       => q (g q q) -> p (g p p)
+unbind = ((Transformation.Rank2.Map $ snd . getCompose) Full.<$>)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b

@@ -121,6 +121,7 @@ mergeLexemes _ outer _ inner = inner <> outer
 data Serialization pos s = Serialization
 -- | Transformation type used by 'adjustPositions'
 data PositionAdjustment pos s = PositionAdjustment
+-- | Transformation type used by 'adjustNestedPositions'
 data NestedPositionAdjustment (f :: Type -> Type) pos s = NestedPositionAdjustment
 
 -- | Map the stored positions and lexeme inputs in the entire tree and its wrapping
