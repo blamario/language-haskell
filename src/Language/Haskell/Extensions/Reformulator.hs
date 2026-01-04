@@ -10,6 +10,8 @@ module Language.Haskell.Extensions.Reformulator (
 where
 
 import Control.Applicative (ZipList(ZipList))
+import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, state)
+import Data.Bifunctor (bimap)
 import Data.Char (ord)
 import Data.Coerce (coerce)
 import Data.Either (lefts)
@@ -19,6 +21,7 @@ import Data.Foldable1 (Foldable1)
 import Data.Functor.Compose (Compose (Compose, getCompose))
 import Data.Functor.Const (Const)
 import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Lazy as Map
 import Data.Monoid (Sum)
@@ -402,40 +405,45 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
       Binder.rebind mempty mempty
       $ Reserializer.adjustNestedPositions
       $ Compose (env, ((start,
-                        Reserializer.Trailing (Reserializer.Token Reserializer.Delimiter
-                                               <$> [ "(", "\\", "->", ")"])
-                        <> trailingWhiteSpace original,
+                        parens (Reserializer.Trailing (
+                                   (Reserializer.Token Reserializer.Delimiter <$> [ "\\", "->"])
+                                   <> [Reserializer.WhiteSpace " "]))
+                        <> originalTrail,
                         end'),
                        Abstract.lambdaExpression (NonEmpty.fromList vars)
                        $ Compose (env, ((mid,
-                                         parens $ Reserializer.Trailing $ concat $ replicate (length items - 1)
-                                          [Reserializer.Token Reserializer.Delimiter ",",
-                                           Reserializer.WhiteSpace " "],
-                                         end'),
+                                         originalDelimiters,
+                                         move (-1 - Reserializer.parsedLength originalTrail) end'),
                                         Abstract.tupleExpression items'))))
      where
-       vars = zipWith leftPattern [0..] (snd <$> lefts (toList itemsAssigned))
-       ZipNonEmpty items' = assignExpression <$> itemsAssigned
-       itemsAssigned :: f ~ Wrap l pos s => ZipNonEmpty (Either (Int, Abstract.Name l) (f (Abstract.Expression l l f f)))
+       (originalDelimiters, originalTrail) = splitTrailingWhiteSpace original
+       vars = zipWith leftPattern [0..] (lefts $ toList itemsAssigned)
+       items' :: NonEmpty (q (Abstract.Expression l l q q))
+       itemsAssigned :: ZipNonEmpty (Either (Abstract.Name l) (q (Abstract.Expression l l q q)))
+       assign :: Maybe (q (Abstract.Expression l l q q)) -> Char
+              -> Either (Abstract.Name l) (q (Abstract.Expression l l q q))
+       ZipNonEmpty items' = evalState (traverse assignExpression itemsAssigned) (move 1 mid)
        itemsAssigned = assign <$> items <*> ZipNonEmpty.fromList ['a' ..]
-       assign Nothing letter = Left (ord letter - ord 'a', Abstract.name $ Text.singleton letter)
+       assignExpression :: Either (Abstract.Name l) (q (Abstract.Expression l l q q))
+                        -> State pos (q (Abstract.Expression l l q q))
+       assignExpression (Left var) = state $ \pos->
+         (Compose (env, ((pos,
+                          Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var,
+                                                 Reserializer.WhiteSpace " "],
+                          pos),
+                         Abstract.referenceExpression (Abstract.qualifiedName Nothing var))),
+          move 1 pos)
+       assignExpression (Right e@(Compose (_env, ((_, _, end), _)))) = state $ const $ (moveNode 5 e, move 6 end)
+       assign Nothing letter = Left (Abstract.name $ Text.singleton letter)
        assign (Just e) _ = Right e
-       assignExpression (Left (offset, var)) =
-         Compose (env, ((move (1 + 3*offset) mid,
-                         Reserializer.Trailing [Reserializer.Token Reserializer.Other
-                                                $ fromText $ AST.getName var,
-                                                Reserializer.WhiteSpace " "],
-                         move (3 + 3*offset) mid),
-                        Abstract.referenceExpression (Abstract.qualifiedName Nothing var)))
-       assignExpression (Right e) = moveNode (2 * length vars + 4) e
        leftPattern offset var =
-         Compose (env, ((move (2*offset + 2) start,
+         Compose (env, ((move 2 start,
                          Reserializer.Trailing [Reserializer.Token Reserializer.Other
                                                 $ fromText $ AST.getName var, Reserializer.WhiteSpace " "],
-                         move (2*offset + 4) start),
+                         move 2 start),
                         Abstract.variablePattern var))
-       mid = move (2 * length vars + 4) start
-       end' = move (4 * length vars + 5) end
+       mid = move 5 start
+       end' = move 6 end
     _ `translateWrapped` Compose (env, (s, p)) = Compose (env, (s, p))
 
 -- auxiliary functions
@@ -446,11 +454,12 @@ parens (Reserializer.Trailing tokens) =
                          <> tokens
                          <> [Reserializer.Token Reserializer.Delimiter ")"])
 
-trailingWhiteSpace :: Reserializer.ParsedLexemes s -> Reserializer.ParsedLexemes s
-trailingWhiteSpace (Reserializer.Trailing tokens) = Reserializer.Trailing $ trailing id tokens
+splitTrailingWhiteSpace :: Reserializer.ParsedLexemes s -> (Reserializer.ParsedLexemes s, Reserializer.ParsedLexemes s)
+splitTrailingWhiteSpace (Reserializer.Trailing tokens) =
+  bimap Reserializer.Trailing Reserializer.Trailing $ trailing ((,) mempty) tokens
   where trailing acc [] = acc []
         trailing acc (x@Reserializer.WhiteSpace{} : xs) = trailing (acc . (x:)) xs
-        trailing acc (_ : xs) = trailing id xs
+        trailing acc (x : xs) = trailing (let (p, s) = acc [] in (,) (p <> s <> [x])) xs
 
 moveNode :: Position pos => Int -> Wrap l pos s node -> Wrap l pos s node
 moveNode n (Compose (env, ((start, tokens, end), node))) =

@@ -6,7 +6,7 @@
 
 module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(..), Wrapped,
                                       adjustPositions, adjustNestedPositions, lexemes, reserialize, reserializeNested,
-                                      sourceLength, joinWrapped, mergeLexemes, mapWrapping, mapWrappings,
+                                      sourceLength, parsedLength, joinWrapped, mergeLexemes, mapWrapping, mapWrappings,
                                       PositionAdjustment (PositionAdjustment),
                                       NestedPositionAdjustment (NestedPositionAdjustment), Serialization) where
 
@@ -94,7 +94,7 @@ sourceLength :: forall g s pos. (Factorial s, Rank2.Foldable (g (Const (Sum Int)
                                  Deep.Foldable (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int)) g)
              => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> Int
 sourceLength root = getSum (nodeLength root <> foldMap (Transformation.Rank2.foldMap nodeLength) root)
-   where nodeLength ((_, Trailing ls, _), _) = foldMap (Sum . Factorial.length . lexemeText) ls
+   where nodeLength ((_, tokens, _), _) = Sum (parsedLength tokens)
 
 -- | The length of the parsed source code with nodes 'Wrapped' under a nested wrapper
 nestedSourceLength :: forall f g s pos.
@@ -103,7 +103,11 @@ nestedSourceLength :: forall f g s pos.
                    => Compose f (Wrapped pos s) (g (Compose f (Wrapped pos s)) (Compose f (Wrapped pos s))) -> Int
 nestedSourceLength root = getSum (nestedNodeLength root <> foldMap (Transformation.Rank2.foldMap nestedNodeLength) root)
    where nestedNodeLength (Compose node) = foldMap nodeLength node
-         nodeLength ((_, Trailing ls, _), _) = foldMap (Sum . Factorial.length . lexemeText) ls
+         nodeLength ((_, tokens, _), _) = Sum (parsedLength tokens)
+
+-- | The total length of the parsed tokens
+parsedLength :: Factorial s => ParsedLexemes s -> Int
+parsedLength (Trailing ls) = getSum $ foldMap (Sum . Factorial.length . lexemeText) ls
 
 -- | Join the two wrappings of a double-'Wrapped' value into one.
 joinWrapped :: (Position pos, Factorial s) => Wrapped pos s (Wrapped pos s a) -> Wrapped pos s a
