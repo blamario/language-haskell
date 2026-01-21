@@ -1,3 +1,3 @@
 packages: .
 
-allow-newer: data-functor-logistic:base
+allow-newer: data-functor-logistic:base, indexed-traversable:base, indexed-traversable-instances:base
