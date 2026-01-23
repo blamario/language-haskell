@@ -64,7 +64,7 @@ instance {-# overlappable #-} Reorganization l pos s
 instance {-# overlaps #-} forall l pos s f.
          (Eq s, Factorial s, IsString s, Eq pos, Position pos, f ~ Wrap l pos s,
           Show pos, Show s, Show (ExtAST.Expression l l f f),
-          Deep.Foldable (Transformation.Rank2.Fold f (Sum Int)) (Abstract.Expression l l),
+          Deep.Foldable (Full.Outward (Transformation.Rank2.Fold f (Sum Int))) (Abstract.Expression l l),
           Deep.Traversable (NestedAdjustment l pos s) (ExtAST.Expression l l),
           Rank2.Foldable (Abstract.Expression l l (Const (Sum Int))),
           Abstract.Expression l ~ ExtAST.Expression l,

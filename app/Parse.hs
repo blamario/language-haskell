@@ -40,6 +40,7 @@ import Data.Monoid.Instances.PrefixMemory (content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
 import qualified Data.Map as Map
+import Data.Semigroup (Sum)
 import Data.Text (Text)
 import Data.Text.IO (getLine, readFile, getContents)
 import qualified Data.Text.IO as Text
@@ -127,6 +128,7 @@ main' Opts{..} = do
               forall f. Rank2.Functor (g l l f),
               Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
               Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+              Rank2.Foldable (g l l (Const (Sum Int))),
               AG.At (AG.Auto (Binder.Binder l w)) (g l l),
               AG.Atts (AG.Synthesized (Binder.Binder Language (Grammar.NodeWrap Input))) (g l l)
               ~ (x, Binder.LocalEnvironment l),
@@ -170,11 +172,14 @@ main' Opts{..} = do
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
               Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
+              Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
+              Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
               Deep.Foldable (Verifier.Verification l Int Text) (g l l),
               Deep.Foldable
-                 (Transformation.Folded
-                    ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                    (Reserializer.Serialization Int Text))
+                 (Full.Outward
+                   (Transformation.Folded
+                      ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                      (Reserializer.Serialization Int Text)))
                  (g l l))
           => (Input -> ParseResults Input [w (g l l w w)])
           -> String -> Text -> IO ()
@@ -194,6 +199,7 @@ main' Opts{..} = do
                   forall f. Rank2.Functor (g l l f),
                   Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
                   Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+                  Rank2.Foldable (g l l (Const (Sum Int))),
                   AG.At (AG.Auto (Binder.Binder l w)) (g l l),
                   AG.Atts (AG.Synthesized (AG.Auto (Binder.Binder Language (Grammar.NodeWrap Input)))) (g l l)
                   ~ (x, Binder.LocalEnvironment l),
@@ -237,11 +243,14 @@ main' Opts{..} = do
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
                   Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
+                  Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
+                  Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
                   Deep.Foldable (Verifier.Verification l Int Text) (g l l),
                   Deep.Foldable
-                     (Transformation.Folded
-                        ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                        (Reserializer.Serialization Int Text))
+                     (Full.Outward
+                        (Transformation.Folded
+                           ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                           (Reserializer.Serialization Int Text)))
                      (g l l))
               => Text -> ParseResults Input [w (g l l w w)] -> IO ()
        report contents (Right [parsed]) = case optsOutput of

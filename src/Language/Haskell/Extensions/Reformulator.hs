@@ -206,12 +206,16 @@ dropMultilineStrings :: forall l1 l2 node pos s.
 dropMultilineStrings = coerce
 
 dropTupleSections :: forall l1 l2 node pos s.
-                     (Abstract.Haskell l2,
+                     (Abstract.Haskell l2, TextualMonoid s, Position pos,
                       SameWrap 'Extensions.TupleSections '[] pos s l1 l2,
+                      Rank2.Foldable (node l2 l2 (Const (Sum Int))),
+                      Deep.Foldable (Full.Outward (Transformation.Rank2.Fold (Wrap l2 pos s) (Sum Int))) (node l2 l2),
+                      Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l2)) pos s) (node l2 l2),
                       FullyTranslatable (ReformulationOf (On 'Extensions.TupleSections) '[] l1 l2 pos s) node)
                   => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                   -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropTupleSections =
+   Reserializer.adjustNestedPositions .
    Translation.translateFully
       (Reformulation (Extensions.on Extensions.TupleSections) []
        :: ReformulationOf (On 'Extensions.TupleSections) '[] l1 l2 pos s)
@@ -383,7 +387,8 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
 
 instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
           Abstract.DeeplyTraversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) pos s) l,
-          Abstract.DeeplyFoldable (Transformation.Rank2.Fold (Binder.WithEnvironment l (Reserializer.Wrapped pos s)) (Sum Int)) l,
+          Abstract.DeeplyFoldable (Full.Outward (Transformation.Rank2.Fold
+                                                 (Binder.WithEnvironment l (Reserializer.Wrapped pos s)) (Sum Int))) l,
           TextualMonoid s,
           Position pos,
           Abstract.Supports 'Extensions.TupleSections λ,
@@ -409,11 +414,11 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
                                    (Reserializer.Token Reserializer.Delimiter <$> [ "\\", "->"])
                                    <> [Reserializer.WhiteSpace " "]))
                         <> originalTrail,
-                        end'),
+                        end),
                        Abstract.lambdaExpression (NonEmpty.fromList vars)
                        $ Compose (env, ((mid,
                                          originalDelimiters,
-                                         move (-1 - Reserializer.parsedLength originalTrail) end'),
+                                         move (negate $ Reserializer.parsedLength originalTrail) end),
                                         Abstract.tupleExpression items'))))
      where
        (originalDelimiters, originalTrail) = splitTrailingWhiteSpace original
@@ -428,8 +433,7 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
                         -> State pos (q (Abstract.Expression l l q q))
        assignExpression (Left var) = state $ \pos->
          (Compose (env, ((pos,
-                          Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var,
-                                                 Reserializer.WhiteSpace " "],
+                          Reserializer.Trailing [Reserializer.Token Reserializer.Other $ fromText $ AST.getName var],
                           pos),
                          Abstract.referenceExpression (Abstract.qualifiedName Nothing var))),
           move 1 pos)
