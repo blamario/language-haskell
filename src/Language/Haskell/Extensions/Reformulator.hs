@@ -408,7 +408,6 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
   where
     _ `translateWrapped` Compose (env, ((start, original, end), AST.TupleSectionExpression () items)) =
       Binder.rebind mempty mempty
-      $ Reserializer.adjustNestedPositions
       $ Compose (env, ((start,
                         parens (Reserializer.Trailing (
                                    (Reserializer.Token Reserializer.Delimiter <$> [ "\\", "->"])
