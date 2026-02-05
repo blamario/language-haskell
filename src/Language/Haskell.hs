@@ -101,9 +101,10 @@ resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (
                            (Binder.WithEnvironment AST.Language Parsed))
                         node,
                      Deep.Functor
-                        (Transformation.Mapped
-                            ((,) (Binder.Attributes AST.Language))
-                            (Rank2.Map Parsed Placed))
+                        (Full.Outward
+                            (Transformation.Mapped
+                               ((,) (Binder.Attributes AST.Language))
+                               (Rank2.Map Parsed Placed)))
                         node)
                  => Map Extension Bool                      -- ^ language extension switches
                  -> Binder.ModuleEnvironment AST.Language   -- ^ modules available for import
@@ -112,7 +113,7 @@ resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (
                  -> Parsed (node Parsed Parsed)             -- ^ parsed AST
                  -> Bound (node Bound Bound)
 resolvePositions extensions modEnv env src =
-   (Transformation.Mapped (Rank2.Map rewrap) Full.<$>)
+   (Full.Outward (Transformation.Mapped (Rank2.Map rewrap)) Full.<$>)
    . either (error . show) id . validationToEither
    . Full.traverse Reorganizer.Reorganization
    . Binder.withBindings extensions modEnv env
@@ -133,11 +134,6 @@ checkRestrictions :: Map Extension Bool
 checkRestrictions extensions m = case Verifier.verify extensions m of
    [] -> pure m
    errors -> Left mempty{errorAlternatives= show <$> errors}
-
-instance (Rank2.Functor (g (Compose ((,) (Binder.Attributes AST.Language)) q)),
-          Deep.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g) =>
-         Full.Functor (Transformation.Mapped ((,) (Binder.Attributes AST.Language)) (Rank2.Map q Placed)) g where
-   (<$>) = Full.mapDownDefault
 
 -- | All the predefined modules available for import
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)

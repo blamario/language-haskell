@@ -165,9 +165,10 @@ main' Opts{..} = do
               Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                       (Reserializer.Wrapped (Down Int) Text)) (g l l),
               Deep.Functor
-                 (Transformation.Mapped
-                    ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                    (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
+                 (Full.Outward
+                    (Transformation.Mapped
+                       ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                       (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed)))
                  (g l l),
               Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
               Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
@@ -236,9 +237,10 @@ main' Opts{..} = do
                   Deep.Functor (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                           (Reserializer.Wrapped (Down Int) Text)) (g l l),
                   Deep.Functor
-                     (Transformation.Mapped
-                        ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
-                        (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed))
+                     (Full.Outward
+                        (Transformation.Mapped
+                           ((,) (Di.Atts (Binder.Environment l) (Binder.LocalEnvironment l)))
+                           (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed)))
                      (g l l),
                   Deep.Foldable (Binder.BindingVerifier l Placed) (g l l),
                   Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
@@ -256,7 +258,8 @@ main' Opts{..} = do
        report contents (Right [parsed]) = case optsOutput of
           Original -> case optsStage of
              Parsed -> Text.putStr (content $ Reserializer.reserialize parsed)
-             Bound -> Text.putStr $ Reserializer.reserializeNested $ Transformation.Mapped (Rank2.Map rewrap) Full.<$> bound
+             Bound -> Text.putStr $ Reserializer.reserializeNested
+                      $ Full.Outward (Transformation.Mapped (Rank2.Map rewrap)) Full.<$> bound
              Resolved -> Text.putStr $ Reserializer.reserializeNested reformulated
              Verified -> verifyBefore (Text.putStr . Reserializer.reserializeNested)
           Plain -> case optsStage of
