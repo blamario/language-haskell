@@ -223,7 +223,7 @@ dropTupleSections =
 -- Generic instance to adjust the LANGUAGE pragma
 
 instance (TextualMonoid s,
-          Abstract.DeeplyFoldable (Accounting l1 pos s) l1,
+          Full.Foldable (Full.Outward (Accounting l1 pos s)) (AST.Module l1 l1),
           Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l1 ~ AST.ModuleName l1,
@@ -234,7 +234,7 @@ instance (TextualMonoid s,
           Abstract.Module l2 ~ AST.Module l2) => Translation (ReformulationOf e es l1 l2 pos s) AST.Module
   where
    translate t@(Reformulation e@(ExtensionSwitch (e', _)) es) (AST.ExtendedModule oldExts m)
-      | Map.notMember e' (getUnionWith $ Full.foldMap (Accounting :: Accounting l1 pos s) m)
+      | Map.notMember e' (getUnionWith $ Full.foldMap (Full.Outward (Accounting :: Accounting l1 pos s)) m)
       = withExtensions (List.delete e oldExts)
       | otherwise = withExtensions (List.union es $ List.delete e oldExts)
       where withExtensions [] = Translation.translate t (Foldable1.head m)

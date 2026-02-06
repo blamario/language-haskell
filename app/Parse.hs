@@ -123,7 +123,6 @@ main' Opts{..} = do
               Show (Di.Atts (Binder.Environment Language) (Binder.LocalEnvironment Language)),
               Data (g l l [] []),
               Show (g Language Language e e), Show (g Language Language w w), Show (g Language Language Placed Placed),
-              Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
               Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
               forall f. Rank2.Functor (g l l f),
               Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
@@ -175,7 +174,8 @@ main' Opts{..} = do
               Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
               Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
               Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
-              Deep.Foldable (Verifier.Verification l Int Text) (g l l),
+              Full.Foldable (Full.Outward (Verifier.Accounting l Int Text)) (g l l),
+              Full.Foldable (Full.Outward (Verifier.Verification l Int Text)) (g l l),
               Deep.Foldable
                  (Full.Outward
                    (Transformation.Folded
@@ -195,7 +195,6 @@ main' Opts{..} = do
                   Data (g l l [] []),
                   Show (g Language Language e e), Show (g Language Language w w),
                   Show (g Language Language Placed Placed),
-                  Transformation.At (Verifier.Verification l Int Text) (g l l Bound Bound),
                   Transformation.At (Binder.BindingVerifier l Placed) (g l l Bound Bound),
                   forall f. Rank2.Functor (g l l f),
                   Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
@@ -247,7 +246,7 @@ main' Opts{..} = do
                   Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
                   Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
                   Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
-                  Deep.Foldable (Verifier.Verification l Int Text) (g l l),
+                  Full.Foldable (Full.Outward (Verifier.Verification l Int Text)) (g l l),
                   Deep.Foldable
                      (Full.Outward
                         (Transformation.Folded

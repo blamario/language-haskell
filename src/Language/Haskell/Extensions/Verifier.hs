@@ -98,14 +98,15 @@ instance Transformation.Transformation (Verification l pos s) where
 
 -- | Given the list of declared extensions, report errors on the use of undeclared extensions and non-use
 -- of declared ones.
-verify :: forall w l pos s g. (w ~ Wrap l pos s, Full.Foldable (Verification l pos s) g) =>
-                Map Extension Bool
-             -> w (g w w)
-             -> [Error pos]
-verify extensions node = evalAccum (getAp $ Full.foldMap (Verification :: Verification l pos s) node) extensions
+verify :: forall w l pos s g. (w ~ Wrap l pos s, Full.Foldable (Full.Outward (Verification l pos s)) g)
+       => Map Extension Bool
+       -> w (g w w)
+       -> [Error pos]
+verify extensions node =
+   evalAccum (getAp $ Full.foldMap (Full.Outward (Verification :: Verification l pos s)) node) extensions
 
 verifyModuleExtensions :: forall l pos s. (TextualMonoid s, Num pos, Ord pos,
-                                           Abstract.DeeplyFoldable (Accounting l pos s) l,
+                                           Full.Foldable (Full.Outward (Accounting l pos s)) (AST.Module l l),
                                            Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
                                            Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
                           Map Extension Bool
@@ -119,7 +120,8 @@ verifyModuleExtensions extensions (Compose (_, (_, (AST.ExtendedModule localExte
     <> (uncurry UndeclaredExtensionUse <$> Map.toList (usedExtensions Map.\\ declaredExtensions)),
     declaredExtensions)
    where usedExtensions :: Map Extension [(pos, pos)]
-         usedExtensions = filterExtensions $ getUnionWith $ Full.foldMap (Accounting :: Accounting l pos s) m
+         usedExtensions = filterExtensions $ getUnionWith
+                          $ Full.foldMap (Full.Outward (Accounting :: Accounting l pos s)) m
          declaredExtensions = Map.filter id (withImplications (localExtensions <> extensions)
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
          (contradictions, localExtensions) = partitionContradictory (Set.fromList localExtensionSwitches)
@@ -128,7 +130,8 @@ verifyModuleExtensions extensions (Compose (_, (_, (AST.ExtendedModule localExte
 verifyModuleExtensions extensions m =
    (uncurry UndeclaredExtensionUse
     <$> Map.toList (filterExtensions $
-                    getUnionWith (Full.foldMap (Accounting :: Accounting l pos s) m) Map.\\ declaredExtensions),
+                    getUnionWith (Full.foldMap (Full.Outward (Accounting :: Accounting l pos s)) m)
+                    Map.\\ declaredExtensions),
     declaredExtensions)
    where declaredExtensions = Map.filter id (withImplications extensions
                                              <> Map.fromSet (const True) Extensions.includedByDefault)
@@ -155,23 +158,23 @@ instance {-# overlappable #-}
          `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
    Verification $ _ = mempty
 
-instance (TextualMonoid s, Num pos, Ord pos, Abstract.DeeplyFoldable (Accounting l pos s) l,
+instance (TextualMonoid s, Num pos, Ord pos, Abstract.DeeplyFoldable (Full.Outward (Accounting l pos s)) l,
           Abstract.Haskell l, Abstract.Module l l ~ AST.Module l l,
-          Abstract.DeeplyFoldable (Accounting l pos s) l,
+          Full.Foldable (Full.Outward (Accounting l pos s)) (AST.Module l l),
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Verification l pos s
          `Transformation.At` AST.Module l l (Wrap l pos s) (Wrap l pos s) where
    Verification $ m = Const $ Ap $ accum $ flip verifyModuleExtensions m
 
-instance (Full.Foldable (Accounting l pos s) (Abstract.DataConstructor l l),
-          Full.Foldable (Accounting l pos s) (Abstract.GADTConstructor l l)) =>
+instance (Full.Foldable (Full.Outward (Accounting l pos s)) (Abstract.DataConstructor l l),
+          Full.Foldable (Full.Outward (Accounting l pos s)) (Abstract.GADTConstructor l l)) =>
          Verification l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
    Verification $ Compose (_, (_, d))
      | ExtAST.TypeDataDeclaration _sup _lhs _kind constructors <- d = verifyTypeData constructors
      | ExtAST.TypeGADTDeclaration _sup1 _sup2 _lhs _kind constructors <- d = verifyTypeData constructors
      | otherwise = mempty
-     where verifyTypeData :: (w ~ Wrap l pos s, Foldable f, Full.Foldable (Accounting l pos s) g)
+     where verifyTypeData :: (w ~ Wrap l pos s, Foldable f, Full.Foldable (Full.Outward (Accounting l pos s)) g)
                           => f (w (g w w)) -> Verified pos x
            verifyTypeData =
               Const
@@ -182,7 +185,7 @@ instance (Full.Foldable (Accounting l pos s) (Abstract.DataConstructor l l),
                                                      Extensions.TraditionalRecordSyntax -> [RecordTypeDataFields v]
                                                      _ -> [])
               . getUnionWith
-              . foldMap (Full.foldMap Accounting)
+              . foldMap (Full.foldMap $ Full.Outward Accounting)
 
 instance (TextualMonoid s, Abstract.Module l l ~ AST.Module l l, Ord (Abstract.ModuleName l), Ord (Abstract.Name l)) =>
          Accounting l pos s
@@ -227,7 +230,7 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Deep.Foldable (UnicodeSyntaxAccounting l pos s) (ExtAST.Declaration l l),
           FlexibleInstanceHeadAccounting l pos s
           `Transformation.At` Abstract.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s),
-          Full.Foldable (MPTCAccounting l pos s) (Abstract.TypeLHS l l)) =>
+          Full.Foldable (Full.Outward (MPTCAccounting l pos s)) (Abstract.TypeLHS l l)) =>
          Accounting l pos s
          `Transformation.At` ExtAST.Declaration l l (Wrap l pos s) (Wrap l pos s) where
    Accounting $ d@(Compose (_, ((start, _, end), dec))) = Const $ UnionWith $
@@ -251,7 +254,7 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
          ExtAST.ForeignImport convention safety id name ty ->
             ffiUse <> getUnionWith (getConst (Accounting Transformation.$ (convention <$ d))
                                     <> getConst (foldMap ((Accounting Transformation.$) . (<$ d)) safety))
-         ExtAST.ClassDeclaration _ lhs _ -> case Full.foldMap MPTCAccounting lhs of
+         ExtAST.ClassDeclaration _ lhs _ -> case Full.foldMap (Full.Outward MPTCAccounting) lhs of
             Sum 1 -> mempty
             _ -> Map.singleton Extensions.MultiParamTypeClasses [(start, end)]
          ExtAST.FunDepClassDeclaration{} -> Map.singleton Extensions.FunctionalDependencies [(start, end)]
@@ -625,40 +628,6 @@ instance (Eq s, IsString s) =>
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←", "★", "⊸"]
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Verification l pos s) g,
-          Transformation.At (Verification l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (Verification l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (Accounting l pos s) g,
-          Transformation.At (Accounting l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (Accounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (MPTCAccounting l pos s) g,
-          Transformation.At (MPTCAccounting l pos s)
-                            (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (MPTCAccounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceHeadAccounting l pos s) g,
-          Transformation.At (FlexibleInstanceHeadAccounting l pos s)
-                            (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (FlexibleInstanceHeadAccounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceTypeAccounting l pos s) g,
-          Transformation.At (FlexibleInstanceTypeAccounting l pos s)
-                            (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (FlexibleInstanceTypeAccounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (FlexibleInstanceTypeArgAccounting l pos s) g,
-          Transformation.At (FlexibleInstanceTypeArgAccounting l pos s)
-                            (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (FlexibleInstanceTypeArgAccounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
 
 instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
           Transformation.At (UnicodeSyntaxAccounting l pos s)
