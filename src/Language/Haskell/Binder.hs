@@ -121,9 +121,9 @@ instance Monoid (Unbound l) where
   mempty = Unbound mempty mempty mempty
 
 -- | Find all the names that have not been bound
-unboundNames :: Full.Foldable (BindingVerifier l p) g
+unboundNames :: Full.Foldable (Full.Outward (BindingVerifier l p)) g
              => WithEnvironment l p (g (WithEnvironment l p) (WithEnvironment l p)) -> Unbound l
-unboundNames = Full.foldMap BindingVerifier
+unboundNames = Full.foldMap (Full.Outward BindingVerifier)
 
 -- | Look up a type name in the environment
 lookupType :: AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
@@ -178,10 +178,10 @@ withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binde
                                      Rank2.Apply (g (AG.Semantics (AG.Keep w))),
                                      Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
                                      Deep.Functor (AG.Knit (AG.Keep w)) g,
-                                     Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
+                                     Deep.Functor (Full.Outward (Transformation.Rank2.Map (AG.Kept w) q)) g)
              => Map Extension Bool -> ModuleEnvironment l -> Environment l -> p (g p p) -> q (g q q)
 withBindings extensions modEnv env node =
-   Full.mapDownDefault (Transformation.Rank2.Map trim)
+   (Full.Outward (Transformation.Rank2.Map trim) Full.<$>)
    $ AG.syn
    $ ((AG.Knit $ AG.Keep $ AG.Auto $ Binder modEnv) Full.<$> node) Rank2.$ AG.Inherited (extensions, env)
    where trim :: AG.Kept w a -> WithEnvironment l p a
@@ -197,16 +197,16 @@ rebind :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p)
                                Rank2.Apply (g (AG.Semantics (AG.Keep w))),
                                Rank2.Traversable (g (AG.Semantics (AG.Keep w))),
                                Deep.Functor (AG.Knit (AG.Keep w)) g,
-                               Deep.Functor (Transformation.Rank2.Map q p) g,
-                               Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g)
+                               Deep.Functor (Full.Outward (Transformation.Rank2.Map q p)) g,
+                               Deep.Functor (Full.Outward (Transformation.Rank2.Map (AG.Kept w) q)) g)
        => Map Extension Bool -> ModuleEnvironment l -> q (g q q) -> q (g q q)
 rebind extensions modEnv root@(Compose (Di.Atts{Di.inh= env}, _)) = withBindings extensions modEnv env $ unbind root
 
 -- | Remove the bindings within the given subtree.
 unbind :: forall l g p w q x. (q ~ WithEnvironment l p, Rank2.Functor (g p), Functor p,
-                               Deep.Functor (Transformation.Rank2.Map q p) g)
+                               Deep.Functor (Full.Outward (Transformation.Rank2.Map q p)) g)
        => q (g q q) -> p (g p p)
-unbind = ((Transformation.Rank2.Map $ snd . getCompose) Full.<$>)
+unbind = (Full.Outward (Transformation.Rank2.Map $ snd . getCompose) Full.<$>)
 
 -- | Apply the function to the map inside 'UnionWith'
 onMap :: (Map.Map j a -> Map.Map k b) -> UnionWith (Map j) a -> UnionWith (Map k) b
@@ -244,11 +244,6 @@ data BindingVerifier l (f :: Type -> Type) = BindingVerifier
 instance Transformation (BindingVerifier l f) where
    type Domain (BindingVerifier l f) = WithEnvironment l f
    type Codomain (BindingVerifier l f) = Const (Unbound l)
-
-instance (Rank2.Functor (g (AG.Kept a)), Rank2.Functor (g (WithEnvironment l f)), Functor f,
-          Deep.Functor (Transformation.Rank2.Map (AG.Kept a) (WithEnvironment l f)) g) =>
-         Full.Functor (Transformation.Rank2.Map (AG.Kept a) (WithEnvironment l f)) g where
-  (<$>) = Full.mapDownDefault
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, Abstract.Declaration l ~ ExtAST.Declaration l,
@@ -837,16 +832,6 @@ instance (Foldable f, Abstract.QualifiedName l ~ AST.QualifiedName l,
    _ $ Compose (Di.Atts{Di.inh= env}, node) = foldMap verify node
       where verify (ExtAST.ConstructorReference q) = verifyConstructorName q env
             verify _ = mempty
-
-instance (Foldable f, Rank2.Foldable (g (WithEnvironment l f)), Deep.Foldable (BindingVerifier l f) g,
-          Transformation.At (BindingVerifier l f) (g (WithEnvironment l f) (WithEnvironment l f))) =>
-         Full.Foldable (BindingVerifier l f) g where
-   foldMap = Full.foldMapDownDefault
-
-instance (Deep.Functor (Transformation.Rank2.Map (WithEnvironment l p) p) g,
-          Rank2.Functor (g (WithEnvironment l p)), Functor p) =>
-         Full.Functor (Transformation.Rank2.Map (WithEnvironment l p) p) g where
-   (<$>) = Full.mapDownDefault
 
 verifyConstructorName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyConstructorName q env = case lookupType q env $> () <|> lookupValue q env $> () of

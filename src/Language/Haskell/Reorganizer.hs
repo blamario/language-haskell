@@ -176,18 +176,11 @@ reorganizeModules :: forall l pos s f. (f ~ Wrap l pos s,
                                 Abstract.Declaration l ~ ExtAST.Declaration l,
                                 Abstract.QualifiedName l ~ AST.QualifiedName l,
                                 Abstract.Name l ~ AST.Name l,
-                                Deep.Traversable (Reorganization l pos s) (Abstract.Declaration l l),
-                                Full.Traversable (Reorganization l pos s) (Abstract.Module l l),
-                                Full.Traversable (Reorganization l pos s) (Abstract.Declaration l l)) =>
+                                Full.Traversable (Full.Inward (Reorganization l pos s)) (Abstract.Module l l)) =>
                   Map.Map (Abstract.ModuleName l) (f (AST.Module l l f f))
                -> Validation (NonEmpty (Abstract.ModuleName l, NonEmpty (Error l f)))
                              (Map.Map (Abstract.ModuleName l) (f (AST.Module l l f f)))
 reorganizeModules modules = Map.traverseWithKey extractErrors reorganizedModules
-   where reorganizedModules = Full.traverse Reorganization <$> modules
+   where reorganizedModules = Full.traverse (Full.Inward Reorganization) <$> modules
          extractErrors moduleKey (Failure e)   = Failure ((moduleKey, e) :| [])
          extractErrors _         (Success mod) = Success mod
-
-instance (Rank2.Traversable (g (Wrap l pos s)), Deep.Traversable (Reorganization l pos s) g,
-          Transformation.At (Reorganization l pos s) (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Traversable (Reorganization l pos s) g where
-   traverse = Full.traverseUpDefault

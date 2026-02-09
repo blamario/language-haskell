@@ -8,7 +8,8 @@ module Language.Haskell.Reserializer (ParsedLexemes(..), Lexeme(..), TokenType(.
                                       adjustPositions, adjustNestedPositions, lexemes, reserialize, reserializeNested,
                                       sourceLength, parsedLength, joinWrapped, mergeLexemes, mapWrapping, mapWrappings,
                                       PositionAdjustment (PositionAdjustment),
-                                      NestedPositionAdjustment (NestedPositionAdjustment), Serialization) where
+                                      NestedPositionAdjustment (NestedPositionAdjustment),
+                                      Serialization, NestedSerialization) where
 
 import Control.Monad.Trans.State.Strict (State, StateT(..), evalState, state)
 import Data.Bifunctor (first)
@@ -69,21 +70,19 @@ reserialize :: (Monoid s, Factorial s, Position pos, Deep.Foldable (Serializatio
 reserialize = foldMap lexemeText . lexemes
 
 -- | Serializes the tree just like 'reserialize', but with an additional wrapping on every node.
-reserializeNested :: (Monoid s, Factorial s, Position pos, Foldable f,
-                      Deep.Foldable (Full.Outward (Transformation.Folded f (Serialization pos s))) g)
+reserializeNested :: (Monoid s, Factorial s, Position pos, Foldable f, Deep.Foldable (NestedSerialization f pos s) g)
                   => Compose f (Wrapped pos s) (g (Compose f (Wrapped pos s)) (Compose f (Wrapped pos s))) -> s
 reserializeNested = foldMap lexemeText . nestedLexemes
 
 -- | Serializes the tree into the lexemes it was parsed from.
 lexemes :: (Factorial s, Position pos, Deep.Foldable (Serialization pos s) g)
         => Wrapped pos s (g (Wrapped pos s) (Wrapped pos s)) -> [Lexeme s]
-lexemes root = finalize $ Full.foldMap Serialization root
+lexemes root = finalize $ Full.foldMap (Full.Outward Serialization) root
    where finalize (PositionedLexemes ranges) = foldMap lexemeList ranges
          lexemeList (_, Trailing ls, _) = ls
 
 -- | Serializes the tree into the lexemes it was parsed from.
-nestedLexemes :: (Factorial s, Position pos, Foldable f,
-                  Deep.Foldable (Full.Outward (Transformation.Folded f (Serialization pos s))) g)
+nestedLexemes :: (Factorial s, Position pos, Foldable f, Deep.Foldable (NestedSerialization f pos s) g)
               => Compose f (Wrapped pos s) (g (Compose f (Wrapped pos s)) (Compose f (Wrapped pos s))) -> [Lexeme s]
 nestedLexemes root = finalize $ Full.foldMap (Full.Outward $ Transformation.Folded Serialization) root
    where finalize (PositionedLexemes ranges) = foldMap lexemeList ranges
@@ -122,28 +121,32 @@ mergeLexemes pos1 outer@(lexeme1:rest1) pos2 inner@(lexeme2:rest2)
    | pos1 < pos2 = lexeme1 : mergeLexemes (move (Factorial.length $ lexemeText lexeme1) pos1) rest1 pos2 inner
 mergeLexemes _ outer _ inner = inner <> outer
 
--- | Transformation type used by 'reserialize'
-data Serialization pos s = Serialization
+-- | Transformation type alias used by 'reserialize' and 'lexemes'
+type Serialization pos s = Full.Outward (SerializationT pos s)
+-- | Transformation type alias used by 'reserializeNested' and 'nestedLexemes'
+type NestedSerialization f pos s = Full.Outward (Transformation.Folded f (SerializationT pos s))
+-- | Transformation type
+data SerializationT pos s = Serialization
 -- | Transformation type used by 'adjustPositions'
 data PositionAdjustment pos s = PositionAdjustment
 -- | Transformation type used by 'adjustNestedPositions'
 data NestedPositionAdjustment (f :: Type -> Type) pos s = NestedPositionAdjustment
 
 -- | Map the stored positions and lexeme inputs in the entire tree and its wrapping
-mapWrappings :: Deep.Functor (Transformation.Rank2.Map (Wrapped pos s) (Wrapped pos' s')) g
+mapWrappings :: Deep.Functor (Full.Inward (Transformation.Rank2.Map (Wrapped pos s) (Wrapped pos' s'))) g
              => (pos -> pos') -> (s -> s')
              -> Wrapped pos s (g (Wrapped pos s) (Wrapped pos s))
              -> Wrapped pos' s' (g (Wrapped pos' s') (Wrapped pos' s'))
-mapWrappings f g x = mapWrapping f g ((mapWrapping f g Transformation.Rank2.<$>) <$> x)
+mapWrappings f g x = Full.Inward (Transformation.Rank2.Map (mapWrapping f g)) Full.<$> x
 {-# INLINE mapWrappings #-}
 
 mapWrapping :: (pos -> pos') -> (s -> s') -> Wrapped pos s a -> Wrapped pos' s' a
 mapWrapping f g ((start, ls, end), a) = ((f start, g <$> ls, f end), a)
 {-# INLINE mapWrapping #-}
 
-instance Transformation.Transformation (Serialization pos s) where
-    type Domain (Serialization pos s) = Wrapped pos s
-    type Codomain (Serialization pos s) = Const (PositionedLexemes pos s)
+instance Transformation.Transformation (SerializationT pos s) where
+    type Domain (SerializationT pos s) = Wrapped pos s
+    type Codomain (SerializationT pos s) = Const (PositionedLexemes pos s)
 
 instance Transformation.Transformation (PositionAdjustment pos s) where
     type Domain (PositionAdjustment pos s) = Wrapped pos s
@@ -152,11 +155,6 @@ instance Transformation.Transformation (PositionAdjustment pos s) where
 instance Transformation.Transformation (NestedPositionAdjustment f pos s) where
     type Domain (NestedPositionAdjustment f pos s) = Compose f (Wrapped pos s)
     type Codomain (NestedPositionAdjustment f pos s) = Compose (State Int) (Compose f (Wrapped pos s))
-
-instance (p ~ Wrapped pos input, Rank2.Functor (g p),
-          Deep.Functor (Transformation.Rank2.Map p (Wrapped pos' input')) g) =>
-         Full.Functor (Transformation.Rank2.Map (Wrapped pos input) (Wrapped pos' input')) g where
-  (<$>) = Full.mapUpDefault
 
 newtype PositionedLexemes pos s = PositionedLexemes (Seq (pos, ParsedLexemes s, pos))
 
@@ -183,13 +181,8 @@ splitUntil start lexemes end
 instance (Factorial s, Position pos) => Monoid (PositionedLexemes pos s) where
   mempty = PositionedLexemes mempty
 
-instance forall pos s a. (Factorial s, Position pos) => Serialization pos s `Transformation.At` a where
+instance forall pos s a. (Factorial s, Position pos) => SerializationT pos s `Transformation.At` a where
    Serialization $ (range, _) = Const (PositionedLexemes $ pure range)
-
-instance forall g s pos. (Factorial s, Position pos,
-                          Rank2.Foldable (g (Wrapped pos s)), Deep.Foldable (Serialization pos s) g) =>
-         Full.Foldable (Serialization pos s) g where
-   foldMap = Full.foldMapDownDefault
 
 instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
           Deep.Foldable (Full.Outward (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int))) g) =>

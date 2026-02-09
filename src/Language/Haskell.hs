@@ -87,7 +87,7 @@ parseModule extensions modEnv env verify source =
 
 -- | Resolve identifiers in the given parsed AST, and replace the stored positions in the entire tree with
 -- offsets from the start of the given source text.
-resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (Down Int) Input) node,
+resolvePositions :: (Full.Traversable (Full.Inward (Reorganizer.Reorganization AST.Language (Down Int) Input)) node,
                      AG.At (AG.Auto (Binder.Binder AST.Language Parsed)) node,
                      AG.Atts (AG.Synthesized (Binder.Binder AST.Language Parsed)) node
                      ~ (x, Binder.LocalEnvironment AST.Language),
@@ -96,9 +96,10 @@ resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (
                      Rank2.Traversable (node (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed))))),
                      Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed)))) node,
                      Deep.Functor
-                        (Rank2.Map
-                           (AG.Kept (AG.Auto (Binder.Binder AST.Language Parsed)))
-                           (Binder.WithEnvironment AST.Language Parsed))
+                        (Full.Outward
+                           (Rank2.Map
+                              (AG.Kept (AG.Auto (Binder.Binder AST.Language Parsed)))
+                              (Binder.WithEnvironment AST.Language Parsed)))
                         node,
                      Deep.Functor
                         (Full.Outward
@@ -115,7 +116,7 @@ resolvePositions :: (Full.Traversable (Reorganizer.Reorganization AST.Language (
 resolvePositions extensions modEnv env src =
    (Full.Outward (Transformation.Mapped (Rank2.Map rewrap)) Full.<$>)
    . either (error . show) id . validationToEither
-   . Full.traverse Reorganizer.Reorganization
+   . Full.traverse (Full.Inward Reorganizer.Reorganization)
    . Binder.withBindings extensions modEnv env
    where rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
          rewrap = Reserializer.mapWrapping (offset src) content

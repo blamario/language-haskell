@@ -226,8 +226,8 @@ instance (Eq s, IsString s) =>
    Accounting $ _ = mempty
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
-          Abstract.DeeplyFoldable (UnicodeSyntaxAccounting l pos s) l,
-          Deep.Foldable (UnicodeSyntaxAccounting l pos s) (ExtAST.Declaration l l),
+          Abstract.DeeplyFoldable (Full.Outward (UnicodeSyntaxAccounting l pos s)) l,
+          Deep.Foldable (Full.Outward (UnicodeSyntaxAccounting l pos s)) (ExtAST.Declaration l l),
           FlexibleInstanceHeadAccounting l pos s
           `Transformation.At` Abstract.ClassInstanceLHS l l (Wrap l pos s) (Wrap l pos s),
           Full.Foldable (Full.Outward (MPTCAccounting l pos s)) (Abstract.TypeLHS l l)) =>
@@ -273,7 +273,7 @@ instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
          ExtAST.NewtypeFamilyInstance{} -> typeFamiliesUse
          ExtAST.TypeFamilyInstance{} -> typeFamiliesUse
          _ -> mempty
-      <> getUnionWith (Full.foldMap UnicodeSyntaxAccounting d)
+      <> getUnionWith (Full.foldMap (Full.Outward UnicodeSyntaxAccounting) d)
       where
       typeFamiliesUse = Map.singleton Extensions.TypeFamilies [(start, end)]
       typeFamilyDependenciesUse = Map.singleton Extensions.TypeFamilyDependencies [(start, end)]
@@ -628,12 +628,6 @@ instance (Eq s, IsString s) =>
       | otherwise = mempty
       where unicodeDelimiters :: [Lexeme s]
             unicodeDelimiters = Token Delimiter <$> ["∷", "⇒", "→", "←", "★", "⊸"]
-
-instance (Rank2.Foldable (g (Wrap l pos s)), Deep.Foldable (UnicodeSyntaxAccounting l pos s) g,
-          Transformation.At (UnicodeSyntaxAccounting l pos s)
-                            (g (Wrap l pos s) (Wrap l pos s))) =>
-         Full.Foldable (UnicodeSyntaxAccounting l pos s) g where
-   foldMap = Full.foldMapDownDefault
 
 checkDuplicateRecordFields :: forall l pos s node. (Ord (Abstract.ModuleName l), Ord (Abstract.Name l))
                            => ZipList (Wrap l pos s node) -> Maybe [(pos, pos)]

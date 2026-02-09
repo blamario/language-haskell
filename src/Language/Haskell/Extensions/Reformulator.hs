@@ -401,8 +401,8 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
           p ~ Reserializer.Wrapped pos s, g ~ AST.Expression l l,
           AG.At w g,
           Deep.Functor (AG.Knit (AG.Keep w)) g,
-          Deep.Functor (Transformation.Rank2.Map q p) g,
-          Deep.Functor (Transformation.Rank2.Map (AG.Kept w) q) g) =>
+          Deep.Functor (Full.Outward (Transformation.Rank2.Map q p)) g,
+          Deep.Functor (Full.Outward (Transformation.Rank2.Map (AG.Kept w) q)) g) =>
    ReformulationOf (On 'Extensions.TupleSections) '[] λ l pos s
    `WrappedTranslation` AST.Expression
   where
