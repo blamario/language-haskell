@@ -1,3 +1,9 @@
 packages: .
 
+source-repository-package
+    type: git
+    location: https://github.com/blamario/grampa
+    tag: 0ef7e39d89461a64cd16a1663f2cbce8ed09f65c
+    subdir: deep-transformations
+
 allow-newer: data-functor-logistic:base, indexed-traversable:base, indexed-traversable-instances:base
