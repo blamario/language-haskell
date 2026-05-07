@@ -157,9 +157,9 @@ main' Opts{..} = do
               FullyTranslatable
                  (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
                  g,
-              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
-              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
-              Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
+              Deep.Functor (Full.Inward (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) [])) (g l l),
+              Deep.Functor (Full.Inward (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) [])) (g l l),
+              Deep.Functor (Full.Inward (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) [])) (g l l),
               Deep.Functor (Full.Outward (Rank2.Map Bound Placed)) (g l l),
               Deep.Functor (Full.Outward (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed)) (g l l),
               Deep.Functor (Full.Inward (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
@@ -225,13 +225,13 @@ main' Opts{..} = do
                   FullyTranslatable
                      (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
                      g,
-                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
-                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
+                  Deep.Functor (Full.Inward (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) [])) (g l l),
+                  Deep.Functor (Full.Inward (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) [])) (g l l),
                   Deep.Functor (Full.Outward (Rank2.Map Bound Placed)) (g l l),
                   Deep.Functor
                      (Full.Outward (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed))
                      (g l l),
-                  Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
+                  Deep.Functor (Full.Inward (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) [])) (g l l),
                   Deep.Functor (Full.Inward (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
                                                        (Reserializer.Wrapped (Down Int) Text))) (g l l),
                   Deep.Functor
@@ -295,11 +295,11 @@ main' Opts{..} = do
                 reformulate Extensions.ViewPatterns = Reformulator.orToViewPatterns
                 reformulate ext = error ("Can't reformulate " <> show ext <> " yet")
                 printTree :: forall w. (Data (g l l [] []), Foldable w, Functor w,
-                                        Full.Functor (Rank2.Map w []) (g l l))
+                                        Deep.Functor (Full.Inward (Rank2.Map w [])) (g l l))
                           => w (g l l w w) -> IO ()
                 printTree = putStrLn . reprTreeString . unwrap
                    where unwrap :: w (g l l w w) -> [g l l [] []]
-                         unwrap = (Rank2.Map toList Full.<$>)
+                         unwrap = (Full.Inward (Rank2.Map toList) Full.<$>)
        report contents (Right l) =
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])
@@ -329,6 +329,3 @@ main' Opts{..} = do
       defaultExtensions = Map.fromSet (const True) Extensions.includedByDefault
 
 type NodeWrap = ((,) Int)
-
-instance (Rank2.Functor (g p), Deep.Functor (Rank2.Map p []) g, Functor p) => Full.Functor (Rank2.Map p []) g where
-  (<$>) = Full.mapUpDefault

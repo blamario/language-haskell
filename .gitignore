@@ -1,2 +1,5 @@
 *.pdf
 *.tex
+dist-newstyle/
+.cabal-sandbox/
+cabal.sandbox.config

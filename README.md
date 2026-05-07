@@ -24,7 +24,7 @@ all the tools used for this.
 
 Every parsed AST node is contained by a wrapper node. Immediately after parsing,
 the wrapper carries the information about the node's position and the tokens
-consumed to parse it. This information is sufficient to xactly reproduce the
+consumed to parse it. This information is sufficient to exactly reproduce the
 original source code. In the next stage, the identifiers are bound to their
 definitions and the wrappers get enriched to carry the resolved environment. The
 discovered bindings are subsequently used to verify and correct the AST of
