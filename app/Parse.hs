@@ -49,6 +49,7 @@ import Options.Applicative
 import Text.Grampa (ParseResults, parseComplete, failureDescription)
 import Text.Parser.Input.Position (offset)
 import ReprTree (reprTreeString)
+import System.IO (isEOF)
 
 import Prelude hiding (getLine, getContents, readFile)
 
@@ -304,15 +305,18 @@ main' Opts{..} = do
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
           >> report contents (Right [l !! optsIndex])
        report contents (Left err) = Text.putStrLn (failureDescription contents (content <$> err) 4)
+       parseStdin = do
+          eof <- isEOF
+          when (not eof) $ do
+             getLine >>=
+               case optsMode of
+                 ModuleMode     -> go parseModule "<stdin>"
+                 ExpressionMode -> go parseExpression "<stdin>"
+             parseStdin
    case optsFile of
       Just file -> (if file == "-" then getContents else readFile file)
                    >>= go parseModule file
-      Nothing ->
-         forever $
-         getLine >>=
-         case optsMode of
-            ModuleMode     -> go parseModule "<stdin>"
-            ExpressionMode -> go parseExpression "<stdin>"
+      Nothing -> parseStdin
    where
       parseModule :: (Abstract.ExtendedHaskell l,
                       Abstract.DeeplyFoldable (Reserializer.Serialization (Down Int) Input) l,
