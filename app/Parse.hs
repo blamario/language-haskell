@@ -20,6 +20,7 @@ import qualified Language.Haskell.Extensions.Verifier as Verifier
 import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
+import qualified Language.Haskell.TypeSystem as TypeSystem
 
 import qualified Rank2
 import qualified Transformation
@@ -35,6 +36,7 @@ import Data.Data (Data)
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Identity (Identity)
 import Data.Maybe (fromMaybe)
 import Data.Monoid.Instances.PrefixMemory (content)
 import Data.Monoid.Textual (fromText)
@@ -56,7 +58,7 @@ import Prelude hiding (getLine, getContents, readFile)
 data GrammarMode = ModuleMode | ExpressionMode
     deriving Show
 
-data Output = Original | Plain | Stripped | Pretty | Tree
+data Output = Original | Plain | Stripped | Pretty | Tree | TypeCheck
             deriving Show
 
 data Stage = Parsed | Bound | Resolved | Verified
@@ -71,6 +73,18 @@ data Opts = Opts
     , optsInclude      :: Maybe FilePath
     , optsFile         :: Maybe FilePath
     } deriving Show
+
+class TypeCheckable g l where
+   typeCheck :: Placed (g l l Placed Placed) -> String
+
+
+instance TypeCheckable AST.Expression Language where
+   typeCheck =
+     either (("Type error: " <>) . show) Template.showViaTH
+     . TypeSystem.checkExpression TypeSystem.defaultConstraintHandler mempty mempty
+
+instance TypeCheckable AST.Module l where
+   typeCheck = const ""
 
 main :: IO ()
 main = execParser opts >>= main'
@@ -87,6 +101,7 @@ main = execParser opts >>= main'
                           <> showDefault <> value 0 <> metavar "INT"))
         <*> many (option auto (long "reformulate" <> help "Reformulate and eliminate given language extensions"))
         <*> (flag' Pretty (long "pretty" <> help "Pretty-print output")
+             <|> flag' TypeCheck (long "typecheck" <> help "Type-check and print the type of the input expression")
              <|> flag' Tree (long "tree" <> help "Print the output as an abstract syntax tree")
              <|> flag' Original (long "original"
                                  <> help "Print the output with the original tokens and whitespace")
@@ -120,6 +135,7 @@ main' Opts{..} = do
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
               e ~ Binder.WithEnvironment Language w,
               Abstract.ExtendedHaskell l,
+              TypeCheckable g Language,
               Abstract.QualifiedName l ~ AST.QualifiedName l,
               Show (Binder.Attributes Language),
               Data (g l l [] []),
@@ -187,6 +203,7 @@ main' Opts{..} = do
                   a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
                   e ~ Binder.WithEnvironment Language w,
                   Abstract.ExtendedHaskell l,
+                  TypeCheckable g Language,
                   Abstract.QualifiedName l ~ AST.QualifiedName l,
                   Show (Binder.Attributes Language),
                   Data (g l l [] []),
@@ -275,6 +292,7 @@ main' Opts{..} = do
              Bound -> printTree bound
              Resolved -> printTree reformulated
              Verified -> verifyBefore printTree
+          TypeCheck -> putStrLn $ typeCheck unbound
           where verifyBefore :: (a -> IO ()) -> IO ()
                 verifyBefore action = case Verifier.verify mempty reformulated of
                    [] -> let unbounds = Binder.unboundNames reformulated
@@ -284,9 +302,11 @@ main' Opts{..} = do
                 t :: Verifier.Verification l Int Text
                 t = Verifier.Verification
                 resolved, reformulated :: Bound (g l l Bound Bound)
+                unbound :: Placed (g l l Placed Placed)
                 reformulated = foldr reformulate resolved (reverse optsReformulate)
                 resolved = Haskell.resolvePositions defaultExtensions importableModules preludeBindings contents parsed
                 bound = Binder.withBindings defaultExtensions importableModules preludeBindings parsed
+                unbound = Full.Outward (Rank2.Map $ snd . getCompose) Full.<$> resolved
                 rewrap :: forall a. Reserializer.Wrapped (Down Int) Input a -> Reserializer.Wrapped Int Text a
                 rewrap = Reserializer.mapWrapping (offset contents) content
                 reformulate :: Extensions.Extension -> Bound (g l l Bound Bound) -> Bound (g l l Bound Bound)

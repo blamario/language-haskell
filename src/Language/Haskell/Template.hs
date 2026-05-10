@@ -4,13 +4,14 @@
 
 -- | Pretty-printing of AST via Template Haskell. That is, the AST is first transformed into corresponding
 -- Template Haskell AST, then printed using its pretty-printer.
-module Language.Haskell.Template (PrettyViaTH, pprint) where
+module Language.Haskell.Template (PrettyViaTH, pprint, showViaTH) where
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Bifunctor (bimap)
 import qualified Data.Char as Char
 import Data.Foldable (foldl', toList)
-import Data.Functor.Compose (Compose (getCompose))
+import Data.Functor.Identity (Identity(runIdentity))
+import Data.Functor.Compose (Compose(getCompose))
 import Data.Functor.Const (Const (Const))
 import Data.List ((\\), nub)
 import Data.Maybe (fromMaybe)
@@ -67,7 +68,7 @@ pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.W
            FullyTranslatable
               (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language pos s)
               node) => a -> String
-pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
+pprint = showViaTH
          . Reformulator.dropRecordWildCards
          . Reformulator.dropNPlusKPatterns
 #if MIN_VERSION_template_haskell(2,23,0)
@@ -75,6 +76,9 @@ pprint = render . Ppr.to_HPJ_Doc . prettyViaTH
          . Reformulator.orToViewPatterns
 #endif
          . Reformulator.dropNoListTuplePuns
+
+showViaTH :: PrettyViaTH a => a -> String
+showViaTH = render . Ppr.to_HPJ_Doc . prettyViaTH
 
 doE, mdoE :: [Stmt] -> Exp
 #if MIN_VERSION_template_haskell(2,17,0)
@@ -102,6 +106,10 @@ instance TemplateWrapper (Reserializer.Wrapped Int Text) where
    extract = snd
    isParenthesized ((_, Trailing (lexeme:_), _), _) = "(" `Text.isPrefixOf` lexemeText lexeme
    isParenthesized _ = False
+
+instance TemplateWrapper Identity where
+  extract = runIdentity
+  isParenthesized _ = True
 
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
@@ -186,6 +194,9 @@ instance TemplateWrapper f => PrettyViaTH (Declaration Language Language f f) wh
 
 instance TemplateWrapper f => PrettyViaTH (Expression Language Language f f) where
    prettyViaTH x = Ppr.ppr (expressionTemplate x)
+
+instance TemplateWrapper f => PrettyViaTH (ExtAST.Type Language Language f f) where
+   prettyViaTH x = Ppr.ppr (typeTemplate x)
 
 instance PrettyViaTH (ModuleName Language) where
    prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ nameText <$> toList mods)

@@ -7,7 +7,7 @@
 
 module Language.Haskell.TypeSystem (
   checkExpression{-, checkDeclaration, checkModule-},
-  defaultConstraintHandler) where
+  TypeErrors, DefaultConstraints, defaultConstraintHandler) where
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Either.Validation (Validation(Failure, Success), validationToEither)
@@ -83,7 +83,7 @@ checkExpression constrain extensions bindings e =
   fmap fst $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
   where env = TypeEnv{
           bindings,
-          freshVarPrefix = "",
+          freshVarPrefix = "a",
           constraints = constrain.empty}
         transformation = AG.Knit TypeCheck{constrain, extensions}
 
@@ -152,6 +152,8 @@ data TypeError l con
   | TypeAmbiguity con
   | DuplicatePatternVariables (NonEmpty (AST.Name l))
   | UnknownTypeVariable (AST.QualifiedName l)
+
+deriving instance (Show (AST.Type l l Identity Identity), Show (AST.Name l), Show con) => Show (TypeError l con)
 
 type TypeErrors l pos con = NonEmpty (pos, TypeError l con)
 
@@ -376,10 +378,13 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
+          Abstract.Value l ~ AST.Value l,
           Abstract.Pattern l ~ AST.Pattern l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
   attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ referenceAttribution constrain env var, AST.ReferenceExpression var)
+  attribution TypeCheck{} (i, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
+    (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
   attribution
     TypeCheck{constrain=ConstraintHandler{unify, union}}
     (_, AST.ApplyExpression{})
@@ -405,8 +410,9 @@ instance (Abstract.Haskell l,
     where abstract :: (AST.Name l, Map (AST.Name l) (AST.Type l l Identity Identity), con)
                    -> (AST.Type l l Identity Identity, con)
                    -> (AST.Type l l Identity Identity, con)
-          abstract (patVar, _, patCon) (rhsType, rhsCon) =
-            (AST.FunctionType (Identity $ AST.TypeVariable patVar) (Identity rhsType), constrain.union patCon rhsCon)
+          abstract (patVar, patBindings, patCon) (rhsType, rhsCon) =
+            (AST.FunctionType (Identity $ patBindings Map.! patVar) (Identity rhsType),
+             constrain.union patCon rhsCon)
           patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
           bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
           patVarBindings = foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> varBindings) patSyns
@@ -604,12 +610,13 @@ referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                      -> TypeEnv l Identity con
                      -> AST.QualifiedName l
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
-referenceAttribution ConstraintHandler{fromContext, replaceVar} env name =
+referenceAttribution ConstraintHandler{empty, fromContext, replaceVar} env name =
     case Map.lookup name (bindings env) of
       Just t -> Success $ concrete t
       Nothing -> Failure $ UnknownTypeVariable name
     where concrete (AST.ForallType vars (Identity (AST.ConstrainedType (Identity context) (Identity body)))) =
             foldr (replace . runIdentity) (body, fromContext context) vars
+          concrete t = (t, empty)
           replace (AST.ExplicitlyKindedTypeVariable _ name _) typeCon = replaceFresh replaceVar env name typeCon
           replace (AST.ImplicitlyKindedTypeVariable _ name) typeCon = replaceFresh replaceVar env name typeCon
           replace AST.WildcardTypeBinding typeCon = typeCon
