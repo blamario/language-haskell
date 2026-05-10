@@ -1,16 +1,19 @@
-{-# Language DataKinds, FlexibleContexts, FlexibleInstances, ImportQualifiedPost,
+{-# Language DataKinds, FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
              MultiParamTypeClasses, NamedFieldPuns, OverloadedRecordDot, OverloadedStrings,
-             ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators #-}
+             ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
+             UndecidableInstances #-}
 
 -- | Type system, OutsideIn(X) formulated as an attribute grammar
 
-module Language.Haskell.TypeSystem (checkExpression{-, checkDeclaration, checkModule-}) where
+module Language.Haskell.TypeSystem (
+  checkExpression{-, checkDeclaration, checkModule-},
+  defaultConstraintHandler) where
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Either.Validation (Validation(Failure, Success), validationToEither)
 import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
-import Data.Functor.Compose (Compose(Compose))
+import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Identity (Identity(Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
@@ -95,10 +98,48 @@ data ConstraintHandler l con = ConstraintHandler{
   replaceVar :: AST.Name l -> AST.Name l -> con -> con,
   simplify :: con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
-           -> (con, TypeEnv l Identity con),
+           -> (con, Map (AST.Name l) (AST.Type l l Identity Identity)),
   unify :: AST.Type l l Identity Identity -> AST.Type l l Identity Identity -> con,
   union :: con -> con -> con,
   empty :: con}
+
+data DefaultConstraints l = DefaultConstraints{
+  equations :: [(AST.Type l l Identity Identity, AST.Type l l Identity Identity)],
+  classes :: Map (AST.QualifiedName l) [AST.Type l l Identity Identity]}
+
+deriving instance (Show (AST.QualifiedName l), Show (AST.Type l l Identity Identity)) => Show (DefaultConstraints l)
+instance Semigroup (DefaultConstraints AST.Language) where
+  (<>) = defaultConstraintHandler.union
+instance Monoid (DefaultConstraints AST.Language) where
+  mempty = defaultConstraintHandler.empty
+
+defaultConstraintHandler :: ConstraintHandler AST.Language (DefaultConstraints AST.Language)
+defaultConstraintHandler = ConstraintHandler{
+  fromContext = \case
+      AST.ClassConstraint name (Identity arg) -> DefaultConstraints{equations= [], classes= Map.singleton name [arg]}
+      AST.Constraints cons -> foldMap defaultConstraintHandler.fromContext (Compose cons)
+      AST.NoContext -> defaultConstraintHandler.empty,
+  replaceVar = \from to DefaultConstraints{equations, classes} ->
+      let replaceInType = \case
+            AST.TypeVariable name
+              | name == from -> AST.TypeVariable to
+              | otherwise -> AST.TypeVariable name
+            AST.FunctionType l r -> AST.FunctionType (replaceInType <$> l) (replaceInType <$> r)
+            AST.ListType t -> AST.ListType (replaceInType <$> t)
+            AST.StrictType t -> AST.StrictType (replaceInType <$> t)
+            AST.TupleType fields -> AST.TupleType (getCompose $ replaceInType <$> Compose fields)
+            AST.TypeApplication l r -> AST.TypeApplication (replaceInType <$> l) (replaceInType <$> r)
+            t -> t
+      in DefaultConstraints{
+        equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
+        classes = getCompose $ replaceInType <$> Compose classes},
+  -- TODO: actually simplify wanted, report contradictions
+  simplify = \given wanted-> (given <> wanted, Map.empty),
+  unify = \a b -> DefaultConstraints{equations= [(a, b)], classes= mempty},
+  union = \l r-> DefaultConstraints{
+      equations= l.equations <> r.equations,
+      classes= Map.unionWith (<>) l.classes r.classes},
+  empty = DefaultConstraints{equations= [], classes= Map.empty}}
 
 -- | The type environment maps variables to their types
 data TypeEnv l f con = TypeEnv{
