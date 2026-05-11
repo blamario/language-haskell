@@ -80,12 +80,13 @@ checkExpression :: (Abstract.Haskell l,
                 -> Wrap l pos s (AST.Expression l l (Wrap l pos s) (Wrap l pos s))
                 -> Either (TypeErrors l pos con) (AST.Type l l Identity Identity)
 checkExpression constrain extensions bindings e =
-  fmap fst $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
+  fmap constrainType $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
   where env = TypeEnv{
           bindings,
           freshVarPrefix = "a",
           constraints = constrain.empty}
         transformation = AG.Knit TypeCheck{constrain, extensions}
+        constrainType (t, con) = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
 
 -- | Transformation for checking and inference of types. The @con@ parameter is for constraints.
 data TypeCheck l pos s con = TypeCheck{
@@ -95,6 +96,7 @@ data TypeCheck l pos s con = TypeCheck{
 -- | Record of functions for handling constraints
 data ConstraintHandler l con = ConstraintHandler{
   fromContext :: AST.Context l l Identity Identity -> con,
+  toContext :: con -> (AST.Context l l Identity Identity, con),
   replaceVar :: AST.Name l -> AST.Name l -> con -> con,
   simplify :: con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
@@ -119,6 +121,11 @@ defaultConstraintHandler = ConstraintHandler{
       AST.ClassConstraint name (Identity arg) -> DefaultConstraints{equations= [], classes= Map.singleton name [arg]}
       AST.Constraints cons -> foldMap defaultConstraintHandler.fromContext (Compose cons)
       AST.NoContext -> defaultConstraintHandler.empty,
+  toContext = \DefaultConstraints{equations, classes}->
+      case [AST.TypeEquality (Identity l) (Identity r) | (l, r) <- equations]
+           <> [AST.ClassConstraint name (Identity arg) | (name, [arg]) <- Map.toList classes]
+      of [] -> (AST.NoContext, defaultConstraintHandler.empty)
+         cons -> (AST.Constraints (ZipList $ Identity <$> cons), defaultConstraintHandler.empty),
   replaceVar = \from to DefaultConstraints{equations, classes} ->
       let replaceInType = \case
             AST.TypeVariable name
