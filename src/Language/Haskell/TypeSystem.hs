@@ -440,10 +440,26 @@ instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Abstract.Constructor l ~ AST.Constructor l) =>
+          Abstract.Constructor l ~ AST.Constructor l,
+          Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.Value l l) where
+  attribution TypeCheck{constrain, extensions} (_, AST.IntegerLiteral n) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (ty, con), AST.IntegerLiteral n)
+    where ty = AST.TypeVariable $ freshTV env
+          con = constrain.fromContext $ AST.ClassConstraint (preludeName extensions "Num") (Identity ty)
+  attribution TypeCheck{constrain, extensions} (_, AST.FloatingLiteral r) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (ty, con), AST.FloatingLiteral r)
+    where ty = AST.TypeVariable $ freshTV env
+          con = constrain.fromContext $ AST.ClassConstraint (preludeName extensions "Fractional") (Identity ty)
   attribution TypeCheck{constrain, extensions} (_, AST.CharLiteral c) _ =
     (AG.Synthesized $ Success (preludeType extensions "Char", constrain.empty), AST.CharLiteral c)
+  attribution TypeCheck{constrain, extensions} (_, AST.StringLiteral s) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (ty, con), AST.StringLiteral s)
+    where (ty, con)
+            | Map.findWithDefault False Extensions.OverloadedStrings extensions
+            = (AST.TypeVariable $ freshTV env,
+               constrain.fromContext $ AST.ClassConstraint (preludeName extensions "IsString") (Identity ty))
+            | otherwise = (preludeType extensions "String", constrain.empty)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -642,10 +658,12 @@ replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> 
 replaceTypeVar old new = undefined
 
 preludeType :: Abstract.Haskell l => Map Extension Bool -> Text -> AST.Type l l Identity Identity
-preludeType extensions =
-  AST.ConstructorType . Identity . Abstract.constructorReference
-  . (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Binder.unqualifiedName
-     else Abstract.qualifiedName (Just Binder.preludeName))
+preludeType extensions = AST.ConstructorType . Identity . Abstract.constructorReference . preludeName extensions
+
+preludeName :: Abstract.Haskell l => Map Extension Bool -> Text -> Abstract.QualifiedName l
+preludeName extensions =
+  (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Binder.unqualifiedName
+   else Abstract.qualifiedName (Just Binder.preludeName))
   . Abstract.name
 
 replaceFresh :: (AST.Name l -> AST.Name l -> con -> con)
