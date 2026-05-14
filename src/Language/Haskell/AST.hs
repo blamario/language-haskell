@@ -218,10 +218,10 @@ data Declaration λ l d s =
 
 data Expression λ l d s =
    ApplyExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
+   | CaseExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.CaseAlternative l l d d)))
    | ConditionalExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                            (s (Abstract.Expression l l d d))
    | ConstructorExpression (s (Abstract.Constructor l l d d))
-   | CaseExpression (s (Abstract.Expression l l d d)) (ZipList (s (Abstract.CaseAlternative l l d d)))
    | DoExpression (s (Abstract.GuardedExpression l l d d))
    | InfixExpression (s (Abstract.Expression l l d d)) (s (Abstract.Expression l l d d))
                      (s (Abstract.Expression l l d d))

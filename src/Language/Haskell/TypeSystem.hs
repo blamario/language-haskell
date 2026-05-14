@@ -381,12 +381,14 @@ instance (Abstract.Haskell l,
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
-          Abstract.Type l ~ AST.Type l,
+          Abstract.CaseAlternative l ~ AST.CaseAlternative l,
+          Abstract.Constructor l ~ AST.Constructor l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Value l ~ AST.Value l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          Abstract.Type l ~ AST.Type l,
+          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
   attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ referenceAttribution constrain env var, AST.ReferenceExpression var)
@@ -407,8 +409,43 @@ instance (Abstract.Haskell l,
           var = AST.TypeVariable (freshTV env)
   attribution
     TypeCheck{constrain}
+    (i, AST.CaseExpression _ cases)
+    (AG.Inherited env,
+     AST.CaseExpression (AG.Synthesized scrutineeSyn) caseSyns) =
+    (AG.Synthesized $ (,) caseType <$> con,
+     AST.CaseExpression
+      (AG.Inherited $ forkFresh 's' env)
+      (AG.Inherited . flip forkFresh env <$> (ZipList ['a' ..] <* cases)))
+    where caseType = AST.TypeVariable $ freshTV env
+          con = liftA2 constrain.union (snd <$> scrutineeSyn) $
+            foldr constrain.union constrain.empty <$> traverse caseConstraints caseSyns
+          caseConstraints (AG.Synthesized caseSyn) =
+            forA2 scrutineeSyn caseSyn $ \(scrutineeType, _) (lhsTy, rhsTy, caseCon)->
+              constrain.union (constrain.unify scrutineeType lhsTy)
+              $ constrain.union (constrain.unify caseType rhsTy) caseCon
+  attribution
+    TypeCheck{constrain, extensions}
+    (i, AST.ConditionalExpression{})
+    (AG.Inherited env,
+     AST.ConditionalExpression (AG.Synthesized condSyn) (AG.Synthesized trueSyn) (AG.Synthesized falseSyn)) =
+    (AG.Synthesized $ (,) . fst <$> trueSyn <*> con,
+     AST.ConditionalExpression
+      (AG.Inherited $ forkFresh 'c' env)
+      (AG.Inherited $ forkFresh 't' env)
+      (AG.Inherited $ forkFresh 'f' env))
+    where con = foldr constrain.union constrain.empty <$> sequenceA [
+            constrain.unify (preludeType extensions "Bool") . fst <$> condSyn,
+            liftA2 constrain.unify (fst <$> trueSyn) (fst <$> falseSyn),
+            snd <$> condSyn,
+            snd <$> trueSyn,
+            snd <$> falseSyn]
+  attribution TypeCheck{} (i, AST.ConstructorExpression{}) (AG.Inherited env, AST.ConstructorExpression consSyn) =
+    (AG.Synthesized $ AG.syn consSyn, AST.ConstructorExpression $ AG.Inherited env)
+  attribution
+    TypeCheck{constrain}
     ((start, _, end), AST.LambdaExpression patterns _)
-    (AG.Inherited env, AST.LambdaExpression patSyns (AG.Synthesized body)) =
+    (AG.Inherited env, AST.LambdaExpression patSyns (AG.Synthesized body))
+    =
     (AG.Synthesized
      $ case nonEmpty patVarDuplicates
        of Just duplicates -> Failure $ pure (start, DuplicatePatternVariables duplicates)
@@ -426,6 +463,25 @@ instance (Abstract.Haskell l,
           patVarDuplicates =
             Map.keys $ Map.filter (> Sum 1)
             $ foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> Sum 1 <$ varBindings) patSyns
+  attribution
+    TypeCheck{constrain}
+    (_, AST.TupleExpression items)
+    (AG.Inherited env, AST.TupleExpression itemSyns)
+    =
+    (AG.Synthesized
+     $ (,) . AST.TupleType . (Identity . fst <$>)
+       <$> itemTypeCons
+       <*> (foldr (constrain.union . snd) constrain.empty <$> itemTypeCons),
+     AST.TupleExpression (AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* items)))
+    where
+      itemTypeCons = traverse AG.syn itemSyns
+  attribution
+    TypeCheck{constrain}
+    (_, AST.TypedExpression{})
+    (AG.Inherited env, AST.TypedExpression (AG.Synthesized eSyn) (AG.Synthesized tSyn))
+    =
+    (AG.Synthesized $ (,) <$> tSyn <*> (constrain.union . snd <$> eSyn <*> (constrain.unify . fst <$> eSyn <*> tSyn)),
+     AST.TypedExpression (AG.Inherited $ forkFresh 'e' env) (AG.Inherited $ forkFresh 't' env))
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -680,3 +736,6 @@ forkFresh c env@TypeEnv{freshVarPrefix} = env{freshVarPrefix= c:freshVarPrefix}
 
 freshTV :: Abstract.Haskell l => TypeEnv l f con -> Abstract.Name l
 freshTV TypeEnv{freshVarPrefix} = Abstract.name (Text.pack freshVarPrefix)
+
+forA2 :: Applicative f  => f a -> f b -> (a -> b -> c) -> f c
+forA2 a b f = liftA2 f a b
