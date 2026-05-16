@@ -139,7 +139,7 @@ checkRestrictions extensions m = case Verifier.verify extensions m of
 -- | All the predefined modules available for import
 predefinedModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 predefinedModuleBindings =
-   liftA2 (<>) baseModuleBindings $ Map.fromList . pure . (,) Binder.preludeName <$> unqualifiedPreludeBindings
+   liftA2 (<>) baseModuleBindings $ Map.fromList . pure . (,) Abstract.preludeName <$> unqualifiedPreludeBindings
 
 -- | All the @Prelude@ bindings available without any import statement
 preludeBindings :: IO (Binder.Environment AST.Language)
@@ -151,7 +151,7 @@ unqualifiedPreludeBindings = do
    baseModuleEnv <- unsafeInterleaveIO baseModuleBindings
    preludeModuleEnv <- nonRecursiveDirectoryModuleBindings mempty baseModuleEnv preludeModuleDir
    preludeModuleEnv' <- nonRecursiveDirectoryModuleBindings mempty (preludeModuleEnv <> baseModuleEnv) preludeModuleDir
-   pure (preludeModuleEnv' Map.! Binder.preludeName <> Binder.builtinPreludeBindings)
+   pure (preludeModuleEnv' Map.! Abstract.preludeName <> Binder.builtinPreludeBindings)
 
 baseModuleBindings :: IO (Binder.ModuleEnvironment AST.Language)
 baseModuleBindings = do

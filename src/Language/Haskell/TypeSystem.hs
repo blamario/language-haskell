@@ -38,7 +38,6 @@ import Transformation.Full qualified as Full
 import Transformation.Rank2 qualified
 
 import Language.Haskell.Extensions.Abstract qualified as Abstract
-import Language.Haskell.Binder qualified as Binder
 import Language.Haskell.Reserializer qualified as Reserializer
 import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, RebindableSyntax))
 import Language.Haskell.Extensions.AST qualified as AST
@@ -640,7 +639,7 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ AST.FunctionType . Identity <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
      AST.FunctionType env env)
   attribution TypeCheck{constrain} (_, AST.TypeVariable name) (AG.Inherited env, _) =
-    (AG.Synthesized $ case referenceAttribution constrain env (Binder.unqualifiedName name) of
+    (AG.Synthesized $ case referenceAttribution constrain env (Abstract.unqualifiedName name) of
         Success (t, con) -> Success t
         Failure _ -> Success $ AST.TypeVariable name,
      AST.TypeVariable name)
@@ -741,7 +740,7 @@ placeError _ (Success a) = Success a
 extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
            => Map (AST.Name l) (AST.Type l l Identity Identity) -> TypeEnv l Identity con -> TypeEnv l Identity con
 extendWith localEnv env@TypeEnv{bindings} =
-  env{bindings = bindings <> Map.mapKeysMonotonic Binder.unqualifiedName localEnv}
+  env{bindings = bindings <> Map.mapKeysMonotonic Abstract.unqualifiedName localEnv}
 
 replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
 replaceTypeVar old new = undefined
@@ -751,8 +750,8 @@ preludeType extensions = AST.ConstructorType . Identity . Abstract.constructorRe
 
 preludeName :: Abstract.Haskell l => Map Extension Bool -> Text -> Abstract.QualifiedName l
 preludeName extensions =
-  (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Binder.unqualifiedName
-   else Abstract.qualifiedName (Just Binder.preludeName))
+  (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Abstract.unqualifiedName
+   else Abstract.qualifiedName (Just Abstract.preludeName))
   . Abstract.name
 
 replaceFresh :: (AST.Name l -> AST.Name l -> con -> con)

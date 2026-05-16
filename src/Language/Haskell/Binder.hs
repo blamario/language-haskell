@@ -16,10 +16,8 @@ module Language.Haskell.Binder (
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
    Unbound(Unbound, types, values, constructors),
-   -- * Prelude
-   preludeName, builtinPreludeBindings,
    -- * Utility functions
-   lookupType, lookupValue, onMap, baseName, unqualifiedName) where
+   builtinPreludeBindings, lookupType, lookupValue, onMap, baseName) where
 
 import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
@@ -399,10 +397,10 @@ instance {-# OVERLAPS #-}
             importedScope importSyns =
                allImports
                <> if not importsPrelude && Map.findWithDefault True Extensions.ImplicitPrelude exts
-                  then qualifiedWith preludeName preludeEnv <> unqualified preludeEnv
+                  then qualifiedWith Abstract.preludeName preludeEnv <> unqualified preludeEnv
                   else mempty
               where ((Any importsPrelude, allImports), _) = foldMap AG.syn importSyns
-            preludeEnv = fold $ Map.lookup preludeName modEnv
+            preludeEnv = fold $ Map.lookup Abstract.preludeName modEnv
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l, BindingMembers l,
@@ -434,7 +432,7 @@ instance {-# OVERLAPS #-}
       reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
       unqualifiedAndQualifiedWith modName qn@(AST.QualifiedName modName' localName) =
         modName' == Just modName
-        && lookupEnv qn moduleGlobalScope == lookupEnv (unqualifiedName localName) moduleGlobalScope
+        && lookupEnv qn moduleGlobalScope == lookupEnv (Abstract.unqualifiedName localName) moduleGlobalScope
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -446,7 +444,7 @@ instance {-# OVERLAPS #-}
           Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (ExtAST.Import l l) where
    attribution (AG.Auto (Binder modEnv)) node (AG.Inherited (exts, _), ExtAST.Import _ _ _ _ _ specSyn) =
-      (AG.Synthesized ((Any (name == preludeName), scope), mempty),
+      (AG.Synthesized ((Any (name == Abstract.preludeName), scope), mempty),
        ExtAST.Import False qualified Nothing name alias (Just $ AG.Inherited (exts, unqualified available)))
       where ExtAST.Import _ qualified _ name alias _ = Foldable1.head node
             available = fold $ Map.lookup name modEnv
@@ -490,7 +488,7 @@ instance {-# OVERLAPS #-}
                     -> (TypeAndValueBinding t v, envT <> envV)
                   Just (TypeAndValueBinding t@(DataType env) v) -> (TypeAndValueBinding t v, env)
                   Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
-                  _ -> (ErroneousBinding (MissingBinding $ unqualifiedName parent), mempty)
+                  _ -> (ErroneousBinding (MissingBinding $ Abstract.unqualifiedName parent), mempty)
             itemImports (ExtAST.ImportPattern name) = nameImport name available
             itemImports (ExtAST.ImportVar name) = nameImport name available
             available = onMap (Map.mapKeysMonotonic baseName) (snd i)
@@ -884,7 +882,7 @@ qualifiedWith :: AST.ModuleName l -> UnionWith (Map (AST.Name l)) a -> UnionWith
 qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Just moduleName)
 
 unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
-unqualified = onMap (Map.mapKeysMonotonic unqualifiedName)
+unqualified = onMap (Map.mapKeysMonotonic Abstract.unqualifiedName)
 
 filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> LocalEnvironment l
 filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
@@ -895,11 +893,3 @@ lookupEnv k = Map.lookup k . getUnionWith
 -- | The local name part of a qualified name
 baseName :: AST.QualifiedName l -> AST.Name l
 baseName (AST.QualifiedName _ name) = name
-
--- | Turns a local name into a 'QualifiedName'
-unqualifiedName :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l
-unqualifiedName = Abstract.qualifiedName Nothing
-
--- | The name of the @Prelude@ module
-preludeName :: Abstract.Haskell l => Abstract.ModuleName l
-preludeName = Abstract.moduleName (Abstract.name "Prelude" :| [])

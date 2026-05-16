@@ -1,4 +1,5 @@
-{-# Language ConstraintKinds, FlexibleContexts, KindSignatures, TypeFamilies, TypeFamilyDependencies #-}
+{-# Language ConstraintKinds, FlexibleContexts, KindSignatures,
+             OverloadedStrings, TypeFamilies, TypeFamilyDependencies #-}
 
 -- | The abstract node types forming a standard Haskell 2010 module. Every node type has the kind 'TreeNodeKind'.
 module Language.Haskell.Abstract (
@@ -6,13 +7,15 @@ module Language.Haskell.Abstract (
   TreeNodeKind, TreeNodeSubKind, NodeWrap, Language,
   -- * Class
   Haskell(..),
+  -- * Utility functions
+  preludeName, unqualifiedName,
   -- * Constraint synonyms
   DeeplyFunctor, DeeplyFoldable, DeeplyTraversable,
   UniversallyApplicable)
 where
 
 import qualified Data.Kind as Kind
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
 import qualified Rank2
 import qualified Transformation
@@ -206,6 +209,14 @@ class Haskell λ where
 
    cCall, cppCall, dotNetCall, jvmCall, stdCall :: CallingConvention λ
    safeCall, unsafeCall :: CallSafety λ
+
+-- | Turns a local name into a 'QualifiedName'
+unqualifiedName :: Haskell l => Name l -> QualifiedName l
+unqualifiedName = qualifiedName Nothing
+
+-- | The name of the @Prelude@ module
+preludeName :: Haskell l => ModuleName l
+preludeName = moduleName (name "Prelude" :| [])
 
 -- | Constraint @UniversallyApplicable t l d@ means that the transformation @t@ can be applied to any AST node of
 -- language @l@ with subtrees wrapped in @d@.

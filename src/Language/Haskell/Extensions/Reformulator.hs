@@ -338,7 +338,7 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
             nOpK op =
                rewrap $
                AST.InfixExpression nExp (rewrap $ AST.ReferenceExpression $ qualifiedWithPrelude $ AST.Name op) kExp
-            nExp = rewrap $ AST.ReferenceExpression $ Binder.unqualifiedName n
+            nExp = rewrap $ AST.ReferenceExpression $ Abstract.unqualifiedName n
             kExp = rewrap $ AST.LiteralExpression $ rewrap $ AST.IntegerLiteral k
             just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Just"
             rewrap :: node -> Wrap l2 pos s node
@@ -502,4 +502,4 @@ mapName :: Abstract.Haskell λ2 => AST.Name λ1 -> Abstract.Name λ2
 mapName (AST.Name name) = Abstract.name name
 
 qualifiedWithPrelude :: Abstract.Haskell l => Abstract.Name l -> Abstract.QualifiedName l
-qualifiedWithPrelude = Abstract.qualifiedName (Just Binder.preludeName)
+qualifiedWithPrelude = Abstract.qualifiedName (Just Abstract.preludeName)
