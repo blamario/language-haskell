@@ -21,6 +21,7 @@ import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Ap(Ap), Endo(Endo), Sum(Sum))
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -176,6 +177,8 @@ type instance AG.Atts (AG.Synthesized (TypeCheck l pos s con)) g =
 
 type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) where
   InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity con)
+  InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l con, TypeEnv l Identity con)
+  InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l con, TypeEnv l Identity con)
   InhAtts l pos s con _ = TypeEnv l Identity con
 
 type family SynAtts l pos s con g where
@@ -203,6 +206,9 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.TypeVarBinding l l) = AST.TypeVarBinding l l Identity Identity
   SynAtts l pos s con (AST.Context l l) = (AST.Context l l Identity Identity, con)
   SynAtts l pos s con _ = ()
+
+type StatementConstraintBuilder l con =
+  TypeEnv l Identity con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -339,10 +345,23 @@ instance (Abstract.Haskell l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
-          Abstract.Expression l ~ AST.Expression l) =>
+          Abstract.Expression l ~ AST.Expression l,
+          Abstract.GuardedExpression l ~ AST.GuardedExpression l) =>
          AG.At (TypeCheck l pos s con) (AST.EquationRHS l l) where
-  attribution TypeCheck{constrain} (_, AST.NormalRHS{}) (AG.Inherited env, AST.NormalRHS (AG.Synthesized patSyn)) =
-    (AG.Synthesized patSyn, AST.NormalRHS $ AG.Inherited env)
+  attribution TypeCheck{constrain} (_, AST.NormalRHS{}) (AG.Inherited env, AST.NormalRHS (AG.Synthesized bodySyn)) =
+    (AG.Synthesized bodySyn, AST.NormalRHS $ AG.Inherited env)
+  attribution
+    TypeCheck{constrain, extensions}
+    (_, AST.GuardedRHS guardeds)
+    (AG.Inherited env, AST.GuardedRHS guardedSyns)
+    =
+    (AG.Synthesized $ collapse <$> traverse AG.syn guardedSyns,
+     AST.GuardedRHS
+     $ AG.Inherited . (,) constrainToBool <$> liftA2 forkFresh (ZipNonEmpty $ 'a' :| ['b'..]) (env <$ guardeds))
+     where
+       collapse (ZipNonEmpty ((t1, con1) :| tyCons)) =
+         (t1, foldr (\(ty, con) cons-> constrain.union (constrain.unify t1 ty) $ constrain.union con cons) con1 tyCons)
+       constrainToBool _env mlt rt = constrain.unify (fromMaybe (preludeType extensions "Bool") mlt) rt
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -353,11 +372,11 @@ instance (Abstract.Haskell l,
   attribution
     TypeCheck{constrain}
     (_, AST.GuardedExpression guards _)
-    (AG.Inherited env, AST.GuardedExpression (ZipList guardSyns) (AG.Synthesized bodySyn))
+    (AG.Inherited (statConBuilder, env), AST.GuardedExpression (ZipList guardSyns) (AG.Synthesized bodySyn))
     =
     (AG.Synthesized $ combine <$> bodySyn <*> guardsCon,
      AST.GuardedExpression
-       (AG.Inherited <$> liftA2 forkFresh (ZipList ['a' ..]) (ZipList guardEnvs))
+       (AG.Inherited . (,) statConBuilder <$> liftA2 forkFresh (ZipList ['a' ..]) (ZipList guardEnvs))
        (AG.Inherited $ forkFresh 'x' bodyEnv))
     where combine (bodyType, bodyCon) (Endo appGuardsCon) = (bodyType, appGuardsCon bodyCon)
           Ap guardsCon = foldMap (Ap . fmap (Endo . constrain.union . snd) . AG.syn) guardSyns
@@ -373,10 +392,10 @@ instance (Abstract.Haskell l,
           Abstract.Expression l ~ AST.Expression l) =>
          AG.At (TypeCheck l pos s con) (AST.Statement l l) where
   attribution TypeCheck{constrain, extensions} (_, AST.ExpressionStatement _)
-    (AG.Inherited env, AST.ExpressionStatement (AG.Synthesized bodySyn))
+    (AG.Inherited (buildCon, env), AST.ExpressionStatement (AG.Synthesized bodySyn))
     =
-    (AG.Synthesized $ requireBool <$> bodySyn, AST.ExpressionStatement (AG.Inherited env))
-    where requireBool (t, con) = (mempty, constrain.union con $ constrain.unify t (preludeType extensions "Bool"))
+    (AG.Synthesized $ addConstraints <$> bodySyn, AST.ExpressionStatement (AG.Inherited env))
+    where addConstraints (t, con) = (mempty, constrain.union con $ buildCon env Nothing t)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -384,6 +403,7 @@ instance (Abstract.Haskell l,
           Abstract.CaseAlternative l ~ AST.CaseAlternative l,
           Abstract.Constructor l ~ AST.Constructor l,
           Abstract.Context l ~ AST.Context l,
+          Abstract.GuardedExpression l ~ AST.GuardedExpression l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Value l ~ AST.Value l,
           Abstract.Pattern l ~ AST.Pattern l,
@@ -441,6 +461,19 @@ instance (Abstract.Haskell l,
             snd <$> falseSyn]
   attribution TypeCheck{} (i, AST.ConstructorExpression{}) (AG.Inherited env, AST.ConstructorExpression consSyn) =
     (AG.Synthesized $ AG.syn consSyn, AST.ConstructorExpression $ AG.Inherited env)
+  attribution
+    TypeCheck{constrain, extensions}
+    (_, AST.DoExpression{})
+    (AG.Inherited env, AST.DoExpression (AG.Synthesized bodySyn))
+    = (AG.Synthesized $ constrainBodyType <$> bodySyn, AST.DoExpression $ AG.Inherited (statementCon, env))
+    where
+      constrainBodyType (ty, con) =
+        (ty,
+         constrain.union con
+         $ constrain.union (constrain.unify ty $ AST.TypeApplication mt $ Identity AST.TypeWildcard)
+         $ constrain.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
+      statementCon _ mlt rt = constrain.unify rt $ AST.TypeApplication mt $ Identity $ fromMaybe AST.TypeWildcard mlt
+      mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
   attribution
     TypeCheck{constrain}
     ((start, _, end), AST.LambdaExpression patterns _)
