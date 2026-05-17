@@ -9,7 +9,7 @@ module Language.Haskell.TypeSystem (
   checkExpression{-, checkDeclaration, checkModule-},
   TypeErrors, DefaultConstraints, defaultConstraintHandler) where
 
-import Control.Applicative (ZipList(ZipList))
+import Control.Applicative (ZipList(ZipList), liftA3)
 import Data.Either.Validation (Validation(Failure, Success), validationToEither)
 import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
@@ -159,6 +159,7 @@ data TypeError l con
   | TypeAmbiguity con
   | DuplicatePatternVariables (NonEmpty (AST.Name l))
   | UnknownTypeVariable (AST.QualifiedName l)
+  | UnknownValue (AST.QualifiedName l)
 
 deriving instance (Show (AST.Type l l Identity Identity), Show (AST.Name l), Show con) => Show (TypeError l con)
 
@@ -437,7 +438,7 @@ instance (Abstract.Haskell l,
       (AG.Inherited . flip forkFresh env <$> (ZipList ['a' ..] <* cases)))
     where caseType = AST.TypeVariable $ freshTV env
           con = liftA2 constrain.union (snd <$> scrutineeSyn) $
-            foldr constrain.union constrain.empty <$> traverse caseConstraints caseSyns
+            conconcat constrain <$> traverse caseConstraints caseSyns
           caseConstraints (AG.Synthesized caseSyn) =
             forA2 scrutineeSyn caseSyn $ \(scrutineeType, _) (lhsTy, rhsTy, caseCon)->
               constrain.union (constrain.unify scrutineeType lhsTy)
@@ -452,7 +453,7 @@ instance (Abstract.Haskell l,
       (AG.Inherited $ forkFresh 'c' env)
       (AG.Inherited $ forkFresh 't' env)
       (AG.Inherited $ forkFresh 'f' env))
-    where con = foldr constrain.union constrain.empty <$> sequenceA [
+    where con = conconcat constrain <$> sequenceA [
             constrain.unify (preludeType extensions "Bool") . fst <$> condSyn,
             liftA2 constrain.unify (fst <$> trueSyn) (fst <$> falseSyn),
             snd <$> condSyn,
@@ -473,6 +474,51 @@ instance (Abstract.Haskell l,
          $ constrain.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
       statementCon _ mlt rt = constrain.unify rt $ AST.TypeApplication mt $ Identity $ fromMaybe AST.TypeWildcard mlt
       mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
+  attribution
+    TypeCheck{constrain}
+    (_, AST.InfixExpression{})
+    (AG.Inherited env, AST.InfixExpression (AG.Synthesized lSyn) (AG.Synthesized opSyn) (AG.Synthesized rSyn))
+    =
+    (AG.Synthesized $ liftA3 apply lSyn opSyn rSyn,
+     AST.InfixExpression
+       (AG.Inherited $ forkFresh 'l' env)
+       (AG.Inherited $ forkFresh 'o' env)
+       (AG.Inherited $ forkFresh 'r' env))
+    where
+      apply (lT, lCon) (opT, opCon) (rT, rCon) =
+        (resultType,
+         conconcat constrain [
+            constrain.unify opT (AST.FunctionType (Identity lT) $ Identity
+                                 $ AST.FunctionType (Identity rT) (Identity resultType)),
+            lCon, opCon, rCon])
+      resultType = AST.TypeVariable $ freshTV env
+  attribution
+    TypeCheck{constrain}
+    (i, AST.LeftSectionExpression{})
+    (AG.Inherited env, AST.LeftSectionExpression (AG.Synthesized argSyn) op)
+    =
+    (AG.Synthesized $ liftA2 apply opLookup argSyn, AST.LeftSectionExpression (AG.Inherited $ forkFresh 'l' env) op)
+    where
+      apply opT (argT, argCon) =
+        (resultType,
+         constrain.union argCon $ constrain.unify opT $ AST.FunctionType (Identity argT) (Identity resultType))
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op $ bindings env)
+      resultType = AST.TypeVariable $ freshTV env
+  attribution
+    TypeCheck{constrain}
+    (i, AST.RightSectionExpression{})
+    (AG.Inherited env, AST.RightSectionExpression op (AG.Synthesized argSyn))
+    =
+    (AG.Synthesized $ liftA2 apply opLookup argSyn, AST.RightSectionExpression op (AG.Inherited $ forkFresh 'r' env))
+    where
+      apply opT (argT, argCon) =
+        (resultType,
+         constrain.union argCon $ constrain.unify opT
+         $ AST.FunctionType (Identity leftArgType) $ Identity
+         $ AST.FunctionType (Identity argT) (Identity resultType))
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op $ bindings env)
+      resultType = AST.TypeVariable $ freshTV $ forkFresh 'x' env
+      leftArgType = AST.TypeVariable $ freshTV $ forkFresh 'l' env
   attribution
     TypeCheck{constrain}
     ((start, _, end), AST.LambdaExpression patterns _)
@@ -768,6 +814,9 @@ forkFresh c env@TypeEnv{freshVarPrefix} = env{freshVarPrefix= c:freshVarPrefix}
 
 freshTV :: Abstract.Haskell l => TypeEnv l f con -> Abstract.Name l
 freshTV TypeEnv{freshVarPrefix} = Abstract.name (Text.pack freshVarPrefix)
+
+conconcat :: Foldable f => ConstraintHandler l con -> f con -> con
+conconcat constrain = foldr constrain.union constrain.empty
 
 forA2 :: Applicative f  => f a -> f b -> (a -> b -> c) -> f c
 forA2 a b f = liftA2 f a b
