@@ -400,6 +400,7 @@ instance (Abstract.Haskell l,
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.Declaration l ~ AST.Declaration l,
           Abstract.CaseAlternative l ~ AST.CaseAlternative l,
           Abstract.Constructor l ~ AST.Constructor l,
           Abstract.Context l ~ AST.Context l,
@@ -522,25 +523,39 @@ instance (Abstract.Haskell l,
   attribution
     TypeCheck{constrain}
     ((start, _, end), AST.LambdaExpression patterns _)
-    (AG.Inherited env, AST.LambdaExpression patSyns (AG.Synthesized body))
+    (AG.Inherited env, AST.LambdaExpression patSyns (AG.Synthesized bodySyn))
     =
     (AG.Synthesized
      $ case nonEmpty patVarDuplicates
        of Just duplicates -> Failure $ pure (start, DuplicatePatternVariables duplicates)
-          Nothing -> foldr (liftA2 abstract . AG.syn) body patSyns,
+          Nothing -> foldr (liftA2 abstract . AG.syn) bodySyn patSyns,
      AST.LambdaExpression (AG.Inherited <$> patEnvs) (AG.Inherited bodyEnv))
-    where abstract :: (AST.Name l, Map (AST.Name l) (AST.Type l l Identity Identity), con)
-                   -> (AST.Type l l Identity Identity, con)
-                   -> (AST.Type l l Identity Identity, con)
-          abstract (patVar, patBindings, patCon) (rhsType, rhsCon) =
-            (AST.FunctionType (Identity $ patBindings Map.! patVar) (Identity rhsType),
-             constrain.union patCon rhsCon)
-          patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
-          bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
-          patVarBindings = foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> varBindings) patSyns
-          patVarDuplicates =
-            Map.keys $ Map.filter (> Sum 1)
-            $ foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> Sum 1 <$ varBindings) patSyns
+    where
+      abstract :: (AST.Name l, Map (AST.Name l) (AST.Type l l Identity Identity), con)
+               -> (AST.Type l l Identity Identity, con)
+               -> (AST.Type l l Identity Identity, con)
+      abstract (patVar, patBindings, patCon) (rhsType, rhsCon) =
+        (AST.FunctionType (Identity $ patBindings Map.! patVar) (Identity rhsType),
+         constrain.union patCon rhsCon)
+      patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
+      bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
+      patVarBindings = foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> varBindings) patSyns
+      patVarDuplicates =
+        Map.keys $ Map.filter (> Sum 1)
+        $ foldMap (\(AG.Synthesized (Success (_, varBindings, _))) -> Sum 1 <$ varBindings) patSyns
+  attribution
+    TypeCheck{constrain}
+    ((start, _, end), AST.LetExpression bindings _)
+    (AG.Inherited env, AST.LetExpression bindSyns (AG.Synthesized bodySyn))
+    =
+    (AG.Synthesized $ liftA2 complete (traverse ((snd <$>) . AG.syn) bindSyns) bodySyn,
+     AST.LetExpression (AG.Inherited <$> bindEnvs) (AG.Inherited bodyEnv))
+    where
+      complete (ZipList bindCons) (bodyType, bodyCon) = (bodyType, conconcat constrain $ bodyCon : bindCons)
+      boundEnv = foldMap fst $ Compose (AG.syn <$> bindSyns)
+      env' = extendWith boundEnv env
+      bindEnvs = flip forkFresh env' <$> (ZipList ['a' ..] <* bindings)
+      bodyEnv = forkFresh 'x' env'
   attribution
     TypeCheck{constrain}
     (_, AST.TupleExpression items)
