@@ -309,8 +309,8 @@ instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
-          Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
+          Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.Pattern l ~ AST.Pattern l) =>
          AG.At (TypeCheck l pos s con) (AST.EquationLHS l l) where
   attribution TypeCheck{constrain} (_, AST.VariableLHS name) (AG.Inherited env, _) =
@@ -318,6 +318,28 @@ instance (Abstract.Haskell l,
      AST.VariableLHS name)
     where tv = freshTV env
           varType = AST.TypeVariable tv
+  attribution TypeCheck{constrain} (_, AST.PatternLHS{}) (AG.Inherited env, AST.PatternLHS (AG.Synthesized patSyn)) =
+    (AG.Synthesized patSyn, AST.PatternLHS $ AG.Inherited env)
+  attribution
+    TypeCheck{constrain}
+    (_, AST.PrefixLHS _ args)
+    (AG.Inherited env, AST.PrefixLHS (AG.Synthesized funSyn) argSyns)
+    =
+    (AG.Synthesized $ liftA2 collect funSyn (traverse AG.syn argSyns),
+     AST.PrefixLHS (AG.Inherited $ forkFresh 'p' env) argEnvs)
+    where
+      argEnvs = AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b'..])) <* args
+      collect (name, prefixBindings, prefixCon) argSyns'
+        | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
+        = (name, Map.unions $ prefixBindings : argBindings, conconcat constrain $ prefixCon : argCons)
+  attribution
+    TypeCheck{constrain}
+    (_, AST.InfixLHS{})
+    (AG.Inherited env, AST.InfixLHS (AG.Synthesized lSyn) name (AG.Synthesized rSyn))
+    =
+    (AG.Synthesized $ liftA2 combine lSyn rSyn,
+     AST.InfixLHS (AG.Inherited $ forkFresh 'l' env) name (AG.Inherited $ forkFresh 'r' env))
+    where combine (_, lBind, lCon) (_, rBind, rCon) = (name, Map.union lBind rBind, constrain.union lCon rCon)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l) =>
