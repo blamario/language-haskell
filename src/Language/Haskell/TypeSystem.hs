@@ -77,12 +77,14 @@ checkExpression :: (Abstract.Haskell l,
                 => ConstraintHandler l con
                 -> Map Extension Bool
                 -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
+                -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
                 -> Wrap l pos s (AST.Expression l l (Wrap l pos s) (Wrap l pos s))
                 -> Either (TypeErrors l pos con) (AST.Type l l Identity Identity)
-checkExpression constrain extensions bindings e =
+checkExpression constrain extensions typeBindings valueBindings e =
   fmap constrainType $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
   where env = TypeEnv{
-          bindings,
+          typeBindings,
+          valueBindings,
           freshVarPrefix = "a",
           constraints = constrain.empty}
         transformation = AG.Knit TypeCheck{constrain, extensions}
@@ -151,7 +153,8 @@ defaultConstraintHandler = ConstraintHandler{
 -- | The type environment maps variables to their types
 data TypeEnv l f con = TypeEnv{
   freshVarPrefix :: String,
-  bindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
+  typeBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
+  valueBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
   constraints :: con}
 
 data TypeError l con
@@ -412,7 +415,7 @@ instance (Abstract.Haskell l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
   attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
-    (AG.Synthesized $ placeError i $ referenceAttribution constrain env var, AST.ReferenceExpression var)
+    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env var, AST.ReferenceExpression var)
   attribution TypeCheck{} (i, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
     (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
   attribution
@@ -642,7 +645,7 @@ instance (Abstract.Haskell l,
           Abstract.Pattern l ~ AST.Pattern l) =>
          AG.At (TypeCheck l pos s con) (AST.Constructor l l) where
   attribution TypeCheck{constrain} (i, AST.ConstructorReference name) (AG.Inherited env, _) =
-    (AG.Synthesized $ placeError i $ referenceAttribution constrain env name, AST.ConstructorReference name)
+    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env name, AST.ConstructorReference name)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -700,7 +703,7 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ AST.FunctionType . Identity <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
      AST.FunctionType env env)
   attribution TypeCheck{constrain} (_, AST.TypeVariable name) (AG.Inherited env, _) =
-    (AG.Synthesized $ case referenceAttribution constrain env (Abstract.unqualifiedName name) of
+    (AG.Synthesized $ case typeReferenceAttribution constrain env (Abstract.unqualifiedName name) of
         Success (t, con) -> Success t
         Failure _ -> Success $ AST.TypeVariable name,
      AST.TypeVariable name)
@@ -774,18 +777,21 @@ instance (Abstract.Haskell l,
           whereEnvs = AG.Inherited . (`forkFresh` extendWith lhsBindings env)
                       <$> (ZipList ['a' ..] <* wheres)
 
+typeReferenceAttribution constrain = referenceAttribution False constrain
+valueReferenceAttribution constrain = referenceAttribution True constrain
 referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
                          Abstract.Type l ~ AST.Type l,
                          Abstract.Context l ~ AST.Context l)
-                     => ConstraintHandler l con
+                     => Bool
+                     -> ConstraintHandler l con
                      -> TypeEnv l Identity con
                      -> AST.QualifiedName l
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
-referenceAttribution ConstraintHandler{empty, fromContext, replaceVar} env name =
-    case Map.lookup name (bindings env) of
+referenceAttribution isValue ConstraintHandler{empty, fromContext, replaceVar} env name =
+    case Map.lookup name $ if isValue then valueBindings env else typeBindings env of
       Just t -> Success $ concrete t
-      Nothing -> Failure $ UnknownTypeVariable name
+      Nothing -> Failure $ if isValue then UnknownValue name else UnknownTypeVariable name
     where concrete (AST.ForallType vars (Identity (AST.ConstrainedType (Identity context) (Identity body)))) =
             foldr (replace . runIdentity) (body, fromContext context) vars
           concrete t = (t, empty)
@@ -798,10 +804,16 @@ placeError :: (pos, s, pos) -> Validation (TypeError l con) a -> Validation (Typ
 placeError (pos, _, _) (Failure err) = Failure $ (pos, err) :| []
 placeError _ (Success a) = Success a
 
-extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
-           => Map (AST.Name l) (AST.Type l l Identity Identity) -> TypeEnv l Identity con -> TypeEnv l Identity con
-extendWith localEnv env@TypeEnv{bindings} =
-  env{bindings = bindings <> Map.mapKeysMonotonic Abstract.unqualifiedName localEnv}
+extendTypesWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
+                => Map (AST.Name l) (AST.Type l l Identity Identity) -> TypeEnv l Identity con -> TypeEnv l Identity con
+extendTypesWith localEnv env@TypeEnv{typeBindings} =
+  env{typeBindings = typeBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName localEnv}
+
+extendValuesWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
+                 => Map (AST.Name l) (AST.Type l l Identity Identity) -> TypeEnv l Identity con
+                 -> TypeEnv l Identity con
+extendValuesWith localEnv env@TypeEnv{valueBindings} =
+  env{valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName localEnv}
 
 replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
 replaceTypeVar old new = undefined
