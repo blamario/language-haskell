@@ -81,7 +81,7 @@ class TypeCheckable g l where
 instance TypeCheckable AST.Expression Language where
    typeCheck =
      either (("Type error: " <>) . show) Template.showViaTH
-     . TypeSystem.checkExpression TypeSystem.defaultConstraintHandler mempty mempty
+     . TypeSystem.checkExpression TypeSystem.defaultConstraintHandler mempty mempty mempty
 
 instance TypeCheckable AST.Module l where
    typeCheck = const ""
