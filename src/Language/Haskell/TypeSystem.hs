@@ -74,7 +74,7 @@ checkExpression :: (Abstract.Haskell l,
                     Abstract.Constructor l ~ AST.Constructor l,
                     Abstract.Pattern l ~ AST.Pattern l,
                     Abstract.FieldPattern l ~ AST.FieldPattern l)
-                => ConstraintHandler l con
+                => ConstraintHandler l pos con
                 -> Map Extension Bool
                 -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
                 -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
@@ -92,11 +92,11 @@ checkExpression constrain extensions typeBindings valueBindings e =
 
 -- | Transformation for checking and inference of types. The @con@ parameter is for constraints.
 data TypeCheck l pos s con = TypeCheck{
-  constrain :: ConstraintHandler l con,
+  constrain :: ConstraintHandler l pos con,
   extensions :: Map Extension Bool}
 
 -- | Record of functions for handling constraints
-data ConstraintHandler l con = ConstraintHandler{
+data ConstraintHandler l pos con = ConstraintHandler{
   display :: con -> String,
   fromContext :: AST.Context l l Identity Identity -> con,
   toContext :: con -> (AST.Context l l Identity Identity, con),
@@ -105,22 +105,23 @@ data ConstraintHandler l con = ConstraintHandler{
            -> con  -- ^ wanted constraints to simplify
            -> (con, Map (AST.Name l) (AST.Type l l Identity Identity)),
   unify :: AST.Type l l Identity Identity -> AST.Type l l Identity Identity -> con,
-  assign :: AST.Name l -> TypeOrError l con -> con,
+  assign :: AST.Name l -> TypeOrError l pos con -> con,
   union :: con -> con -> con,
   empty :: con}
 
-data DefaultConstraints l = DefaultConstraints{
+data DefaultConstraints l pos = DefaultConstraints{
   equations :: [(AST.Type l l Identity Identity, AST.Type l l Identity Identity)],
-  errors :: Map (AST.Name l) (TypeError l (DefaultConstraints l)),
+  errors :: Map (AST.Name l) (TypeErrors l pos (DefaultConstraints l pos)),
   classes :: Map (AST.QualifiedName l) [AST.Type l l Identity Identity]}
 
-deriving instance (Show (AST.QualifiedName l), Show (AST.Type l l Identity Identity)) => Show (DefaultConstraints l)
-instance Semigroup (DefaultConstraints AST.Language) where
+deriving instance (Show (AST.QualifiedName l), Show (AST.Type l l Identity Identity), Show pos) =>
+  Show (DefaultConstraints l pos)
+instance Show pos => Semigroup (DefaultConstraints AST.Language pos) where
   (<>) = defaultConstraintHandler.union
-instance Monoid (DefaultConstraints AST.Language) where
+instance Show pos => Monoid (DefaultConstraints AST.Language pos) where
   mempty = defaultConstraintHandler.empty
 
-defaultConstraintHandler :: ConstraintHandler AST.Language (DefaultConstraints AST.Language)
+defaultConstraintHandler :: Show pos => ConstraintHandler AST.Language pos (DefaultConstraints AST.Language pos)
 defaultConstraintHandler = ConstraintHandler{
   display = show,
   fromContext = \case
@@ -175,9 +176,9 @@ data TypeError l con
   | UnknownValue (AST.QualifiedName l)
   | UntypedValue (AST.QualifiedName l)
 
-data TypeOrError l con
+data TypeOrError l pos con
   = ProperType (AST.Type l l Identity Identity)
-  | ErrorType (TypeError l con)
+  | ErrorType (TypeErrors l pos con)
 
 deriving instance (Show (AST.Type l l Identity Identity), Show (AST.Name l), Show con) => Show (TypeError l con)
 
@@ -258,7 +259,7 @@ instance (Abstract.Haskell l,
               $ [lhsCon, rhsCon, constrain.assign lhsName rhsTypeOrError] ++ whereCons)
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
-            Failure ((_, e) :| _) -> (ErrorType e, constrain.empty)
+            Failure err -> (ErrorType err, constrain.empty)
           (lhsName, lhsBindings@(typeBindings, valueBindings), lhsCon) = lhsSyn
           ZipList whereCons = snd . AG.syn <$> whereSyns
           lhsEnv = forkFresh 'l' env
@@ -849,7 +850,7 @@ referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                          Abstract.Type l ~ AST.Type l,
                          Abstract.Context l ~ AST.Context l)
                      => Bool
-                     -> ConstraintHandler l con
+                     -> ConstraintHandler l pos con
                      -> TypeEnv l Identity con
                      -> AST.QualifiedName l
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
@@ -913,7 +914,7 @@ forkFresh c env@TypeEnv{freshVarPrefix} = env{freshVarPrefix= c:freshVarPrefix}
 freshTV :: Abstract.Haskell l => TypeEnv l f con -> Abstract.Name l
 freshTV TypeEnv{freshVarPrefix} = Abstract.name (Text.pack freshVarPrefix)
 
-conconcat :: Foldable f => ConstraintHandler l con -> f con -> con
+conconcat :: Foldable f => ConstraintHandler l pos con -> f con -> con
 conconcat constrain = foldr constrain.union constrain.empty
 
 forA2 :: Applicative f  => f a -> f b -> (a -> b -> c) -> f c
