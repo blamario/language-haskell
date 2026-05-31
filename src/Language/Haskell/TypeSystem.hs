@@ -397,10 +397,6 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
-  attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
-    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env var, AST.ReferenceExpression var)
-  attribution TypeCheck{} (i, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
-    (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
   attribution
     TypeCheck{constrain=ConstraintHandler{unify, union}}
     (_, AST.ApplyExpression{})
@@ -542,6 +538,10 @@ instance (Abstract.Haskell l,
       env' = extendWith boundEnv env
       bindEnvs = flip forkFresh env' <$> (ZipList ['a' ..] <* bindings)
       bodyEnv = forkFresh 'x' env'
+  attribution TypeCheck{} (i, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
+    (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
+  attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
+    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env var, AST.ReferenceExpression var)
   attribution
     TypeCheck{constrain}
     (_, AST.TupleExpression items)
