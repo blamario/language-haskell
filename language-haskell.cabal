@@ -35,7 +35,7 @@ library
                        Language.Haskell.Extensions.Reformulator,
                        Language.Haskell.Extensions.Translation,
                        Language.Haskell.Extensions.Verifier
-  other-modules:       Paths_language_haskell
+  other-modules:       Paths_language_haskell, Language.Haskell.TypeSystem.Constraints
   build-depends:       base >=4.7 && <5, ghc-prim < 0.14,
                        foldable1-classes-compat < 0.2,
                        bytestring < 0.13, text < 3, containers >= 0.5.8 && < 1,
