@@ -170,7 +170,7 @@ instance Monoid (Binding l) where
 
 -- | Add the inherited and synthesized bindings to every node in the argument AST.
 withBindings :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p),
-                                     AG.At w g, Traversable p,
+                                     AG.At w g, Foldable1 p, Traversable p,
                                      AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
                                      Rank2.Functor (g p),
                                      Rank2.Apply (g (AG.Semantics (AG.Keep w))),
@@ -189,7 +189,7 @@ withBindings extensions modEnv env node =
 -- | Recalculate the bindings within the given subtree. The 'ModuleEnvironment' only matters if the function is
 -- applied to the module itself or its imports, otherwise it's easiest to supply 'mempty'.
 rebind :: forall l g p w q x. (q ~ WithEnvironment l p, w ~ AG.Auto (Binder l p),
-                               AG.At w g, Traversable p,
+                               AG.At w g, Foldable1 p, Traversable p,
                                AG.Atts (AG.Synthesized w) g ~ (x, LocalEnvironment l),
                                Rank2.Functor (g p),
                                Rank2.Apply (g (AG.Semantics (AG.Keep w))),
@@ -218,9 +218,8 @@ onMaps f (UnionWith x) (UnionWith y) = UnionWith (f x y)
 -- | The transformation type used by 'withBindings'
 newtype Binder l (f :: Type -> Type) = Binder (ModuleEnvironment l)
 
-instance Foldable1 f => AG.Attribution (Binder l f) where
+instance AG.Attribution (Binder l f) where
    type Origin (Binder l f) = f
-   unwrap _ = Foldable1.head
 
 type instance AG.Atts (AG.Inherited (Binder l f)) g = (Map Extension Bool, Environment l)
 type instance AG.Atts (AG.Synthesized (Binder l f)) g = (OtherSynAtts l g, LocalEnvironment l)

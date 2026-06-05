@@ -112,7 +112,6 @@ type LocalBindings l con = (Map (AST.Name l) (AST.Type l l Identity Identity),
 
 instance AG.Attribution (TypeCheck l pos s con) where
   type Origin (TypeCheck l pos s con) = Wrap l pos s
-  unwrap _ (_, x) = x
 
 type instance AG.Atts (AG.Inherited (TypeCheck l pos s con)) g = InhAtts l pos s con g
 type instance AG.Atts (AG.Synthesized (TypeCheck l pos s con)) g = SynAtts l pos s con g
