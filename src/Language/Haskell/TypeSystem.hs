@@ -85,8 +85,9 @@ checkExpression :: (Abstract.Haskell l,
 checkExpression constrain extensions typeBindings valueBindings e =
   fmap constrainType $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
   where env = TypeEnv{
-          typeBindings,
-          valueBindings = Success <$> valueBindings,
+          bindings = TypeMap{
+              typeBindings,
+              valueBindings = Success <$> valueBindings},
           freshVarPrefix = "a",
           constraints = constrain.empty}
         transformation = AG.Knit TypeCheck{constrain, extensions}
@@ -97,11 +98,14 @@ data TypeCheck l pos s con = TypeCheck{
   constrain :: ConstraintHandler l pos con,
   extensions :: Map Extension Bool}
 
+data TypeMap l f con = TypeMap{
+  typeBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
+  valueBindings :: Map (AST.QualifiedName l) (Validation (TypeError l con) (AST.Type l l f f))}
+
 -- | The type environment maps variables to their types
 data TypeEnv l f con = TypeEnv{
   freshVarPrefix :: String,
-  typeBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
-  valueBindings :: Map (AST.QualifiedName l) (Validation (TypeError l con) (AST.Type l l f f)),
+  bindings :: TypeMap l f con,
   constraints :: con}
 
 type Wrap l pos s = Reserializer.Wrapped pos s
@@ -484,7 +488,7 @@ instance (Abstract.Haskell l,
       apply opT (argT, argCon) =
         (resultType,
          constrain.union argCon $ constrain.unify opT $ AST.FunctionType (Identity argT) (Identity resultType))
-      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.valueBindings)
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV env
   attribution
     TypeCheck{constrain}
@@ -498,7 +502,7 @@ instance (Abstract.Haskell l,
          constrain.union argCon $ constrain.unify opT
          $ AST.FunctionType (Identity leftArgType) $ Identity
          $ AST.FunctionType (Identity argT) (Identity resultType))
-      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.valueBindings)
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV $ forkFresh 'x' env
       leftArgType = AST.TypeVariable $ freshTV $ forkFresh 'l' env
   attribution
@@ -786,12 +790,12 @@ referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
 referenceAttribution isValue ConstraintHandler{empty, fromContext, replaceVar} env name
   | isValue =
-    case Map.lookup name env.valueBindings of
+    case Map.lookup name env.bindings.valueBindings of
       Just (Success t) -> Success $ concrete t
       Just Failure{} -> Failure $ UntypedValue name
       Nothing -> Failure $ UnknownValue name
   | otherwise =
-    case Map.lookup name env.typeBindings of
+    case Map.lookup name env.bindings.typeBindings of
       Just t -> Success $ concrete t
       Nothing -> Failure $ UnknownTypeVariable name
     where concrete (AST.ForallType vars (Identity (AST.ConstrainedType (Identity context) (Identity body)))) =
@@ -813,9 +817,9 @@ firstError (Success a) = Success a
 
 extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
            => LocalBindings l con -> TypeEnv l Identity con -> TypeEnv l Identity con
-extendWith (types, values) env@TypeEnv{typeBindings, valueBindings} =
-  env{typeBindings = typeBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName types,
-      valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values}
+extendWith (types, values) env@TypeEnv{bindings = TypeMap{typeBindings, valueBindings}} =
+  env{bindings = TypeMap{typeBindings = typeBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName types,
+                         valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values}}
 
 replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
 replaceTypeVar old new = undefined
