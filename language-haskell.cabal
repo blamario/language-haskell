@@ -57,6 +57,7 @@ executable haskell-parser
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.14 && <5, containers < 1, text, repr-tree-syb < 0.2, filepath < 1.5,
+                       either, witherable >= 0.4 && <0.6,
                        monoid-subclasses, optparse-applicative >= 0.12 && < 0.19,
                        input-parsers >= 0.2.2 && < 0.4, grammatical-parsers,
                        rank2classes, deep-transformations,

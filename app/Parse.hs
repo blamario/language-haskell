@@ -33,6 +33,8 @@ import qualified Transformation.Full as Full
 
 import Control.Monad
 import Data.Data (Data)
+import qualified Data.Either.Validation as Validation
+import Data.Either.Validation (validationToEither)
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
@@ -83,8 +85,14 @@ instance TypeCheckable AST.Expression Language where
      either (("Type error: " <>) . show) Template.showViaTH
      . TypeSystem.checkExpression TypeSystem.defaultConstraintHandler mempty mempty mempty
 
-instance TypeCheckable AST.Module l where
-   typeCheck = const ""
+instance TypeCheckable AST.Module Language where
+   typeCheck =
+     either (("Type error: " <>) . show) showTypes
+     . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty
+     where showTypes (ts, vs) = Map.foldMapWithKey showType ts <> Map.foldMapWithKey showErrorOrType vs
+           showErrorOrType k v =
+             AST.nameString k <> " :: " <> either show Template.showViaTH (validationToEither v) <> "\n"
+           showType k v = "type " <> AST.nameString k <> " = " <> Template.showViaTH v <> "\n"
 
 main :: IO ()
 main = execParser opts >>= main'

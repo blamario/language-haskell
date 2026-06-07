@@ -543,6 +543,7 @@ data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
    | ExportPattern (Abstract.QualifiedName λ)
    | ReExportModule (Abstract.ModuleName λ)
 
+-- | Import safe qualified package module alias specification
 data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (Maybe (Abstract.ModuleName λ))
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 

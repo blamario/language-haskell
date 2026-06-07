@@ -6,11 +6,12 @@
 -- | Type system, OutsideIn(X) formulated as an attribute grammar
 
 module Language.Haskell.TypeSystem (
-  checkExpression{-, checkDeclaration, checkModule-},
+  checkExpression, checkModule,
   TypeErrors, DefaultConstraints, defaultConstraintHandler) where
 
 import Control.Applicative (ZipList(ZipList), liftA3)
 import Data.Either.Validation (Validation(Failure, Success), validationToEither)
+import Data.Coerce (coerce)
 import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
@@ -43,6 +44,57 @@ import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, R
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
   ConstraintHandler(..), DefaultConstraints, defaultConstraintHandler, TypeError(..), TypeErrors, TypeOrError(..))
+
+checkModule :: (Abstract.Haskell l,
+                Abstract.Name l ~ AST.Name l,
+                Abstract.ModuleName l ~ AST.ModuleName l,
+                Abstract.QualifiedName l ~ AST.QualifiedName l,
+                Abstract.Module l ~ AST.Module l,
+                Abstract.Export l ~ AST.Export l,
+                Abstract.Import l ~ AST.Import l,
+                Abstract.ImportSpecification l ~ AST.ImportSpecification l,
+                Abstract.ImportItem l ~ AST.ImportItem l,
+                Abstract.Declaration l ~ AST.Declaration l,
+                Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                Abstract.Type l ~ AST.Type l,
+                Abstract.Kind l ~ AST.Type l,
+                Abstract.Context l ~ AST.Context l,
+                Abstract.Expression l ~ AST.Expression l,
+                Abstract.FieldBinding l ~ AST.FieldBinding l,
+                Abstract.Value l ~ AST.Value l,
+                Abstract.CaseAlternative l ~ AST.CaseAlternative l,
+                Abstract.LambdaCasesAlternative l ~ AST.LambdaCasesAlternative l,
+                Abstract.Statement l ~ AST.Statement l,
+                Abstract.EquationLHS l ~ AST.EquationLHS l,
+                Abstract.EquationRHS l ~ AST.EquationRHS l,
+                Abstract.GuardedExpression l ~ AST.GuardedExpression l,
+                Abstract.FieldDeclaration l ~ AST.FieldDeclaration l,
+                Abstract.TypeLHS l ~ AST.TypeLHS l,
+                Abstract.ClassInstanceLHS l ~ AST.ClassInstanceLHS l,
+                Abstract.PatternLHS l ~ AST.PatternLHS l,
+                Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
+                Abstract.PatternEquationClause l ~ AST.PatternEquationClause l,
+                Abstract.FunctionalDependency l ~ AST.FunctionalDependency l,
+                Abstract.DerivingClause l ~ AST.DerivingClause l,
+                Abstract.DerivingStrategy l ~ AST.DerivingStrategy l,
+                Abstract.DataConstructor l ~ AST.DataConstructor l,
+                Abstract.GADTConstructor l ~ AST.GADTConstructor l,
+                Abstract.Constructor l ~ AST.Constructor l,
+                Abstract.Pattern l ~ AST.Pattern l,
+                Abstract.FieldPattern l ~ AST.FieldPattern l)
+            => ConstraintHandler l pos con
+            -> Map Extension Bool
+            -> Map (AST.ModuleName l) (TypeMap l Identity con)
+            -> TypeMap l Identity con
+            -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
+            -> Either (TypeErrors l pos con) (LocalBindings l con)
+checkModule constrain extensions moduleBindings bindings m =
+  validationToEither $ AG.syn $ (transformation Full.<$> m) Rank2.$ AG.Inherited env
+  where env = TypeEnv{
+          bindings,
+          freshVarPrefix = "",
+          constraints = constrain.empty}
+        transformation = AG.Knit TypeCheck{constrain, extensions}
 
 checkExpression :: (Abstract.Haskell l,
                     Abstract.Name l ~ AST.Name l,
@@ -102,6 +154,16 @@ data TypeMap l f con = TypeMap{
   typeBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
   valueBindings :: Map (AST.QualifiedName l) (Validation (TypeError l con) (AST.Type l l f f))}
 
+instance Semigroup (TypeMap l f con) where
+  m1 <> m2 = TypeMap{
+    typeBindings = m1.typeBindings <> m2.typeBindings,
+    valueBindings = m1.valueBindings <> m2.valueBindings}
+
+instance Monoid (TypeMap l f con) where
+  mempty = TypeMap{
+    typeBindings = mempty,
+    valueBindings = mempty}
+
 -- | The type environment maps variables to their types
 data TypeEnv l f con = TypeEnv{
   freshVarPrefix :: String,
@@ -127,6 +189,11 @@ type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) 
   InhAtts l pos s con _ = TypeEnv l Identity con
 
 type family SynAtts l pos s con g where
+  SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalBindings l con)
+  SynAtts l pos s con (AST.Export l l) = ()
+  SynAtts l pos s con (AST.Import l l) = ()
+  SynAtts l pos s con (AST.ImportSpecification l l) = ()
+  SynAtts l pos s con (AST.ImportItem l l) = ()
   SynAtts l pos s con (AST.Expression l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Value l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.FieldBinding l l) =
@@ -158,6 +225,67 @@ type family SynAtts l pos s con g where
 
 type StatementConstraintBuilder l pos con =
   TypeEnv l Identity con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
+
+instance (Abstract.Haskell l,
+          Abstract.Name l ~ AST.Name l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.Module l ~ AST.Module l,
+          Abstract.Export l ~ AST.Export l,
+          Abstract.Import l ~ AST.Import l,
+          Abstract.Declaration l ~ AST.Declaration l) =>
+         AG.At (TypeCheck l pos s con) (AST.Module l l) where
+  attribution
+    TypeCheck{constrain}
+    (_, AST.AnonymousModule imports declarations)
+    (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
+    =
+    (AG.Synthesized $ Success $ foldMap (solve . AG.syn) bodySyns,
+     AST.AnonymousModule
+      (AG.Inherited freshEnv <$ imports)
+      (AG.Inherited freshEnv <$ declarations))
+    where freshEnv = TypeEnv{
+            bindings = mempty,
+            freshVarPrefix = mempty,
+            constraints = constrain.empty}
+          solve (bindings, con) = bindings
+  attribution
+    TypeCheck{constrain}
+    (_, AST.NamedModule name exports imports declarations)
+    (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
+    =
+    (AG.Synthesized $ Success $ foldMap (solve . AG.syn) bodySyns,
+     AST.NamedModule name
+      (getCompose $ AG.Inherited freshEnv <$ Compose exports)
+      (AG.Inherited freshEnv <$ imports)
+      (AG.Inherited freshEnv <$ declarations))
+    where freshEnv = TypeEnv{
+            bindings = mempty,
+            freshVarPrefix = mempty,
+            constraints = constrain.empty}
+          solve (bindings, con) = bindings
+  attribution
+    TypeCheck{constrain}
+    (_, AST.ExtendedModule extensions _)
+    (AG.Inherited env, AST.ExtendedModule _ bodySyn)
+    =
+    (bodySyn, AST.ExtendedModule extensions $ AG.Inherited env)
+
+instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (AST.Export l l) where
+  attribution TypeCheck{} (_, node) (AG.Inherited env, _) = (AG.Synthesized (), coerce node)
+
+instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+          Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
+         AG.At (TypeCheck l pos s con) (AST.Import l l) where
+  attribution TypeCheck{} (_, AST.Import safe qualified package name alias spec) (AG.Inherited env, _) =
+    (AG.Synthesized (), AST.Import safe qualified package name alias $ AG.Inherited env <$ spec)
+
+instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ImportItem l ~ AST.ImportItem l) =>
+  AG.At (TypeCheck l pos s con) (AST.ImportSpecification l l) where
+  attribution TypeCheck{} (_, AST.ImportSpecification hiding items) (AG.Inherited env, _) =
+    (AG.Synthesized (), AST.ImportSpecification hiding $ AG.Inherited env <$ items)
+
+instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (AST.ImportItem l l) where
+  attribution TypeCheck{} (_, node) (AG.Inherited env, _) = (AG.Synthesized (), coerce node)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
