@@ -11,6 +11,7 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Data (Data, Typeable)
 import Data.Text (Text)
+import qualified Data.Text as Text
 
 import Data.ZipNonEmpty (ZipNonEmpty(ZipNonEmpty))
 
@@ -553,6 +554,12 @@ newtype Name λ = Name {getName :: Text} deriving (Data, Eq, Ord, Show)
 data QualifiedName λ = QualifiedName (Maybe (ModuleName λ)) (Name λ) deriving (Data, Eq, Ord, Show)
 
 newtype ModuleName λ = ModuleName (NonEmpty (Name λ)) deriving (Data, Eq, Ord, Show)
+
+nameText :: Name λ -> Text
+nameText (Name s) = s
+
+nameString :: Name λ -> String
+nameString = Text.unpack . nameText
 
 $(concat <$>
   (forM [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,

@@ -199,7 +199,7 @@ instance TemplateWrapper f => PrettyViaTH (ExtAST.Type Language Language f f) wh
    prettyViaTH x = Ppr.ppr (typeTemplate x)
 
 instance PrettyViaTH (ModuleName Language) where
-   prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ nameText <$> toList mods)
+   prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ AST.nameText <$> toList mods)
 
 instance PrettyViaTH (AST.Name Language) where
    prettyViaTH x = Ppr.pprName (nameTemplate x)
@@ -238,7 +238,7 @@ expressionTemplate (MDoQualifiedExpression () () m statements) =
    MDoE (Just $ moduleNameTemplate m) (guardedTemplate $ extract statements)
 #endif
 
-expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (nameString name)
+expressionTemplate (ImplicitParameterExpression _ name) = ImplicitParamVarE (AST.nameString name)
 expressionTemplate (InfixExpression left op right) =
    UInfixE (wrappedExpressionTemplate left) (wrappedExpressionTemplate op) (wrappedExpressionTemplate right)
 expressionTemplate (LeftSectionExpression left op) =
@@ -285,7 +285,7 @@ expressionTemplate (VisibleTypeApplication e t) = AppTypeE (wrappedExpressionTem
 expressionTemplate (ExplicitTypeExpression () t) = TypeE (typeTemplate $ extract t)
 expressionTemplate (GetField e (Name field)) = GetFieldE (wrappedExpressionTemplate e) (Text.unpack field)
 expressionTemplate (OverloadedLabel l) = LabelE (Text.unpack l)
-expressionTemplate (FieldProjection fields) = ProjectionE (nameString <$> fields)
+expressionTemplate (FieldProjection fields) = ProjectionE (AST.nameString <$> fields)
 
 guardedTemplate :: TemplateWrapper f => GuardedExpression Language Language f f -> [Stmt]
 guardedTemplate (GuardedExpression statements result) =
@@ -387,7 +387,7 @@ declarationTemplates (ForeignImport convention safety identification name t) =
          safetyTemplate UnsafeCall = Unsafe
          safetyTemplate (InterruptibleCall ()) = Interruptible
 declarationTemplates (ImplicitParameterDeclaration _ name value) =
-   [ImplicitParamBindD (nameString name) (expressionTemplate $ extract value)]
+   [ImplicitParamBindD (AST.nameString name) (expressionTemplate $ extract value)]
 declarationTemplates (InstanceDeclaration _vars context lhs wheres) =
      [InstanceD Nothing (contextTemplate $ extract context) (lhsTypeTemplate $ extract lhs)
                 (foldMap (declarationTemplates . extract) wheres)]
@@ -545,7 +545,8 @@ strategyTemplate (Via () ty) = Just $ ViaStrategy (typeTemplate $ extract ty)
 
 contextTemplate :: TemplateWrapper f => ExtAST.Context Language Language f f -> Cxt
 contextTemplate (ClassConstraint cls t) = [AppT (ConT $ qnameTemplate cls) (typeTemplate $ extract t)]
-contextTemplate (ImplicitParameterConstraint _ name t) = [ImplicitParamT (nameString name) (typeTemplate $ extract t)]
+contextTemplate (ImplicitParameterConstraint _ name t) =
+   [ImplicitParamT (AST.nameString name) (typeTemplate $ extract t)]
 contextTemplate (TypeConstraint t) = case extract t of
    ConstructorType c | UnitConstructor <- extract c -> []
    TupleType ts -> wrappedTypeTemplate <$> toList ts
@@ -860,7 +861,7 @@ nameTemplate (Name s) = mkName (unpack s)
 qnameTemplate :: AST.QualifiedName Language -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
-                                                                   $ nameText <$> toList m ++ [name])
+                                                                   $ AST.nameText <$> toList m ++ [name])
 
 baseName :: AST.QualifiedName Language -> AST.Name Language
 baseName (QualifiedName _ name) = name
@@ -878,9 +879,3 @@ extractSimpleTypeLHS = fromTypeLHS . extract
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingVisibleTemplate var])
          fromTypeLHS (TypeLHSTypeApplication () t var)
             | (con, vars) <- extractSimpleTypeLHS t = (con, vars ++ [typeVarBindingInvisibleTemplate var])
-
-nameText :: AST.Name λ -> Text
-nameText (Name s) = s
-
-nameString :: AST.Name λ -> String
-nameString = Text.unpack . nameText
