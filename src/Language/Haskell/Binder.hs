@@ -8,10 +8,11 @@ module Language.Haskell.Binder (
    -- * Main functions
    withBindings, rebind, unbind, unboundNames,
    -- * Transformations
-   Binder, BindingVerifier,
+   Binder(Binder), BindingVerifier,
    -- * Node wrappers
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    -- * Binding types
+   BindingMembers,
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),

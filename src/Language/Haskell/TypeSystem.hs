@@ -10,8 +10,9 @@ module Language.Haskell.TypeSystem (
   TypeErrors, DefaultConstraints, defaultConstraintHandler) where
 
 import Control.Applicative (ZipList(ZipList), liftA3)
-import Data.Either.Validation (Validation(Failure, Success), validationToEither)
+import Data.Bifunctor (bimap, first)
 import Data.Coerce (coerce)
+import Data.Either.Validation (Validation(Failure, Success), validationToEither)
 import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
@@ -38,6 +39,8 @@ import Transformation.Deep qualified as Deep
 import Transformation.Full qualified as Full
 import Transformation.Rank2 qualified
 
+import Language.Haskell.Binder (Binder(Binder))
+import Language.Haskell.Binder qualified as Binder
 import Language.Haskell.Extensions.Abstract qualified as Abstract
 import Language.Haskell.Reserializer qualified as Reserializer
 import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, RebindableSyntax))
@@ -46,6 +49,7 @@ import Language.Haskell.TypeSystem.Constraints (
   ConstraintHandler(..), DefaultConstraints, defaultConstraintHandler, TypeError(..), TypeErrors, TypeOrError(..))
 
 checkModule :: (Abstract.Haskell l,
+                Binder.BindingMembers l,
                 Abstract.Name l ~ AST.Name l,
                 Abstract.ModuleName l ~ AST.ModuleName l,
                 Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -84,17 +88,20 @@ checkModule :: (Abstract.Haskell l,
                 Abstract.FieldPattern l ~ AST.FieldPattern l)
             => ConstraintHandler l pos con
             -> Map Extension Bool
+            -> Binder.ModuleEnvironment l
+            -> Binder.Environment l
             -> Map (AST.ModuleName l) (TypeMap l Identity con)
             -> TypeMap l Identity con
             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
-            -> Either (TypeErrors l pos con) (LocalBindings l con)
-checkModule constrain extensions moduleBindings bindings m =
-  validationToEither $ AG.syn $ (transformation Full.<$> m) Rank2.$ AG.Inherited env
+            -> (Either (TypeErrors l pos con) (LocalBindings l con), Binder.LocalEnvironment l)
+checkModule constrain extensions binderModuleEnv binderEnv moduleBindings bindings m =
+  bimap validationToEither snd $ AG.syn
+  $ (transformation Full.<$> m) Rank2.$ AG.Inherited (env, (extensions, binderEnv))
   where env = TypeEnv{
           bindings,
           freshVarPrefix = "",
           constraints = constrain.empty}
-        transformation = AG.Knit TypeCheck{constrain, extensions}
+        transformation = AG.Knit (TypeCheck{constrain, extensions}, AG.Auto $ Binder binderModuleEnv)
 
 checkExpression :: (Abstract.Haskell l,
                     Abstract.Name l ~ AST.Name l,
@@ -190,8 +197,8 @@ type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) 
 
 type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalBindings l con)
-  SynAtts l pos s con (AST.Export l l) = ()
-  SynAtts l pos s con (AST.Import l l) = ()
+  SynAtts l pos s con (AST.Export l l) = LocalBindings l con
+  SynAtts l pos s con (AST.Import l l) = TypeMap l Identity con
   SynAtts l pos s con (AST.ImportSpecification l l) = ()
   SynAtts l pos s con (AST.ImportItem l l) = ()
   SynAtts l pos s con (AST.Expression l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
@@ -226,6 +233,30 @@ type family SynAtts l pos s con g where
 type StatementConstraintBuilder l pos con =
   TypeEnv l Identity con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
 
+-- | Overrides the pair instance from Transformation.AG
+instance {-# OVERLAPS #-} (
+  Abstract.Haskell l,
+  Abstract.Name l ~ AST.Name l,
+  Abstract.QualifiedName l ~ AST.QualifiedName l,
+  AG.At (TypeCheck l pos s con) (AST.Module l l),
+  AG.At (AG.Auto (Binder l (Wrap l pos s))) (AST.Module l l),
+  Abstract.Module l ~ AST.Module l,
+  Abstract.Export l ~ AST.Export l,
+  Abstract.Import l ~ AST.Import l,
+  Abstract.Declaration l ~ AST.Declaration l) =>
+  AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Module l l) where
+  attribution (t1, t2) x@(_, m) (AG.Inherited (i1, i2), s) = (AG.Synthesized $ adjustSyn s1 s2, adjustInh i1' i2')
+    where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
+          (AG.Synthesized s2, i2') = AG.attribution t2 x (AG.Inherited i2, AG.Synthesized . snd . AG.syn Rank2.<$> s)
+          pairInh (AG.Inherited inh1) (AG.Inherited inh2) = AG.Inherited (inh1, inh2)
+          adjustInh :: AST.Module l l sem (AG.Inherited t1)
+                    -> AST.Module l l sem (AG.Inherited t2)
+                    -> AST.Module l l sem (AG.Inherited (t1, t2))
+          adjustInh t b = case m of
+            AST.ExtendedModule{} -> Rank2.liftA2 pairInh t b
+            _ -> Rank2.liftA2 pairInh t b
+          adjustSyn t b = (t, b)
+
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -239,30 +270,37 @@ instance (Abstract.Haskell l,
     (_, AST.AnonymousModule imports declarations)
     (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ foldMap (solve . AG.syn) bodySyns,
+    (AG.Synthesized $ Success $ (,) mempty
+     $ Map.mapKeysMonotonic Binder.baseName (Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings),
      AST.AnonymousModule
-      (AG.Inherited freshEnv <$ imports)
-      (AG.Inherited freshEnv <$ declarations))
-    where freshEnv = TypeEnv{
-            bindings = mempty,
+      (AG.Inherited topEnv <$ imports)
+      (AG.Inherited topEnv <$ declarations))
+    where topEnv = TypeEnv{
+            bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
-          solve (bindings, con) = bindings
+          solve ((ts, vs), con) = TypeMap{
+            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ts,
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName vs}
+          mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
   attribution
     TypeCheck{constrain}
     (_, AST.NamedModule name exports imports declarations)
     (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ foldMap (solve . AG.syn) bodySyns,
+    (AG.Synthesized $ Success $ foldMap AG.syn $ Compose expSyns,
      AST.NamedModule name
-      (getCompose $ AG.Inherited freshEnv <$ Compose exports)
-      (AG.Inherited freshEnv <$ imports)
-      (AG.Inherited freshEnv <$ declarations))
-    where freshEnv = TypeEnv{
-            bindings = mempty,
+      (getCompose $ AG.Inherited topEnv <$ Compose exports)
+      (AG.Inherited topEnv <$ imports)
+      (AG.Inherited topEnv <$ declarations))
+    where topEnv = TypeEnv{
+            bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
-          solve (bindings, con) = bindings
+          solve ((ts, vs), con) = TypeMap{
+            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ts,
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName vs}
+          mainName = Abstract.qualifiedName @l Nothing (Abstract.name "main")
   attribution
     TypeCheck{constrain}
     (_, AST.ExtendedModule extensions _)
@@ -271,13 +309,14 @@ instance (Abstract.Haskell l,
     (bodySyn, AST.ExtendedModule extensions $ AG.Inherited env)
 
 instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (AST.Export l l) where
-  attribution TypeCheck{} (_, node) (AG.Inherited env, _) = (AG.Synthesized (), coerce node)
+  attribution TypeCheck{} (_, node) (AG.Inherited env, _) =
+    (AG.Synthesized mempty, coerce node)
 
 instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
           Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
          AG.At (TypeCheck l pos s con) (AST.Import l l) where
   attribution TypeCheck{} (_, AST.Import safe qualified package name alias spec) (AG.Inherited env, _) =
-    (AG.Synthesized (), AST.Import safe qualified package name alias $ AG.Inherited env <$ spec)
+    (AG.Synthesized mempty, AST.Import safe qualified package name alias $ AG.Inherited env <$ spec)
 
 instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ImportItem l ~ AST.ImportItem l) =>
   AG.At (TypeCheck l pos s con) (AST.ImportSpecification l l) where

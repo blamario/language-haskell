@@ -87,8 +87,8 @@ instance TypeCheckable AST.Expression Language where
 
 instance TypeCheckable AST.Module Language where
    typeCheck =
-     either (("Type error: " <>) . show) showTypes
-     . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty
+     either (("Type error: " <>) . show) showTypes . fst
+     . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty mempty mempty
      where showTypes (ts, vs) = Map.foldMapWithKey showType ts <> Map.foldMapWithKey showErrorOrType vs
            showErrorOrType k v =
              AST.nameString k <> " :: " <> either show Template.showViaTH (validationToEither v) <> "\n"
