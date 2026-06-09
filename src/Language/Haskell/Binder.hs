@@ -22,6 +22,7 @@ module Language.Haskell.Binder (
 
 import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
+import Data.Bifunctor (first)
 import Data.Data (Data, Typeable)
 import Data.Foldable (fold, toList)
 import Data.Foldable1 as Foldable1
@@ -226,6 +227,7 @@ type instance AG.Atts (AG.Inherited (Binder l f)) g = (Map Extension Bool, Envir
 type instance AG.Atts (AG.Synthesized (Binder l f)) g = (OtherSynAtts l g, LocalEnvironment l)
 
 type family OtherSynAtts l g where
+  OtherSynAtts l (ExtAST.Export l l) = Environment l
   OtherSynAtts l (ExtAST.Import l l) = (Any, Environment l)
   OtherSynAtts l (ExtAST.EquationLHS l l) = LocalEnvironment l
   OtherSynAtts l _ = ()
@@ -373,7 +375,7 @@ instance {-# OVERLAPS #-}
                      noFieldSelector (ValueBinding RecordFieldAndValue) = Just (ValueBinding DefinedValue)
                      noFieldSelector x = Just x
             moduleAttribution (AST.AnonymousModule modImports body) =
-               (AG.Synthesized ((), filterEnv (== mainName) moduleGlobalScope),
+               (AG.Synthesized ((), onMap (Map.mapKeysMonotonic baseName) $ filterEnv (== mainName) moduleGlobalScope),
                 AST.AnonymousModule (AG.Inherited childInh <$ modImports) (AG.Inherited childInh <$ body))
                where moduleGlobalScope = importedScope importSyn <> unqualified bodySyn
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
@@ -381,7 +383,8 @@ instance {-# OVERLAPS #-}
                      bodySyn = foldMap (snd . AG.syn) declsSyn
                      childInh = (exts, moduleGlobalScope)
             moduleAttribution (AST.NamedModule moduleName exports modImports body) =
-               (AG.Synthesized $ maybe ((), bodySyn) (const $ foldMap AG.syn (Compose exportSyn)) exports,
+               (AG.Synthesized
+                $ maybe ((), bodySyn) (const $ first (const ()) $ foldMap AG.syn (Compose exportSyn)) exports,
                 AST.NamedModule moduleName ((AG.Inherited childInh <$) <$> exports)
                                 (AG.Inherited childInh <$ modImports)
                                 (AG.Inherited childInh <$ body))
@@ -410,14 +413,17 @@ instance {-# OVERLAPS #-}
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Export l l) where
-   synthesis _ node (_, moduleGlobalScope) _ = ((), foldMap itemExports node) where
-      itemExports :: forall d. ExtAST.Export l l d d -> LocalEnvironment l
+   synthesis _ node (_, moduleGlobalScope) _ = (allExports, onMap (Map.mapKeysMonotonic baseName) allExports) where
+      allExports :: Environment l
+      allExports = foldMap itemExports node
+      itemExports :: forall d. ExtAST.Export l l d d -> Environment l
       itemExports (ExtAST.ReExportModule modName) = reexportModule modName
       itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportClassOrType parent (Just members)) =
-         (\(b, e)-> onMap (Map.insert (baseName parent) b) (filterMembers members e)) $
+         (\(b, e)-> onMap (Map.insert parent b . Map.mapKeysMonotonic (qualifyAs parent))
+                    $ filterMembers members e) $
          case lookupEnv parent moduleGlobalScope
          of Just b@(TypeBinding (TypeClass env)) -> (b, env)
             Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
@@ -429,6 +435,8 @@ instance {-# OVERLAPS #-}
             Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
             Just b -> (ErroneousBinding (NonExportableBinding b), mempty)
             Nothing -> (ErroneousBinding (MissingBinding parent), mempty)
+      qualifyAs :: AST.QualifiedName l -> AST.Name l -> AST.QualifiedName l
+      qualifyAs (AST.QualifiedName prefix _) name = AST.QualifiedName prefix name
       reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
       unqualifiedAndQualifiedWith modName qn@(AST.QualifiedName modName' localName) =
         modName' == Just modName
@@ -884,8 +892,8 @@ qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Jus
 unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
 unqualified = onMap (Map.mapKeysMonotonic Abstract.unqualifiedName)
 
-filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> LocalEnvironment l
-filterEnv f env = onMap (Map.mapKeysMonotonic baseName . Map.filterWithKey (const . f)) env
+filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> Environment l
+filterEnv f env = onMap (Map.filterWithKey (const . f)) env
 
 lookupEnv :: Ord k => k -> UnionWith (Map k) a -> Maybe a
 lookupEnv k = Map.lookup k . getUnionWith
