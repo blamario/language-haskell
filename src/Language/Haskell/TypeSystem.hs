@@ -1,4 +1,4 @@
-{-# Language DataKinds, FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
+{-# Language DataKinds, DuplicateRecordFields, FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
              MultiParamTypeClasses, NamedFieldPuns, NoFieldSelectors, OverloadedRecordDot, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
@@ -25,6 +25,7 @@ import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Ap(Ap), Endo(Endo), Sum(Sum))
+import Data.Semigroup.Union (UnionWith(..))
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -90,13 +91,13 @@ checkModule :: (Abstract.Haskell l,
             -> Map Extension Bool
             -> Binder.ModuleEnvironment l
             -> Binder.Environment l
-            -> Map (AST.ModuleName l) (TypeMap l Identity con)
+            -> Map (AST.ModuleName l) (LocalTypeMap l Identity con)
             -> TypeMap l Identity con
             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
             -> (Either (TypeErrors l pos con) (LocalBindings l con), Binder.LocalEnvironment l)
 checkModule constrain extensions binderModuleEnv binderEnv moduleBindings bindings m =
   bimap validationToEither snd $ AG.syn
-  $ (transformation Full.<$> m) Rank2.$ AG.Inherited (env, (extensions, binderEnv))
+  $ (transformation Full.<$> m) Rank2.$ AG.Inherited ((moduleBindings, env), (extensions, binderEnv))
   where env = TypeEnv{
           bindings,
           freshVarPrefix = "",
@@ -171,6 +172,20 @@ instance Monoid (TypeMap l f con) where
     typeBindings = mempty,
     valueBindings = mempty}
 
+data LocalTypeMap l f con = LocalTypeMap{
+  typeBindings :: Map (AST.Name l) (AST.Type l l f f),
+  valueBindings :: Map (AST.Name l) (Validation (TypeError l con) (AST.Type l l f f))}
+
+instance Semigroup (LocalTypeMap l f con) where
+  m1 <> m2 = LocalTypeMap{
+    typeBindings = m1.typeBindings <> m2.typeBindings,
+    valueBindings = m1.valueBindings <> m2.valueBindings}
+
+instance Monoid (LocalTypeMap l f con) where
+  mempty = LocalTypeMap{
+    typeBindings = mempty,
+    valueBindings = mempty}
+
 -- | The type environment maps variables to their types
 data TypeEnv l f con = TypeEnv{
   freshVarPrefix :: String,
@@ -190,6 +205,10 @@ type instance AG.Atts (AG.Inherited (TypeCheck l pos s con)) g = InhAtts l pos s
 type instance AG.Atts (AG.Synthesized (TypeCheck l pos s con)) g = SynAtts l pos s con g
 
 type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) where
+  InhAtts l pos s con (AST.Module l l) = (Map (AST.ModuleName l) (LocalTypeMap l Identity con), TypeEnv l Identity con)
+  InhAtts l pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity con)
+  InhAtts l pos s con (AST.ImportSpecification l l) = ()
+  InhAtts l pos s con (AST.ImportItem l l) = ()
   InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity con)
   InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity con)
   InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity con)
@@ -257,6 +276,22 @@ instance {-# OVERLAPS #-} (
             _ -> Rank2.liftA2 pairInh t b
           adjustSyn t b = (t, b)
 
+instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ModuleName l ~ AST.ModuleName l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
+         AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Import l l) where
+  attribution (t1, t2) x@(_, AST.Import safe qualified package name alias spec) (AG.Inherited (i1, i2), s) =
+    (AG.Synthesized $ crossSyn s1 s2, Rank2.liftA2 pairInh i1' i2')
+    where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
+          (AG.Synthesized s2, i2') = AG.attribution t2 x (AG.Inherited i2, AG.Synthesized . snd . AG.syn Rank2.<$> s)
+          pairInh (AG.Inherited inh1) (AG.Inherited inh2) = AG.Inherited (inh1, inh2)
+          crossSyn _ bsyn@((isPrelude, binderEnv), _) = (intersect (Map.findWithDefault mempty name i1) binderEnv, bsyn)
+          intersect LocalTypeMap{typeBindings, valueBindings} (UnionWith boundEnv) =
+            Map.foldMapWithKey importBinding boundEnv
+            where importBinding name Binder.TypeBinding{} =
+                    TypeMap{typeBindings= Map.singleton name $ typeBindings Map.! Binder.baseName name,
+                            valueBindings= mempty}
+
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -273,7 +308,7 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ Success $ (,) mempty
      $ Map.mapKeysMonotonic Binder.baseName (Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings),
      AST.AnonymousModule
-      (AG.Inherited topEnv <$ imports)
+      (AG.Inherited (fst env) <$ imports)
       (AG.Inherited topEnv <$ declarations))
     where topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
@@ -291,7 +326,7 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ Success $ foldMap AG.syn $ Compose expSyns,
      AST.NamedModule name
       (getCompose $ AG.Inherited topEnv <$ Compose exports)
-      (AG.Inherited topEnv <$ imports)
+      (AG.Inherited (fst env) <$ imports)
       (AG.Inherited topEnv <$ declarations))
     where topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
@@ -316,7 +351,8 @@ instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
           Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
          AG.At (TypeCheck l pos s con) (AST.Import l l) where
   attribution TypeCheck{} (_, AST.Import safe qualified package name alias spec) (AG.Inherited env, _) =
-    (AG.Synthesized mempty, AST.Import safe qualified package name alias $ AG.Inherited env <$ spec)
+    -- The actual imports are done by the pair instance above
+    (AG.Synthesized mempty, AST.Import safe qualified package name alias $ AG.Inherited mempty <$ spec)
 
 instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ImportItem l ~ AST.ImportItem l) =>
   AG.At (TypeCheck l pos s con) (AST.ImportSpecification l l) where
