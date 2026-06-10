@@ -1,4 +1,5 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, NoMonomorphismRestriction,
+{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+             NamedFieldPuns, NoMonomorphismRestriction,
              OverloadedRecordDot, QuantifiedConstraints, RankNTypes, RecordWildCards,
              ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
@@ -89,7 +90,8 @@ instance TypeCheckable AST.Module Language where
    typeCheck =
      either (("Type error: " <>) . show) showTypes . fst
      . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty mempty mempty
-     where showTypes (ts, vs) = Map.foldMapWithKey showType ts <> Map.foldMapWithKey showErrorOrType vs
+     where showTypes TypeSystem.LocalTypeMap{typeBindings, valueBindings} =
+             Map.foldMapWithKey showType typeBindings <> Map.foldMapWithKey showErrorOrType valueBindings
            showErrorOrType k v =
              AST.nameString k <> " :: " <> either show Template.showViaTH (validationToEither v) <> "\n"
            showType k v = "type " <> AST.nameString k <> " = " <> Template.showViaTH v <> "\n"

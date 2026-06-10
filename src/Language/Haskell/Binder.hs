@@ -13,7 +13,7 @@ module Language.Haskell.Binder (
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    -- * Binding types
    BindingMembers,
-   Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding),
+   Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding, PatternBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
    Unbound(Unbound, types, values, constructors),

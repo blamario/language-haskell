@@ -7,7 +7,7 @@
 
 module Language.Haskell.TypeSystem (
   checkExpression, checkModule,
-  TypeErrors, DefaultConstraints, defaultConstraintHandler) where
+  TypeMap(..), LocalTypeMap(..), TypeErrors, DefaultConstraints, defaultConstraintHandler) where
 
 import Control.Applicative (ZipList(ZipList), liftA3)
 import Data.Bifunctor (bimap, first)
@@ -94,7 +94,7 @@ checkModule :: (Abstract.Haskell l,
             -> Map (AST.ModuleName l) (LocalTypeMap l Identity con)
             -> TypeMap l Identity con
             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
-            -> (Either (TypeErrors l pos con) (LocalBindings l con), Binder.LocalEnvironment l)
+            -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity con), Binder.LocalEnvironment l)
 checkModule constrain extensions binderModuleEnv binderEnv moduleBindings bindings m =
   bimap validationToEither snd $ AG.syn
   $ (transformation Full.<$> m) Rank2.$ AG.Inherited ((moduleBindings, env), (extensions, binderEnv))
@@ -215,8 +215,8 @@ type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) 
   InhAtts l pos s con _ = TypeEnv l Identity con
 
 type family SynAtts l pos s con g where
-  SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalBindings l con)
-  SynAtts l pos s con (AST.Export l l) = LocalBindings l con
+  SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity con)
+  SynAtts l pos s con (AST.Export l l) = LocalTypeMap l Identity con
   SynAtts l pos s con (AST.Import l l) = TypeMap l Identity con
   SynAtts l pos s con (AST.ImportSpecification l l) = ()
   SynAtts l pos s con (AST.ImportItem l l) = ()
@@ -252,34 +252,34 @@ type family SynAtts l pos s con g where
 type StatementConstraintBuilder l pos con =
   TypeEnv l Identity con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
 
--- | Overrides the pair instance from Transformation.AG
+instance {-# OVERLAPS #-} (
+  Abstract.Haskell l, Binder.BindingMembers l, Abstract.Name l ~ AST.Name l,
+  Abstract.ModuleName l ~ AST.ModuleName l,
+  Abstract.QualifiedName l ~ AST.QualifiedName l
+  ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
+  attribution (TypeCheck{}, b) node@(_, x) (AG.Inherited (TypeEnv{bindings}, binds), expSyn) =
+    (AG.Synthesized (Map.foldMapWithKey replicate binderExports, binderSyn), error "AST.Export node has no children")
+    where (AG.Synthesized binderSyn@(UnionWith binderExports, _), _) =
+            AG.attribution b node (AG.Inherited binds, AG.Synthesized . snd . AG.syn Rank2.<$> expSyn)
+          replicate name Binder.TypeBinding{} = LocalTypeMap{
+            typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
+            valueBindings = mempty}
+          replicate name Binder.ValueBinding{} = LocalTypeMap{
+            typeBindings = mempty,
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+          replicate name Binder.PatternBinding{} = LocalTypeMap{
+            typeBindings = mempty,
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+          replicate name _ = LocalTypeMap{
+            typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+
 instance {-# OVERLAPS #-} (
   Abstract.Haskell l,
-  Abstract.Name l ~ AST.Name l,
+  Abstract.Name l ~ AST.Name l, Abstract.ModuleName l ~ AST.ModuleName l,
   Abstract.QualifiedName l ~ AST.QualifiedName l,
-  AG.At (TypeCheck l pos s con) (AST.Module l l),
-  AG.At (AG.Auto (Binder l (Wrap l pos s))) (AST.Module l l),
-  Abstract.Module l ~ AST.Module l,
-  Abstract.Export l ~ AST.Export l,
-  Abstract.Import l ~ AST.Import l,
-  Abstract.Declaration l ~ AST.Declaration l) =>
-  AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Module l l) where
-  attribution (t1, t2) x@(_, m) (AG.Inherited (i1, i2), s) = (AG.Synthesized $ adjustSyn s1 s2, adjustInh i1' i2')
-    where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
-          (AG.Synthesized s2, i2') = AG.attribution t2 x (AG.Inherited i2, AG.Synthesized . snd . AG.syn Rank2.<$> s)
-          pairInh (AG.Inherited inh1) (AG.Inherited inh2) = AG.Inherited (inh1, inh2)
-          adjustInh :: AST.Module l l sem (AG.Inherited t1)
-                    -> AST.Module l l sem (AG.Inherited t2)
-                    -> AST.Module l l sem (AG.Inherited (t1, t2))
-          adjustInh t b = case m of
-            AST.ExtendedModule{} -> Rank2.liftA2 pairInh t b
-            _ -> Rank2.liftA2 pairInh t b
-          adjustSyn t b = (t, b)
-
-instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ModuleName l ~ AST.ModuleName l,
-          Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
-         AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Import l l) where
+  Abstract.ImportSpecification l ~ AST.ImportSpecification l
+  ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Import l l) where
   attribution (t1, t2) x@(_, AST.Import safe qualified package name alias spec) (AG.Inherited (i1, i2), s) =
     (AG.Synthesized $ crossSyn s1 s2, Rank2.liftA2 pairInh i1' i2')
     where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
@@ -288,9 +288,18 @@ instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ModuleName 
           crossSyn _ bsyn@((isPrelude, binderEnv), _) = (intersect (Map.findWithDefault mempty name i1) binderEnv, bsyn)
           intersect LocalTypeMap{typeBindings, valueBindings} (UnionWith boundEnv) =
             Map.foldMapWithKey importBinding boundEnv
-            where importBinding name Binder.TypeBinding{} =
-                    TypeMap{typeBindings= Map.singleton name $ typeBindings Map.! Binder.baseName name,
-                            valueBindings= mempty}
+            where importBinding name Binder.TypeBinding{} = TypeMap{
+                    typeBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) typeBindings),
+                    valueBindings= mempty}
+                  importBinding name Binder.ValueBinding{} = TypeMap{
+                    typeBindings= mempty,
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
+                  importBinding name Binder.PatternBinding{} = TypeMap{
+                    typeBindings= mempty,
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
+                  importBinding name _ = TypeMap{
+                    typeBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) typeBindings),
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -298,14 +307,16 @@ instance (Abstract.Haskell l,
           Abstract.Module l ~ AST.Module l,
           Abstract.Export l ~ AST.Export l,
           Abstract.Import l ~ AST.Import l,
-          Abstract.Declaration l ~ AST.Declaration l) =>
+          Abstract.Declaration l ~ AST.Declaration l,
+          Abstract.Context l ~ AST.Context l,
+          Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.Module l l) where
   attribution
     TypeCheck{constrain}
     (_, AST.AnonymousModule imports declarations)
     (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ (,) mempty
+    (AG.Synthesized $ Success $ LocalTypeMap mempty
      $ Map.mapKeysMonotonic Binder.baseName (Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings),
      AST.AnonymousModule
       (AG.Inherited (fst env) <$ imports)
@@ -315,8 +326,9 @@ instance (Abstract.Haskell l,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
           solve ((ts, vs), con) = TypeMap{
-            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ts,
-            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName vs}
+            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ((constrainType <$>) <$> vs)}
+            where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
   attribution
     TypeCheck{constrain}
@@ -333,8 +345,9 @@ instance (Abstract.Haskell l,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
           solve ((ts, vs), con) = TypeMap{
-            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ts,
-            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName vs}
+            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ((constrainType <$>) <$> vs)}
+            where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           mainName = Abstract.qualifiedName @l Nothing (Abstract.name "main")
   attribution
     TypeCheck{constrain}
@@ -342,10 +355,6 @@ instance (Abstract.Haskell l,
     (AG.Inherited env, AST.ExtendedModule _ bodySyn)
     =
     (bodySyn, AST.ExtendedModule extensions $ AG.Inherited env)
-
-instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (AST.Export l l) where
-  attribution TypeCheck{} (_, node) (AG.Inherited env, _) =
-    (AG.Synthesized mempty, coerce node)
 
 instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
           Abstract.ImportSpecification l ~ AST.ImportSpecification l) =>
