@@ -91,10 +91,10 @@ checkModule :: (Abstract.Haskell l,
             -> Map Extension Bool
             -> Binder.ModuleEnvironment l
             -> Binder.Environment l
-            -> Map (AST.ModuleName l) (LocalTypeMap l Identity con)
-            -> TypeMap l Identity con
+            -> Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
+            -> TypeMap l Identity pos con
             -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
-            -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity con), Binder.LocalEnvironment l)
+            -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity pos con), Binder.LocalEnvironment l)
 checkModule constrain extensions binderModuleEnv binderEnv moduleBindings bindings m =
   bimap validationToEither snd $ AG.syn
   $ (transformation Full.<$> m) Rank2.$ AG.Inherited ((moduleBindings, env), (extensions, binderEnv))
@@ -147,7 +147,8 @@ checkExpression constrain extensions typeBindings valueBindings e =
   where env = TypeEnv{
           bindings = TypeMap{
               typeBindings,
-              valueBindings = Success <$> valueBindings},
+              valueBindings,
+              errors= mempty},
           freshVarPrefix = "a",
           constraints = constrain.empty}
         transformation = AG.Knit TypeCheck{constrain, extensions}
@@ -158,38 +159,44 @@ data TypeCheck l pos s con = TypeCheck{
   constrain :: ConstraintHandler l pos con,
   extensions :: Map Extension Bool}
 
-data TypeMap l f con = TypeMap{
+data TypeMap l f pos con = TypeMap{
   typeBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
-  valueBindings :: Map (AST.QualifiedName l) (Validation (TypeError l con) (AST.Type l l f f))}
+  valueBindings :: Map (AST.QualifiedName l) (AST.Type l l f f),
+  errors :: [(pos, TypeError l con)]}
 
-instance Semigroup (TypeMap l f con) where
+instance Semigroup (TypeMap l f pos con) where
   m1 <> m2 = TypeMap{
     typeBindings = m1.typeBindings <> m2.typeBindings,
-    valueBindings = m1.valueBindings <> m2.valueBindings}
+    valueBindings = m1.valueBindings <> m2.valueBindings,
+    errors = m1.errors <> m2.errors}
 
-instance Monoid (TypeMap l f con) where
+instance Monoid (TypeMap l f pos con) where
   mempty = TypeMap{
     typeBindings = mempty,
-    valueBindings = mempty}
+    valueBindings = mempty,
+    errors = mempty}
 
-data LocalTypeMap l f con = LocalTypeMap{
+data LocalTypeMap l f pos con = LocalTypeMap{
   typeBindings :: Map (AST.Name l) (AST.Type l l f f),
-  valueBindings :: Map (AST.Name l) (Validation (TypeError l con) (AST.Type l l f f))}
+  valueBindings :: Map (AST.Name l) (AST.Type l l f f),
+  errors :: [(pos, TypeError l con)]}
 
-instance Semigroup (LocalTypeMap l f con) where
+instance Semigroup (LocalTypeMap l f pos con) where
   m1 <> m2 = LocalTypeMap{
     typeBindings = m1.typeBindings <> m2.typeBindings,
-    valueBindings = m1.valueBindings <> m2.valueBindings}
+    valueBindings = m1.valueBindings <> m2.valueBindings,
+    errors = m1.errors <> m2.errors}
 
-instance Monoid (LocalTypeMap l f con) where
+instance Monoid (LocalTypeMap l f pos con) where
   mempty = LocalTypeMap{
     typeBindings = mempty,
-    valueBindings = mempty}
+    valueBindings = mempty,
+    errors = mempty}
 
 -- | The type environment maps variables to their types
-data TypeEnv l f con = TypeEnv{
+data TypeEnv l f pos con = TypeEnv{
   freshVarPrefix :: String,
-  bindings :: TypeMap l f con,
+  bindings :: TypeMap l f pos con,
   constraints :: con}
 
 type Wrap l pos s = Reserializer.Wrapped pos s
@@ -201,19 +208,19 @@ type instance AG.Atts (AG.Inherited (TypeCheck l pos s con)) g = InhAtts l pos s
 type instance AG.Atts (AG.Synthesized (TypeCheck l pos s con)) g = SynAtts l pos s con g
 
 type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) where
-  InhAtts l pos s con (AST.Module l l) = (Map (AST.ModuleName l) (LocalTypeMap l Identity con), TypeEnv l Identity con)
-  InhAtts l pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity con)
+  InhAtts l pos s con (AST.Module l l) = (Map (AST.ModuleName l) (LocalTypeMap l Identity pos con), TypeEnv l Identity pos con)
+  InhAtts l pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
   InhAtts l pos s con (AST.ImportSpecification l l) = ()
   InhAtts l pos s con (AST.ImportItem l l) = ()
-  InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity con)
-  InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity con)
-  InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity con)
-  InhAtts l pos s con _ = TypeEnv l Identity con
+  InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
+  InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
+  InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
+  InhAtts l pos s con _ = TypeEnv l Identity pos con
 
 type family SynAtts l pos s con g where
-  SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity con)
-  SynAtts l pos s con (AST.Export l l) = LocalTypeMap l Identity con
-  SynAtts l pos s con (AST.Import l l) = TypeMap l Identity con
+  SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con)
+  SynAtts l pos s con (AST.Export l l) = LocalTypeMap l Identity pos con
+  SynAtts l pos s con (AST.Import l l) = TypeMap l Identity pos con
   SynAtts l pos s con (AST.ImportSpecification l l) = ()
   SynAtts l pos s con (AST.ImportItem l l) = ()
   SynAtts l pos s con (AST.Expression l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
@@ -221,24 +228,24 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.FieldBinding l l) =
     Validation (TypeErrors l pos con) (AST.QualifiedName l, AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Constructor l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
-  SynAtts l pos s con (AST.Pattern l l) = (AST.Name l, LocalTypeMap l Identity con, con)
-  SynAtts l pos s con (AST.PatternEquationLHS l l) = (LocalTypeMap l Identity con, con)
-  SynAtts l pos s con (AST.PatternEquationClause l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity con, con)
-  SynAtts l pos s con (AST.FieldPattern l l) = (AST.QualifiedName l, LocalTypeMap l Identity con, con)
+  SynAtts l pos s con (AST.Pattern l l) = (AST.Name l, LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.PatternEquationLHS l l) = (LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.PatternEquationClause l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.FieldPattern l l) = (AST.QualifiedName l, LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.GuardedExpression l l) =
     Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.LambdaCasesAlternative l l) =
-    Validation (TypeErrors l pos con) ([AST.Name l], LocalTypeMap l Identity con, AST.Type l l Identity Identity, con)
+    Validation (TypeErrors l pos con) ([AST.Name l], LocalTypeMap l Identity pos con, AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.CaseAlternative l l) =
     Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, AST.Type l l Identity Identity, con)
-  SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity con, con)
-  SynAtts l pos s con (AST.EquationLHS l l) = (AST.Name l, LocalTypeMap l Identity con, con)
+  SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.EquationLHS l l) = (AST.Name l, LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.EquationRHS l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
-  SynAtts l pos s con (AST.Declaration l l) = (LocalTypeMap l Identity con, con)
-  SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity con
+  SynAtts l pos s con (AST.Declaration l l) = (LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity pos con
   SynAtts l pos s con (AST.DataConstructor l l) =
     Validation (TypeErrors l pos con) (AST.Name l, AST.Type l l Identity Identity)
-  SynAtts l pos s con (AST.GADTConstructor l l) = LocalTypeMap l Identity con
+  SynAtts l pos s con (AST.GADTConstructor l l) = LocalTypeMap l Identity pos con
   SynAtts l pos s con (AST.Type l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity)
   SynAtts l pos s con (AST.TypeVarBinding l l) =
     Validation (TypeErrors l pos con) (AST.TypeVarBinding l l Identity Identity)
@@ -246,7 +253,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con _ = Validation (TypeErrors l pos con) ()
 
 type StatementConstraintBuilder l pos con =
-  TypeEnv l Identity con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
+  TypeEnv l Identity pos con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
 
 instance {-# OVERLAPS #-} (
   Abstract.Haskell l, Binder.BindingMembers l, Abstract.Name l ~ AST.Name l,
@@ -259,16 +266,20 @@ instance {-# OVERLAPS #-} (
             AG.attribution b node (AG.Inherited binds, AG.Synthesized . snd . AG.syn Rank2.<$> expSyn)
           replicate name Binder.TypeBinding{} = LocalTypeMap{
             typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
-            valueBindings = mempty}
+            valueBindings = mempty,
+            errors = mempty}
           replicate name Binder.ValueBinding{} = LocalTypeMap{
             typeBindings = mempty,
-            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings),
+            errors = mempty}
           replicate name Binder.PatternBinding{} = LocalTypeMap{
             typeBindings = mempty,
-            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings),
+            errors = mempty}
           replicate name _ = LocalTypeMap{
             typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
-            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings)}
+            valueBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.valueBindings),
+            errors = mempty}
 
 instance {-# OVERLAPS #-} (
   Abstract.Haskell l,
@@ -286,16 +297,20 @@ instance {-# OVERLAPS #-} (
             Map.foldMapWithKey importBinding boundEnv
             where importBinding name Binder.TypeBinding{} = TypeMap{
                     typeBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) typeBindings),
-                    valueBindings= mempty}
+                    valueBindings= mempty,
+                    errors = mempty}
                   importBinding name Binder.ValueBinding{} = TypeMap{
                     typeBindings= mempty,
-                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings),
+                    errors = mempty}
                   importBinding name Binder.PatternBinding{} = TypeMap{
                     typeBindings= mempty,
-                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings),
+                    errors = mempty}
                   importBinding name _ = TypeMap{
                     typeBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) typeBindings),
-                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings)}
+                    valueBindings= foldMap (Map.singleton name) (Map.lookup (Binder.baseName name) valueBindings),
+                    errors = mempty}
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -312,8 +327,11 @@ instance (Abstract.Haskell l,
     (_, AST.AnonymousModule imports declarations)
     (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ LocalTypeMap mempty
-     $ Map.mapKeysMonotonic Binder.baseName (Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings),
+    (AG.Synthesized $ Success $ LocalTypeMap{
+        typeBindings= mempty,
+        valueBindings= Map.mapKeysMonotonic Binder.baseName
+                       $ Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings,
+        errors= mempty},
      AST.AnonymousModule
       (AG.Inherited (fst env) <$ imports)
       (AG.Inherited topEnv <$ declarations))
@@ -323,7 +341,8 @@ instance (Abstract.Haskell l,
             constraints = constrain.empty}
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
-            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ((constrainType <$>) <$> vs)}
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
+            errors = mempty}
             where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
   attribution
@@ -342,7 +361,8 @@ instance (Abstract.Haskell l,
             constraints = constrain.empty}
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
-            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName ((constrainType <$>) <$> vs)}
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
+            errors = mempty}
             where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           mainName = Abstract.qualifiedName @l Nothing (Abstract.name "main")
   attribution
@@ -473,7 +493,10 @@ instance (Abstract.Haskell l,
   attribution TypeCheck{constrain} (_, AST.VariableLHS name) (AG.Inherited env, _) =
     (AG.Synthesized (
         tv,
-        LocalTypeMap{typeBindings= Map.singleton tv varType, valueBindings= Map.singleton name $ Success varType},
+        LocalTypeMap{
+            typeBindings= Map.singleton tv varType,
+            valueBindings= Map.singleton name varType,
+            errors= mempty},
         constrain.empty),
      AST.VariableLHS name)
     where tv = freshTV env
@@ -493,7 +516,10 @@ instance (Abstract.Haskell l,
         | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
         = (tv,
            mconcat
-           $ LocalTypeMap{typeBindings= Map.singleton tv varType, valueBindings= Map.singleton name $ Success varType}
+           $ LocalTypeMap{
+               typeBindings= Map.singleton tv varType,
+               valueBindings= Map.singleton name varType,
+               errors= mempty}
            : prefixBindings : argBindings,
            conconcat constrain $ prefixCon : argCons)
       tv = freshTV env
@@ -508,7 +534,10 @@ instance (Abstract.Haskell l,
     where
       combine (_, lBind, lCon) (_, rBind, rCon) =
         (tv,
-         LocalTypeMap{typeBindings= Map.singleton tv varType, valueBindings= Map.singleton name $ Success varType}
+         LocalTypeMap{
+           typeBindings= Map.singleton tv varType,
+           valueBindings= Map.singleton name varType,
+           errors= mempty}
          <> lBind <> rBind,
          constrain.union lCon rCon)
       tv = freshTV env
@@ -527,9 +556,15 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.FieldDeclaration l l) where
   attribution TypeCheck{} (_, AST.ConstructorFields names ty) (AG.Inherited env, AST.ConstructorFields _ tySyn) =
-    (AG.Synthesized LocalTypeMap{
-        typeBindings= mempty,
-        valueBindings= Map.fromSet (const $ firstError $ AG.syn tySyn) (Set.fromList $ toList names)},
+    (AG.Synthesized $ case AG.syn tySyn of
+        Success ty -> LocalTypeMap{
+          typeBindings= mempty,
+          valueBindings= Map.fromSet (const ty) (Set.fromList $ toList names),
+          errors= mempty}
+        Failure errors -> LocalTypeMap{
+          typeBindings= mempty,
+          valueBindings= mempty,
+          errors= toList errors},
      AST.ConstructorFields names $ AG.Inherited env)
 
 instance (Abstract.Haskell l,
@@ -704,7 +739,7 @@ instance (Abstract.Haskell l,
       apply opT (argT, argCon) =
         (resultType,
          constrain.union argCon $ constrain.unify opT $ AST.FunctionType (Identity argT) (Identity resultType))
-      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.bindings.valueBindings)
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV env
   attribution
     TypeCheck{constrain}
@@ -718,7 +753,7 @@ instance (Abstract.Haskell l,
          constrain.union argCon $ constrain.unify opT
          $ AST.FunctionType (Identity leftArgType) $ Identity
          $ AST.FunctionType (Identity argT) (Identity resultType))
-      opLookup = placeError i $ maybe (Failure $ UnknownValue op) id (Map.lookup op env.bindings.valueBindings)
+      opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV $ forkFresh 'x' env
       leftArgType = AST.TypeVariable $ freshTV $ forkFresh 'l' env
   attribution
@@ -732,7 +767,7 @@ instance (Abstract.Haskell l,
           Nothing -> flip (foldr (abstract . AG.syn)) patSyns <$> bodySyn,
      AST.LambdaExpression (AG.Inherited <$> patEnvs) (AG.Inherited bodyEnv))
     where
-      abstract :: (AST.Name l, LocalTypeMap l Identity con, con)
+      abstract :: (AST.Name l, LocalTypeMap l Identity pos con, con)
                -> (AST.Type l l Identity Identity, con)
                -> (AST.Type l l Identity Identity, con)
       abstract (patVar, LocalTypeMap{typeBindings}, patCon) (rhsType, rhsCon) =
@@ -836,7 +871,8 @@ instance (Abstract.Haskell l,
     (AG.Synthesized (tv,
                      LocalTypeMap{
                         typeBindings= Map.singleton tv varType,
-                        valueBindings= Map.singleton name $ Success varType},
+                        valueBindings= Map.singleton name varType,
+                        errors= mempty},
                      constrain.empty),
      AST.VariablePattern name)
     where tv = freshTV env
@@ -891,12 +927,18 @@ instance (Abstract.Haskell l,
           Abstract.Pattern l ~ AST.Pattern l) =>
          AG.At (TypeCheck l pos s con) (AST.GADTConstructor l l) where
   attribution TypeCheck{constrain}
-    (_, AST.GADTConstructors names vars context t)
+    ((pos, _, _), AST.GADTConstructors names vars context t)
     (AG.Inherited env, AST.GADTConstructors _ varSyns contextSyn typeSyn)
     =
-    (AG.Synthesized LocalTypeMap{
-        typeBindings= mempty,
-        valueBindings= Map.fromSet (const $ firstError constructorType) (Set.fromList $ toList names)},
+    (AG.Synthesized $ case constructorType of
+        Success ty -> LocalTypeMap{
+          typeBindings= mempty,
+          valueBindings= Map.fromSet (const ty) (Set.fromList $ toList names),
+          errors= mempty}
+        Failure errors -> LocalTypeMap{
+          typeBindings= mempty,
+          valueBindings= mempty,
+          errors= toList errors},
      AST.GADTConstructors names (AG.Inherited env <$ vars) (AG.Inherited env) (AG.Inherited env))
     where
       constructorType = AST.ForallType
@@ -1007,14 +1049,13 @@ referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                          Abstract.Context l ~ AST.Context l)
                      => Bool
                      -> ConstraintHandler l pos con
-                     -> TypeEnv l Identity con
+                     -> TypeEnv l Identity pos con
                      -> AST.QualifiedName l
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
 referenceAttribution isValue ConstraintHandler{empty, fromContext, replaceVar} env name
   | isValue =
     case Map.lookup name env.bindings.valueBindings of
-      Just (Success t) -> Success $ concrete t
-      Just Failure{} -> Failure $ UntypedValue name
+      Just t -> Success $ concrete t
       Nothing -> Failure $ UnknownValue name
   | otherwise =
     case Map.lookup name env.bindings.typeBindings of
@@ -1038,10 +1079,11 @@ firstError (Success a) = Success a
 
 
 extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
-           => LocalTypeMap l Identity con -> TypeEnv l Identity con -> TypeEnv l Identity con
-extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{bindings = TypeMap{typeBindings, valueBindings}} =
+           => LocalTypeMap l Identity pos con -> TypeEnv l Identity pos con -> TypeEnv l Identity pos con
+extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{bindings = TypeMap{typeBindings, valueBindings, errors}} =
   env{bindings = TypeMap{typeBindings = typeBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName types,
-                         valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values}}
+                         valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values,
+                         errors}}
 
 replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
 replaceTypeVar old new = undefined
@@ -1056,7 +1098,7 @@ preludeName extensions =
   . Abstract.name
 
 replaceFresh :: (AST.Name l -> AST.Name l -> con -> con)
-             -> TypeEnv l f con
+             -> TypeEnv l f pos con
              -> AST.Name l
              -> (AST.Type l l Identity Identity, con)
              -> (AST.Type l l Identity Identity, con)
@@ -1064,10 +1106,10 @@ replaceFresh replaceConVar TypeEnv{freshVarPrefix} name@(AST.Name n) (t, con) =
   (replaceTypeVar name name' t, replaceConVar name name' con)
   where name' = AST.Name (Text.pack freshVarPrefix <> "_" <> n)
 
-forkFresh :: Char -> TypeEnv l f con -> TypeEnv l f con
+forkFresh :: Char -> TypeEnv l f pos con -> TypeEnv l f pos con
 forkFresh c env@TypeEnv{freshVarPrefix} = env{freshVarPrefix= c:freshVarPrefix}
 
-freshTV :: Abstract.Haskell l => TypeEnv l f con -> Abstract.Name l
+freshTV :: Abstract.Haskell l => TypeEnv l f pos con -> Abstract.Name l
 freshTV TypeEnv{freshVarPrefix} = Abstract.name (Text.pack freshVarPrefix)
 
 conconcat :: Foldable f => ConstraintHandler l pos con -> f con -> con

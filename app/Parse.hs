@@ -90,11 +90,12 @@ instance TypeCheckable AST.Module Language where
    typeCheck =
      either (("Type error: " <>) . show) showTypes . fst
      . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty mempty mempty
-     where showTypes TypeSystem.LocalTypeMap{typeBindings, valueBindings} =
-             Map.foldMapWithKey showType typeBindings <> Map.foldMapWithKey showErrorOrType valueBindings
-           showErrorOrType k v =
-             AST.nameString k <> " :: " <> either show Template.showViaTH (validationToEither v) <> "\n"
-           showType k v = "type " <> AST.nameString k <> " = " <> Template.showViaTH v <> "\n"
+     where showTypes TypeSystem.LocalTypeMap{typeBindings, valueBindings, errors} = unlines $ concat [
+             Map.foldMapWithKey showType typeBindings,
+             Map.foldMapWithKey showValueType valueBindings,
+             show <$> errors]
+           showType k v = ["type " <> AST.nameString k <> " = " <> Template.showViaTH v]
+           showValueType k v = [AST.nameString k <> " :: " <> Template.showViaTH v]
 
 main :: IO ()
 main = execParser opts >>= main'
