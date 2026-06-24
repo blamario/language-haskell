@@ -17,7 +17,8 @@ category:            Language
 build-type:          Simple
 extra-source-files:  README.md, CHANGELOG.md
 data-dir:            data/
-data-files:          report/*.hs
+data-files:          report/*.hs,
+                     base/Data/*.hs
 source-repository head
    type: git
    location: https://github.com/blamario/language-Haskell/
