@@ -397,7 +397,7 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
-    TypeCheck{constrain}
+    t@TypeCheck{constrain}
     (_, AST.EquationDeclaration _ _ wheres)
     (AG.Inherited env,
      AST.EquationDeclaration (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
@@ -407,16 +407,27 @@ instance (Abstract.Haskell l,
     where eqSyn =
             (lhsBindings,
              conconcat constrain
-             $ [lhsCon, rhsCon, constrain.assign lhsName rhsTypeOrError] ++ whereCons)
+             $ [lhsCon, rhsCon, constrain.assign lhsName rhsTypeOrError, whereCon])
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
             Failure err -> (ErrorType err, constrain.empty)
           (lhsName, lhsBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
-          ZipList whereCons = snd . AG.syn <$> whereSyns
           lhsEnv = forkFresh 'l' env
-          rhsEnv = forkFresh 'r' $ extendWith (lhsBindings <> foldMap (fst . AG.syn) whereSyns) env
-          whereEnvs = AG.Inherited . (`forkFresh` extendWith lhsBindings (forkFresh 'w' env))
-                      <$> (ZipList ['a' ..] <* wheres)
+          rhsEnv = forkFresh 'r' $ extendWith (lhsBindings <> whereBindings) env
+          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
+
+whereAttribution :: forall sem l pos s con.
+                    TypeCheck l pos s con
+                 -> ZipList (sem (AST.Declaration l l sem sem))
+                 -> AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)
+                 -> ZipList (AG.Synthesized (TypeCheck l pos s con) (AST.Declaration l l sem sem))
+                 -> (AG.Synthesized (TypeCheck l pos s con) (AST.Declaration l l sem sem),
+                     ZipList (AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)))
+whereAttribution TypeCheck{constrain} wheres (AG.Inherited env) syns =
+  (AG.Synthesized $ conconcat constrain <$> foldMap collect syns,
+   AG.Inherited . (`forkFresh` forkFresh 'w' env) <$> (ZipList ['a' ..] <* wheres))
+  where collect (AG.Synthesized (bindings, con)) = (bindings, [con])
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -467,20 +478,20 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.PatternEquationClause l l) where
   attribution
-    TypeCheck{constrain}
+    t@TypeCheck{constrain}
     (_, AST.PatternEquationClause sup lhs rhs wheres)
     (AG.Inherited env,
      AST.PatternEquationClause _ (AG.Synthesized (lhsBindings, lhsCon)) (AG.Synthesized rhsSyn) whereSyns)
     =
-    (AG.Synthesized $ combineSyn <$> rhsSyn <*> pure (AG.syn <$> whereSyns),
+    (AG.Synthesized $ combineSyn <$> rhsSyn,
      AST.PatternEquationClause sup (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where combineSyn (rhsType, rhsCon) whereTC =
+    where combineSyn (rhsType, rhsCon) =
             ({-Map.insert lhsName rhsType-} lhsBindings,
-             foldr (constrain.union . snd) (constrain.union lhsCon rhsCon) whereTC)
+             constrain.union (constrain.union lhsCon rhsCon) whereCon)
           lhsEnv = forkFresh 'x' env
-          rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> foldMap (fst . AG.syn) whereSyns) env
-          whereEnvs = AG.Inherited . (`forkFresh` extendWith lhsBindings env)
-                      <$> (ZipList ['a' ..] <* wheres)
+          rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
+          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1027,19 +1038,21 @@ instance (Abstract.Haskell l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
           Abstract.Declaration l ~ AST.Declaration l) =>
          AG.At (TypeCheck l pos s con) (AST.CaseAlternative l l) where
-  attribution TypeCheck{constrain}
+  attribution t@TypeCheck{constrain}
     (_, AST.CaseAlternative _ _ wheres)
     (AG.Inherited env, AST.CaseAlternative (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
     =
-    (AG.Synthesized $ combineSyn (AG.syn <$> whereSyns) lhsSyn <$> rhsSyn,
+    (AG.Synthesized $ combineSyn lhsSyn <$> rhsSyn,
      AST.CaseAlternative (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where combineSyn whereTC (lhsName, LocalTypeMap{typeBindings}, lhsCon) (rhsType, rhsCon) =
-            (typeBindings Map.! lhsName, rhsType, foldr (constrain.union . snd) (constrain.union lhsCon rhsCon) whereTC)
+    where combineSyn (lhsName, LocalTypeMap{typeBindings}, lhsCon) (rhsType, rhsCon) =
+            (typeBindings Map.! lhsName, rhsType, constrain.union whereCon (constrain.union lhsCon rhsCon))
           lhsEnv = forkFresh 'x' env
           lhsBindings = (\(_, env, _)-> env) lhsSyn
-          rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> foldMap (fst . AG.syn) whereSyns) env
-          whereEnvs = AG.Inherited . (`forkFresh` extendWith lhsBindings env)
-                      <$> (ZipList ['a' ..] <* wheres)
+          rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
+          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
+
+
 
 typeReferenceAttribution constrain = referenceAttribution False constrain
 valueReferenceAttribution constrain = referenceAttribution True constrain
