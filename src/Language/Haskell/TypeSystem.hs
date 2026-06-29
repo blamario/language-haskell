@@ -323,7 +323,7 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.Module l l) where
   attribution
-    TypeCheck{constrain}
+    t@TypeCheck{constrain}
     (_, AST.AnonymousModule imports declarations)
     (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
     =
@@ -332,13 +332,12 @@ instance (Abstract.Haskell l,
         valueBindings= Map.mapKeysMonotonic Binder.baseName
                        $ Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings,
         errors= mempty},
-     AST.AnonymousModule
-      (AG.Inherited (fst env) <$ imports)
-      (AG.Inherited topEnv <$ declarations))
+     AST.AnonymousModule (AG.Inherited (fst env) <$ imports) bodyEnvs)
     where topEnv = TypeEnv{
-            bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
+            bindings = foldMap AG.syn impSyns <> solve bodySyn,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
+          (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
@@ -346,7 +345,7 @@ instance (Abstract.Haskell l,
             where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
   attribution
-    TypeCheck{constrain}
+    t@TypeCheck{constrain}
     (_, AST.NamedModule name exports imports declarations)
     (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
     =
@@ -354,11 +353,12 @@ instance (Abstract.Haskell l,
      AST.NamedModule name
       (getCompose $ AG.Inherited topEnv <$ Compose exports)
       (AG.Inherited (fst env) <$ imports)
-      (AG.Inherited topEnv <$ declarations))
+      bodyEnvs)
     where topEnv = TypeEnv{
-            bindings = foldMap AG.syn impSyns <> foldMap (solve . AG.syn) bodySyns,
+            bindings = foldMap AG.syn impSyns <> solve bodySyn,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
+          (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
@@ -791,17 +791,15 @@ instance (Abstract.Haskell l,
         Map.keys $ Map.filter (> Sum 1)
         $ foldMap (\(AG.Synthesized (_, LocalTypeMap{valueBindings}, _)) -> Sum 1 <$ valueBindings) patSyns
   attribution
-    TypeCheck{constrain}
+    t@TypeCheck{constrain}
     ((start, _, end), AST.LetExpression bindings _)
     (AG.Inherited env, AST.LetExpression bindSyns (AG.Synthesized bodySyn))
     =
-    (AG.Synthesized $ complete (snd . AG.syn <$> bindSyns) <$> bodySyn,
-     AST.LetExpression (AG.Inherited <$> bindEnvs) (AG.Inherited bodyEnv))
+    (AG.Synthesized $ (constrain.union bindCon <$>) <$> bodySyn,
+     AST.LetExpression bindEnvs (AG.Inherited bodyEnv))
     where
-      complete (ZipList bindCons) (bodyType, bodyCon) = (bodyType, conconcat constrain $ bodyCon : bindCons)
-      boundEnv = foldMap fst $ AG.syn <$> bindSyns
+      ((boundEnv, bindCon), bindEnvs) = whereAttribution t bindings env bindSyns
       env' = extendWith boundEnv env
-      bindEnvs = flip forkFresh env' <$> (ZipList ['a' ..] <* bindings)
       bodyEnv = forkFresh 'x' env'
   attribution TypeCheck{constrain} (i, AST.ListExpression items) (AG.Inherited env, AST.ListExpression itemSyns) =
     (AG.Synthesized unified, AST.ListExpression $ AG.Inherited <$> itemEnvs)
