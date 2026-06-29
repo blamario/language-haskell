@@ -414,18 +414,18 @@ instance (Abstract.Haskell l,
           (lhsName, lhsBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
           lhsEnv = forkFresh 'l' env
           rhsEnv = forkFresh 'r' $ extendWith (lhsBindings <> whereBindings) env
-          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
+          ((whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (extendWith lhsBindings env) whereSyns
 
 whereAttribution :: forall sem l pos s con.
                     TypeCheck l pos s con
                  -> ZipList (sem (AST.Declaration l l sem sem))
-                 -> AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)
+                 -> TypeEnv l Identity pos con
                  -> ZipList (AG.Synthesized (TypeCheck l pos s con) (AST.Declaration l l sem sem))
-                 -> (AG.Synthesized (TypeCheck l pos s con) (AST.Declaration l l sem sem),
+                 -> ((LocalTypeMap l Identity pos con, con),
                      ZipList (AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)))
-whereAttribution TypeCheck{constrain} wheres (AG.Inherited env) syns =
-  (AG.Synthesized $ conconcat constrain <$> foldMap collect syns,
+whereAttribution TypeCheck{constrain} wheres env syns =
+  (conconcat constrain <$> foldMap collect syns,
    AG.Inherited . (`forkFresh` forkFresh 'w' env) <$> (ZipList ['a' ..] <* wheres))
   where collect (AG.Synthesized (bindings, con)) = (bindings, [con])
 
@@ -490,8 +490,8 @@ instance (Abstract.Haskell l,
              constrain.union (constrain.union lhsCon rhsCon) whereCon)
           lhsEnv = forkFresh 'x' env
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
-          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
+          ((whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (extendWith lhsBindings env) whereSyns
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1049,8 +1049,8 @@ instance (Abstract.Haskell l,
           lhsEnv = forkFresh 'x' env
           lhsBindings = (\(_, env, _)-> env) lhsSyn
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
-          (AG.Synthesized (whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (AG.Inherited $ extendWith lhsBindings env) whereSyns
+          ((whereBindings, whereCon), whereEnvs) =
+            whereAttribution t wheres (extendWith lhsBindings env) whereSyns
 
 
 
