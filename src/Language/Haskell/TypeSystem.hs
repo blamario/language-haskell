@@ -212,6 +212,7 @@ type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) 
   InhAtts l pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
   InhAtts l pos s con (AST.ImportSpecification l l) = ()
   InhAtts l pos s con (AST.ImportItem l l) = ()
+  InhAtts l pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, LocalTypeMap l Identity pos con)
   InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
   InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
   InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
@@ -241,7 +242,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.EquationLHS l l) = (AST.Name l, LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.EquationRHS l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
-  SynAtts l pos s con (AST.Declaration l l) = (LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.Declaration l l) = (LocalTypeMap l Identity pos con, LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity pos con
   SynAtts l pos s con (AST.DataConstructor l l) =
     Validation (TypeErrors l pos con) (AST.Name l, AST.Type l l Identity Identity)
@@ -391,31 +392,54 @@ instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+          Abstract.Context l ~ AST.Context l,
           Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
           Abstract.Declaration l ~ AST.Declaration l,
           Abstract.Type l ~ AST.Type l) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
+    TypeCheck{constrain}
+    (_, AST.TypeSignature names _ _)
+    (AG.Inherited (env, _declared),
+     AST.TypeSignature _ (AG.Synthesized ctxSyn) (AG.Synthesized tySyn))
+    =
+    (AG.Synthesized (declaredTypeMap, mempty, constrain.empty),
+     AST.TypeSignature names (AG.Inherited env) (AG.Inherited env))
+    where declaredTypeMap = case tySyn of
+            Success t -> LocalTypeMap{
+              typeBindings= mempty,
+              valueBindings= Map.fromList [(name, t) | name <- toList names],
+              errors= mempty}
+            Failure errs -> LocalTypeMap{
+              typeBindings= mempty,
+              valueBindings= mempty,
+              errors= toList errs}
+  attribution
     t@TypeCheck{constrain}
     (_, AST.EquationDeclaration _ _ wheres)
-    (AG.Inherited env,
+    (AG.Inherited (env, declaredBindings),
      AST.EquationDeclaration (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
     =
     (AG.Synthesized eqSyn,
      AST.EquationDeclaration (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
     where eqSyn =
-            (lhsBindings,
+            (mempty,
+             localTypeDifference lhsBindings declaredBindings,
              conconcat constrain
              $ [lhsCon, rhsCon, constrain.assign lhsName rhsTypeOrError, whereCon])
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
             Failure err -> (ErrorType err, constrain.empty)
           (lhsName, lhsBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
-          lhsEnv = forkFresh 'l' env
-          rhsEnv = forkFresh 'r' $ extendWith (lhsBindings <> whereBindings) env
+          lhsEnv = extendWith declaredBindings $ forkFresh 'l' env
+          rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> lhsBindings <> declaredBindings) env
           ((whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (extendWith lhsBindings env) whereSyns
+            whereAttribution t wheres (extendWith (lhsBindings <> declaredBindings) env) whereSyns
+          localTypeDifference l r = LocalTypeMap{
+            typeBindings= Map.difference l.typeBindings r.typeBindings,
+            valueBindings= Map.difference l.valueBindings r.valueBindings,
+            errors= l.errors}
 
 whereAttribution :: forall sem l pos s con.
                     TypeCheck l pos s con
@@ -426,8 +450,10 @@ whereAttribution :: forall sem l pos s con.
                      ZipList (AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)))
 whereAttribution TypeCheck{constrain} wheres env syns =
   (conconcat constrain <$> foldMap collect syns,
-   AG.Inherited . (`forkFresh` forkFresh 'w' env) <$> (ZipList ['a' ..] <* wheres))
-  where collect (AG.Synthesized (bindings, con)) = (bindings, [con])
+   bequeath <$> (ZipList ['a' ..] <* wheres))
+  where collect (AG.Synthesized (declared, inferred, con)) = (declared <> inferred, [con])
+        collectDeclared (AG.Synthesized (declared, _, _)) = declared
+        bequeath letter = AG.Inherited (forkFresh letter $ forkFresh 'w' env, foldMap collectDeclared syns)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
