@@ -350,21 +350,27 @@ instance (Abstract.Haskell l,
     (_, AST.NamedModule name exports imports declarations)
     (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ foldMap AG.syn $ Compose expSyns,
+    (AG.Synthesized $ Success $ maybe solvedBodySyn (const $ foldMap AG.syn $ Compose expSyns) exports,
      AST.NamedModule name
       (getCompose $ AG.Inherited topEnv <$ Compose exports)
       (AG.Inherited (fst env) <$ imports)
       bodyEnvs)
     where topEnv = TypeEnv{
-            bindings = foldMap AG.syn impSyns <> solve bodySyn,
+            bindings = foldMap AG.syn impSyns <> globalized solvedBodySyn,
             freshVarPrefix = mempty,
             constraints = constrain.empty}
           (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
-          solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
-            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
-            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
-            errors = mempty}
+          solvedBodySyn :: LocalTypeMap l Identity pos con
+          solvedBodySyn = solve bodySyn
+          solve (LocalTypeMap{typeBindings= ts, valueBindings= vs, errors}, con) = LocalTypeMap{
+            typeBindings = constrainType <$> ts,
+            valueBindings = constrainType <$> vs,
+            errors}
             where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
+          globalized l@LocalTypeMap{typeBindings, valueBindings} = TypeMap{
+            typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.typeBindings,
+            valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.valueBindings,
+            errors = l.errors}
           mainName = Abstract.qualifiedName @l Nothing (Abstract.name "main")
   attribution
     TypeCheck{constrain}
