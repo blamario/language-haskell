@@ -537,7 +537,7 @@ instance (Abstract.Haskell l,
     (AG.Synthesized (
         tv,
         LocalTypeMap{
-            typeBindings= Map.singleton tv varType,
+            typeBindings= Map.empty,
             valueBindings= Map.singleton name varType,
             errors= mempty},
         constrain.empty),
@@ -557,13 +557,8 @@ instance (Abstract.Haskell l,
       argEnvs = AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b'..])) <* args
       collect (name, prefixBindings, prefixCon) argSyns'
         | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
-        = (tv,
-           mconcat
-           $ LocalTypeMap{
-               typeBindings= Map.singleton tv varType,
-               valueBindings= Map.singleton name varType,
-               errors= mempty}
-           : prefixBindings : argBindings,
+        = (name,
+           mconcat $ prefixBindings : argBindings,
            conconcat constrain $ prefixCon : argCons)
       tv = freshTV env
       varType = AST.TypeVariable tv
@@ -578,7 +573,7 @@ instance (Abstract.Haskell l,
       combine (_, lBind, lCon) (_, rBind, rCon) =
         (tv,
          LocalTypeMap{
-           typeBindings= Map.singleton tv varType,
+           typeBindings= Map.empty,
            valueBindings= Map.singleton name varType,
            errors= mempty}
          <> lBind <> rBind,
@@ -918,6 +913,10 @@ instance (Abstract.Haskell l,
      AST.VariablePattern name)
     where tv = freshTV env
           varType = AST.TypeVariable tv
+  attribution TypeCheck{constrain} (_, AST.WildcardPattern) (AG.Inherited env, _) =
+    (AG.Synthesized (tv, mempty, constrain.empty),
+     AST.WildcardPattern)
+    where tv = freshTV env
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
