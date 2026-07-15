@@ -350,7 +350,10 @@ instance (Abstract.Haskell l,
     (_, AST.NamedModule name exports imports declarations)
     (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
     =
-    (AG.Synthesized $ Success $ maybe solvedBodySyn (const $ foldMap AG.syn $ Compose expSyns) exports,
+    (AG.Synthesized
+     $ case nonEmpty solvedBodySyn.errors of
+        Nothing -> Success $ maybe solvedBodySyn (const $ foldMap AG.syn $ Compose expSyns) exports
+        Just es -> Failure es,
      AST.NamedModule name
       (getCompose $ AG.Inherited topEnv <$ Compose exports)
       (AG.Inherited (fst env) <$ imports)
@@ -365,7 +368,7 @@ instance (Abstract.Haskell l,
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs, errors}, con) = LocalTypeMap{
             typeBindings = constrainType <$> ts,
             valueBindings = constrainType <$> vs,
-            errors}
+            errors = errors <> constrain.errors con}
             where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
           globalized l@LocalTypeMap{typeBindings, valueBindings} = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.typeBindings,

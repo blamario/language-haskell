@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
+{-# Language DuplicateRecordFields, FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
              NamedFieldPuns, NoFieldSelectors, OverloadedRecordDot, OverloadedStrings,
              ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 
@@ -8,6 +8,7 @@ module Language.Haskell.TypeSystem.Constraints (
   ConstraintHandler(..), DefaultConstraints, defaultConstraintHandler, TypeError(..), TypeErrors, TypeOrError(..)) where
 
 import Control.Applicative (ZipList(ZipList))
+import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Identity (Identity(Identity))
@@ -28,6 +29,7 @@ data ConstraintHandler l pos con = ConstraintHandler{
   unify :: AST.Type l l Identity Identity -> AST.Type l l Identity Identity -> con,
   assign :: AST.Name l -> TypeOrError l pos con -> con,
   union :: con -> con -> con,
+  errors :: con -> [(pos, TypeError l con)],
   empty :: con}
 
 data TypeError l con
@@ -96,5 +98,6 @@ defaultConstraintHandler = ConstraintHandler{
       equations= l.equations <> r.equations,
       errors= l.errors <> r.errors,
       classes= Map.unionWith (<>) l.classes r.classes},
+  errors = \DefaultConstraints{errors}-> foldMap toList errors,
   empty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}}
 
