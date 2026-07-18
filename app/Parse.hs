@@ -84,12 +84,12 @@ class TypeCheckable g l where
 instance TypeCheckable AST.Expression Language where
    typeCheck =
      either (("Type error: " <>) . show) Template.showViaTH
-     . TypeSystem.checkExpression TypeSystem.defaultConstraintHandler mempty mempty mempty
+     . TypeSystem.checkExpression mempty mempty mempty
 
 instance TypeCheckable AST.Module Language where
    typeCheck =
      either (("Type error: " <>) . show) showTypes . fst
-     . TypeSystem.checkModule TypeSystem.defaultConstraintHandler mempty mempty mempty mempty mempty
+     . TypeSystem.checkModule mempty mempty mempty mempty mempty
      where showTypes TypeSystem.LocalTypeMap{typeBindings, valueBindings, errors} = unlines $ concat [
              Map.foldMapWithKey showType typeBindings,
              Map.foldMapWithKey showValueType valueBindings,

@@ -1,11 +1,11 @@
 {-# Language DuplicateRecordFields, FlexibleContexts, FlexibleInstances, ImportQualifiedPost, LambdaCase,
-             NamedFieldPuns, NoFieldSelectors, OverloadedRecordDot, OverloadedStrings,
-             ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
+             MultiParamTypeClasses, NamedFieldPuns, NoFieldSelectors, OverloadedRecordDot, OverloadedStrings,
+             ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The X part of OutsideIn(X), the constraints and their handler
 
 module Language.Haskell.TypeSystem.Constraints (
-  ConstraintHandler(..), DefaultConstraints, defaultConstraintHandler, TypeError(..), TypeErrors, TypeOrError(..)) where
+  ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..)) where
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Foldable (toList)
@@ -18,19 +18,23 @@ import Data.Map.Strict (Map)
 import Language.Haskell.Extensions.AST qualified as AST
 
 -- | Record of functions for handling constraints
-data ConstraintHandler l pos con = ConstraintHandler{
-  display :: con -> String,
-  fromContext :: AST.Context l l Identity Identity -> con,
-  toContext :: con -> (AST.Context l l Identity Identity, con),
-  replaceVar :: AST.Name l -> AST.Name l -> con -> con,
+class Monoid con => ConstraintCollection con where
+  type Language con
+  type Position con
+  display :: con -> String
+  fromContext :: AST.Context (Language con) (Language con) Identity Identity -> con
+  toContext :: con -> (AST.Context (Language con) (Language con) Identity Identity, con)
+  replaceVar :: AST.Name (Language con) -> AST.Name (Language con) -> con -> con
   simplify :: con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
-           -> (con, Map (AST.Name l) (AST.Type l l Identity Identity)),
-  unify :: AST.Type l l Identity Identity -> AST.Type l l Identity Identity -> con,
-  assign :: AST.Name l -> TypeOrError l pos con -> con,
-  union :: con -> con -> con,
-  errors :: con -> [(pos, TypeError l con)],
-  empty :: con}
+           -> (con, Map (AST.Name (Language con)) (AST.Type (Language con) (Language con) Identity Identity))
+  unify :: AST.Type (Language con) (Language con) Identity Identity
+        -> AST.Type (Language con) (Language con) Identity Identity
+        -> con
+  assign :: AST.Name (Language con) -> TypeOrError (Language con) (Position con) con -> con
+  union :: con -> con -> con
+  errors :: con -> [(Position con, TypeError (Language con) con)]
+  empty :: con
 
 data TypeError l con
   = TypeMismatch (AST.Type l l Identity Identity) (AST.Type l l Identity Identity)
@@ -53,25 +57,30 @@ data DefaultConstraints l pos = DefaultConstraints{
   errors :: Map (AST.Name l) (TypeErrors l pos (DefaultConstraints l pos)),
   classes :: Map (AST.QualifiedName l) [AST.Type l l Identity Identity]}
 
-deriving instance (Show (AST.Type l l Identity Identity), Show pos) =>
-  Show (DefaultConstraints l pos)
-instance Show pos => Semigroup (DefaultConstraints AST.Language pos) where
-  (<>) = defaultConstraintHandler.union
-instance Show pos => Monoid (DefaultConstraints AST.Language pos) where
-  mempty = defaultConstraintHandler.empty
+deriving instance (Show (AST.Type l l Identity Identity), Show pos) => Show (DefaultConstraints l pos)
 
-defaultConstraintHandler :: Show pos => ConstraintHandler AST.Language pos (DefaultConstraints AST.Language pos)
-defaultConstraintHandler = ConstraintHandler{
-  display = show,
+instance Semigroup (DefaultConstraints l pos) where
+  x <> y = DefaultConstraints{
+    classes= Map.unionWith (<>) x.classes y.classes,
+    equations = x.equations <> y.equations,
+    errors = x.errors <> y.errors}
+
+instance Monoid (DefaultConstraints l pos) where
+  mempty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}
+
+instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) where
+  type Language (DefaultConstraints AST.Language pos) = AST.Language
+  type Position (DefaultConstraints AST.Language pos) = pos
+  display = show
   fromContext = \case
-      AST.ClassConstraint name (Identity arg) -> defaultConstraintHandler.empty{classes= Map.singleton name [arg]}
-      AST.Constraints cons -> foldMap defaultConstraintHandler.fromContext (Compose cons)
-      AST.NoContext -> defaultConstraintHandler.empty,
+      AST.ClassConstraint name (Identity arg) -> mempty{classes= Map.singleton name [arg]}
+      AST.Constraints cons -> foldMap fromContext (Compose cons)
+      AST.NoContext -> mempty
   toContext = \DefaultConstraints{equations, classes}->
       case [AST.TypeEquality (Identity l) (Identity r) | (l, r) <- equations]
            <> [AST.ClassConstraint name (Identity arg) | (name, args) <- Map.toList classes, arg <- args]
-      of [] -> (AST.NoContext, defaultConstraintHandler.empty)
-         cons -> (AST.Constraints (ZipList $ Identity <$> cons), defaultConstraintHandler.empty),
+      of [] -> (AST.NoContext, mempty)
+         cons -> (AST.Constraints (ZipList $ Identity <$> cons), mempty)
   replaceVar = \from to DefaultConstraints{errors, equations, classes} ->
       let replaceInType = \case
             AST.TypeVariable name
@@ -86,18 +95,17 @@ defaultConstraintHandler = ConstraintHandler{
       in DefaultConstraints{
         errors = errors,
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
-        classes = getCompose $ replaceInType <$> Compose classes},
+        classes = getCompose $ replaceInType <$> Compose classes}
   -- TODO: actually simplify wanted, report contradictions
-  simplify = \given wanted-> (given <> wanted, Map.empty),
-  unify = \a b -> DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty},
+  simplify = \given wanted-> (given <> wanted, Map.empty)
+  unify = \a b -> DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty}
   assign = \var terr-> case terr of
       ProperType t -> DefaultConstraints{
         equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
-      ErrorType err -> DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err},
+      ErrorType err -> DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
   union = \l r-> DefaultConstraints{
       equations= l.equations <> r.equations,
       errors= l.errors <> r.errors,
-      classes= Map.unionWith (<>) l.classes r.classes},
-  errors = \DefaultConstraints{errors}-> foldMap toList errors,
-  empty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}}
-
+      classes= Map.unionWith (<>) l.classes r.classes}
+  errors DefaultConstraints{errors} = foldMap toList errors
+  empty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}

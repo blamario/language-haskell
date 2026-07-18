@@ -7,7 +7,7 @@
 
 module Language.Haskell.TypeSystem (
   checkExpression, checkModule,
-  TypeMap(..), LocalTypeMap(..), TypeErrors, DefaultConstraints, defaultConstraintHandler) where
+  TypeMap(..), LocalTypeMap(..), TypeErrors) where
 
 import Control.Applicative (ZipList(ZipList), liftA3)
 import Data.Bifunctor (bimap, first)
@@ -47,116 +47,123 @@ import Language.Haskell.Reserializer qualified as Reserializer
 import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, RebindableSyntax))
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
-  ConstraintHandler(..), DefaultConstraints, defaultConstraintHandler, TypeError(..), TypeErrors, TypeOrError(..))
+  ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..))
+import Language.Haskell.TypeSystem.Constraints qualified as Constraints (ConstraintCollection(..))
 
-checkModule :: (Abstract.Haskell l,
-                Binder.BindingMembers l,
-                Abstract.Name l ~ AST.Name l,
-                Abstract.ModuleName l ~ AST.ModuleName l,
-                Abstract.QualifiedName l ~ AST.QualifiedName l,
-                Abstract.Module l ~ AST.Module l,
-                Abstract.Export l ~ AST.Export l,
-                Abstract.Import l ~ AST.Import l,
-                Abstract.ImportSpecification l ~ AST.ImportSpecification l,
-                Abstract.ImportItem l ~ AST.ImportItem l,
-                Abstract.Declaration l ~ AST.Declaration l,
-                Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
-                Abstract.Type l ~ AST.Type l,
-                Abstract.Kind l ~ AST.Type l,
-                Abstract.Context l ~ AST.Context l,
-                Abstract.Expression l ~ AST.Expression l,
-                Abstract.FieldBinding l ~ AST.FieldBinding l,
-                Abstract.Value l ~ AST.Value l,
-                Abstract.CaseAlternative l ~ AST.CaseAlternative l,
-                Abstract.LambdaCasesAlternative l ~ AST.LambdaCasesAlternative l,
-                Abstract.Statement l ~ AST.Statement l,
-                Abstract.EquationLHS l ~ AST.EquationLHS l,
-                Abstract.EquationRHS l ~ AST.EquationRHS l,
-                Abstract.GuardedExpression l ~ AST.GuardedExpression l,
-                Abstract.FieldDeclaration l ~ AST.FieldDeclaration l,
-                Abstract.TypeLHS l ~ AST.TypeLHS l,
-                Abstract.ClassInstanceLHS l ~ AST.ClassInstanceLHS l,
-                Abstract.PatternLHS l ~ AST.PatternLHS l,
-                Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
-                Abstract.PatternEquationClause l ~ AST.PatternEquationClause l,
-                Abstract.FunctionalDependency l ~ AST.FunctionalDependency l,
-                Abstract.DerivingClause l ~ AST.DerivingClause l,
-                Abstract.DerivingStrategy l ~ AST.DerivingStrategy l,
-                Abstract.DataConstructor l ~ AST.DataConstructor l,
-                Abstract.GADTConstructor l ~ AST.GADTConstructor l,
-                Abstract.Constructor l ~ AST.Constructor l,
-                Abstract.Pattern l ~ AST.Pattern l,
-                Abstract.FieldPattern l ~ AST.FieldPattern l)
-            => ConstraintHandler l pos con
-            -> Map Extension Bool
-            -> Binder.ModuleEnvironment l
-            -> Binder.Environment l
-            -> Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
-            -> TypeMap l Identity pos con
-            -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
-            -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity pos con), Binder.LocalEnvironment l)
-checkModule constrain extensions binderModuleEnv binderEnv moduleBindings bindings m =
+checkModule :: forall l pos s con. (
+  Abstract.Haskell l,
+  Binder.BindingMembers l,
+  Abstract.Name l ~ AST.Name l,
+  Abstract.ModuleName l ~ AST.ModuleName l,
+  Abstract.QualifiedName l ~ AST.QualifiedName l,
+  Abstract.Module l ~ AST.Module l,
+  Abstract.Export l ~ AST.Export l,
+  Abstract.Import l ~ AST.Import l,
+  Abstract.ImportSpecification l ~ AST.ImportSpecification l,
+  Abstract.ImportItem l ~ AST.ImportItem l,
+  Abstract.Declaration l ~ AST.Declaration l,
+  Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+  Abstract.Type l ~ AST.Type l,
+  Abstract.Kind l ~ AST.Type l,
+  Abstract.Context l ~ AST.Context l,
+  Abstract.Expression l ~ AST.Expression l,
+  Abstract.FieldBinding l ~ AST.FieldBinding l,
+  Abstract.Value l ~ AST.Value l,
+  Abstract.CaseAlternative l ~ AST.CaseAlternative l,
+  Abstract.LambdaCasesAlternative l ~ AST.LambdaCasesAlternative l,
+  Abstract.Statement l ~ AST.Statement l,
+  Abstract.EquationLHS l ~ AST.EquationLHS l,
+  Abstract.EquationRHS l ~ AST.EquationRHS l,
+  Abstract.GuardedExpression l ~ AST.GuardedExpression l,
+  Abstract.FieldDeclaration l ~ AST.FieldDeclaration l,
+  Abstract.TypeLHS l ~ AST.TypeLHS l,
+  Abstract.ClassInstanceLHS l ~ AST.ClassInstanceLHS l,
+  Abstract.PatternLHS l ~ AST.PatternLHS l,
+  Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
+  Abstract.PatternEquationClause l ~ AST.PatternEquationClause l,
+  Abstract.FunctionalDependency l ~ AST.FunctionalDependency l,
+  Abstract.DerivingClause l ~ AST.DerivingClause l,
+  Abstract.DerivingStrategy l ~ AST.DerivingStrategy l,
+  Abstract.DataConstructor l ~ AST.DataConstructor l,
+  Abstract.GADTConstructor l ~ AST.GADTConstructor l,
+  Abstract.Constructor l ~ AST.Constructor l,
+  Abstract.Pattern l ~ AST.Pattern l,
+  Abstract.FieldPattern l ~ AST.FieldPattern l,
+  Show pos,
+  l ~ AST.Language,
+  con ~ DefaultConstraints l pos)
+  => Map Extension Bool
+  -> Binder.ModuleEnvironment l
+  -> Binder.Environment l
+  -> Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
+  -> TypeMap l Identity pos con
+  -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
+  -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity pos con), Binder.LocalEnvironment l)
+checkModule extensions binderModuleEnv binderEnv moduleBindings bindings m =
   bimap validationToEither snd $ AG.syn
   $ (transformation Full.<$> m) Rank2.$ AG.Inherited ((moduleBindings, env), (extensions, binderEnv))
   where env = TypeEnv{
           bindings,
           freshVarPrefix = "",
-          constraints = constrain.empty}
-        transformation = AG.Knit (TypeCheck{constrain, extensions}, AG.Auto $ Binder binderModuleEnv)
+          constraints = mempty :: DefaultConstraints l pos}
+        transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con, AG.Auto $ Binder binderModuleEnv)
 
-checkExpression :: (Abstract.Haskell l,
-                    Abstract.Name l ~ AST.Name l,
-                    Abstract.ModuleName l ~ AST.ModuleName l,
-                    Abstract.QualifiedName l ~ AST.QualifiedName l,
-                    Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
-                    Abstract.Type l ~ AST.Type l,
-                    Abstract.Kind l ~ AST.Type l,
-                    Abstract.Context l ~ AST.Context l,
-                    Abstract.Expression l ~ AST.Expression l,
-                    Abstract.FieldBinding l ~ AST.FieldBinding l,
-                    Abstract.Value l ~ AST.Value l,
-                    Abstract.CaseAlternative l ~ AST.CaseAlternative l,
-                    Abstract.LambdaCasesAlternative l ~ AST.LambdaCasesAlternative l,
-                    Abstract.Statement l ~ AST.Statement l,
-                    Abstract.EquationLHS l ~ AST.EquationLHS l,
-                    Abstract.EquationRHS l ~ AST.EquationRHS l,
-                    Abstract.GuardedExpression l ~ AST.GuardedExpression l,
-                    Abstract.Declaration l ~ AST.Declaration l,
-                    Abstract.FieldDeclaration l ~ AST.FieldDeclaration l,
-                    Abstract.TypeLHS l ~ AST.TypeLHS l,
-                    Abstract.ClassInstanceLHS l ~ AST.ClassInstanceLHS l,
-                    Abstract.PatternLHS l ~ AST.PatternLHS l,
-                    Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
-                    Abstract.PatternEquationClause l ~ AST.PatternEquationClause l,
-                    Abstract.FunctionalDependency l ~ AST.FunctionalDependency l,
-                    Abstract.DerivingClause l ~ AST.DerivingClause l,
-                    Abstract.DerivingStrategy l ~ AST.DerivingStrategy l,
-                    Abstract.DataConstructor l ~ AST.DataConstructor l,
-                    Abstract.GADTConstructor l ~ AST.GADTConstructor l,
-                    Abstract.Constructor l ~ AST.Constructor l,
-                    Abstract.Pattern l ~ AST.Pattern l,
-                    Abstract.FieldPattern l ~ AST.FieldPattern l)
-                => ConstraintHandler l pos con
-                -> Map Extension Bool
-                -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
-                -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
-                -> Wrap l pos s (AST.Expression l l (Wrap l pos s) (Wrap l pos s))
-                -> Either (TypeErrors l pos con) (AST.Type l l Identity Identity)
-checkExpression constrain extensions typeBindings valueBindings e =
+checkExpression :: forall l pos s con. (
+  Abstract.Haskell l,
+  Abstract.Name l ~ AST.Name l,
+  Abstract.ModuleName l ~ AST.ModuleName l,
+  Abstract.QualifiedName l ~ AST.QualifiedName l,
+  Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+  Abstract.Type l ~ AST.Type l,
+  Abstract.Kind l ~ AST.Type l,
+  Abstract.Context l ~ AST.Context l,
+  Abstract.Expression l ~ AST.Expression l,
+  Abstract.FieldBinding l ~ AST.FieldBinding l,
+  Abstract.Value l ~ AST.Value l,
+  Abstract.CaseAlternative l ~ AST.CaseAlternative l,
+  Abstract.LambdaCasesAlternative l ~ AST.LambdaCasesAlternative l,
+  Abstract.Statement l ~ AST.Statement l,
+  Abstract.EquationLHS l ~ AST.EquationLHS l,
+  Abstract.EquationRHS l ~ AST.EquationRHS l,
+  Abstract.GuardedExpression l ~ AST.GuardedExpression l,
+  Abstract.Declaration l ~ AST.Declaration l,
+  Abstract.FieldDeclaration l ~ AST.FieldDeclaration l,
+  Abstract.TypeLHS l ~ AST.TypeLHS l,
+  Abstract.ClassInstanceLHS l ~ AST.ClassInstanceLHS l,
+  Abstract.PatternLHS l ~ AST.PatternLHS l,
+  Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
+  Abstract.PatternEquationClause l ~ AST.PatternEquationClause l,
+  Abstract.FunctionalDependency l ~ AST.FunctionalDependency l,
+  Abstract.DerivingClause l ~ AST.DerivingClause l,
+  Abstract.DerivingStrategy l ~ AST.DerivingStrategy l,
+  Abstract.DataConstructor l ~ AST.DataConstructor l,
+  Abstract.GADTConstructor l ~ AST.GADTConstructor l,
+  Abstract.Constructor l ~ AST.Constructor l,
+  Abstract.Pattern l ~ AST.Pattern l,
+  Abstract.FieldPattern l ~ AST.FieldPattern l,
+  Show pos,
+  l ~ AST.Language,
+  con ~ DefaultConstraints l pos)
+  => Map Extension Bool
+  -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
+  -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
+  -> Wrap l pos s (AST.Expression l l (Wrap l pos s) (Wrap l pos s))
+  -> Either (TypeErrors l pos con) (AST.Type l l Identity Identity)
+checkExpression extensions typeBindings valueBindings e =
   fmap constrainType $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
-  where env = TypeEnv{
+  where env :: TypeEnv l Identity pos con
+        env = TypeEnv{
           bindings = TypeMap{
               typeBindings,
               valueBindings,
               errors= mempty},
           freshVarPrefix = "a",
-          constraints = constrain.empty}
-        transformation = AG.Knit TypeCheck{constrain, extensions}
-        constrainType (t, con) = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
+          constraints = mempty}
+        transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con)
+        constrainType (t, con) = AST.ConstrainedType (Identity $ fst $ Constraints.toContext con) (Identity t)
 
 -- | Transformation for checking and inference of types. The @con@ parameter is for constraints.
 data TypeCheck l pos s con = TypeCheck{
-  constrain :: ConstraintHandler l pos con,
   extensions :: Map Extension Bool}
 
 data TypeMap l f pos con = TypeMap{
@@ -204,19 +211,19 @@ type Wrap l pos s = Reserializer.Wrapped pos s
 instance AG.Attribution (TypeCheck l pos s con) where
   type Origin (TypeCheck l pos s con) = Wrap l pos s
 
-type instance AG.Atts (AG.Inherited (TypeCheck l pos s con)) g = InhAtts l pos s con g
+type instance AG.Atts (AG.Inherited (TypeCheck l pos s con)) g = InhAtts pos s con g
 type instance AG.Atts (AG.Synthesized (TypeCheck l pos s con)) g = SynAtts l pos s con g
 
-type family InhAtts l pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) where
-  InhAtts l pos s con (AST.Module l l) = (Map (AST.ModuleName l) (LocalTypeMap l Identity pos con), TypeEnv l Identity pos con)
-  InhAtts l pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
-  InhAtts l pos s con (AST.ImportSpecification l l) = ()
-  InhAtts l pos s con (AST.ImportItem l l) = ()
-  InhAtts l pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, LocalTypeMap l Identity pos con)
-  InhAtts l pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
-  InhAtts l pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
-  InhAtts l pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
-  InhAtts l pos s con _ = TypeEnv l Identity pos con
+type family InhAtts pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) where
+  InhAtts pos s con (AST.Module l l) = (Map (AST.ModuleName l) (LocalTypeMap l Identity pos con), TypeEnv l Identity pos con)
+  InhAtts pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
+  InhAtts pos s con (AST.ImportSpecification l l) = ()
+  InhAtts pos s con (AST.ImportItem l l) = ()
+  InhAtts pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, LocalTypeMap l Identity pos con)
+  InhAtts pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
+  InhAtts pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
+  InhAtts pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
+  InhAtts pos s con _ = TypeEnv (Constraints.Language con) Identity pos con
 
 type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.Module l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con)
@@ -259,7 +266,9 @@ type StatementConstraintBuilder l pos con =
 instance {-# OVERLAPS #-} (
   Abstract.Haskell l, Binder.BindingMembers l, Abstract.Name l ~ AST.Name l,
   Abstract.ModuleName l ~ AST.ModuleName l,
-  Abstract.QualifiedName l ~ AST.QualifiedName l
+  Abstract.QualifiedName l ~ AST.QualifiedName l,
+  ConstraintCollection con,
+  Constraints.Language con ~ l
   ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
   attribution (TypeCheck{}, b) node@(_, x) (AG.Inherited (TypeEnv{bindings}, binds), expSyn) =
     (AG.Synthesized (Map.foldMapWithKey replicate binderExports, binderSyn), error "AST.Export node has no children")
@@ -321,10 +330,13 @@ instance (Abstract.Haskell l,
           Abstract.Import l ~ AST.Import l,
           Abstract.Declaration l ~ AST.Declaration l,
           Abstract.Context l ~ AST.Context l,
-          Abstract.Type l ~ AST.Type l) =>
+          Abstract.Type l ~ AST.Type l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l,
+          Constraints.Position con ~ pos) =>
          AG.At (TypeCheck l pos s con) (AST.Module l l) where
   attribution
-    t@TypeCheck{constrain}
+    t@TypeCheck{}
     (_, AST.AnonymousModule imports declarations)
     (AG.Inherited env, AST.AnonymousModule impSyns bodySyns)
     =
@@ -337,16 +349,16 @@ instance (Abstract.Haskell l,
     where topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> solve bodySyn,
             freshVarPrefix = mempty,
-            constraints = constrain.empty}
+            constraints = mempty}
           (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
             errors = mempty}
-            where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
+            where constrainType t = AST.ConstrainedType (Identity $ fst $ Constraints.toContext con) (Identity t)
           mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
   attribution
-    t@TypeCheck{constrain}
+    t@TypeCheck{}
     (_, AST.NamedModule name exports imports declarations)
     (AG.Inherited env, AST.NamedModule _ expSyns impSyns bodySyns)
     =
@@ -361,22 +373,22 @@ instance (Abstract.Haskell l,
     where topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> globalized solvedBodySyn,
             freshVarPrefix = mempty,
-            constraints = constrain.empty}
+            constraints = mempty}
           (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
           solvedBodySyn :: LocalTypeMap l Identity pos con
           solvedBodySyn = solve bodySyn
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs, errors}, con) = LocalTypeMap{
             typeBindings = constrainType <$> ts,
             valueBindings = constrainType <$> vs,
-            errors = errors <> constrain.errors con}
-            where constrainType t = AST.ConstrainedType (Identity $ fst $ constrain.toContext con) (Identity t)
+            errors = errors <> Constraints.errors con}
+            where constrainType t = AST.ConstrainedType (Identity $ fst $ Constraints.toContext con) (Identity t)
           globalized l@LocalTypeMap{typeBindings, valueBindings} = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.typeBindings,
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.valueBindings,
             errors = l.errors}
           mainName = Abstract.qualifiedName @l Nothing (Abstract.name "main")
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.ExtendedModule extensions _)
     (AG.Inherited env, AST.ExtendedModule _ bodySyn)
     =
@@ -405,15 +417,18 @@ instance (Abstract.Haskell l,
           Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
           Abstract.Declaration l ~ AST.Declaration l,
-          Abstract.Type l ~ AST.Type l) =>
+          Abstract.Type l ~ AST.Type l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l,
+          Constraints.Position con ~ pos) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.TypeSignature names _ _)
     (AG.Inherited (env, _declared),
      AST.TypeSignature _ (AG.Synthesized ctxSyn) (AG.Synthesized tySyn))
     =
-    (AG.Synthesized (declaredTypeMap, mempty, constrain.empty),
+    (AG.Synthesized (declaredTypeMap, mempty, mempty),
      AST.TypeSignature names (AG.Inherited env) (AG.Inherited env))
     where declaredTypeMap = case tySyn of
             Success t -> LocalTypeMap{
@@ -425,7 +440,7 @@ instance (Abstract.Haskell l,
               valueBindings= mempty,
               errors= toList errs}
   attribution
-    t@TypeCheck{constrain}
+    t@TypeCheck{}
     (_, AST.EquationDeclaration _ _ wheres)
     (AG.Inherited (env, declaredBindings),
      AST.EquationDeclaration (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
@@ -435,11 +450,11 @@ instance (Abstract.Haskell l,
     where eqSyn =
             (mempty,
              localTypeDifference lhsBindings declaredBindings,
-             conconcat constrain
-             $ [lhsCon, rhsCon, constrain.assign lhsName rhsTypeOrError, whereCon])
+             mconcat
+             $ [lhsCon, rhsCon, Constraints.assign lhsName rhsTypeOrError, whereCon])
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
-            Failure err -> (ErrorType err, constrain.empty)
+            Failure err -> (ErrorType err, mempty)
           (lhsName, lhsBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
           lhsEnv = extendWith declaredBindings $ forkFresh 'l' env
           rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> lhsBindings <> declaredBindings) env
@@ -450,15 +465,15 @@ instance (Abstract.Haskell l,
             valueBindings= Map.difference l.valueBindings r.valueBindings,
             errors= l.errors}
 
-whereAttribution :: forall sem l pos s con.
+whereAttribution :: forall sem l pos s con. Monoid con =>
                     TypeCheck l pos s con
                  -> ZipList (sem (AST.Declaration l l sem sem))
                  -> TypeEnv l Identity pos con
                  -> ZipList (AG.Synthesized (TypeCheck l pos s con) (AST.Declaration l l sem sem))
                  -> ((LocalTypeMap l Identity pos con, con),
                      ZipList (AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)))
-whereAttribution TypeCheck{constrain} wheres env syns =
-  (conconcat constrain <$> foldMap collect syns,
+whereAttribution TypeCheck{} wheres env syns =
+  (mconcat <$> foldMap collect syns,
    bequeath <$> (ZipList ['a' ..] <* wheres))
   where collect (AG.Synthesized (declared, inferred, con)) = (declared <> inferred, [con])
         collectDeclared (AG.Synthesized (declared, _, _)) = declared
@@ -471,7 +486,7 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l) =>
          AG.At (TypeCheck l pos s con) (AST.TypeLHS l l) where
-  attribution TypeCheck{constrain} (_, AST.SimpleTypeLHS name vars) (AG.Inherited env, _) =
+  attribution TypeCheck{} (_, AST.SimpleTypeLHS name vars) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (), AST.SimpleTypeLHS name vars)
 
 instance (Abstract.Haskell l,
@@ -493,16 +508,17 @@ instance (Abstract.Haskell l,
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          Monoid con) =>
          AG.At (TypeCheck l pos s con) (AST.PatternEquationLHS l l) where
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.PrefixPatternEquationLHS name args)
     (AG.Inherited env, AST.PrefixPatternEquationLHS _ argSyns)
     =
-    (AG.Synthesized $ foldr combine (mempty, constrain.empty) (AG.syn <$> argSyns),
+    (AG.Synthesized $ foldr combine (mempty, mempty) (AG.syn <$> argSyns),
      AST.PrefixPatternEquationLHS name (AG.Inherited env <$ args))
-    where combine (_, bindings1, con1) (bindings, con) = (bindings <> bindings1, constrain.union con1 con)
+    where combine (_, bindings1, con1) (bindings, con) = (bindings <> bindings1, con1 <> con)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -510,10 +526,12 @@ instance (Abstract.Haskell l,
           Abstract.PatternEquationLHS l ~ AST.PatternEquationLHS l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
           Abstract.Declaration l ~ AST.Declaration l,
-          Abstract.Type l ~ AST.Type l) =>
+          Abstract.Type l ~ AST.Type l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.PatternEquationClause l l) where
   attribution
-    t@TypeCheck{constrain}
+    t@TypeCheck{}
     (_, AST.PatternEquationClause sup lhs rhs wheres)
     (AG.Inherited env,
      AST.PatternEquationClause _ (AG.Synthesized (lhsBindings, lhsCon)) (AG.Synthesized rhsSyn) whereSyns)
@@ -522,7 +540,7 @@ instance (Abstract.Haskell l,
      AST.PatternEquationClause sup (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
     where combineSyn (rhsType, rhsCon) =
             ({-Map.insert lhsName rhsType-} lhsBindings,
-             constrain.union (constrain.union lhsCon rhsCon) whereCon)
+             lhsCon <> rhsCon <> whereCon)
           lhsEnv = forkFresh 'x' env
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
           ((whereBindings, whereCon), whereEnvs) =
@@ -534,23 +552,25 @@ instance (Abstract.Haskell l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
           Abstract.Context l ~ AST.Context l,
           Abstract.EquationLHS l ~ AST.EquationLHS l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.EquationLHS l l) where
-  attribution TypeCheck{constrain} (_, AST.VariableLHS name) (AG.Inherited env, _) =
+  attribution TypeCheck{} (_, AST.VariableLHS name) (AG.Inherited env, _) =
     (AG.Synthesized (
         tv,
         LocalTypeMap{
             typeBindings= Map.empty,
             valueBindings= Map.singleton name varType,
             errors= mempty},
-        constrain.empty),
+        mempty),
      AST.VariableLHS name)
     where tv = freshTV env
           varType = AST.TypeVariable tv
-  attribution TypeCheck{constrain} (_, AST.PatternLHS{}) (AG.Inherited env, AST.PatternLHS (AG.Synthesized patSyn)) =
+  attribution TypeCheck{} (_, AST.PatternLHS{}) (AG.Inherited env, AST.PatternLHS (AG.Synthesized patSyn)) =
     (AG.Synthesized patSyn, AST.PatternLHS $ AG.Inherited env)
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.PrefixLHS _ args)
     (AG.Inherited env, AST.PrefixLHS (AG.Synthesized funSyn) argSyns)
     =
@@ -562,11 +582,11 @@ instance (Abstract.Haskell l,
         | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
         = (name,
            mconcat $ prefixBindings : argBindings,
-           conconcat constrain $ prefixCon : argCons)
+           mconcat $ prefixCon : argCons)
       tv = freshTV env
       varType = AST.TypeVariable tv
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.InfixLHS{})
     (AG.Inherited env, AST.InfixLHS (AG.Synthesized lSyn) name (AG.Synthesized rSyn))
     =
@@ -580,14 +600,14 @@ instance (Abstract.Haskell l,
            valueBindings= Map.singleton name varType,
            errors= mempty}
          <> lBind <> rBind,
-         constrain.union lCon rCon)
+         lCon <> rCon)
       tv = freshTV env
       varType = AST.TypeVariable tv
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l) =>
          AG.At (TypeCheck l pos s con) (AST.FunctionalDependency l l) where
-  attribution TypeCheck{constrain} (_, AST.FunctionalDependency lhs rhs) (AG.Inherited env, _) =
+  attribution TypeCheck{} (_, AST.FunctionalDependency lhs rhs) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (), AST.FunctionalDependency lhs rhs)
 
 instance (Abstract.Haskell l,
@@ -627,12 +647,14 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.GuardedExpression l ~ AST.GuardedExpression l) =>
+          Abstract.GuardedExpression l ~ AST.GuardedExpression l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.EquationRHS l l) where
-  attribution TypeCheck{constrain} (_, AST.NormalRHS{}) (AG.Inherited env, AST.NormalRHS (AG.Synthesized bodySyn)) =
+  attribution TypeCheck{} (_, AST.NormalRHS{}) (AG.Inherited env, AST.NormalRHS (AG.Synthesized bodySyn)) =
     (AG.Synthesized bodySyn, AST.NormalRHS $ AG.Inherited env)
   attribution
-    TypeCheck{constrain, extensions}
+    TypeCheck{extensions}
     (_, AST.GuardedRHS guardeds)
     (AG.Inherited env, AST.GuardedRHS guardedSyns)
     =
@@ -641,17 +663,19 @@ instance (Abstract.Haskell l,
      $ AG.Inherited . (,) constrainToBool <$> liftA2 forkFresh (ZipNonEmpty $ 'a' :| ['b'..]) (env <$ guardeds))
      where
        collapse (ZipNonEmpty ((t1, con1) :| tyCons)) =
-         (t1, foldr (\(ty, con) cons-> constrain.union (constrain.unify t1 ty) $ constrain.union con cons) con1 tyCons)
-       constrainToBool _env mlt rt = constrain.unify (fromMaybe (preludeType extensions "Bool") mlt) rt
+         (t1, foldr (\(ty, con) cons-> Constraints.unify t1 ty <> con <> cons) con1 tyCons)
+       constrainToBool _env mlt rt = Constraints.unify (fromMaybe (preludeType extensions "Bool") mlt) rt
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Statement l ~ AST.Statement l,
-          Abstract.Expression l ~ AST.Expression l) =>
+          Abstract.Expression l ~ AST.Expression l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.GuardedExpression l l) where
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.GuardedExpression guards _)
     (AG.Inherited (statConBuilder, env), AST.GuardedExpression (ZipList guardSyns) (AG.Synthesized bodySyn))
     =
@@ -660,7 +684,7 @@ instance (Abstract.Haskell l,
        (AG.Inherited . (,) statConBuilder <$> liftA2 forkFresh (ZipList ['a' ..]) (ZipList guardEnvs))
        (AG.Inherited $ forkFresh 'x' bodyEnv))
     where combine (bodyType, bodyCon) (Endo appGuardsCon) = (bodyType, appGuardsCon bodyCon)
-          Ap guardsCon = foldMap (Ap . fmap (Endo . constrain.union . snd) . AG.syn) guardSyns
+          Ap guardsCon = foldMap (Ap . fmap (Endo . (<>) . snd) . AG.syn) guardSyns
           bodyEnv :| guardEnvs = NonEmpty.reverse $ NonEmpty.scanl carry env guardSyns
           carry prevEnv (AG.Synthesized (Success (guardBindings, _))) = extendWith guardBindings prevEnv
           carry prevEnv _ = prevEnv
@@ -670,13 +694,15 @@ instance (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Declaration l ~ AST.Declaration l,
           Abstract.Pattern l ~ AST.Pattern l,
-          Abstract.Expression l ~ AST.Expression l) =>
+          Abstract.Expression l ~ AST.Expression l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Statement l l) where
-  attribution TypeCheck{constrain, extensions} (_, AST.ExpressionStatement _)
+  attribution TypeCheck{extensions} (_, AST.ExpressionStatement _)
     (AG.Inherited (buildCon, env), AST.ExpressionStatement (AG.Synthesized bodySyn))
     =
     (AG.Synthesized $ addConstraints <$> bodySyn, AST.ExpressionStatement (AG.Inherited env))
-    where addConstraints (t, con) = (mempty, constrain.union con $ buildCon env Nothing t)
+    where addConstraints (t, con) = (mempty, con <> buildCon env Nothing t)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -690,10 +716,12 @@ instance (Abstract.Haskell l,
           Abstract.Value l ~ AST.Value l,
           Abstract.Pattern l ~ AST.Pattern l,
           Abstract.Type l ~ AST.Type l,
-          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l) =>
+          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
   attribution
-    TypeCheck{constrain=ConstraintHandler{unify, union}}
+    TypeCheck{}
     (_, AST.ApplyExpression{})
     (AG.Inherited env, AST.ApplyExpression (AG.Synthesized tc1) (AG.Synthesized tc2))
     =
@@ -703,10 +731,10 @@ instance (Abstract.Haskell l,
                 -> (AST.Type l l Identity Identity, con)
                 -> (AST.Type l l Identity Identity, con)
           apply (t1, c1) (t2, c2) =
-            (var, c1 `union` c2 `union` unify t1 (AST.FunctionType (Identity t2) (Identity var)))
+            (var, c1 <> c2 <> Constraints.unify t1 (AST.FunctionType (Identity t2) (Identity var)))
           var = AST.TypeVariable (freshTV env)
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (i, AST.CaseExpression _ cases)
     (AG.Inherited env,
      AST.CaseExpression (AG.Synthesized scrutineeSyn) caseSyns) =
@@ -715,14 +743,13 @@ instance (Abstract.Haskell l,
       (AG.Inherited $ forkFresh 's' env)
       (AG.Inherited . flip forkFresh env <$> (ZipList ['a' ..] <* cases)))
     where caseType = AST.TypeVariable $ freshTV env
-          con = liftA2 constrain.union (snd <$> scrutineeSyn) $
-            conconcat constrain <$> traverse caseConstraints caseSyns
+          con = liftA2 (<>) (snd <$> scrutineeSyn) $
+            fold <$> traverse caseConstraints caseSyns
           caseConstraints (AG.Synthesized caseSyn) =
             forA2 scrutineeSyn caseSyn $ \(scrutineeType, _) (lhsTy, rhsTy, caseCon)->
-              constrain.union (constrain.unify scrutineeType lhsTy)
-              $ constrain.union (constrain.unify caseType rhsTy) caseCon
+              Constraints.unify scrutineeType lhsTy <> Constraints.unify caseType rhsTy <> caseCon
   attribution
-    TypeCheck{constrain, extensions}
+    TypeCheck{extensions}
     (i, AST.ConditionalExpression{})
     (AG.Inherited env,
      AST.ConditionalExpression (AG.Synthesized condSyn) (AG.Synthesized trueSyn) (AG.Synthesized falseSyn)) =
@@ -731,29 +758,28 @@ instance (Abstract.Haskell l,
       (AG.Inherited $ forkFresh 'c' env)
       (AG.Inherited $ forkFresh 't' env)
       (AG.Inherited $ forkFresh 'f' env))
-    where con = conconcat constrain <$> sequenceA [
-            constrain.unify (preludeType extensions "Bool") . fst <$> condSyn,
-            liftA2 constrain.unify (fst <$> trueSyn) (fst <$> falseSyn),
+    where con = mconcat <$> sequenceA [
+            Constraints.unify (preludeType extensions "Bool") . fst <$> condSyn,
+            liftA2 Constraints.unify (fst <$> trueSyn) (fst <$> falseSyn),
             snd <$> condSyn,
             snd <$> trueSyn,
             snd <$> falseSyn]
   attribution TypeCheck{} (i, AST.ConstructorExpression{}) (AG.Inherited env, AST.ConstructorExpression consSyn) =
     (AG.Synthesized $ AG.syn consSyn, AST.ConstructorExpression $ AG.Inherited env)
   attribution
-    TypeCheck{constrain, extensions}
+    TypeCheck{extensions}
     (_, AST.DoExpression{})
     (AG.Inherited env, AST.DoExpression (AG.Synthesized bodySyn))
     = (AG.Synthesized $ constrainBodyType <$> bodySyn, AST.DoExpression $ AG.Inherited (statementCon, env))
     where
       constrainBodyType (ty, con) =
         (ty,
-         constrain.union con
-         $ constrain.union (constrain.unify ty $ AST.TypeApplication mt $ Identity AST.TypeWildcard)
-         $ constrain.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
-      statementCon _ mlt rt = constrain.unify rt $ AST.TypeApplication mt $ Identity $ fromMaybe AST.TypeWildcard mlt
+         con <> (Constraints.unify ty $ AST.TypeApplication mt $ Identity AST.TypeWildcard)
+         <> Constraints.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
+      statementCon _ mlt rt = Constraints.unify rt $ AST.TypeApplication mt $ Identity $ fromMaybe AST.TypeWildcard mlt
       mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.InfixExpression{})
     (AG.Inherited env, AST.InfixExpression (AG.Synthesized lSyn) (AG.Synthesized opSyn) (AG.Synthesized rSyn))
     =
@@ -765,13 +791,13 @@ instance (Abstract.Haskell l,
     where
       apply (lT, lCon) (opT, opCon) (rT, rCon) =
         (resultType,
-         conconcat constrain [
-            constrain.unify opT (AST.FunctionType (Identity lT) $ Identity
+         mconcat [
+            Constraints.unify opT (AST.FunctionType (Identity lT) $ Identity
                                  $ AST.FunctionType (Identity rT) (Identity resultType)),
             lCon, opCon, rCon])
       resultType = AST.TypeVariable $ freshTV env
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (i, AST.LeftSectionExpression{})
     (AG.Inherited env, AST.LeftSectionExpression (AG.Synthesized argSyn) op)
     =
@@ -779,11 +805,11 @@ instance (Abstract.Haskell l,
     where
       apply opT (argT, argCon) =
         (resultType,
-         constrain.union argCon $ constrain.unify opT $ AST.FunctionType (Identity argT) (Identity resultType))
+         argCon <> Constraints.unify opT (AST.FunctionType (Identity argT) (Identity resultType)))
       opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV env
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (i, AST.RightSectionExpression{})
     (AG.Inherited env, AST.RightSectionExpression op (AG.Synthesized argSyn))
     =
@@ -791,14 +817,15 @@ instance (Abstract.Haskell l,
     where
       apply opT (argT, argCon) =
         (resultType,
-         constrain.union argCon $ constrain.unify opT
-         $ AST.FunctionType (Identity leftArgType) $ Identity
-         $ AST.FunctionType (Identity argT) (Identity resultType))
+         argCon
+         <> (Constraints.unify opT
+             $ AST.FunctionType (Identity leftArgType) $ Identity
+             $ AST.FunctionType (Identity argT) (Identity resultType)))
       opLookup = placeError i $ maybe (Failure $ UnknownValue op) Success (Map.lookup op env.bindings.valueBindings)
       resultType = AST.TypeVariable $ freshTV $ forkFresh 'x' env
       leftArgType = AST.TypeVariable $ freshTV $ forkFresh 'l' env
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     ((start, _, end), AST.LambdaExpression patterns _)
     (AG.Inherited env, AST.LambdaExpression patSyns (AG.Synthesized bodySyn))
     =
@@ -813,7 +840,7 @@ instance (Abstract.Haskell l,
                -> (AST.Type l l Identity Identity, con)
       abstract (patVar, LocalTypeMap{typeBindings}, patCon) (rhsType, rhsCon) =
         (AST.FunctionType (Identity $ typeBindings Map.! patVar) (Identity rhsType),
-         constrain.union patCon rhsCon)
+         patCon <> rhsCon)
       patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
       bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
       patVarBindings = foldMap (\(AG.Synthesized (_, varBindings, _)) -> varBindings) patSyns
@@ -821,46 +848,46 @@ instance (Abstract.Haskell l,
         Map.keys $ Map.filter (> Sum 1)
         $ foldMap (\(AG.Synthesized (_, LocalTypeMap{valueBindings}, _)) -> Sum 1 <$ valueBindings) patSyns
   attribution
-    t@TypeCheck{constrain}
+    t@TypeCheck{}
     ((start, _, end), AST.LetExpression bindings _)
     (AG.Inherited env, AST.LetExpression bindSyns (AG.Synthesized bodySyn))
     =
-    (AG.Synthesized $ (constrain.union bindCon <$>) <$> bodySyn,
+    (AG.Synthesized $ ((bindCon <>) <$>) <$> bodySyn,
      AST.LetExpression bindEnvs (AG.Inherited bodyEnv))
     where
       ((boundEnv, bindCon), bindEnvs) = whereAttribution t bindings env bindSyns
       env' = extendWith boundEnv env
       bodyEnv = forkFresh 'x' env'
-  attribution TypeCheck{constrain} (i, AST.ListExpression items) (AG.Inherited env, AST.ListExpression itemSyns) =
+  attribution TypeCheck{} (i, AST.ListExpression items) (AG.Inherited env, AST.ListExpression itemSyns) =
     (AG.Synthesized unified, AST.ListExpression $ AG.Inherited <$> itemEnvs)
     where
       itemEnvs = flip forkFresh env <$> (ZipList ['a' ..] <* items)
       itemType = AST.TypeVariable $ freshTV env
       itemTypeCons = traverse AG.syn itemSyns
-      constrainItem (t, con) = constrain.union con $ constrain.unify t itemType
-      unified = (,) (AST.ListType $ Identity itemType) . conconcat constrain . (constrainItem <$>) <$> itemTypeCons
+      constrainItem (t, con) = con <> Constraints.unify t itemType
+      unified = (,) (AST.ListType $ Identity itemType) . fold . (constrainItem <$>) <$> itemTypeCons
   attribution TypeCheck{} (_, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
     (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
-  attribution TypeCheck{constrain} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
-    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env var, AST.ReferenceExpression var)
+  attribution TypeCheck{} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
+    (AG.Synthesized $ placeError i $ valueReferenceAttribution env var, AST.ReferenceExpression var)
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.TupleExpression items)
     (AG.Inherited env, AST.TupleExpression itemSyns)
     =
     (AG.Synthesized
      $ (,) . AST.TupleType . (Identity . fst <$>)
        <$> itemTypeCons
-       <*> (foldr (constrain.union . snd) constrain.empty <$> itemTypeCons),
+       <*> (foldr ((<>) . snd) mempty <$> itemTypeCons),
      AST.TupleExpression (AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* items)))
     where
       itemTypeCons = traverse AG.syn itemSyns
   attribution
-    TypeCheck{constrain}
+    TypeCheck{}
     (_, AST.TypedExpression{})
     (AG.Inherited env, AST.TypedExpression (AG.Synthesized eSyn) (AG.Synthesized tSyn))
     =
-    (AG.Synthesized $ (,) <$> tSyn <*> (constrain.union . snd <$> eSyn <*> (constrain.unify . fst <$> eSyn <*> tSyn)),
+    (AG.Synthesized $ (,) <$> tSyn <*> ((<>) . snd <$> eSyn <*> (Constraints.unify . fst <$> eSyn <*> tSyn)),
      AST.TypedExpression (AG.Inherited $ forkFresh 'e' env) (AG.Inherited $ forkFresh 't' env))
 
 instance (Abstract.Haskell l,
@@ -877,25 +904,27 @@ instance (Abstract.Haskell l,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Constructor l ~ AST.Constructor l,
-          Abstract.Type l ~ AST.Type l) =>
+          Abstract.Type l ~ AST.Type l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Value l l) where
-  attribution TypeCheck{constrain, extensions} (_, AST.IntegerLiteral n) (AG.Inherited env, _) =
+  attribution TypeCheck{extensions} (_, AST.IntegerLiteral n) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (ty, con), AST.IntegerLiteral n)
     where ty = AST.TypeVariable $ freshTV env
-          con = constrain.fromContext $ AST.ClassConstraint (preludeName extensions "Num") (Identity ty)
-  attribution TypeCheck{constrain, extensions} (_, AST.FloatingLiteral r) (AG.Inherited env, _) =
+          con = Constraints.fromContext $ AST.ClassConstraint (preludeName extensions "Num") (Identity ty)
+  attribution TypeCheck{extensions} (_, AST.FloatingLiteral r) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (ty, con), AST.FloatingLiteral r)
     where ty = AST.TypeVariable $ freshTV env
-          con = constrain.fromContext $ AST.ClassConstraint (preludeName extensions "Fractional") (Identity ty)
-  attribution TypeCheck{constrain, extensions} (_, AST.CharLiteral c) _ =
-    (AG.Synthesized $ Success (preludeType extensions "Char", constrain.empty), AST.CharLiteral c)
-  attribution TypeCheck{constrain, extensions} (_, AST.StringLiteral s) (AG.Inherited env, _) =
+          con = Constraints.fromContext $ AST.ClassConstraint (preludeName extensions "Fractional") (Identity ty)
+  attribution TypeCheck{extensions} (_, AST.CharLiteral c) _ =
+    (AG.Synthesized $ Success (preludeType extensions "Char", mempty), AST.CharLiteral c)
+  attribution TypeCheck{extensions} (_, AST.StringLiteral s) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (ty, con), AST.StringLiteral s)
     where (ty, con)
             | Map.findWithDefault False Extensions.OverloadedStrings extensions
             = (AST.TypeVariable $ freshTV env,
-               constrain.fromContext $ AST.ClassConstraint (preludeName extensions "IsString") (Identity ty))
-            | otherwise = (preludeType extensions "String", constrain.empty)
+               Constraints.fromContext $ AST.ClassConstraint (preludeName extensions "IsString") (Identity ty))
+            | otherwise = (preludeType extensions "String", mempty)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -904,20 +933,22 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Pattern l l) where
-  attribution TypeCheck{constrain} (_, AST.VariablePattern name) (AG.Inherited env, _) =
+  attribution TypeCheck{} (_, AST.VariablePattern name) (AG.Inherited env, _) =
     (AG.Synthesized (tv,
                      LocalTypeMap{
                         typeBindings= Map.singleton tv varType,
                         valueBindings= Map.singleton name varType,
                         errors= mempty},
-                     constrain.empty),
+                     mempty),
      AST.VariablePattern name)
     where tv = freshTV env
           varType = AST.TypeVariable tv
-  attribution TypeCheck{constrain} (_, AST.WildcardPattern) (AG.Inherited env, _) =
-    (AG.Synthesized (tv, mempty, constrain.empty),
+  attribution TypeCheck{} (_, AST.WildcardPattern) (AG.Inherited env, _) =
+    (AG.Synthesized (tv, mempty, mempty),
      AST.WildcardPattern)
     where tv = freshTV env
 
@@ -937,12 +968,14 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Constructor l l) where
-  attribution TypeCheck{constrain} (i, AST.ConstructorReference name) (AG.Inherited env, _) =
-    (AG.Synthesized $ placeError i $ valueReferenceAttribution constrain env name, AST.ConstructorReference name)
-  attribution TypeCheck{constrain} (i, AST.EmptyListConstructor) (AG.Inherited env, _) =
-    (AG.Synthesized $ Success (AST.ListType $ Identity $ AST.TypeVariable $ freshTV env, constrain.empty),
+  attribution TypeCheck{} (i, AST.ConstructorReference name) (AG.Inherited env, _) =
+    (AG.Synthesized $ placeError i $ valueReferenceAttribution env name, AST.ConstructorReference name)
+  attribution TypeCheck{} (i, AST.EmptyListConstructor) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (AST.ListType $ Identity $ AST.TypeVariable $ freshTV env, mempty),
      AST.EmptyListConstructor)
 
 instance (Abstract.Haskell l,
@@ -952,7 +985,9 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.DataConstructor l l) where
   attribution TypeCheck{} (_, AST.Constructor name types) (AG.Inherited (resultType, env), AST.Constructor _ typeSyns) =
     (AG.Synthesized $ (,) name <$> constructorType, AST.Constructor name $ AG.Inherited env <$ types)
@@ -969,7 +1004,7 @@ instance (Abstract.Haskell l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Pattern l ~ AST.Pattern l) =>
          AG.At (TypeCheck l pos s con) (AST.GADTConstructor l l) where
-  attribution TypeCheck{constrain}
+  attribution TypeCheck{}
     ((pos, _, _), AST.GADTConstructors names vars context t)
     (AG.Inherited env, AST.GADTConstructors _ varSyns contextSyn typeSyn)
     =
@@ -999,7 +1034,9 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Constructor l ~ AST.Constructor l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Type l l) where
   attribution TypeCheck{} (_, AST.ConstructorType{}) (AG.Inherited env, AST.ConstructorType conSyn) =
     (AG.Synthesized $ fst <$> AG.syn conSyn, AST.ConstructorType $ AG.Inherited env)
@@ -1008,8 +1045,8 @@ instance (Abstract.Haskell l,
   attribution TypeCheck{} (_, AST.FunctionType{}) (env, AST.FunctionType lSyn rSyn) =
     (AG.Synthesized $ AST.FunctionType . Identity <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
      AST.FunctionType env env)
-  attribution TypeCheck{constrain} (_, AST.TypeVariable name) (AG.Inherited env, _) =
-    (AG.Synthesized $ case typeReferenceAttribution constrain env (Abstract.unqualifiedName name) of
+  attribution TypeCheck{} (_, AST.TypeVariable name) (AG.Inherited env, _) =
+    (AG.Synthesized $ case typeReferenceAttribution env (Abstract.unqualifiedName name) of
         Success (t, con) -> Success t
         Failure _ -> Success $ AST.TypeVariable name,
      AST.TypeVariable name)
@@ -1028,18 +1065,21 @@ instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Type l ~ AST.Type l,
-          Abstract.Context l ~ AST.Context l) =>
+          Abstract.Context l ~ AST.Context l,
+          Monoid con) =>
          AG.At (TypeCheck l pos s con) (AST.Context l l) where
-  attribution TypeCheck{constrain} (_, AST.NoContext) _ =
-    (AG.Synthesized $ Success (AST.NoContext, constrain.empty), AST.NoContext)
+  attribution TypeCheck{} (_, AST.NoContext) _ =
+    (AG.Synthesized $ Success (AST.NoContext, mempty), AST.NoContext)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Pattern l ~ AST.Pattern l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.LambdaCasesAlternative l l) where
-  attribution TypeCheck{constrain}
+  attribution TypeCheck{}
     (input, AST.LambdaCasesAlternative sup args body)
     (AG.Inherited env, AST.LambdaCasesAlternative _ argSyns (AG.Synthesized bodySyn))
     =
@@ -1049,7 +1089,7 @@ instance (Abstract.Haskell l,
       argsSyn = AG.syn <$> argSyns
       combine (bodyType, bodyCon) = foldr collect ([], mempty, bodyType, bodyCon)
       collect (patName, bindings, patCon) (patNames, bindingses, bodyType, con) =
-        (patName : patNames, bindings <> bindingses, bodyType, constrain.union patCon con)
+        (patName : patNames, bindings <> bindingses, bodyType, patCon <> con)
       argEnvs = AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* args)
       bodyEnv = forkFresh 'x'  $ extendWith argBindings env
       (conflicts, argBindings) = foldr addBindings mempty argsSyn
@@ -1068,36 +1108,47 @@ instance (Abstract.Haskell l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Pattern l ~ AST.Pattern l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
-          Abstract.Declaration l ~ AST.Declaration l) =>
+          Abstract.Declaration l ~ AST.Declaration l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.CaseAlternative l l) where
-  attribution t@TypeCheck{constrain}
+  attribution t@TypeCheck{}
     (_, AST.CaseAlternative _ _ wheres)
     (AG.Inherited env, AST.CaseAlternative (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
     =
     (AG.Synthesized $ combineSyn lhsSyn <$> rhsSyn,
      AST.CaseAlternative (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
     where combineSyn (lhsName, LocalTypeMap{typeBindings}, lhsCon) (rhsType, rhsCon) =
-            (typeBindings Map.! lhsName, rhsType, constrain.union whereCon (constrain.union lhsCon rhsCon))
+            (typeBindings Map.! lhsName, rhsType, whereCon <> lhsCon <> rhsCon)
           lhsEnv = forkFresh 'x' env
           lhsBindings = (\(_, env, _)-> env) lhsSyn
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env
           ((whereBindings, whereCon), whereEnvs) =
             whereAttribution t wheres (extendWith lhsBindings env) whereSyns
 
-
-
-typeReferenceAttribution constrain = referenceAttribution False constrain
-valueReferenceAttribution constrain = referenceAttribution True constrain
+typeReferenceAttribution, valueReferenceAttribution
+  :: (Abstract.Name l ~ AST.Name l,
+      Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+      Abstract.Type l ~ AST.Type l,
+      Abstract.Context l ~ AST.Context l,
+      ConstraintCollection con,
+      Constraints.Language con ~ l)
+  => TypeEnv l Identity pos con
+  -> AST.QualifiedName l
+  -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
 referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
                          Abstract.Type l ~ AST.Type l,
-                         Abstract.Context l ~ AST.Context l)
+                         Abstract.Context l ~ AST.Context l,
+                         ConstraintCollection con,
+                         Constraints.Language con ~ l)
                      => Bool
-                     -> ConstraintHandler l pos con
                      -> TypeEnv l Identity pos con
                      -> AST.QualifiedName l
                      -> Validation (TypeError l con) (AST.Type l l Identity Identity, con)
-referenceAttribution isValue ConstraintHandler{empty, fromContext, replaceVar} env name
+typeReferenceAttribution = referenceAttribution False
+valueReferenceAttribution = referenceAttribution True
+referenceAttribution isValue env name
   | isValue =
     case Map.lookup name env.bindings.valueBindings of
       Just t -> Success $ concrete t
@@ -1107,10 +1158,10 @@ referenceAttribution isValue ConstraintHandler{empty, fromContext, replaceVar} e
       Just t -> Success $ concrete t
       Nothing -> Failure $ UnknownTypeVariable name
     where concrete (AST.ForallType vars (Identity (AST.ConstrainedType (Identity context) (Identity body)))) =
-            foldr (replace . runIdentity) (body, fromContext context) vars
-          concrete t = (t, empty)
-          replace (AST.ExplicitlyKindedTypeVariable _ name _) typeCon = replaceFresh replaceVar env name typeCon
-          replace (AST.ImplicitlyKindedTypeVariable _ name) typeCon = replaceFresh replaceVar env name typeCon
+            foldr (replace . runIdentity) (body, Constraints.fromContext context) vars
+          concrete t = (t, mempty)
+          replace (AST.ExplicitlyKindedTypeVariable _ name _) typeCon = replaceFresh Constraints.replaceVar env name typeCon
+          replace (AST.ImplicitlyKindedTypeVariable _ name) typeCon = replaceFresh Constraints.replaceVar env name typeCon
           replace AST.WildcardTypeBinding typeCon = typeCon
           replace AST.ExplicitlyKindedWildcardTypeBinding{} typeCon = typeCon
 
@@ -1156,9 +1207,6 @@ forkFresh c env@TypeEnv{freshVarPrefix} = env{freshVarPrefix= c:freshVarPrefix}
 
 freshTV :: Abstract.Haskell l => TypeEnv l f pos con -> Abstract.Name l
 freshTV TypeEnv{freshVarPrefix} = Abstract.name (Text.pack freshVarPrefix)
-
-conconcat :: Foldable f => ConstraintHandler l pos con -> f con -> con
-conconcat constrain = foldr constrain.union constrain.empty
 
 forA2 :: Applicative f  => f a -> f b -> (a -> b -> c) -> f c
 forA2 a b f = liftA2 f a b
