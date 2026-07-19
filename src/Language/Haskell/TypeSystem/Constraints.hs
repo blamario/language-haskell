@@ -32,9 +32,7 @@ class Monoid con => ConstraintCollection con where
         -> AST.Type (Language con) (Language con) Identity Identity
         -> con
   assign :: AST.Name (Language con) -> TypeOrError (Language con) (Position con) con -> con
-  union :: con -> con -> con
   errors :: con -> [(Position con, TypeError (Language con) con)]
-  empty :: con
 
 data TypeError l con
   = TypeMismatch (AST.Type l l Identity Identity) (AST.Type l l Identity Identity)
@@ -103,9 +101,4 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
       ProperType t -> DefaultConstraints{
         equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
       ErrorType err -> DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
-  union = \l r-> DefaultConstraints{
-      equations= l.equations <> r.equations,
-      errors= l.errors <> r.errors,
-      classes= Map.unionWith (<>) l.classes r.classes}
   errors DefaultConstraints{errors} = foldMap toList errors
-  empty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}
