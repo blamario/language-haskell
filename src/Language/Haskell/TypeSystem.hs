@@ -255,6 +255,8 @@ type family SynAtts l pos s con g where
     Validation (TypeErrors l pos con) (AST.Name l, AST.Type l l Identity Identity)
   SynAtts l pos s con (AST.GADTConstructor l l) = LocalTypeMap l Identity pos con
   SynAtts l pos s con (AST.Type l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity)
+  SynAtts l pos s con (AST.TypeLHS l l) =
+    Validation (TypeErrors l pos con) (AST.Name l, [(AST.Name l, Bool, Maybe (AST.Type l l Identity Identity))])
   SynAtts l pos s con (AST.TypeVarBinding l l) =
     Validation (TypeErrors l pos con) (AST.TypeVarBinding l l Identity Identity)
   SynAtts l pos s con (AST.Context l l) = Validation (TypeErrors l pos con) (AST.Context l l Identity Identity, con)
@@ -413,6 +415,7 @@ instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+          Abstract.TypeLHS l ~ AST.TypeLHS l,
           Abstract.Context l ~ AST.Context l,
           Abstract.EquationLHS l ~ AST.EquationLHS l,
           Abstract.EquationRHS l ~ AST.EquationRHS l,
@@ -464,6 +467,50 @@ instance (Abstract.Haskell l,
             typeBindings= Map.difference l.typeBindings r.typeBindings,
             valueBindings= Map.difference l.valueBindings r.valueBindings,
             errors= l.errors}
+  attribution
+    TypeCheck{}
+    (_, AST.FixityDeclaration associativity precedence names)
+    (_, AST.FixityDeclaration{})
+    =
+    (AG.Synthesized (mempty, mempty, mempty),
+     AST.FixityDeclaration associativity precedence names)
+  attribution
+    t
+    (_, AST.ClassDeclaration _ _ wheres)
+    (AG.Inherited (env, declaredBindings),
+     AST.ClassDeclaration (AG.Synthesized contextSyn) (AG.Synthesized classSyn) whereSyns)
+    =
+    (AG.Synthesized declSyn,
+     AST.ClassDeclaration (AG.Inherited contextEnv) (AG.Inherited classEnv) whereEnvs)
+    where
+      env' = extendWith declaredBindings env
+      ((whereBindings, whereCon), whereEnvs) = whereAttribution t wheres (extendWith lhsBindings env') whereSyns
+      contextEnv = forkFresh 'x' env'
+      classEnv = forkFresh 's' env'
+      lhsBindings = LocalTypeMap{
+        typeBindings = lhsClassBinding <> foldMap (foldMap classArgBinding . snd) classSyn,
+        valueBindings = mempty,
+        errors = mempty}
+      classArgBinding (name, _inferred, kind) = Map.singleton name $ fromMaybe typeKind kind
+      lhsClassBinding = case (contextSyn, classSyn) of
+        (Success (context, _con), Success (name, args))
+          -> Map.singleton name $ AST.ConstrainedType (Identity context) $ Identity
+             $ foldr classType constraintKind args
+        _ -> mempty
+      declSyn =
+        (LocalTypeMap{
+            typeBindings = lhsClassBinding,
+            valueBindings = mempty,
+            errors = case contextSyn *> classSyn of
+                Failure err -> toList err
+                Success{} -> []},
+          mempty,
+          foldMap snd contextSyn)
+        <> foldMap AG.syn whereSyns
+      constraintKind = kind "Constraint"
+      typeKind = kind "Type"
+      classType (_name, _inferred, Just kind) rhs = AST.FunctionType (Identity kind) (Identity rhs)
+      classType (_name, _inferred, Nothing) rhs = AST.FunctionType (Identity typeKind) (Identity rhs)
 
 whereAttribution :: forall sem l pos s con. Monoid con =>
                     TypeCheck l pos s con
@@ -487,7 +534,7 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l) =>
          AG.At (TypeCheck l pos s con) (AST.TypeLHS l l) where
   attribution TypeCheck{} (_, AST.SimpleTypeLHS name vars) (AG.Inherited env, _) =
-    (AG.Synthesized $ Success (), AST.SimpleTypeLHS name vars)
+    (AG.Synthesized $ Success (name, [(var, False, Nothing) | var <- vars]), AST.SimpleTypeLHS name vars)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1192,6 +1239,13 @@ preludeName extensions =
   (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Abstract.unqualifiedName
    else Abstract.qualifiedName (Just Abstract.preludeName))
   . Abstract.name
+
+kind :: Abstract.Haskell l => Text -> AST.Type l l Identity Identity
+kind = AST.ConstructorType . Identity . Abstract.constructorReference . kindName
+
+kindName :: Abstract.Haskell l => Text -> Abstract.QualifiedName l
+kindName =
+  Abstract.qualifiedName (Just $ Abstract.moduleName $ Abstract.name "Data" :| [Abstract.name "Kind"]) . Abstract.name
 
 replaceFresh :: (AST.Name l -> AST.Name l -> con -> con)
              -> TypeEnv l f pos con
