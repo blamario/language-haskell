@@ -529,12 +529,20 @@ whereAttribution TypeCheck{} wheres env syns =
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.TypeLHS l ~ AST.TypeLHS l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l) =>
          AG.At (TypeCheck l pos s con) (AST.TypeLHS l l) where
   attribution TypeCheck{} (_, AST.SimpleTypeLHS name vars) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (name, [(var, False, Nothing) | var <- vars]), AST.SimpleTypeLHS name vars)
+  attribution TypeCheck{}
+    (_, AST.TypeLHSApplication{})
+    (AG.Inherited env, AST.TypeLHSApplication (AG.Synthesized lhsSyn) (AG.Synthesized varSyn))
+    =
+    (AG.Synthesized $ liftA2 combine lhsSyn varSyn,
+     AST.TypeLHSApplication (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'v' env))
+    where combine (tyName, vars) (AST.ImplicitlyKindedTypeVariable inf name) = (tyName, vars ++ [(name, inf, Nothing)])
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
