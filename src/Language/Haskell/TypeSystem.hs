@@ -258,7 +258,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.TypeLHS l l) =
     Validation (TypeErrors l pos con) (AST.Name l, [(AST.Name l, Bool, Maybe (AST.Type l l Identity Identity))])
   SynAtts l pos s con (AST.TypeVarBinding l l) =
-    Validation (TypeErrors l pos con) (AST.TypeVarBinding l l Identity Identity)
+    Validation (TypeErrors l pos con) (AST.Name l, Bool, Maybe (AST.Type l l Identity Identity))
   SynAtts l pos s con (AST.Context l l) = Validation (TypeErrors l pos con) (AST.Context l l Identity Identity, con)
   SynAtts l pos s con _ = Validation (TypeErrors l pos con) ()
 
@@ -542,7 +542,7 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized $ liftA2 combine lhsSyn varSyn,
      AST.TypeLHSApplication (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'v' env))
-    where combine (tyName, vars) (AST.ImplicitlyKindedTypeVariable inf name) = (tyName, vars ++ [(name, inf, Nothing)])
+    where combine (tyName, vars) binding = (tyName, vars ++ [binding])
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1055,6 +1055,7 @@ instance (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
           Abstract.Type l ~ AST.Type l,
+          Abstract.Kind l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Pattern l ~ AST.Pattern l) =>
@@ -1075,11 +1076,13 @@ instance (Abstract.Haskell l,
      AST.GADTConstructors names (AG.Inherited env <$ vars) (AG.Inherited env) (AG.Inherited env))
     where
       constructorType = AST.ForallType
-                        <$> (traverse (fmap Identity . AG.syn) varSyns)
+                        <$> traverse ((Identity . toBinding <$>) . AG.syn) varSyns
                         <*> (Identity
                              <$> (AST.ConstrainedType
                                   <$> (Identity . fst <$> AG.syn contextSyn)
                                   <*> (Identity <$> AG.syn typeSyn)))
+      toBinding (name, inferred, Nothing) = AST.ImplicitlyKindedTypeVariable inferred name
+      toBinding (name, inferred, Just kind) = AST.ExplicitlyKindedTypeVariable inferred name (Identity kind)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1111,10 +1114,26 @@ instance (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Kind l ~ AST.Type l,
-          Abstract.Context l ~ AST.Context l) =>
+          Abstract.Context l ~ AST.Context l,
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.TypeVarBinding l l) where
+  attribution TypeCheck{}
+    (_, AST.ExplicitlyKindedTypeVariable inf name _kind)
+    (AG.Inherited env, AST.ExplicitlyKindedTypeVariable _ _ (AG.Synthesized kindSyn))
+    =
+    (AG.Synthesized $ (,,) name inf . Just <$> kindSyn,
+     AST.ExplicitlyKindedTypeVariable inf name (AG.Inherited env))
   attribution TypeCheck{} (_, AST.ImplicitlyKindedTypeVariable inf name) _ =
-    (AG.Synthesized $ Success (AST.ImplicitlyKindedTypeVariable inf name), AST.ImplicitlyKindedTypeVariable inf name)
+    (AG.Synthesized $ Success (name, inf, Nothing), AST.ImplicitlyKindedTypeVariable inf name)
+  attribution TypeCheck{} (_, AST.WildcardTypeBinding) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (freshTV env, False, Nothing), AST.WildcardTypeBinding)
+  attribution TypeCheck{}
+    (_, AST.ExplicitlyKindedWildcardTypeBinding _kind)
+    (AG.Inherited env, AST.ExplicitlyKindedWildcardTypeBinding (AG.Synthesized kindSyn))
+    =
+    (AG.Synthesized $ (,,) (freshTV env) False . Just <$> kindSyn,
+     AST.ExplicitlyKindedWildcardTypeBinding (AG.Inherited env))
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
