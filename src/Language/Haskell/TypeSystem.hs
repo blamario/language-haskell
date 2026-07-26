@@ -1100,9 +1100,15 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ fst <$> AG.syn conSyn, AST.ConstructorType $ AG.Inherited env)
   attribution TypeCheck{} (_, AST.FunctionConstructorType) _ =
     (AG.Synthesized $ Success AST.FunctionConstructorType, AST.FunctionConstructorType)
-  attribution TypeCheck{} (_, AST.FunctionType{}) (env, AST.FunctionType lSyn rSyn) =
+  attribution TypeCheck{} (_, AST.FunctionType{}) (AG.Inherited env, AST.FunctionType lSyn rSyn) =
     (AG.Synthesized $ AST.FunctionType . Identity <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
-     AST.FunctionType env env)
+     AST.FunctionType (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'r' env))
+  attribution TypeCheck{} (_, AST.ConstrainedType{}) (AG.Inherited env, AST.ConstrainedType lSyn rSyn) =
+    (AG.Synthesized $ AST.ConstrainedType . Identity . fst <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
+     AST.ConstrainedType (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'r' env))
+  attribution TypeCheck{} (_, AST.TypeApplication{}) (AG.Inherited env, AST.TypeApplication lSyn rSyn) =
+    (AG.Synthesized $ AST.TypeApplication . Identity <$> AG.syn lSyn <*> (Identity <$> AG.syn rSyn),
+     AST.TypeApplication (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'r' env))
   attribution TypeCheck{} (_, AST.TypeVariable name) (AG.Inherited env, _) =
     (AG.Synthesized $ case typeReferenceAttribution env (Abstract.unqualifiedName name) of
         Success (t, con) -> Success t
