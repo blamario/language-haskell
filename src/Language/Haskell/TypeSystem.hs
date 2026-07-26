@@ -893,8 +893,8 @@ instance (Abstract.Haskell l,
       abstract :: (AST.Name l, LocalTypeMap l Identity pos con, con)
                -> (AST.Type l l Identity Identity, con)
                -> (AST.Type l l Identity Identity, con)
-      abstract (patVar, LocalTypeMap{typeBindings}, patCon) (rhsType, rhsCon) =
-        (AST.FunctionType (Identity $ typeBindings Map.! patVar) (Identity rhsType),
+      abstract (patVar, LocalTypeMap{valueBindings}, patCon) (rhsType, rhsCon) =
+        (AST.FunctionType (Identity $ valueBindings Map.! patVar) (Identity rhsType),
          patCon <> rhsCon)
       patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
       bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
@@ -993,9 +993,9 @@ instance (Abstract.Haskell l,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Pattern l l) where
   attribution TypeCheck{} (_, AST.VariablePattern name) (AG.Inherited env, _) =
-    (AG.Synthesized (tv,
+    (AG.Synthesized (name,
                      LocalTypeMap{
-                        typeBindings= Map.singleton tv varType,
+                        typeBindings= Map.singleton tv AST.GroundTypeKind,
                         valueBindings= Map.singleton name varType,
                         errors= mempty},
                      mempty),
@@ -1192,8 +1192,8 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized $ combineSyn lhsSyn <$> rhsSyn,
      AST.CaseAlternative (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where combineSyn (lhsName, LocalTypeMap{typeBindings}, lhsCon) (rhsType, rhsCon) =
-            (typeBindings Map.! lhsName, rhsType, whereCon <> lhsCon <> rhsCon)
+    where combineSyn (lhsName, LocalTypeMap{valueBindings}, lhsCon) (rhsType, rhsCon) =
+            (valueBindings Map.! lhsName, rhsType, whereCon <> lhsCon <> rhsCon)
           lhsEnv = forkFresh 'x' env
           lhsBindings = (\(_, env, _)-> env) lhsSyn
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env

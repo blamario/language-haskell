@@ -94,7 +94,7 @@ instance TypeCheckable AST.Module Language where
              Map.foldMapWithKey showType typeBindings,
              Map.foldMapWithKey showValueType valueBindings,
              show <$> errors]
-           showType k v = ["type " <> AST.nameString k <> " = " <> Template.showViaTH v]
+           showType k v = ["type " <> AST.nameString k <> " :: " <> Template.showViaTH v]
            showValueType k v = [AST.nameString k <> " :: " <> Template.showViaTH v]
 
 main :: IO ()
