@@ -1140,8 +1140,44 @@ instance (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
-          Monoid con) =>
+          ConstraintCollection con,
+          Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Context l l) where
+  attribution
+    TypeCheck{}
+    (_, AST.ClassConstraint name _)
+    (AG.Inherited env, AST.ClassConstraint _ (AG.Synthesized tySyn))
+    =
+    (AG.Synthesized $ tySyn <&> \ty->
+        let constraint = AST.ClassConstraint name $ Identity ty
+        in (constraint, Constraints.fromContext constraint),
+     AST.ClassConstraint name (AG.Inherited env))
+  attribution TypeCheck{} (_, AST.TypeConstraint{}) (AG.Inherited env, AST.TypeConstraint (AG.Synthesized tySyn)) =
+    (AG.Synthesized $ tySyn <&> \ty->
+        let constraint = AST.TypeConstraint $ Identity ty
+        in (constraint, Constraints.fromContext constraint),
+     AST.TypeConstraint $ AG.Inherited env)
+  attribution
+    TypeCheck{}
+    (_, AST.TypeEquality{})
+    (AG.Inherited env, AST.TypeEquality (AG.Synthesized lSyn) (AG.Synthesized rSyn))
+    =
+    (AG.Synthesized $ liftA2 combine lSyn rSyn,
+     AST.TypeEquality (AG.Inherited $ forkFresh 'l' env) (AG.Inherited $ forkFresh 'r' env))
+    where combine l r = (AST.TypeEquality (Identity l) (Identity r), Constraints.unify l r)
+  attribution
+    TypeCheck{}
+    (_, AST.ImplicitParameterConstraint sup name _)
+    (AG.Inherited env, AST.ImplicitParameterConstraint _ _ (AG.Synthesized tySyn))
+    =
+    (AG.Synthesized $ tySyn <&> \ty->
+        let constraint = AST.ImplicitParameterConstraint sup name $ Identity ty
+        in (constraint, Constraints.fromContext constraint),
+     AST.ImplicitParameterConstraint sup name $ AG.Inherited env)
+  attribution TypeCheck{} (_, AST.Constraints cons) (AG.Inherited env, AST.Constraints conSyns) =
+    (AG.Synthesized
+     $ traverse AG.syn conSyns <&> \consSyn-> (AST.Constraints $ Identity . fst <$> consSyn, foldMap snd consSyn),
+     AST.Constraints $ (AG.Inherited . (`forkFresh` env)) <$> (ZipList ['a' ..] <* cons))
   attribution TypeCheck{} (_, AST.NoContext) _ =
     (AG.Synthesized $ Success (AST.NoContext, mempty), AST.NoContext)
 
