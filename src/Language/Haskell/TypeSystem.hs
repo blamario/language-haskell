@@ -485,11 +485,17 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized eqSyn,
      AST.EquationDeclaration (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where eqSyn = DeclarationAttributes{
+    where tv = freshTV env
+          eqSyn = DeclarationAttributes{
             initial = mempty,
-            declared = mempty,
+            declared = LocalTypeMap{
+                typeBindings = Map.singleton tv typeKind,
+                valueBindings = Map.singleton lhsName (AST.TypeVariable tv),
+                errors = mempty},
             inferred = inheritance.declared <> lhsBindings,
-            constraints = mconcat [lhsCon, rhsCon, Constraints.assign lhsName rhsTypeOrError, whereCon]}
+            constraints = mconcat [Constraints.assign lhsName rhsTypeOrError,
+                                   foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
+                                   lhsCon, rhsCon, whereCon]}
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
             Failure err -> (ErrorType err, mempty)
@@ -535,8 +541,8 @@ instance (Abstract.Haskell l,
       declSyn =
         DeclarationAttributes{
           initial = bindings,
-          declared= bindings,
-          inferred= bindings,
+          declared = bindings,
+          inferred = bindings,
           constraints = foldMap snd contextSyn}
         <> foldMap AG.syn whereSyns
       bindings = LocalTypeMap{
@@ -545,8 +551,6 @@ instance (Abstract.Haskell l,
         errors = case contextSyn *> classSyn of
             Failure err -> toList err
             Success{} -> []}
-      constraintKind = kind "Constraint"
-      typeKind = kind "Type"
       classType (_name, _inferred, Just kind) rhs = AST.FunctionType (Identity kind) (Identity rhs)
       classType (_name, _inferred, Nothing) rhs = AST.FunctionType (Identity typeKind) (Identity rhs)
 
@@ -1344,6 +1348,10 @@ preludeName extensions =
   (if Map.findWithDefault False Extensions.RebindableSyntax extensions then Abstract.unqualifiedName
    else Abstract.qualifiedName (Just Abstract.preludeName))
   . Abstract.name
+
+constraintKind, typeKind :: Abstract.Haskell l => AST.Type l l Identity Identity
+constraintKind = kind "Constraint"
+typeKind = kind "Type"
 
 kind :: Abstract.Haskell l => Text -> AST.Type l l Identity Identity
 kind = AST.ConstructorType . Identity . Abstract.constructorReference . kindName
