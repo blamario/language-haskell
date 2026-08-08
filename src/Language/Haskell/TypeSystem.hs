@@ -219,7 +219,7 @@ type family InhAtts pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) wh
   InhAtts pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
   InhAtts pos s con (AST.ImportSpecification l l) = ()
   InhAtts pos s con (AST.ImportItem l l) = ()
-  InhAtts pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, LocalTypeMap l Identity pos con)
+  InhAtts pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, DeclarationAttributes l pos s con)
   InhAtts pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
   InhAtts pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
   InhAtts pos s con (AST.Statement l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
@@ -249,7 +249,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.EquationLHS l l) = (AST.Name l, LocalTypeMap l Identity pos con, con)
   SynAtts l pos s con (AST.EquationRHS l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
-  SynAtts l pos s con (AST.Declaration l l) = DeclarationSynthesizedAtts l pos s con
+  SynAtts l pos s con (AST.Declaration l l) = DeclarationAttributes l pos s con
   SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity pos con
   SynAtts l pos s con (AST.DataConstructor l l) =
     Validation (TypeErrors l pos con) (AST.Name l, AST.Type l l Identity Identity)
@@ -265,21 +265,22 @@ type family SynAtts l pos s con g where
 type StatementConstraintBuilder l pos con =
   TypeEnv l Identity pos con -> Maybe (AST.Type l l Identity Identity) -> AST.Type l l Identity Identity -> con
 
-data DeclarationSynthesizedAtts l pos s con = DeclarationSynthesizedAtts{
+data DeclarationAttributes l pos s con = DeclarationAttributes{
   initial :: LocalTypeMap l Identity pos con,
   declared :: LocalTypeMap l Identity pos con,
+  -- | Inferred types and constraints
   inferred :: LocalTypeMap l Identity pos con,
   constraints :: con}
 
-instance Semigroup con => Semigroup (DeclarationSynthesizedAtts l pos s con) where
-  atts1 <> atts2 = DeclarationSynthesizedAtts{
+instance Semigroup con => Semigroup (DeclarationAttributes l pos s con) where
+  atts1 <> atts2 = DeclarationAttributes{
     initial = atts1.initial <> atts2.initial,
     declared = atts1.declared <> atts2.declared,
     inferred = atts1.inferred <> atts2.inferred,
     constraints = atts1.constraints <> atts2.constraints}
 
-instance Monoid con => Monoid (DeclarationSynthesizedAtts l pos s con) where
-  mempty = DeclarationSynthesizedAtts{
+instance Monoid con => Monoid (DeclarationAttributes l pos s con) where
+  mempty = DeclarationAttributes{
     initial = mempty,
     declared = mempty,
     inferred = mempty,
@@ -368,11 +369,15 @@ instance (Abstract.Haskell l,
                        $ Map.filterWithKey (const . (== mainName)) topEnv.bindings.valueBindings,
         errors= mempty},
      AST.AnonymousModule (AG.Inherited (fst env) <$ imports) bodyEnvs)
-    where topEnv = TypeEnv{
+    where importedEnv = TypeEnv{
+            bindings = foldMap AG.syn impSyns,
+            freshVarPrefix = mempty,
+            constraints = mempty}
+          topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> solve bodySyn,
             freshVarPrefix = mempty,
             constraints = mempty}
-          (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
+          (bodySyn, bodyEnvs) = whereAttribution t declarations importedEnv bodySyns
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs}, con) = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> ts),
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName (constrainType <$> vs),
@@ -392,11 +397,15 @@ instance (Abstract.Haskell l,
       (getCompose $ AG.Inherited topEnv <$ Compose exports)
       (AG.Inherited (fst env) <$ imports)
       bodyEnvs)
-    where topEnv = TypeEnv{
+    where importedEnv = TypeEnv{
+            bindings = foldMap AG.syn impSyns,
+            freshVarPrefix = mempty,
+            constraints = mempty}
+          topEnv = TypeEnv{
             bindings = foldMap AG.syn impSyns <> globalized solvedBodySyn,
             freshVarPrefix = mempty,
             constraints = mempty}
-          (bodySyn, bodyEnvs) = whereAttribution t declarations topEnv bodySyns
+          (bodySyn, bodyEnvs) = whereAttribution t declarations importedEnv bodySyns
           solvedBodySyn :: LocalTypeMap l Identity pos con
           solvedBodySyn = solve bodySyn
           solve (LocalTypeMap{typeBindings= ts, valueBindings= vs, errors}, con) = LocalTypeMap{
@@ -448,12 +457,18 @@ instance (Abstract.Haskell l,
   attribution
     TypeCheck{}
     (_, AST.TypeSignature names _ _)
-    (AG.Inherited (env, _declared),
+    (AG.Inherited (env, _inheritance),
      AST.TypeSignature _ (AG.Synthesized ctxSyn) (AG.Synthesized tySyn))
     =
-    (AG.Synthesized DeclarationSynthesizedAtts{initial= mempty, declared= declaredTypeMap, inferred= mempty, constraints= mempty},
-     AST.TypeSignature names (AG.Inherited env) (AG.Inherited env))
-    where declaredTypeMap = case tySyn of
+    (AG.Synthesized
+     DeclarationAttributes{initial= initialTypeMap, declared= declaredTypeMap, inferred= declaredTypeMap, constraints= mempty},
+     AST.TypeSignature names (AG.Inherited $ forkFresh 'c' env) (AG.Inherited $ forkFresh 't' env))
+    where tv = freshTV env
+          initialTypeMap = LocalTypeMap{
+            typeBindings= mempty,
+            valueBindings= Map.fromList [(name, AST.TypeVariable tv) | name <- toList names],
+            errors= mempty}
+          declaredTypeMap = case tySyn of
             Success t -> LocalTypeMap{
               typeBindings= mempty,
               valueBindings= Map.fromList [(name, t) | name <- toList names],
@@ -465,24 +480,24 @@ instance (Abstract.Haskell l,
   attribution
     t@TypeCheck{}
     (_, AST.EquationDeclaration _ _ wheres)
-    (AG.Inherited (env, declaredBindings),
+    (AG.Inherited (env, inheritance),
      AST.EquationDeclaration (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
     =
     (AG.Synthesized eqSyn,
      AST.EquationDeclaration (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where eqSyn = DeclarationSynthesizedAtts{
+    where eqSyn = DeclarationAttributes{
             initial = mempty,
             declared = mempty,
-            inferred = localTypeDifference lhsBindings declaredBindings,
+            inferred = inheritance.declared <> lhsBindings,
             constraints = mconcat [lhsCon, rhsCon, Constraints.assign lhsName rhsTypeOrError, whereCon]}
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
             Failure err -> (ErrorType err, mempty)
           (lhsName, lhsBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
-          lhsEnv = extendWith declaredBindings $ forkFresh 'l' env
-          rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> lhsBindings <> declaredBindings) env
+          lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
+          rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> lhsBindings <> inheritance.declared) env
           ((whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (extendWith (lhsBindings <> declaredBindings) env) whereSyns
+            whereAttribution t wheres (extendWith (lhsBindings <> inheritance.declared) env) whereSyns
           localTypeDifference l r = LocalTypeMap{
             typeBindings= Map.difference l.typeBindings r.typeBindings,
             valueBindings= Map.difference l.valueBindings r.valueBindings,
@@ -497,13 +512,13 @@ instance (Abstract.Haskell l,
   attribution
     t
     (_, AST.ClassDeclaration _ _ wheres)
-    (AG.Inherited (env, declaredBindings),
+    (AG.Inherited (env, attributes),
      AST.ClassDeclaration (AG.Synthesized contextSyn) (AG.Synthesized classSyn) whereSyns)
     =
     (AG.Synthesized declSyn,
      AST.ClassDeclaration (AG.Inherited contextEnv) (AG.Inherited classEnv) whereEnvs)
     where
-      env' = extendWith declaredBindings env
+      env' = extendWith attributes.initial env
       ((whereBindings, whereCon), whereEnvs) = whereAttribution t wheres (extendWith lhsBindings env') whereSyns
       contextEnv = forkFresh 'x' env'
       classEnv = forkFresh 's' env'
@@ -518,17 +533,18 @@ instance (Abstract.Haskell l,
              $ foldr classType constraintKind args
         _ -> mempty
       declSyn =
-        DeclarationSynthesizedAtts{
-          initial = mempty,
-          declared= LocalTypeMap{
-            typeBindings = lhsClassBinding,
-            valueBindings = mempty,
-            errors = case contextSyn *> classSyn of
-                Failure err -> toList err
-                Success{} -> []},
-          inferred= mempty,
+        DeclarationAttributes{
+          initial = bindings,
+          declared= bindings,
+          inferred= bindings,
           constraints = foldMap snd contextSyn}
         <> foldMap AG.syn whereSyns
+      bindings = LocalTypeMap{
+        typeBindings = lhsClassBinding,
+        valueBindings = mempty,
+        errors = case contextSyn *> classSyn of
+            Failure err -> toList err
+            Success{} -> []}
       constraintKind = kind "Constraint"
       typeKind = kind "Type"
       classType (_name, _inferred, Just kind) rhs = AST.FunctionType (Identity kind) (Identity rhs)
@@ -542,12 +558,9 @@ whereAttribution :: forall sem l pos s con. Monoid con =>
                  -> ((LocalTypeMap l Identity pos con, con),
                      ZipList (AG.Inherited (TypeCheck l pos s con) (AST.Declaration l l sem sem)))
 whereAttribution TypeCheck{} wheres env syns =
-  (mconcat <$> foldMap collect syns,
-   bequeath <$> (ZipList ['a' ..] <* wheres))
-  where collect (AG.Synthesized DeclarationSynthesizedAtts{declared, inferred, constraints}) = (declared <> inferred, [constraints])
-        collectDeclared (AG.Synthesized DeclarationSynthesizedAtts{declared}) = declared
---        bequeath letter = AG.Inherited (TypeEnv mempty mempty mempty, foldMap collectDeclared syns)
-        bequeath letter = AG.Inherited (forkFresh letter $ forkFresh 'w' env, foldMap collectDeclared syns)
+  ((collected.inferred, collected.constraints), bequeath <$> (ZipList ['a' ..] <* wheres))
+  where collected = foldMap AG.syn syns
+        bequeath letter = AG.Inherited (forkFresh letter $ forkFresh 'w' env, collected)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
