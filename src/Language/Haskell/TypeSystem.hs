@@ -495,6 +495,7 @@ instance (Abstract.Haskell l,
                 errors = mempty},
             inferred = inheritance.declared <> setLocalValues globalBindings mempty,
             constraints = mconcat [Constraints.assign lhsName rhsTypeOrError,
+                                   Map.foldMapWithKey unifyWithDeclared globalBindings,
                                    foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
                                    lhsCon, rhsCon, whereCon]}
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
@@ -505,6 +506,8 @@ instance (Abstract.Haskell l,
           rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
           ((whereBindings, whereCon), whereEnvs) =
             whereAttribution t wheres (extendWith (localBindings <> inheritance.declared) env) whereSyns
+          unifyWithDeclared name inferredType =
+            foldMap (Constraints.unify inferredType) (Map.lookup name inheritance.declared.valueBindings)
   attribution
     TypeCheck{}
     (_, AST.FixityDeclaration associativity precedence names)
