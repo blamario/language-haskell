@@ -247,8 +247,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.CaseAlternative l l) =
     Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
-  SynAtts l pos s con (AST.EquationLHS l l) =
-    (AST.Name l, Map (AST.Name l) (AST.Type l l Identity Identity), LocalTypeMap l Identity pos con, con)
+  SynAtts l pos s con (AST.EquationLHS l l510) = EquationLHSAttributes l pos con
   SynAtts l pos s con (AST.EquationRHS l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Declaration l l) = DeclarationAttributes l pos s con
   SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity pos con
@@ -271,6 +270,12 @@ data DeclarationAttributes l pos s con = DeclarationAttributes{
   declared :: LocalTypeMap l Identity pos con,
   -- | Inferred types and constraints
   inferred :: LocalTypeMap l Identity pos con,
+  constraints :: con}
+
+data EquationLHSAttributes l pos con = EquationLHSAttributes {
+  lhsTypeName :: AST.Name l,
+  globalBindings :: Map (AST.Name l) (AST.Type l l Identity Identity),
+  localBindings :: LocalTypeMap l Identity pos con,
   constraints :: con}
 
 instance Semigroup con => Semigroup (DeclarationAttributes l pos s con) where
@@ -491,17 +496,19 @@ instance (Abstract.Haskell l,
             initial = mempty,
             declared = LocalTypeMap{
                 typeBindings = Map.singleton tv typeKind,
-                valueBindings = Map.singleton lhsName (AST.TypeVariable tv),
+                valueBindings = Map.singleton lhsTypeName (AST.TypeVariable tv),
                 errors = mempty},
             inferred = inheritance.declared <> setLocalValues globalBindings mempty,
-            constraints = mconcat [Constraints.assign lhsName rhsTypeOrError,
+            constraints = mconcat [Constraints.assign lhsTypeName rhsTypeOrError,
                                    Map.foldMapWithKey unifyWithDeclared globalBindings,
                                    foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
                                    lhsCon, rhsCon, whereCon]}
           ~(rhsTypeOrError, rhsCon) = case rhsSyn of
             Success (t, c) -> (ProperType t, c)
             Failure err -> (ErrorType err, mempty)
-          (lhsName, globalBindings, localBindings@LocalTypeMap{typeBindings, valueBindings}, lhsCon) = lhsSyn
+          EquationLHSAttributes{lhsTypeName, globalBindings,
+                                localBindings = localBindings@LocalTypeMap{typeBindings, valueBindings},
+                                constraints = lhsCon} = lhsSyn
           lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
           rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
           ((whereBindings, whereCon), whereEnvs) =
@@ -652,13 +659,22 @@ instance (Abstract.Haskell l,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.EquationLHS l l) where
   attribution TypeCheck{} (_, AST.VariableLHS name) (AG.Inherited env, _) =
-    (AG.Synthesized (tv, Map.singleton name varType, mempty, mempty), AST.VariableLHS name)
+    (AG.Synthesized EquationLHSAttributes{
+        lhsTypeName = tv,
+        globalBindings = Map.singleton name varType,
+        localBindings = mempty,
+        constraints = mempty},
+    AST.VariableLHS name)
     where tv = freshTV env
           varType = AST.TypeVariable tv
   attribution TypeCheck{} (_, AST.PatternLHS{}) (AG.Inherited env, AST.PatternLHS (AG.Synthesized patSyn)) =
     (AG.Synthesized $ exportPattern patSyn, AST.PatternLHS $ AG.Inherited env)
     where
-      exportPattern (typeName, bindings, con) = (typeName, bindings.valueBindings, bindings, con)
+      exportPattern (typeName, bindings, con) = EquationLHSAttributes{
+        lhsTypeName = typeName,
+        globalBindings = bindings.valueBindings,
+        localBindings = bindings,
+        constraints = con}
   attribution
     TypeCheck{}
     (_, AST.PrefixLHS _ args)
@@ -668,12 +684,11 @@ instance (Abstract.Haskell l,
      AST.PrefixLHS (AG.Inherited $ forkFresh 'p' env) argEnvs)
     where
       argEnvs = AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b'..])) <* args
-      collect (name, exportedBindings, prefixBindings, prefixCon) argSyns'
+      collect prefixAtts argSyns'
         | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
-        = (name,
-           exportedBindings,
-           mconcat $ prefixBindings : argBindings,
-           mconcat $ prefixCon : argCons)
+        = prefixAtts{
+            localBindings = mconcat $ prefixAtts.localBindings : argBindings,
+            constraints = mconcat $ prefixAtts.constraints : argCons}
       tv = freshTV env
       varType = AST.TypeVariable tv
   attribution
@@ -684,15 +699,15 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ combine lSyn rSyn,
      AST.InfixLHS (AG.Inherited $ forkFresh 'l' env) name (AG.Inherited $ forkFresh 'r' env))
     where
-      combine (_, lBind, lCon) (_, rBind, rCon) =
-        (tv,
-         Map.singleton name varType,
-         LocalTypeMap{
-           typeBindings= mempty,
-           valueBindings= mempty,
-           errors= mempty}
+      combine (_, lBind, lCon) (_, rBind, rCon) = EquationLHSAttributes{
+        lhsTypeName = tv,
+        globalBindings = Map.singleton name varType,
+        localBindings =  LocalTypeMap{
+          typeBindings= mempty,
+          valueBindings= mempty,
+          errors= mempty}
          <> lBind <> rBind,
-         lCon <> rCon)
+        constraints = lCon <> rCon}
       tv = freshTV env
       varType = AST.TypeVariable tv
 
