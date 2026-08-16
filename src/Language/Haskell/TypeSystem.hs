@@ -247,7 +247,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.CaseAlternative l l) =
     Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Statement l l) = Validation (TypeErrors l pos con) (LocalTypeMap l Identity pos con, con)
-  SynAtts l pos s con (AST.EquationLHS l l510) = EquationLHSAttributes l pos con
+  SynAtts l pos s con (AST.EquationLHS l l) = EquationLHSAttributes l pos con
   SynAtts l pos s con (AST.EquationRHS l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Declaration l l) = DeclarationAttributes l pos s con
   SynAtts l pos s con (AST.FieldDeclaration l l) = LocalTypeMap l Identity pos con
@@ -274,6 +274,7 @@ data DeclarationAttributes l pos s con = DeclarationAttributes{
 
 data EquationLHSAttributes l pos con = EquationLHSAttributes {
   lhsTypeName :: AST.Name l,
+  argTypeNames :: [AST.Name l],
   globalBindings :: Map (AST.Name l) (AST.Type l l Identity Identity),
   localBindings :: LocalTypeMap l Identity pos con,
   constraints :: con}
@@ -661,6 +662,7 @@ instance (Abstract.Haskell l,
   attribution TypeCheck{} (_, AST.VariableLHS name) (AG.Inherited env, _) =
     (AG.Synthesized EquationLHSAttributes{
         lhsTypeName = tv,
+        argTypeNames = [],
         globalBindings = Map.singleton name varType,
         localBindings = mempty,
         constraints = mempty},
@@ -672,6 +674,7 @@ instance (Abstract.Haskell l,
     where
       exportPattern (typeName, bindings, con) = EquationLHSAttributes{
         lhsTypeName = typeName,
+        argTypeNames = [],
         globalBindings = bindings.valueBindings,
         localBindings = bindings,
         constraints = con}
@@ -685,8 +688,9 @@ instance (Abstract.Haskell l,
     where
       argEnvs = AG.Inherited . flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b'..])) <* args
       collect prefixAtts argSyns'
-        | let (_, argBindings, argCons) = unzip3 $ toList argSyns'
+        | let (argNames, argBindings, argCons) = unzip3 $ toList argSyns'
         = prefixAtts{
+            argTypeNames = prefixAtts.argTypeNames <> argNames,
             localBindings = mconcat $ prefixAtts.localBindings : argBindings,
             constraints = mconcat $ prefixAtts.constraints : argCons}
       tv = freshTV env
@@ -699,8 +703,9 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ combine lSyn rSyn,
      AST.InfixLHS (AG.Inherited $ forkFresh 'l' env) name (AG.Inherited $ forkFresh 'r' env))
     where
-      combine (_, lBind, lCon) (_, rBind, rCon) = EquationLHSAttributes{
+      combine (lName, lBind, lCon) (rName, rBind, rCon) = EquationLHSAttributes{
         lhsTypeName = tv,
+        argTypeNames = [lName, rName],
         globalBindings = Map.singleton name varType,
         localBindings =  LocalTypeMap{
           typeBindings= mempty,
