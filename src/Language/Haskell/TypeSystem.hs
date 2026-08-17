@@ -1048,8 +1048,10 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Pattern l ~ AST.Pattern l,
+          Abstract.Value l ~ AST.Value l,
           ConstraintCollection con,
-          Constraints.Language con ~ l) =>
+          Constraints.Language con ~ l,
+          Constraints.Position con ~ pos) =>
          AG.At (TypeCheck l pos s con) (AST.Pattern l l) where
   attribution TypeCheck{} (_, AST.VariablePattern name) (AG.Inherited env, _) =
     (AG.Synthesized (tv,
@@ -1064,6 +1066,13 @@ instance (Abstract.Haskell l,
   attribution TypeCheck{} (_, AST.WildcardPattern) (AG.Inherited env, _) =
     (AG.Synthesized (tv, setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty, mempty),
      AST.WildcardPattern)
+    where tv = freshTV env
+  attribution TypeCheck{} (_, AST.LiteralPattern{}) (AG.Inherited env, AST.LiteralPattern (AG.Synthesized valSyn)) =
+    (AG.Synthesized (tv, setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty,
+                     Constraints.assign tv $ case fst <$> valSyn of
+                        Failure err -> ErrorType err
+                        Success t -> ProperType t),
+     AST.LiteralPattern $ AG.Inherited env)
     where tv = freshTV env
 
 instance (Abstract.Haskell l,
