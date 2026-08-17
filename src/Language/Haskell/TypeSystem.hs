@@ -492,30 +492,32 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized eqSyn,
      AST.EquationDeclaration (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where tv = freshTV env
-          eqSyn = DeclarationAttributes{
-            initial = mempty,
-            declared = LocalTypeMap{
-                typeBindings = Map.singleton tv typeKind,
-                valueBindings = Map.singleton lhsTypeName (AST.TypeVariable tv),
-                errors = mempty},
-            inferred = inheritance.declared <> setLocalValues globalBindings mempty,
-            constraints = mconcat [Constraints.assign lhsTypeName rhsTypeOrError,
-                                   Map.foldMapWithKey unifyWithDeclared globalBindings,
-                                   foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
-                                   lhsCon, rhsCon, whereCon]}
-          ~(rhsTypeOrError, rhsCon) = case rhsSyn of
-            Success (t, c) -> (ProperType t, c)
-            Failure err -> (ErrorType err, mempty)
-          EquationLHSAttributes{lhsTypeName, globalBindings,
-                                localBindings = localBindings@LocalTypeMap{typeBindings, valueBindings},
-                                constraints = lhsCon} = lhsSyn
-          lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
-          rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
-          ((whereBindings, whereCon), whereEnvs) =
-            whereAttribution t wheres (extendWith (localBindings <> inheritance.declared) env) whereSyns
-          unifyWithDeclared name inferredType =
-            foldMap (Constraints.unify inferredType) (Map.lookup name inheritance.declared.valueBindings)
+    where
+      tv = freshTV env
+      eqSyn = DeclarationAttributes{
+        initial = mempty,
+        declared = LocalTypeMap{
+            typeBindings = Map.singleton tv typeKind,
+            valueBindings = globalBindings,
+            errors = mempty},
+        inferred = inheritance.declared <> setLocalValues globalBindings mempty,
+        constraints = mconcat [Constraints.assign lhsTypeName rhsTypeOrError,
+                               Map.foldMapWithKey unifyWithDeclared globalBindings,
+                               foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
+                               lhsCon, rhsCon, whereCon]}
+      ~(rhsTypeOrError, rhsCon) = case rhsSyn of
+        Success (t, c) -> (ProperType $ foldr abstract t argTypeNames, c)
+        Failure err -> (ErrorType err, mempty)
+      abstract :: AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
+      abstract patVar rhsType = AST.FunctionType (Identity $ AST.TypeVariable patVar) (Identity rhsType)
+      EquationLHSAttributes{lhsTypeName, argTypeNames, globalBindings, localBindings,
+                            constraints = lhsCon} = lhsSyn
+      lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
+      rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
+      ((whereBindings, whereCon), whereEnvs) =
+        whereAttribution t wheres (extendWith (localBindings <> inheritance.declared) env) whereSyns
+      unifyWithDeclared name inferredType =
+        foldMap (Constraints.unify inferredType) (Map.lookup name inheritance.declared.valueBindings)
   attribution
     TypeCheck{}
     (_, AST.FixityDeclaration associativity precedence names)
@@ -950,8 +952,8 @@ instance (Abstract.Haskell l,
       abstract :: (AST.Name l, LocalTypeMap l Identity pos con, con)
                -> (AST.Type l l Identity Identity, con)
                -> (AST.Type l l Identity Identity, con)
-      abstract (patVar, LocalTypeMap{valueBindings}, patCon) (rhsType, rhsCon) =
-        (AST.FunctionType (Identity $ valueBindings Map.! patVar) (Identity rhsType),
+      abstract (patVar, _, patCon) (rhsType, rhsCon) =
+        (AST.FunctionType (Identity $ AST.TypeVariable patVar) (Identity rhsType),
          patCon <> rhsCon)
       patEnvs = flip forkFresh env <$> (ZipNonEmpty ('a' :| ['b' ..]) <* patterns)
       bodyEnv = forkFresh 'x' $ extendWith patVarBindings env
@@ -1050,7 +1052,7 @@ instance (Abstract.Haskell l,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Pattern l l) where
   attribution TypeCheck{} (_, AST.VariablePattern name) (AG.Inherited env, _) =
-    (AG.Synthesized (name,
+    (AG.Synthesized (tv,
                      LocalTypeMap{
                         typeBindings= Map.singleton tv AST.GroundTypeKind,
                         valueBindings= Map.singleton name varType,
@@ -1060,7 +1062,7 @@ instance (Abstract.Haskell l,
     where tv = freshTV env
           varType = AST.TypeVariable tv
   attribution TypeCheck{} (_, AST.WildcardPattern) (AG.Inherited env, _) =
-    (AG.Synthesized (tv, mempty, mempty),
+    (AG.Synthesized (tv, setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty, mempty),
      AST.WildcardPattern)
     where tv = freshTV env
 
@@ -1080,7 +1082,6 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Constructor l l) where
@@ -1097,7 +1098,6 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.DataConstructor l l) where
@@ -1114,8 +1114,7 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Kind l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
-          Abstract.Expression l ~ AST.Expression l,
-          Abstract.Pattern l ~ AST.Pattern l) =>
+          Abstract.Expression l ~ AST.Expression l) =>
          AG.At (TypeCheck l pos s con) (AST.GADTConstructor l l) where
   attribution TypeCheck{}
     ((pos, _, _), AST.GADTConstructors names vars context t)
@@ -1149,7 +1148,6 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Constructor l ~ AST.Constructor l,
-          Abstract.Pattern l ~ AST.Pattern l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Type l l) where
@@ -1358,9 +1356,10 @@ replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> 
 replaceTypeVar old new = undefined
 
 -- | Workaround for GHC-99339
-setLocalValues :: Map (AST.Name l) (AST.Type l l f f)
-               -> LocalTypeMap l f pos con -> LocalTypeMap l f pos con
+setLocalValues, setLocalTypes
+  :: Map (AST.Name l) (AST.Type l l f f) -> LocalTypeMap l f pos con -> LocalTypeMap l f pos con
 setLocalValues values bindings = bindings{valueBindings = values}
+setLocalTypes types bindings = bindings{typeBindings = types}
 
 preludeType :: Abstract.Haskell l => Map Extension Bool -> Text -> AST.Type l l Identity Identity
 preludeType extensions = AST.ConstructorType . Identity . Abstract.constructorReference . preludeName extensions
