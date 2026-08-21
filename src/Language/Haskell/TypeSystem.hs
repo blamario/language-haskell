@@ -48,7 +48,7 @@ import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, R
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
   ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..))
-import Language.Haskell.TypeSystem.Constraints qualified as Constraints (ConstraintCollection(..))
+import Language.Haskell.TypeSystem.Constraints qualified as Constraints
 
 checkModule :: forall l pos s con. (
   Abstract.Haskell l,
@@ -486,7 +486,7 @@ instance (Abstract.Haskell l,
               errors= toList errs}
   attribution
     t@TypeCheck{}
-    (_, AST.EquationDeclaration _ _ wheres)
+    ((pos, _, _), AST.EquationDeclaration _ _ wheres)
     (AG.Inherited (env, inheritance),
      AST.EquationDeclaration (AG.Synthesized lhsSyn) (AG.Synthesized rhsSyn) whereSyns)
     =
@@ -501,10 +501,12 @@ instance (Abstract.Haskell l,
             valueBindings = globalBindings,
             errors = mempty},
         inferred = inheritance.declared <> setLocalValues globalBindings mempty,
-        constraints = mconcat [Constraints.assign lhsTypeName rhsTypeOrError,
-                               Map.foldMapWithKey unifyWithDeclared globalBindings,
-                               foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
-                               lhsCon, rhsCon, whereCon]}
+        constraints = synConstraints}
+      synConstraints = mconcat [
+        Constraints.assign lhsTypeName rhsTypeOrError,
+        Map.foldMapWithKey unifyWithDeclared globalBindings,
+        foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
+        lhsCon, rhsCon, whereCon]
       ~(rhsTypeOrError, rhsCon) = case rhsSyn of
         Success (t, c) -> (ProperType $ foldr abstract t argTypeNames, c)
         Failure err -> (ErrorType err, mempty)
@@ -512,6 +514,31 @@ instance (Abstract.Haskell l,
       abstract patVar rhsType = AST.FunctionType (Identity $ AST.TypeVariable patVar) (Identity rhsType)
       EquationLHSAttributes{lhsTypeName, argTypeNames, globalBindings, localBindings,
                             constraints = lhsCon} = lhsSyn
+      simplifiedBindings = case Map.foldMapWithKey simplify globalBindings of
+        Success valueTypes -> LocalTypeMap{
+          typeBindings = mempty,
+          valueBindings = valueTypes,
+          errors = mempty}
+        Failure errors -> LocalTypeMap{
+          typeBindings = mempty,
+          valueBindings = mempty,
+          errors = [(pos, err) | err <- errors]}
+      simplify name t = case Map.lookup name inheritance.declared.valueBindings of
+        Nothing
+          | let (con', bindings)
+                  = Constraints.simplify inheritance.constraints mempty synConstraints
+            -> Success
+               $ Map.singleton name
+               $ AST.ConstrainedType
+                        (Identity $ fst $ Constraints.toContext con')
+                        (Identity $ Constraints.resolveTypeVariables bindings t)
+        Just declaredType
+          | let (con', t') = Constraints.splitFromType declaredType
+                (con'', bindings)
+                  = Constraints.simplify inheritance.constraints con' synConstraints
+            -> case fst $ Constraints.toContext con'' of
+                 AST.NoContext -> Success mempty
+                 context -> Failure [UndeclaredContext context]
       lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
       rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
       ((whereBindings, whereCon), whereEnvs) =

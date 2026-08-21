@@ -5,9 +5,11 @@
 -- | The X part of OutsideIn(X), the constraints and their handler
 
 module Language.Haskell.TypeSystem.Constraints (
-  ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..)) where
+  ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..),
+  resolveTypeVariables, splitFromType) where
 
 import Control.Applicative (ZipList(ZipList))
+import Data.Bifunctor (first)
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
@@ -16,6 +18,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Language.Haskell.Extensions.AST qualified as AST
+import Language.Haskell.Abstract qualified as Abstract
 
 -- | Record of functions for handling constraints
 class Monoid con => ConstraintCollection con where
@@ -25,7 +28,8 @@ class Monoid con => ConstraintCollection con where
   fromContext :: AST.Context (Language con) (Language con) Identity Identity -> con
   toContext :: con -> (AST.Context (Language con) (Language con) Identity Identity, con)
   replaceVar :: AST.Name (Language con) -> AST.Name (Language con) -> con -> con
-  simplify :: con  -- ^ given constraints to rely on
+  simplify :: con  -- ^ global constraints
+           -> con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
            -> (con, Map (AST.Name (Language con)) (AST.Type (Language con) (Language con) Identity Identity))
   unify :: AST.Type (Language con) (Language con) Identity Identity
@@ -38,6 +42,7 @@ data TypeError l con
   = TypeMismatch (AST.Type l l Identity Identity) (AST.Type l l Identity Identity)
   | TypeAmbiguity con
   | DuplicatePatternVariables (NonEmpty (AST.Name l))
+  | UndeclaredContext (AST.Context l l Identity Identity)
   | UnknownTypeVariable (AST.QualifiedName l)
   | UnknownValue (AST.QualifiedName l)
   | UntypedValue (AST.QualifiedName l)
@@ -46,7 +51,8 @@ data TypeOrError l pos con
   = ProperType (AST.Type l l Identity Identity)
   | ErrorType (TypeErrors l pos con)
 
-deriving instance (Show (AST.Type l l Identity Identity), Show con) => Show (TypeError l con)
+deriving instance (Show (AST.Context l l Identity Identity),
+                   Show (AST.Type l l Identity Identity), Show con) => Show (TypeError l con)
 
 type TypeErrors l pos con = NonEmpty (pos, TypeError l con)
 
@@ -55,7 +61,8 @@ data DefaultConstraints l pos = DefaultConstraints{
   errors :: Map (AST.Name l) (TypeErrors l pos (DefaultConstraints l pos)),
   classes :: Map (AST.QualifiedName l) [AST.Type l l Identity Identity]}
 
-deriving instance (Show (AST.Type l l Identity Identity), Show pos) => Show (DefaultConstraints l pos)
+deriving instance (Show (AST.Context l l Identity Identity),
+                   Show (AST.Type l l Identity Identity), Show pos) => Show (DefaultConstraints l pos)
 
 instance Semigroup (DefaultConstraints l pos) where
   x <> y = DefaultConstraints{
@@ -95,10 +102,22 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
         classes = getCompose $ replaceInType <$> Compose classes}
   -- TODO: actually simplify wanted, report contradictions
-  simplify = \given wanted-> (given <> wanted, Map.empty)
+  simplify = \_ given wanted-> (given <> wanted, Map.empty)
   unify = \a b -> DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty}
   assign = \var terr-> case terr of
       ProperType t -> DefaultConstraints{
         equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
       ErrorType err -> DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
   errors DefaultConstraints{errors} = foldMap toList errors
+
+resolveTypeVariables :: Map (AST.Name l) (AST.Type l l Identity Identity)
+                     -> AST.Type l l Identity Identity
+                     -> AST.Type l l Identity Identity
+resolveTypeVariables bindings t = t
+
+splitFromType :: (Abstract.Context l ~ AST.Context l, Abstract.Type l ~ AST.Type l,
+                  ConstraintCollection con, Language con ~ l)
+              => AST.Type l l Identity Identity -> (con, AST.Type l l Identity Identity)
+splitFromType (AST.ConstrainedType (Identity context) (Identity t)) = first (fromContext context <>) (splitFromType t)
+splitFromType t = (mempty, t)
+  
