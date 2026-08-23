@@ -42,7 +42,7 @@ data TypeError l con
   = TypeMismatch (AST.Type l l Identity Identity) (AST.Type l l Identity Identity)
   | TypeAmbiguity con
   | DuplicatePatternVariables (NonEmpty (AST.Name l))
-  | UndeclaredContext (AST.Context l l Identity Identity)
+  | UndeclaredContext (AST.Name l) (AST.Context l l Identity Identity)
   | UnknownTypeVariable (AST.QualifiedName l)
   | UnknownValue (AST.QualifiedName l)
   | UntypedValue (AST.QualifiedName l)

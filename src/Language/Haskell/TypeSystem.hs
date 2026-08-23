@@ -500,7 +500,7 @@ instance (Abstract.Haskell l,
             typeBindings = Map.singleton tv typeKind,
             valueBindings = globalBindings,
             errors = mempty},
-        inferred = inheritance.declared <> setLocalValues globalBindings mempty,
+        inferred = inheritance.declared <> simplifiedBindings,
         constraints = synConstraints}
       synConstraints = mconcat [
         Constraints.assign lhsTypeName rhsTypeOrError,
@@ -524,21 +524,22 @@ instance (Abstract.Haskell l,
           valueBindings = mempty,
           errors = [(pos, err) | err <- errors]}
       simplify name t = case Map.lookup name inheritance.declared.valueBindings of
-        Nothing
-          | let (con', bindings)
-                  = Constraints.simplify inheritance.constraints mempty synConstraints
-            -> Success
-               $ Map.singleton name
-               $ AST.ConstrainedType
-                        (Identity $ fst $ Constraints.toContext con')
-                        (Identity $ Constraints.resolveTypeVariables bindings t)
+        Nothing -> simplifyUndeclared name t
         Just declaredType
+          | AST.TypeVariable{} <- declaredType -> simplifyUndeclared name t
           | let (con', t') = Constraints.splitFromType declaredType
                 (con'', bindings)
                   = Constraints.simplify inheritance.constraints con' synConstraints
             -> case fst $ Constraints.toContext con'' of
                  AST.NoContext -> Success mempty
-                 context -> Failure [UndeclaredContext context]
+                 context -> Failure [UndeclaredContext name context]
+      simplifyUndeclared name t =
+        let (con', bindings) = Constraints.simplify inheritance.constraints mempty synConstraints
+        in Success
+           $ Map.singleton name
+           $ AST.ConstrainedType
+              (Identity $ fst $ Constraints.toContext con')
+              (Identity $ Constraints.resolveTypeVariables bindings t)
       lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
       rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
       ((whereBindings, whereCon), whereEnvs) =
