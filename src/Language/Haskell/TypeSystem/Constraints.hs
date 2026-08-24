@@ -5,7 +5,7 @@
 -- | The X part of OutsideIn(X), the constraints and their handler
 
 module Language.Haskell.TypeSystem.Constraints (
-  ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..),
+  ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors,
   resolveTypeVariables, splitFromType) where
 
 import Control.Applicative (ZipList(ZipList))
@@ -35,7 +35,8 @@ class Monoid con => ConstraintCollection con where
   unify :: AST.Type (Language con) (Language con) Identity Identity
         -> AST.Type (Language con) (Language con) Identity Identity
         -> con
-  assign :: AST.Name (Language con) -> TypeOrError (Language con) (Position con) con -> con
+  assignType :: AST.Name (Language con) -> AST.Type (Language con) (Language con) Identity Identity -> con
+  assignError :: AST.Name (Language con) -> TypeErrors (Language con) (Position con) con -> con
   errors :: con -> [(Position con, TypeError (Language con) con)]
 
 data TypeError l con
@@ -46,10 +47,6 @@ data TypeError l con
   | UnknownTypeVariable (AST.QualifiedName l)
   | UnknownValue (AST.QualifiedName l)
   | UntypedValue (AST.QualifiedName l)
-
-data TypeOrError l pos con
-  = ProperType (AST.Type l l Identity Identity)
-  | ErrorType (TypeErrors l pos con)
 
 deriving instance (Show (AST.Context l l Identity Identity),
                    Show (AST.Type l l Identity Identity), Show con) => Show (TypeError l con)
@@ -103,11 +100,12 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
         classes = getCompose $ replaceInType <$> Compose classes}
   -- TODO: actually simplify wanted, report contradictions
   simplify = \_ given wanted-> (given <> wanted, Map.empty)
-  unify = \a b -> DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty}
-  assign = \var terr-> case terr of
-      ProperType t -> DefaultConstraints{
-        equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
-      ErrorType err -> DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
+  unify (AST.TypeVariable name) t = assignType name t
+  unify t (AST.TypeVariable name) = assignType name t
+  unify a b = DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty}
+  assignType v1 (AST.TypeVariable v2) | v1 == v2 = mempty
+  assignType var t = DefaultConstraints{equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
+  assignError var err = DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
   errors DefaultConstraints{errors} = foldMap toList errors
 
 resolveTypeVariables :: Map (AST.Name l) (AST.Type l l Identity Identity)

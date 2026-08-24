@@ -47,7 +47,7 @@ import Language.Haskell.Reserializer qualified as Reserializer
 import Language.Haskell.Extensions as Extensions (Extension(OverloadedStrings, RebindableSyntax))
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
-  ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors, TypeOrError(..))
+  ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors)
 import Language.Haskell.TypeSystem.Constraints qualified as Constraints
 
 checkModule :: forall l pos s con. (
@@ -503,13 +503,13 @@ instance (Abstract.Haskell l,
         inferred = inheritance.declared <> simplifiedBindings,
         constraints = synConstraints}
       synConstraints = mconcat [
-        Constraints.assign lhsTypeName rhsTypeOrError,
+        lhsAssignment,
         Map.foldMapWithKey unifyWithDeclared globalBindings,
-        foldMap (Constraints.unify (AST.TypeVariable tv) . fst) rhsSyn,
+        foldMap (Constraints.assignType tv . fst) rhsSyn,
         lhsCon, rhsCon, whereCon]
-      ~(rhsTypeOrError, rhsCon) = case rhsSyn of
-        Success (t, c) -> (ProperType $ foldr abstract t argTypeNames, c)
-        Failure err -> (ErrorType err, mempty)
+      ~(lhsAssignment, rhsCon) = case rhsSyn of
+        Success (t, c) -> (Constraints.assignType lhsTypeName $ foldr abstract t argTypeNames, c)
+        Failure err -> (Constraints.assignError lhsTypeName err, mempty)
       abstract :: AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
       abstract patVar rhsType = AST.FunctionType (Identity $ AST.TypeVariable patVar) (Identity rhsType)
       EquationLHSAttributes{lhsTypeName, argTypeNames, globalBindings, localBindings,
@@ -1097,9 +1097,9 @@ instance (Abstract.Haskell l,
     where tv = freshTV env
   attribution TypeCheck{} (_, AST.LiteralPattern{}) (AG.Inherited env, AST.LiteralPattern (AG.Synthesized valSyn)) =
     (AG.Synthesized (tv, setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty,
-                     Constraints.assign tv $ case fst <$> valSyn of
-                        Failure err -> ErrorType err
-                        Success t -> ProperType t),
+                     case fst <$> valSyn of
+                        Failure err -> Constraints.assignError tv err
+                        Success t -> Constraints.assignType tv t),
      AST.LiteralPattern $ AG.Inherited env)
     where tv = freshTV env
 
