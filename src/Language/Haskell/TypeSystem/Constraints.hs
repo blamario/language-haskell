@@ -15,6 +15,7 @@ import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Identity (Identity(Identity))
 import Data.List.NonEmpty (NonEmpty)
+import Data.DisjointMap qualified as DJMap
 import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Language.Haskell.Extensions.AST qualified as AST
@@ -54,6 +55,7 @@ deriving instance (Show (AST.Context l l Identity Identity),
 type TypeErrors l pos con = NonEmpty (pos, TypeError l con)
 
 data DefaultConstraints l pos = DefaultConstraints{
+  assignments :: DJMap.DisjointMap (AST.Name l) [AST.Type l l Identity Identity],
   equations :: [(AST.Type l l Identity Identity, AST.Type l l Identity Identity)],
   errors :: Map (AST.Name l) (TypeErrors l pos (DefaultConstraints l pos)),
   classes :: Map (AST.QualifiedName l) [AST.Type l l Identity Identity]}
@@ -63,12 +65,13 @@ deriving instance (Show (AST.Context l l Identity Identity),
 
 instance Semigroup (DefaultConstraints l pos) where
   x <> y = DefaultConstraints{
+    assignments= x.assignments <> y.assignments,
     classes= Map.unionWith (<>) x.classes y.classes,
     equations = x.equations <> y.equations,
     errors = x.errors <> y.errors}
 
 instance Monoid (DefaultConstraints l pos) where
-  mempty = DefaultConstraints{equations= [], classes= Map.empty, errors= Map.empty}
+  mempty = DefaultConstraints{assignments= DJMap.empty, equations= [], classes= Map.empty, errors= Map.empty}
 
 instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) where
   type Language (DefaultConstraints AST.Language pos) = AST.Language
@@ -78,12 +81,18 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
       AST.ClassConstraint name (Identity arg) -> mempty{classes= Map.singleton name [arg]}
       AST.Constraints cons -> foldMap fromContext (Compose cons)
       AST.NoContext -> mempty
-  toContext = \DefaultConstraints{equations, classes}->
-      case [AST.TypeEquality (Identity l) (Identity r) | (l, r) <- equations]
+  toContext = \DefaultConstraints{assignments, equations, classes}->
+      case [AST.TypeEquality (Identity l) (Identity r)
+           | (vars, types) <- DJMap.toLists assignments,
+             let allTypes = map AST.TypeVariable vars ++ types
+                 (ls, rs) = splitAt 1 allTypes,
+             l <- ls,
+             r <- rs]
+           <> [AST.TypeEquality (Identity l) (Identity r) | (l, r) <- equations]
            <> [AST.ClassConstraint name (Identity arg) | (name, args) <- Map.toList classes, arg <- args]
       of [] -> (AST.NoContext, mempty)
          cons -> (AST.Constraints (ZipList $ Identity <$> cons), mempty)
-  replaceVar = \from to DefaultConstraints{errors, equations, classes} ->
+  replaceVar = \from to DefaultConstraints{assignments, errors, equations, classes} ->
       let replaceInType = \case
             AST.TypeVariable name
               | name == from -> AST.TypeVariable to
@@ -95,6 +104,7 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
             AST.TypeApplication l r -> AST.TypeApplication (replaceInType <$> l) (replaceInType <$> r)
             t -> t
       in DefaultConstraints{
+        assignments = getCompose $ replaceInType <$> Compose assignments,
         errors = errors,
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
         classes = getCompose $ replaceInType <$> Compose classes}
@@ -102,10 +112,10 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
   simplify = \_ given wanted-> (given <> wanted, Map.empty)
   unify (AST.TypeVariable name) t = assignType name t
   unify t (AST.TypeVariable name) = assignType name t
-  unify a b = DefaultConstraints{equations= [(a, b)], errors= mempty, classes= mempty}
-  assignType v1 (AST.TypeVariable v2) | v1 == v2 = mempty
-  assignType var t = DefaultConstraints{equations= [(AST.TypeVariable var, t)], classes= mempty, errors= mempty}
-  assignError var err = DefaultConstraints{equations= mempty, classes= mempty, errors= Map.singleton var err}
+  unify a b = mempty{equations= [(a, b)]}
+  assignType v1 (AST.TypeVariable v2) = mempty{assignments= DJMap.union v1 v2 DJMap.empty}
+  assignType var t = mempty{assignments= DJMap.singleton var [t]}
+  assignError var err = mempty{errors= Map.singleton var err}
   errors DefaultConstraints{errors} = foldMap toList errors
 
 resolveTypeVariables :: Map (AST.Name l) (AST.Type l l Identity Identity)
