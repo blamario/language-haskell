@@ -18,6 +18,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.DisjointMap qualified as DJMap
 import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
+import Data.Set (Set)
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.Abstract qualified as Abstract
 
@@ -109,7 +110,8 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
         classes = getCompose $ replaceInType <$> Compose classes}
   -- TODO: actually simplify wanted, report contradictions
-  simplify = \_ given wanted-> (given <> wanted, Map.empty)
+  simplify = \_ given wanted->
+    (given <> wanted{assignments= mempty}, DJMap.foldlWithKeys' resolveAssignments mempty wanted.assignments)
   unify (AST.TypeVariable name) t = assignType name t
   unify t (AST.TypeVariable name) = assignType name t
   unify a b = mempty{equations= [(a, b)]}
@@ -118,10 +120,23 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
   assignError var err = mempty{errors= Map.singleton var err}
   errors DefaultConstraints{errors} = foldMap toList errors
 
-resolveTypeVariables :: Map (AST.Name l) (AST.Type l l Identity Identity)
+resolveAssignments :: Map (AST.Name l) (AST.Type l l Identity Identity)
+                   -> Set (AST.Name l)
+                   -> [AST.Type l l Identity Identity]
+                   -> Map (AST.Name l) (AST.Type l l Identity Identity)
+resolveAssignments assigned names types = case toList types of
+  [] -> assigned
+  [t] -> foldr (`Map.insert` t) assigned names
+
+resolveTypeVariables :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l)
+                     => Map (AST.Name l) (AST.Type l l Identity Identity)
                      -> AST.Type l l Identity Identity
                      -> AST.Type l l Identity Identity
-resolveTypeVariables bindings t = t
+resolveTypeVariables bindings t@(AST.TypeVariable name) =
+  maybe t (resolveTypeVariables bindings) (Map.lookup name bindings)
+resolveTypeVariables bindings (AST.FunctionType l r) =
+  AST.FunctionType (resolveTypeVariables bindings <$> l) (resolveTypeVariables bindings <$> r)
+resolveTypeVariables _ t = t
 
 splitFromType :: (Abstract.Context l ~ AST.Context l, Abstract.Type l ~ AST.Type l,
                   ConstraintCollection con, Language con ~ l)
