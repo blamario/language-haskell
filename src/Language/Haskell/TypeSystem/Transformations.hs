@@ -29,14 +29,45 @@ instance Transformation (FreeVariableFold l f) where
   type Codomain (FreeVariableFold l f) = Const (Set (Abstract.Name l))
 
 freeVariables :: (Foldable f, Ord (Abstract.Name l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.Constructor l l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.Context l l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.FieldDeclaration l l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.Kind l l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.Type l l),
-                  Full.Foldable (Full.Outward (FreeVariableFold l f)) (Abstract.TypeVarBinding l l))
+                  Full.Foldable (FreeVariableFold l f) (Abstract.Constructor l l),
+                  Full.Foldable (FreeVariableFold l f) (Abstract.Context l l),
+                  Full.Foldable (FreeVariableFold l f) (Abstract.FieldDeclaration l l),
+                  Full.Foldable (FreeVariableFold l f) (Abstract.Kind l l),
+                  Full.Foldable (FreeVariableFold l f) (Abstract.Type l l),
+                  Full.Foldable (FreeVariableFold l f) (Abstract.TypeVarBinding l l))
               => AST.Type l l f f -> Set (Abstract.Name l)
-freeVariables = Deep.foldMap (Full.Outward FreeVariableFold) 
+freeVariables = Deep.foldMap FreeVariableFold
+
+instance Full.Foldable (FreeVariableFold l f) (AST.Constructor l l) where
+  foldMap _ _ = mempty
+
+instance (Foldable f, Ord (Abstract.Name l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Context l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Type l l)) =>
+         Full.Foldable (FreeVariableFold l f) (AST.Context l l) where
+  foldMap = Full.foldMapUpDefault
+
+instance (Foldable f, Ord (Abstract.Name l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Type l l)) =>
+         Full.Foldable (FreeVariableFold l f) (AST.FieldDeclaration l l) where
+  foldMap = Full.foldMapUpDefault
+
+instance (Foldable f, Ord (Abstract.Name l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Kind l l)) =>
+         Full.Foldable (FreeVariableFold l f) (AST.TypeVarBinding l l) where
+  foldMap = Full.foldMapUpDefault
+
+instance (Foldable f, Ord (Abstract.Name l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Constructor l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Context l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.FieldDeclaration l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Kind l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.Type l l),
+          Full.Foldable (FreeVariableFold l f) (Abstract.TypeVarBinding l l)) =>
+         Full.Foldable (FreeVariableFold l f) (AST.Type l l) where
+  foldMap t x = foldMap collectFrom x where
+    collectFrom (AST.ForallType bindings ty) = Full.foldMap t ty Set.\\ foldMap (Full.foldMap t) bindings
+    collectFrom _ = Full.foldMapUpDefault t x
 
 instance (Foldable f, Ord (Abstract.Name l)) =>
   FreeVariableFold l f `At` AST.Type l l f f where
