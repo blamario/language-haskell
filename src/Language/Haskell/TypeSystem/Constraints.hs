@@ -10,17 +10,21 @@ module Language.Haskell.TypeSystem.Constraints (
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Bifunctor (first)
-import Data.Foldable (toList)
+import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Identity (Identity(Identity))
 import Data.List.NonEmpty (NonEmpty)
 import Data.DisjointMap qualified as DJMap
+import Data.DisjointMap (DisjointMap)
 import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Data.Set (Set)
+import Data.Set qualified as Set
+import Transformation.Deep qualified as Deep
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.Abstract qualified as Abstract
+import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariables)
 
 -- | Record of functions for handling constraints
 class Monoid con => ConstraintCollection con where
@@ -144,3 +148,26 @@ splitFromType :: (Abstract.Context l ~ AST.Context l, Abstract.Type l ~ AST.Type
 splitFromType (AST.ConstrainedType (Identity context) (Identity t)) = first (fromContext context <>) (splitFromType t)
 splitFromType t = (mempty, t)
   
+constraintRelatedTypeVarSetClosure :: (Abstract.Name l ~ AST.Name l,
+                                       Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                                   => DefaultConstraints l pos -> Set (AST.Name l) -> Set (AST.Name l)
+constraintRelatedTypeVarSetClosure DefaultConstraints{assignments, equations} =
+  relatedSetClosure $ foldr unifyEquationVars (foldMap freeVariables <$> assignments) equations
+  where
+    unifyEquationVars :: (Abstract.Name l ~ AST.Name l,
+                          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                      => (AST.Type l l Identity Identity, AST.Type l l Identity Identity)
+                      -> DisjointMap (AST.Name l) (Set (AST.Name l))
+                      -> DisjointMap (AST.Name l) (Set (AST.Name l))
+    unifyEquationVars (l, r) djmap =
+      foldr (uncurry DJMap.union) djmap $ freeVariables l `Set.cartesianProduct` freeVariables r
+
+relatedSetClosure :: Ord a => DisjointMap a (Set a) -> Set a -> Set a
+relatedSetClosure related set = foldMap (`DJMap.lookup` disjointMapClosure related) set
+
+disjointMapClosure :: Ord a => DisjointMap a (Set a) -> DisjointMap a (Set a)
+disjointMapClosure relations =
+  if all (Set.null . fst) front then relations else disjointMapClosure (snd <$> front) where
+    front = fold $ DJMap.fromSets $ next <$> DJMap.toSets relations
+    next (keys, related) = let additional = foldMap (`DJMap.lookup` relations) related in
+      (keys, (additional Set.\\ related, additional `Set.union` related))

@@ -4,7 +4,7 @@
 
 -- | The X part of OutsideIn(X), the constraints and their handler
 
-module Language.Haskell.TypeSystem.Transformations (freeVariables) where
+module Language.Haskell.TypeSystem.Transformations (freeVariables, FreeVariableFold) where
 
 import Data.Foldable (toList)
 import Data.Functor.Compose (Compose(Compose, getCompose))
@@ -29,12 +29,7 @@ instance Transformation (FreeVariableFold l f) where
   type Codomain (FreeVariableFold l f) = Const (Set (Abstract.Name l))
 
 freeVariables :: (Foldable f, Ord (Abstract.Name l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.Constructor l l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.Context l l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.FieldDeclaration l l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.Kind l l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.Type l l),
-                  Full.Foldable (FreeVariableFold l f) (Abstract.TypeVarBinding l l))
+                   Deep.Foldable (FreeVariableFold l f) (AST.Type l l))
               => AST.Type l l f f -> Set (Abstract.Name l)
 freeVariables = Deep.foldMap FreeVariableFold
 
