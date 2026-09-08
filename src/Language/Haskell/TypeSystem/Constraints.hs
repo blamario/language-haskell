@@ -34,6 +34,7 @@ class Monoid con => ConstraintCollection con where
   fromContext :: AST.Context (Language con) (Language con) Identity Identity -> con
   toContext :: con -> (AST.Context (Language con) (Language con) Identity Identity, con)
   replaceVar :: AST.Name (Language con) -> AST.Name (Language con) -> con -> con
+  filterRelevant :: Set (AST.Name (Language con)) -> con -> con
   simplify :: con  -- ^ global constraints
            -> con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
@@ -78,9 +79,17 @@ instance Semigroup (DefaultConstraints l pos) where
 instance Monoid (DefaultConstraints l pos) where
   mempty = DefaultConstraints{assignments= DJMap.empty, equations= [], classes= Map.empty, errors= Map.empty}
 
-instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) where
-  type Language (DefaultConstraints AST.Language pos) = AST.Language
-  type Position (DefaultConstraints AST.Language pos) = pos
+instance (Show pos,
+          Show (AST.Context l l Identity Identity),
+          Show (AST.Type l l Identity Identity),
+          Abstract.Name l ~ AST.Name l,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.Context l ~ AST.Context l,
+          Abstract.Type l ~ AST.Type l,
+          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+         ConstraintCollection (DefaultConstraints l pos) where
+  type Language (DefaultConstraints l pos) = l
+  type Position (DefaultConstraints l pos) = pos
   display = show
   fromContext = \case
       AST.ClassConstraint name (Identity arg) -> mempty{classes= Map.singleton name [arg]}
@@ -113,6 +122,7 @@ instance Show pos => ConstraintCollection (DefaultConstraints AST.Language pos) 
         errors = errors,
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
         classes = getCompose $ replaceInType <$> Compose classes}
+  filterRelevant = filterDefaultRelevant
   -- TODO: actually simplify wanted, report contradictions
   simplify = \_ given wanted->
     (given <> wanted{assignments= mempty}, DJMap.foldlWithKeys' resolveAssignments mempty wanted.assignments)
@@ -147,7 +157,22 @@ splitFromType :: (Abstract.Context l ~ AST.Context l, Abstract.Type l ~ AST.Type
               => AST.Type l l Identity Identity -> (con, AST.Type l l Identity Identity)
 splitFromType (AST.ConstrainedType (Identity context) (Identity t)) = first (fromContext context <>) (splitFromType t)
 splitFromType t = (mempty, t)
-  
+
+filterDefaultRelevant :: (Abstract.Name l ~ AST.Name l,
+                          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                      => Set (AST.Name l) -> DefaultConstraints l pos -> DefaultConstraints l pos
+filterDefaultRelevant vars con = DefaultConstraints{
+  assignments = fold $ DJMap.fromSets $ filter relevantAssignment $ DJMap.toSets con.assignments,
+  errors = con.errors,
+  equations = filter relevantEquation $ con.equations,
+  classes = Map.filter relevantClassParams $ con.classes}
+  where
+    relevantAssignment (keys, tys) = hasRelevant keys || any isRelevantType tys
+    relevantEquation (l, r) = isRelevantType l || isRelevantType r
+    relevantClassParams = any isRelevantType
+    isRelevantType = hasRelevant . freeVariables
+    hasRelevant = not . Set.disjoint vars
+
 constraintRelatedTypeVarSetClosure :: (Abstract.Name l ~ AST.Name l,
                                        Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
                                    => DefaultConstraints l pos -> Set (AST.Name l) -> Set (AST.Name l)
