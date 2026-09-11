@@ -35,6 +35,8 @@ class Monoid con => ConstraintCollection con where
   toContext :: con -> (AST.Context (Language con) (Language con) Identity Identity, con)
   replaceVar :: AST.Name (Language con) -> AST.Name (Language con) -> con -> con
   filterRelevant :: Set (AST.Name (Language con)) -> con -> con
+  canonicalNameMap :: con -> Map (AST.Name (Language con)) (AST.Name (Language con))
+  renameTypeVariables :: Map (AST.Name (Language con)) (AST.Name (Language con)) -> con -> con
   simplify :: con  -- ^ global constraints
            -> con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
@@ -123,6 +125,8 @@ instance (Show pos,
         equations = equations <&> \(l, r)-> (replaceInType l, replaceInType r),
         classes = getCompose $ replaceInType <$> Compose classes}
   filterRelevant = filterDefaultRelevant
+  canonicalNameMap = canonicalDefaultNameMap
+  renameTypeVariables = renameTypeVariablesDefault
   -- TODO: actually simplify wanted, report contradictions
   simplify = \_ given wanted->
     (given <> wanted{assignments= mempty}, DJMap.foldlWithKeys' resolveAssignments mempty wanted.assignments)
@@ -133,6 +137,24 @@ instance (Show pos,
   assignType var t = mempty{assignments= DJMap.singleton var [t]}
   assignError var err = mempty{errors= Map.singleton var err}
   errors DefaultConstraints{errors} = foldMap toList errors
+
+canonicalDefaultNameMap :: DefaultConstraints l pos -> Map (AST.Name l) (AST.Name l)
+canonicalDefaultNameMap con = foldMap (canonicalMap . fst) $ DJMap.toLists con.assignments
+  where canonicalMap names@(name:_)
+          | Just canonical <- DJMap.representative name con.assignments
+          = Map.fromList [(n, canonical) | n <- names]
+
+renameTypeVariablesDefault :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l)
+                           => Map (AST.Name l) (AST.Name l) -> DefaultConstraints l pos -> DefaultConstraints l pos
+renameTypeVariablesDefault renamings con = DefaultConstraints{
+  assignments = fold $ DJMap.fromSets $ renameAssignments <$> DJMap.toLists con.assignments,
+  errors = con.errors,
+  equations = con.equations <&> \(l, r)-> (renameInType l, renameInType r),
+  classes = getCompose $ renameInType <$> Compose con.classes}
+  where
+    renameAssignments (name:_, types) = (foldMap Set.singleton $ Map.lookup name renamings, renameInType <$> types)
+    renameInType = resolveTypeVariables typeRenamings
+    typeRenamings = AST.TypeVariable <$> renamings
 
 resolveAssignments :: Map (AST.Name l) (AST.Type l l Identity Identity)
                    -> Set (AST.Name l)

@@ -49,6 +49,7 @@ import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
   ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors)
 import Language.Haskell.TypeSystem.Constraints qualified as Constraints
+import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariables)
 
 checkModule :: forall l pos s con. (
   Abstract.Haskell l,
@@ -363,7 +364,8 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           ConstraintCollection con,
           Constraints.Language con ~ l,
-          Constraints.Position con ~ pos) =>
+          Constraints.Position con ~ pos,
+          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
          AG.At (TypeCheck l pos s con) (AST.Module l l) where
   attribution
     t@TypeCheck{}
@@ -419,7 +421,8 @@ instance (Abstract.Haskell l,
             typeBindings = constrainType <$> ts,
             valueBindings = constrainType <$> vs,
             errors = errors <> Constraints.errors con}
-            where constrainType t = AST.ConstrainedType (Identity $ fst $ Constraints.toContext con) (Identity t)
+            where constrainType :: AST.Type l l Identity Identity -> AST.Type l l Identity Identity
+                  constrainType t = AST.ConstrainedType (Identity $ fst $ Constraints.toContext $ Constraints.filterRelevant (freeVariables t) con) (Identity t)
           globalized l@LocalTypeMap{typeBindings, valueBindings} = TypeMap{
             typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.typeBindings,
             valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName l.valueBindings,
@@ -459,7 +462,8 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           ConstraintCollection con,
           Constraints.Language con ~ l,
-          Constraints.Position con ~ pos) =>
+          Constraints.Position con ~ pos,
+          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
     TypeCheck{}
@@ -528,18 +532,22 @@ instance (Abstract.Haskell l,
         Just declaredType
           | AST.TypeVariable{} <- declaredType -> simplifyUndeclared name t
           | let (con', t') = Constraints.splitFromType declaredType
-                (con'', bindings)
-                  = Constraints.simplify inheritance.constraints con' synConstraints
+                (con'', bindings) = Constraints.simplify inheritance.constraints con' synConstraints
             -> case fst $ Constraints.toContext con'' of
                  AST.NoContext -> Success mempty
                  context -> Failure [UndeclaredContext name context]
       simplifyUndeclared name t =
         let (con', bindings) = Constraints.simplify inheritance.constraints mempty synConstraints
+            t' = Constraints.resolveTypeVariables bindings t
+            renamings = Constraints.canonicalNameMap con'
+            con'' = Constraints.renameTypeVariables renamings con'
+            t'' = Constraints.resolveTypeVariables (AST.TypeVariable <$> renamings) t'
+            con''' = Constraints.filterRelevant (freeVariables t'') con''
         in Success
            $ Map.singleton name
            $ AST.ConstrainedType
-              (Identity $ fst $ Constraints.toContext con')
-              (Identity $ Constraints.resolveTypeVariables bindings t)
+              (Identity $ fst $ Constraints.toContext con'')
+              (Identity t')
       lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
       rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
       ((whereBindings, whereCon), whereEnvs) =
