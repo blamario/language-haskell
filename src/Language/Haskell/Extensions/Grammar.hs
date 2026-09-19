@@ -12,7 +12,11 @@
 -- * 'Arrows'
 -- * 'TemplateHaskell' and 'TemplateHaskellQuotes'
 
-module Language.Haskell.Extensions.Grammar (ExtendedGrammar(report), extendedGrammar, parseModule, NodeWrap) where
+module Language.Haskell.Extensions.Grammar (
+  ExtendedGrammar(report),
+  extendedGrammar, extensionMixins, overlayedGrammar, parseModule,
+  NodeWrap)
+where
 
 import Control.Applicative
 import Control.Monad (void)
@@ -287,9 +291,17 @@ extendedGrammar extensions = memoize extendWith mixinKeys
    where mixinKeys :: [Set Extension]
          mixinKeys =  filter (all (`Set.member` extensions)) $ toList $ Map.keysSet $ extensionMixins @l @_ @t
          extendWith :: [Set Extension] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
-         extendWith = overlay extendedReport . reverse
-                      . (initialOverlay :) . map snd . List.sortOn fst . fold . map (extensionMixins Map.!)
-         extendedReport g = g{report = Report.grammar g.report}
+         extendWith = overlayedGrammar . map snd . List.sortOn fst . fold . map (extensionMixins Map.!)
+
+-- | Construct the Haskell grammar corresponding to the given set of grammar overlays
+overlayedGrammar :: forall g l t.
+                   (Abstract.ExtendedHaskell l, LexicalParsing (Parser (ExtendedGrammar l t (NodeWrap t)) t),
+                    Ord t, Show t, OutlineMonoid t, SpaceMonoid t,
+                    g ~ ExtendedGrammar l t (NodeWrap t),
+                    Abstract.DeeplyFoldable (Serialization (Down Int) t) l)
+                 => [GrammarOverlay g (Parser g t)] -> Grammar (ExtendedGrammar l t (NodeWrap t)) (ParserT ((,) [[Lexeme t]])) t
+overlayedGrammar overlays = overlay extendedReport $ reverse $ initialOverlay : overlays
+  where extendedReport g = g{report = Report.grammar g.report}
 
 -- | Reorganize the grammar to make it more extensible, without adding any extensions
 initialOverlay :: forall l g t. (Abstract.ExtendedHaskell l,
