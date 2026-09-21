@@ -151,7 +151,10 @@ instance (Abstract.QualifiedName l ~ AST.QualifiedName l,
       | otherwise = prettyViaTH name
    prettyViaTH (ReExportModule name) = Ppr.text "module" <+> prettyViaTH name
 
-instance TemplateWrapper f => PrettyViaTH (Import Language Language f f) where
+instance (TemplateWrapper f,
+          PrettyViaTH (Abstract.ModuleName l),
+          PrettyViaTH (Abstract.ImportSpecification l l f f)) =>
+         PrettyViaTH (Import l l f f) where
    prettyViaTH (Import safe qualified package name alias imports) =
       Ppr.text "import" <+> (if safe then Ppr.text "safe" else Ppr.empty)
       <+> (if qualified then Ppr.text "qualified" else Ppr.empty)
@@ -160,12 +163,17 @@ instance TemplateWrapper f => PrettyViaTH (Import Language Language f f) where
       <+> maybe Ppr.empty ((Ppr.text "as" <+>) . prettyViaTH) alias
       <+> maybe Ppr.empty (prettyViaTH . extract) imports
 
-instance TemplateWrapper f => PrettyViaTH (ImportSpecification Language Language f f) where
+instance (TemplateWrapper f,
+          PrettyViaTH (Abstract.ImportItem l l f f)) =>
+         PrettyViaTH (ImportSpecification l l f f) where
    prettyViaTH (ImportSpecification inclusive items) =
       (if inclusive then id else (Ppr.text "hiding" <+>))
       $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH . extract <$> toList items)
 
-instance PrettyViaTH (ImportItem Language Language f f) where
+instance (Abstract.Name l ~ AST.Name l,
+          PrettyViaTH (Abstract.Name l),
+          PrettyViaTH (Abstract.Members l)) =>
+         PrettyViaTH (ImportItem l l f f) where
    prettyViaTH (ImportClassOrType name@(AST.Name local) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
@@ -175,18 +183,21 @@ instance PrettyViaTH (ImportItem Language Language f f) where
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
    prettyViaTH (ImportPattern name@(AST.Name local)) = Ppr.text "pattern" <+> prettyIdentifier name
 
-instance PrettyViaTH (Members Language) where
+instance (Abstract.Name l ~ AST.Name l,
+          PrettyViaTH (Abstract.Name l),
+          PrettyViaTH (Abstract.ModuleMember l)) =>
+         PrettyViaTH (Members l) where
    prettyViaTH (MemberList names) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyIdentifier <$> names)
-   prettyViaTH (ExplicitlyNamespacedMemberList () members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
+   prettyViaTH (ExplicitlyNamespacedMemberList _ members) = Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> members)
    prettyViaTH AllMembers = Ppr.text ".."
    prettyViaTH (AllMembersPlus extras) = Ppr.sep $ Ppr.punctuate Ppr.comma $ Ppr.text ".." : (prettyViaTH <$> extras)
 
-instance PrettyViaTH (ModuleMember Language) where
+instance (Abstract.Name l ~ AST.Name l, PrettyViaTH (Abstract.Name l)) => PrettyViaTH (ModuleMember l) where
    prettyViaTH (DefaultMember name) = prettyIdentifier name
    prettyViaTH (PatternMember name) = Ppr.text "pattern" <+> prettyIdentifier name
    prettyViaTH (TypeMember name) = Ppr.text "type" <+> prettyIdentifier name
 
-prettyIdentifier :: AST.Name Language -> Ppr.Doc
+prettyIdentifier :: PrettyViaTH (AST.Name l) => AST.Name l -> Ppr.Doc
 prettyIdentifier name@(AST.Name local)
    | Just (c, _) <- Text.uncons local, Char.isLetter c || c == '_' = prettyViaTH name
    | otherwise = Ppr.parens (prettyViaTH name)
@@ -200,13 +211,13 @@ instance TemplateWrapper f => PrettyViaTH (Expression Language Language f f) whe
 instance TemplateWrapper f => PrettyViaTH (ExtAST.Type Language Language f f) where
    prettyViaTH x = Ppr.ppr (typeTemplate x)
 
-instance PrettyViaTH (ModuleName Language) where
+instance PrettyViaTH (ModuleName l) where
    prettyViaTH (ModuleName mods) = Ppr.ppr (mkName $ unpack $ Text.intercalate "." $ AST.nameText <$> toList mods)
 
-instance PrettyViaTH (AST.Name Language) where
+instance PrettyViaTH (AST.Name l) where
    prettyViaTH x = Ppr.pprName (nameTemplate x)
 
-instance PrettyViaTH (QualifiedName Language) where
+instance PrettyViaTH (QualifiedName l) where
    prettyViaTH x = Ppr.pprName (qnameTemplate x)
 
 expressionTemplate :: TemplateWrapper f => Expression Language Language f f -> Exp
@@ -838,7 +849,7 @@ typeVarBindingSpecTemplate tv = case extract tv of
    ExplicitlyKindedWildcardTypeBinding kind -> kindedTVSpecified (mkName "_") (typeTemplate $ extract kind)
    WildcardTypeBinding -> plainTVInferred (mkName "_")
 
-bindingVarName :: ExtAST.TypeVarBinding Language Language f f -> TH.Name
+bindingVarName :: Abstract.Name l ~ AST.Name l => ExtAST.TypeVarBinding l l f f -> TH.Name
 bindingVarName (ExplicitlyKindedTypeVariable _ name _) = nameTemplate name
 bindingVarName (ImplicitlyKindedTypeVariable _ name) = nameTemplate name
 bindingVarName (ExplicitlyKindedWildcardTypeBinding _) = mkName "_"
@@ -849,7 +860,7 @@ inContext context = case extract context
                      of NoContext -> id
                         ctx -> ForallT [] (contextTemplate ctx)
 
-nameReferenceTemplate :: AST.QualifiedName Language -> Exp
+nameReferenceTemplate :: AST.QualifiedName l -> Exp
 nameReferenceTemplate name@(QualifiedName _ (AST.Name local))
    | not (Text.null local), c <- Text.head local, Char.isUpper c || c == ':' = ConE (qnameTemplate name)
    | otherwise = VarE (qnameTemplate name)
@@ -860,12 +871,12 @@ moduleNameTemplate (ModuleName ns) = mkModName $ unpack $ Text.intercalate "." $
 nameTemplate :: AST.Name l -> TH.Name
 nameTemplate (Name s) = mkName (unpack s)
 
-qnameTemplate :: AST.QualifiedName Language -> TH.Name
+qnameTemplate :: AST.QualifiedName l -> TH.Name
 qnameTemplate (QualifiedName Nothing name) = nameTemplate name
 qnameTemplate (QualifiedName (Just (ModuleName m)) name) = mkName (unpack $ Text.intercalate "."
                                                                    $ AST.nameText <$> toList m ++ [name])
 
-baseName :: AST.QualifiedName Language -> AST.Name Language
+baseName :: AST.QualifiedName l -> AST.Name l
 baseName (QualifiedName _ name) = name
 
 extractSimpleTypeLHS :: forall l f. (Abstract.Name l ~ AST.Name l, Abstract.TypeLHS l ~ ExtAST.TypeLHS l,
