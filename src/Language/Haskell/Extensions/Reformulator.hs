@@ -4,7 +4,7 @@
 
 -- | The module exports functions that reformulate an AST in terms of the language extensions it uses.
 module Language.Haskell.Extensions.Reformulator (
-  ReformulationOf, Wrap,
+  Reformable, ReformulationOf, Wrap,
     dropRecordWildCards, dropNPlusKPatterns, dropNoListTuplePuns, dropMultilineStrings,
     dropTupleSections, orToViewPatterns)
 where
@@ -96,41 +96,9 @@ instance (Abstract.QualifiedName λ ~ AST.QualifiedName λ,
   WrapTranslation (ReformulationOf e es λ l pos s) where
    type Wrap (ReformulationOf e es λ l pos s) = Wrap λ pos s
 
-type SameWrap (e :: Extension) (es :: [Extension]) pos s l1 l2 = (
-   Abstract.QualifiedName l1 ~ AST.QualifiedName l1,
-   Abstract.ModuleName l1 ~ AST.ModuleName l1,
-   Abstract.Name l1 ~ AST.Name l1,
-   Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
-   Abstract.ModuleName l2 ~ AST.ModuleName l2,
-   Abstract.Name l2 ~ AST.Name l2,
-   Abstract.Module l1 ~ AST.Module l1,
-   Abstract.Export l1 ~ AST.Export l1,
-   Abstract.Import l1 ~ AST.Import l1,
-   Abstract.ImportSpecification l1 ~ AST.ImportSpecification l1,
-   Abstract.ImportItem l1 ~ AST.ImportItem l1,
-   Abstract.Declaration l1 ~ AST.Declaration l1,
-   Abstract.EquationLHS l1 ~ AST.EquationLHS l1,
-   Abstract.EquationRHS l1 ~ AST.EquationRHS l1,
-   Abstract.ClassInstanceLHS l1 ~ AST.ClassInstanceLHS l1,
-   Abstract.Context l1 ~ AST.Context l1,
-   Abstract.TypeLHS l1 ~ AST.TypeLHS l1,
-   Abstract.Type l1 ~ AST.Type l1,
-   Abstract.Kind l1 ~ AST.Type l1,
-   Abstract.TypeVarBinding l1 ~ AST.TypeVarBinding l1,
-   Abstract.Constructor l1 ~ AST.Constructor l1,
-   Abstract.DataConstructor l1 ~ AST.DataConstructor l1,
-   Abstract.GADTConstructor l1 ~ AST.GADTConstructor l1,
-   Abstract.DerivingClause l1 ~ AST.DerivingClause l1,
-   Abstract.FieldDeclaration l1 ~ AST.FieldDeclaration l1,
-   Abstract.FieldBinding l1 ~ AST.FieldBinding l1,
-   Abstract.FieldPattern l1 ~ AST.FieldPattern l1,
-   Abstract.Pattern l1 ~ AST.Pattern l1,
-   Abstract.GuardedExpression l1 ~ AST.GuardedExpression l1,
-   Abstract.Expression l1 ~ AST.Expression l1,
-   Abstract.Statement l1 ~ AST.Statement l1,
-   Abstract.CaseAlternative l1 ~ AST.CaseAlternative l1,
-   Abstract.Value l1 ~ AST.Value l1,
-   Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2)
+type SameWrap l1 l2 = Binder.WithEnvironment l1 ~ Binder.WithEnvironment l2
+
+type Reformable e es pos s l1 l2 node = (SameWrap l1 l2, FullyTranslatable (ReformulationOf (On e) es l1 l2 pos s) node)
 
 -- | Eliminate the @NoListTuplePuns@ extension.
 dropNoListTuplePuns :: forall l1 l2 node pos s.
@@ -148,10 +116,7 @@ dropNoListTuplePuns =
 -- | Eliminate the 'Extensions.RecordWildCards' extension and replace it with 'Extensions.NamedFieldPuns'.
 dropRecordWildCards :: forall l1 l2 node pos s.
                        (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
-                        SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s l1 l2,
-                        FullyTranslatable
-                           (ReformulationOf (On 'Extensions.RecordWildCards) '[ On 'Extensions.NamedFieldPuns ] l1 l2 pos s)
-                           node)
+                        Reformable 'Extensions.RecordWildCards '[ On 'Extensions.NamedFieldPuns ] pos s l1 l2 node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropRecordWildCards =
@@ -162,10 +127,7 @@ dropRecordWildCards =
 -- | Eliminate the 'Extensions.NPlusKPatterns' extension and replace it with 'Extensions.ViewPatterns'.
 dropNPlusKPatterns :: forall l1 l2 node pos s.
                       (Abstract.Haskell l2, Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
-                       SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s l1 l2,
-                       FullyTranslatable
-                          (ReformulationOf (On 'Extensions.NPlusKPatterns) '[ On 'Extensions.ViewPatterns ] l1 l2 pos s)
-                          node)
+                       Reformable 'Extensions.NPlusKPatterns '[ On 'Extensions.ViewPatterns ] pos s l1 l2 node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropNPlusKPatterns =
@@ -180,13 +142,10 @@ orToViewPatterns :: forall l1 l2 node pos s.
                        Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] l2,
                        Abstract.Supports 'Extensions.ViewPatterns l2,
                        Abstract.Supports 'Extensions.LambdaCase l2,
-                       SameWrap 'Extensions.OrPatterns '[ 'Extensions.ViewPatterns, 'Extensions.LambdaCase ] pos s l1 l2,
-                       FullyTranslatable
-                          (ReformulationOf
-                             (On 'Extensions.OrPatterns)
-                             '[ On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase ]
-                             l1 l2 pos s)
-                          node)
+                       Reformable
+                         'Extensions.OrPatterns
+                         '[ On 'Extensions.ViewPatterns, On 'Extensions.LambdaCase ]
+                         pos s l1 l2 node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 orToViewPatterns =
@@ -199,19 +158,17 @@ orToViewPatterns =
 -- | Eliminating the 'Extensions.MultilineStrings' extension is a no-op.
 dropMultilineStrings :: forall l1 l2 node pos s.
                         (Abstract.Haskell l2,
-                         SameWrap 'Extensions.MultilineStrings '[] pos s l1 l2,
-                         FullyTranslatable (ReformulationOf (On 'Extensions.MultilineStrings) '[] l1 l2 pos s) node)
+                         Reformable 'Extensions.MultilineStrings '[] pos s l1 l2 node)
                     => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                     -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropMultilineStrings = coerce
 
 dropTupleSections :: forall l1 l2 node pos s.
                      (Abstract.Haskell l2, TextualMonoid s, Position pos,
-                      SameWrap 'Extensions.TupleSections '[] pos s l1 l2,
+                      Reformable 'Extensions.TupleSections '[] pos s l1 l2 node,
                       Rank2.Foldable (node l2 l2 (Const (Sum Int))),
                       Deep.Foldable (Full.Outward (Transformation.Rank2.Fold (Wrap l2 pos s) (Sum Int))) (node l2 l2),
-                      Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l2)) pos s) (node l2 l2),
-                      FullyTranslatable (ReformulationOf (On 'Extensions.TupleSections) '[] l1 l2 pos s) node)
+                      Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l2)) pos s) (node l2 l2))
                   => Wrap l1 pos s (node l1 l1 (Wrap l1 pos s) (Wrap l1 pos s))
                   -> Wrap l1 pos s (node l2 l2 (Wrap l1 pos s) (Wrap l1 pos s))
 dropTupleSections =
@@ -245,7 +202,7 @@ instance (TextualMonoid s,
 
 -- RecordWildCards instances
 
-instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l2,
+instance (SameWrap λ l2,
           Abstract.Supports 'Extensions.RecordWildCards λ,
           Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
@@ -275,7 +232,7 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
             qualified name = AST.QualifiedName modName name
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
 
-instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] pos s λ l,
+instance (SameWrap λ l,
           Abstract.Supports 'Extensions.RecordWildCards λ,
           Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] l,
           Abstract.Haskell l,
@@ -307,12 +264,16 @@ instance (SameWrap 'Extensions.RecordWildCards '[ 'Extensions.NamedFieldPuns ] p
 
 -- NPlusKPattern instances
 
-instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos s λ l2,
+instance (SameWrap λ l2,
           Abstract.Haskell l2,
           Abstract.Supports 'Extensions.NPlusKPatterns λ,
           Abstract.Supports 'Extensions.ViewPatterns l2,
           Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
+          Abstract.Pattern l2 ~ AST.Pattern l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
+          Abstract.Expression l2 ~ AST.Expression l2,
+          Abstract.Constructor l2 ~ AST.Constructor l2,
+          Abstract.Value l2 ~ AST.Value l2,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
           Abstract.Name l2 ~ AST.Name l2) =>
@@ -334,27 +295,29 @@ instance (SameWrap 'Extensions.NPlusKPatterns '[ 'Extensions.ViewPatterns ] pos 
                     (nOpK ">=")
                     (rewrap $ rewrap (AST.ConstructorExpression just) `AST.ApplyExpression` nOpK "-")
                     (rewrap $ AST.ConstructorExpression $
-                     rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Nothing")
+                     rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ Abstract.name "Nothing")
             nOpK op =
                rewrap $
                AST.InfixExpression nExp (rewrap $ AST.ReferenceExpression $ qualifiedWithPrelude $ AST.Name op) kExp
             nExp = rewrap $ AST.ReferenceExpression $ Abstract.unqualifiedName n
             kExp = rewrap $ AST.LiteralExpression $ rewrap $ AST.IntegerLiteral k
-            just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ AST.Name "Just"
+            just = rewrap $ AST.ConstructorReference $ qualifiedWithPrelude $ Abstract.name "Just"
             rewrap :: node -> Wrap l2 pos s node
             rewrap node = Compose (env, ((start, mempty, end), node))
    translateWrapped Reformulation{} (Compose (env, (s, p))) = Compose (env, (s, p))
 
 -- OrPattern instances
 
-instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions.ViewPatterns ] pos s λ l2,
+instance (SameWrap λ l2,
           Abstract.Haskell l2,
           Abstract.Supports 'Extensions.OrPatterns λ,
           Abstract.Supports 'Extensions.ViewPatterns l2,
           Abstract.Supports 'Extensions.LambdaCase l2,
           Abstract.ExtendedWith '[ 'Extensions.ViewPatterns ] l2,
           Abstract.ExtendedWith '[ 'Extensions.LambdaCase ] l2,
+          Abstract.Pattern l2 ~ AST.Pattern l2,
           Abstract.FieldPattern l2 ~ AST.FieldPattern l2,
+          Abstract.Value l2 ~ AST.Value l2,
           Abstract.QualifiedName l2 ~ AST.QualifiedName l2,
           Abstract.ModuleName l2 ~ AST.ModuleName l2,
           Abstract.Name l2 ~ AST.Name l2) =>
@@ -385,7 +348,7 @@ instance (SameWrap 'Extensions.OrPatterns '[ 'Extensions.LambdaCase, 'Extensions
 
 -- TupleSections instances
 
-instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
+instance (SameWrap λ l,
           Abstract.DeeplyTraversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) pos s) l,
           Abstract.DeeplyFoldable (Full.Outward (Transformation.Rank2.Fold
                                                  (Binder.WithEnvironment l (Reserializer.Wrapped pos s)) (Sum Int))) l,
@@ -393,6 +356,7 @@ instance (SameWrap 'Extensions.TupleSections '[] pos s λ l,
           Position pos,
           Abstract.Supports 'Extensions.TupleSections λ,
           Abstract.Haskell l,
+          Abstract.Expression l ~ AST.Expression l,
           Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,

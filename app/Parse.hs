@@ -163,22 +163,12 @@ main' Opts{..} = do
                  (Full.Outward (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
                  (g l l),
               Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
-              FullyTranslatable
-                 (ReformulationOf
-                     (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns]
-                     Language Language Int Text)
-                 g,
-              FullyTranslatable
-                 (ReformulationOf
-                     (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns]
-                     Language Language Int Text)
-                 g,
-              FullyTranslatable
-                 (ReformulationOf
-                     (Extensions.On 'Extensions.OrPatterns)
-                     '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase]
-                     Language Language Int Text)
-                 g,
+              Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
+                 Int Text l l g,
+              Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
+                 Int Text l l g,
+              Reformulator.Reformable 'Extensions.OrPatterns
+                '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] Int Text l l g,
               FullyTranslatable
                  (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                  g,
@@ -232,22 +222,12 @@ main' Opts{..} = do
                      (Full.Outward (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
                      (g l l),
                   Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
-                  FullyTranslatable
-                     (ReformulationOf
-                         (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns]
-                         Language Language Int Text)
-                     g,
-                  FullyTranslatable
-                     (ReformulationOf
-                         (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns]
-                         Language Language Int Text)
-                     g,
-                  FullyTranslatable
-                     (ReformulationOf
-                         (Extensions.On 'Extensions.OrPatterns)
-                         '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase]
-                         Language Language Int Text)
-                     g,
+                  Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
+                     Int Text l l g,
+                  Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
+                     Int Text l l g,
+                  Reformulator.Reformable 'Extensions.OrPatterns
+                    '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] Int Text l l g,
                   FullyTranslatable
                      (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
                      g,

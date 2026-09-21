@@ -1,5 +1,5 @@
 {-# Language CPP, DataKinds, FlexibleContexts, FlexibleInstances, GADTs, OverloadedStrings, RankNTypes,
-             ScopedTypeVariables, TemplateHaskell, TypeOperators #-}
+             ScopedTypeVariables, TemplateHaskell, TypeOperators, UndecidableInstances #-}
 {-# Options_GHC -Werror=incomplete-patterns #-}
 
 -- | Pretty-printing of AST via Template Haskell. That is, the AST is first transformed into corresponding
@@ -48,25 +48,16 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
 -- | Pretty-print the Haskell AST via Template Haskell prettyprinter
-pprint :: (PrettyViaTH a, a ~ f (node Language Language f f), f ~ Reformulator.Wrap Language pos s,
+pprint :: (PrettyViaTH a, a ~ f (node l l f f), f ~ Reformulator.Wrap l pos s,
+           Abstract.ExtendedHaskell l,
+           Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
+             pos s l l node,
+           Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
+             pos s l l node,
+           Reformulator.Reformable 'Extensions.OrPatterns
+             '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] pos s l l node,
            FullyTranslatable
-              (Reformulator.ReformulationOf
-                  (Extensions.On 'Extensions.RecordWildCards) '[ Extensions.On 'Extensions.NamedFieldPuns ]
-                  Language Language pos s)
-              node,
-           FullyTranslatable
-              (Reformulator.ReformulationOf
-                  (Extensions.On 'Extensions.NPlusKPatterns) '[ Extensions.On 'Extensions.ViewPatterns ]
-                  Language Language pos s)
-              node,
-           FullyTranslatable
-              (Reformulator.ReformulationOf
-                  (Extensions.On 'Extensions.OrPatterns) '[ Extensions.On 'Extensions.ViewPatterns,
-                                                            Extensions.On 'Extensions.LambdaCase ]
-                  Language Language pos s)
-              node,
-           FullyTranslatable
-              (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language pos s)
+              (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] l l pos s)
               node) => a -> String
 pprint = showViaTH
          . Reformulator.dropRecordWildCards
@@ -117,12 +108,18 @@ instance PrettyViaTH a => PrettyViaTH (x, a) where
 instance (Foldable f, PrettyViaTH a) => PrettyViaTH (Compose f ((,) x) a) where
    prettyViaTH = foldr ((<+>) . prettyViaTH) Ppr.empty . getCompose
 
-instance TemplateWrapper f => PrettyViaTH (Module Language Language f f) where
+instance (TemplateWrapper f,
+          PrettyViaTH (Abstract.ModuleName l),
+          PrettyViaTH (Abstract.Module l l f f),
+          PrettyViaTH (Abstract.Import l l f f),
+          PrettyViaTH (Abstract.Export l l f f),
+          PrettyViaTH (Abstract.Declaration l l f f)) =>
+         PrettyViaTH (AST.Module l l f f) where
    prettyViaTH (AnonymousModule imports declarations) =
       Ppr.vcat ((prettyViaTH . extract <$> toList imports) ++ (prettyViaTH . extract <$> toList declarations))
    prettyViaTH (NamedModule name exports imports declarations) =
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
-      $$ prettyViaTH (AnonymousModule imports declarations :: Module Language Language f f)
+      $$ prettyViaTH (AnonymousModule imports declarations :: Module l l f f)
       where showExports xs = Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma (prettyViaTH . extract <$> toList xs))
    prettyViaTH (ExtendedModule extensions body) =
       Ppr.vcat [Ppr.text "{-# LANGUAGE" <+> Ppr.sep (Ppr.punctuate Ppr.comma $ prettyViaTH <$> extensions)
@@ -134,7 +131,12 @@ instance PrettyViaTH ExtensionSwitch where
    prettyViaTH (ExtensionSwitch (x, True)) = Ppr.text (show x)
    prettyViaTH (ExtensionSwitch (x, False)) = Ppr.text "No" Ppr.<> prettyViaTH (ExtensionSwitch (x, True))
 
-instance PrettyViaTH (Export Language Language f f) where
+instance (Abstract.QualifiedName l ~ AST.QualifiedName l,
+          Abstract.Name l ~ AST.Name l,
+          PrettyViaTH (Abstract.QualifiedName l),
+          PrettyViaTH (Abstract.ModuleName l),
+          PrettyViaTH (Abstract.Members l)) =>
+         PrettyViaTH (Export l l f f) where
    prettyViaTH (ExportClassOrType name@(AST.QualifiedName _ (AST.Name local)) members)
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local =
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
