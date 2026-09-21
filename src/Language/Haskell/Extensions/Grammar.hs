@@ -13,9 +13,9 @@
 -- * 'TemplateHaskell' and 'TemplateHaskellQuotes'
 
 module Language.Haskell.Extensions.Grammar (
-  ExtendedGrammar(report),
-  extendedGrammar, extensionMixins, overlayedGrammar, parseModule,
-  NodeWrap)
+  ExtendedGrammar(..), GrammarExtensions(..),
+  extendedGrammar, extensionMixins, languagePragmas, overlayedGrammar, parseModule,
+  NodeWrap, SpaceMonoid(..))
 where
 
 import Control.Applicative

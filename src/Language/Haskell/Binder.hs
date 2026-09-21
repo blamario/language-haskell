@@ -12,7 +12,7 @@ module Language.Haskell.Binder (
    -- * Node wrappers
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    -- * Binding types
-   BindingMembers,
+   BindingMembers(filterMembers),
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding, PatternBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
