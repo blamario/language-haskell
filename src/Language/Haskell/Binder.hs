@@ -346,7 +346,7 @@ instance {-# OVERLAPS #-}
           Abstract.Export l l ~ ExtAST.Export l l, Abstract.Import l l ~ ExtAST.Import l l,
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
           Abstract.ImportItem l l ~ ExtAST.ImportItem l l,
-          Abstract.Declaration l l ~ ExtAST.Declaration l l,
+          Monoid (OtherSynAtts l (Abstract.Declaration l l)),
           BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (AST.Module l l)
