@@ -48,7 +48,7 @@ import qualified Numeric
 import qualified Rank2
 import qualified Rank2.TH
 import qualified Text.Parser.Char
-import Text.Parser.Combinators (eof, endBy, sepBy, sepBy1, sepByNonEmpty, sepEndBy)
+import Text.Parser.Combinators (eof, endBy, sepBy, sepByNonEmpty, sepEndBy)
 import Text.Parser.Token (braces, brackets, comma, parens)
 import Text.Grampa
 import Text.Grampa.Combinators (moptional, someNonEmpty, takeSomeNonEmpty)
@@ -279,7 +279,6 @@ parseModule extensions source = case moduleExtensions of
    where moduleExtensions = parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
          positiveKeys = Map.keysSet . Map.filter id
-         getSwitch (ExtensionSwitch s) = s
 
 -- | Construct the Haskell grammar corresponding to the given set of language extensions
 extendedGrammar :: forall l t.

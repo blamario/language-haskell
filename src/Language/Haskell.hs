@@ -37,16 +37,13 @@ import Data.Either.Validation (validationToEither)
 import Data.Functor.Compose (Compose(..))
 import Data.Foldable (foldrM)
 import qualified Data.List as List
-import Data.List.NonEmpty (NonEmpty, nonEmpty)
+import Data.List.NonEmpty (nonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid.Instances.PrefixMemory (Shadowed, content)
 import Data.Monoid.Textual (fromText)
 import Data.Ord (Down)
-import Data.Semigroup.Union (UnionWith(..))
 import Data.Text (Text)
-import Data.Tuple (swap)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import System.Directory (doesDirectoryExist, listDirectory)
