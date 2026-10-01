@@ -8,13 +8,13 @@
 -- The following extensions are not implemented, mainly due to not being supported by TemplateHaskell:
 --
 -- * 'TransformListComp'
--- * 'OverloadedRecordUpdate'
 -- * 'Arrows'
 -- * 'TemplateHaskell' and 'TemplateHaskellQuotes'
 
 module Language.Haskell.Extensions.Grammar (
-  ExtendedGrammar(..), GrammarExtensions(..),
+  ExtendedGrammar(..), GrammarExtensions(..), ExtensionOverlay,
   extendedGrammar, extensionMixins, languagePragmas, overlayedGrammar, parseModule,
+  identifierTail, isNameTailChar,
   NodeWrap, SpaceMonoid(..))
 where
 
@@ -201,6 +201,9 @@ extensionMixins =
      (Set.fromList [NamedFieldPuns],                 [(9, namedFieldPunsMixin)]),
      (Set.fromList [RecordWildCards],                [(9, recordWildCardsMixin)]),
      (Set.fromList [OverloadedRecordDot],            [(9, overloadedRecordDotMixin)]),
+     (Set.fromList [OverloadedRecordUpdate],         [(9, overloadedRecordUpdateMixin)]),
+     (Set.fromList [NamedFieldPuns,
+                    OverloadedRecordUpdate],         [(9, punnedOverloadedRecordUpdateMixin)]),
      (Set.fromList [ImplicitParameters],             [(9, implicitParametersMixin)]),
      (Set.fromList [StrictData],                     [(9, strictDataMixin)]),
      (Set.fromList [Strict],                         [(9, strictMixin)]),
@@ -1673,10 +1676,33 @@ overloadedRecordDotMixin self super = super{
          Abstract.getField <$> self.report.aExpression <* prefixDot <*> self.report.variableIdentifier
          <|>
          Abstract.fieldProjection <$> parens (someNonEmpty $ prefixDot *> self.report.variableIdentifier)}}
-   where prefixDot = void (string "."
-                           <* lookAhead (satisfyCharInput varStart)
-                           <* lift ([[Token Modifier "."]], ()))
-                     <?> "prefix ."
+
+overloadedRecordUpdateMixin :: Abstract.ExtendedWith '[ 'OverloadedRecordUpdate ] l => ExtensionOverlay l g t
+overloadedRecordUpdateMixin self super = super{
+   report = super.report{
+      fieldBinding = super.report.fieldBinding
+         <|> Abstract.nestedFieldBinding Abstract.build
+             <$> ((:|)
+                  <$> self.report.variableIdentifier
+                  <*> some (prefixDot *> self.report.variableIdentifier))
+             <* delimiter "="
+             <*> self.report.expression}}
+
+punnedOverloadedRecordUpdateMixin :: Abstract.ExtendedWith '[ 'NamedFieldPuns, 'OverloadedRecordUpdate ] l
+                                  => ExtensionOverlay l g t
+punnedOverloadedRecordUpdateMixin self super = super{
+   report = super.report{
+      fieldBinding = super.report.fieldBinding
+         <|> Abstract.nestedPunnedFieldBinding Abstract.build
+             <$> ((:|)
+                  <$> self.report.variableIdentifier
+                  <*> some (prefixDot *> self.report.variableIdentifier))}}
+
+prefixDot :: (Ord t, Show t, TextualMonoid t, Rank2.Apply g) => Parser g t ()
+prefixDot = void (string "."
+                  <* lookAhead (satisfyCharInput varStart)
+                  <* lift ([[Token Modifier "."]], ()))
+            <?> "prefix ."
 
 implicitParametersMixin :: Abstract.ExtendedWith '[ 'ImplicitParameters ] l => ExtensionOverlay l g t
 implicitParametersMixin self super = super{

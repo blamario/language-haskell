@@ -49,6 +49,7 @@ type instance Abstract.ExtensionsSupportedBy Language = '[
    'Extensions.ExtendedLiterals,
    'Extensions.MagicHash,
    'Extensions.NamedFieldPuns,
+   'Extensions.OverloadedRecordUpdate,
    'Extensions.ParallelListComprehensions,
    'Extensions.RecordWildCards,
    'Extensions.RecursiveDo,
@@ -100,6 +101,14 @@ instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns ] Language where
    build = Abstract.NamedFieldPunsConstruction {
       Abstract.punnedFieldBinding = PunnedFieldBinding (),
       Abstract.punnedFieldPattern = PunnedFieldPattern ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.OverloadedRecordUpdate ] Language where
+   build = Abstract.OverloadedRecordUpdateConstruction {
+      Abstract.nestedFieldBinding = NestedFieldBinding ()}
+
+instance Abstract.ExtendedWith '[ 'Extensions.NamedFieldPuns, 'Extensions.OverloadedRecordUpdate ] Language where
+   build = Abstract.PunnedOverloadedRecordUpdateConstruction {
+      Abstract.nestedPunnedFieldBinding = NestedPunnedFieldBinding () ()}
 
 instance Abstract.ExtendedWith '[ 'Extensions.ParallelListComprehensions ] Language where
    build = Abstract.ParallelListComprehensionConstruction {
@@ -834,6 +843,10 @@ data LambdaCasesAlternative λ l d s =
 data FieldBinding λ l d s =
    FieldBinding (Abstract.QualifiedName λ) (s (Abstract.Expression l l d d))
    | PunnedFieldBinding !(Abstract.SupportFor 'Extensions.NamedFieldPuns λ) (Abstract.QualifiedName λ)
+   | NestedFieldBinding !(Abstract.SupportFor 'Extensions.OverloadedRecordUpdate λ)
+                        (NonEmpty (Abstract.Name λ)) (s (Abstract.Expression l l d d))
+   | NestedPunnedFieldBinding !(Abstract.SupportFor 'Extensions.OverloadedRecordUpdate λ)
+                              !(Abstract.SupportFor 'Extensions.NamedFieldPuns λ) (NonEmpty (Abstract.Name λ))
 
 data Pattern λ l d s =
    AsPattern (Abstract.Name λ) (s (Abstract.Pattern l l d d))
@@ -1228,13 +1241,16 @@ deriving instance (Eq (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ),
 
 deriving instance Typeable (FieldBinding λ l d s)
 deriving instance (Data (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
-                   Data (s (Abstract.Expression l l d d)), Data (Abstract.QualifiedName λ),
+                   Data (Abstract.SupportFor 'Extensions.OverloadedRecordUpdate λ),
+                   Data (s (Abstract.Expression l l d d)), Data (Abstract.Name λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (FieldBinding λ l d s)
 deriving instance (Show (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
-                   Show (s (Abstract.Expression l l d d)), Show (Abstract.QualifiedName λ)) =>
+                   Show (Abstract.SupportFor 'Extensions.OverloadedRecordUpdate λ),
+                   Show (s (Abstract.Expression l l d d)), Show (Abstract.Name λ), Show (Abstract.QualifiedName λ)) =>
                   Show (FieldBinding λ l d s)
 deriving instance (Eq (Abstract.SupportFor 'Extensions.NamedFieldPuns λ),
-                   Eq (s (Abstract.Expression l l d d)), Eq (Abstract.QualifiedName λ)) =>
+                   Eq (Abstract.SupportFor 'Extensions.OverloadedRecordUpdate λ),
+                   Eq (s (Abstract.Expression l l d d)), Eq (Abstract.Name λ), Eq (Abstract.QualifiedName λ)) =>
                   Eq (FieldBinding λ l d s)
 
 deriving instance Typeable (LambdaCasesAlternative λ l d s)

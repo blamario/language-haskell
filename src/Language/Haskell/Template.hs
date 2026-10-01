@@ -13,7 +13,8 @@ import Data.Foldable (foldl', toList)
 import Data.Functor.Identity (Identity(runIdentity))
 import Data.Functor.Compose (Compose(getCompose))
 import Data.Functor.Const (Const (Const))
-import Data.List ((\\), nub)
+import Data.List ((\\), nub, unsnoc)
+import Data.List.NonEmpty (nonEmpty)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
@@ -623,9 +624,18 @@ freeConstructorVars (RecordConstructor _ fieldTypes) = foldMap (freeTypeVarBindi
    where fieldsType (ConstructorFields _ t) = extract t
 freeConstructorVars (ExistentialConstructor _ _ con) = freeConstructorVars (extract con)
 
+-- | In case of a 'NestedFieldBinding', the result is a hacked 'FieldExp' that only looks like the original when
+-- pretty-printed. There is no proper 'FieldExp' constructor. A 'PunnedFieldBinding' gets desugared for the same
+-- reason.
 fieldBindingTemplate :: TemplateWrapper f => FieldBinding Language Language f f -> FieldExp
 fieldBindingTemplate (FieldBinding name value) = (qnameTemplate name, wrappedExpressionTemplate value)
+fieldBindingTemplate (NestedFieldBinding () names value) =
+  (qnameTemplate $ Abstract.qualifiedName (Abstract.moduleName <$> nonEmpty path) leaf, wrappedExpressionTemplate value)
+  where Just (path, leaf) = unsnoc $ toList names
 fieldBindingTemplate (PunnedFieldBinding () name) = (qnameTemplate name, VarE $ qnameTemplate name)
+fieldBindingTemplate (NestedPunnedFieldBinding () () names) =
+  (qnameTemplate $ Abstract.qualifiedName (Abstract.moduleName <$> nonEmpty path) leaf, VarE $ nameTemplate leaf)
+  where Just (path, leaf) = unsnoc $ toList names
 
 literalTemplate :: TemplateWrapper f => Value Language Language f f -> Lit
 literalTemplate (CharLiteral c) = CharL c

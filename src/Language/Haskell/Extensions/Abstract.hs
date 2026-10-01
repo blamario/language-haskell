@@ -16,6 +16,8 @@ module Language.Haskell.Extensions.Abstract (
               RecordWildCardConstruction, wildcardRecordExpression, wildcardRecordPattern,
               MagicHashConstruction, hashLiteral',
               NamedFieldPunsConstruction, punnedFieldBinding, punnedFieldPattern,
+              OverloadedRecordUpdateConstruction, nestedFieldBinding,
+              PunnedOverloadedRecordUpdateConstruction, nestedPunnedFieldBinding,
               RecursiveDoConstruction, mdoExpression, recursiveStatement,
               QualifiedDoConstruction, qualifiedDoExpression,
               QualifiedRecursiveDoConstruction, mdoQualifiedExpression,
@@ -136,6 +138,13 @@ data instance Construct '[ 'Extensions.RecordWildCards ] λ l d s = RecordWildCa
 data instance Construct '[ 'Extensions.NamedFieldPuns ] λ l d s = NamedFieldPunsConstruction {
    punnedFieldBinding :: QualifiedName λ -> FieldBinding λ l d s,
    punnedFieldPattern :: QualifiedName λ -> FieldPattern λ l d s}
+
+data instance Construct '[ 'Extensions.OverloadedRecordUpdate ] λ l d s = OverloadedRecordUpdateConstruction {
+   nestedFieldBinding :: NonEmpty (Name λ) -> s (Expression l l d d) -> FieldBinding λ l d s}
+
+data instance Construct '[ 'Extensions.NamedFieldPuns,
+                           'Extensions.OverloadedRecordUpdate ] λ l d s = PunnedOverloadedRecordUpdateConstruction {
+   nestedPunnedFieldBinding :: NonEmpty (Name λ) -> FieldBinding λ l d s}
 
 data instance Construct '[ 'Extensions.ImplicitParameters ] λ l d s = ImplicitParametersConstruction {
    implicitParameterConstraint :: Name λ -> s (Type l l d d) -> Context λ l d s,
@@ -344,7 +353,7 @@ data instance Construct '[ 'Extensions.TypeFamilyDependencies ] λ l d s = TypeF
 class (Haskell λ,
        ExtendedWithAllOf ['Extensions.MagicHash, 'Extensions.ExtendedLiterals,
                           'Extensions.ParallelListComprehensions, 'Extensions.ExplicitNamespaces,
-                          'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards,
+                          'Extensions.NamedFieldPuns, 'Extensions.RecordWildCards, 'Extensions.OverloadedRecordUpdate,
                           'Extensions.RecursiveDo, 'Extensions.QualifiedDo,
                           'Extensions.LambdaCase,
                           'Extensions.TupleSections, 'Extensions.UnboxedTuples, 'Extensions.UnboxedSums,
@@ -361,7 +370,8 @@ class (Haskell λ,
                           'Extensions.TypeFamilies, 'Extensions.TypeFamilyDependencies,
                           'Extensions.FunctionalDependencies, 'Extensions.RoleAnnotations] λ,
        ExtendedWith '[ 'Extensions.GADTs, 'Extensions.TypeData ] λ,
-       ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ) =>
+       ExtendedWith '[ 'Extensions.QualifiedDo, 'Extensions.RecursiveDo ] λ,
+       ExtendedWith '[ 'Extensions.NamedFieldPuns, 'Extensions.OverloadedRecordUpdate ] λ) =>
       ExtendedHaskell λ where
    type GADTConstructor λ = (x :: TreeNodeSubKind) | x -> λ
    type Kind λ = (x :: TreeNodeSubKind) | x -> λ

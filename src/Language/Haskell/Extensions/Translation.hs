@@ -391,6 +391,9 @@ instance (WrapTranslation t, FullyTranslatable t AST.Expression,
           Abstract.Expression (Target t) ~ AST.Expression (Target t)) =>
          DeeplyTranslatable t AST.FieldBinding where
    translateDeeply t (AST.FieldBinding name value) = AST.FieldBinding name (translateFully t value)
+   translateDeeply t (AST.NestedFieldBinding sup names value) =
+     AST.NestedFieldBinding sup names (translateFully t value)
+   translateDeeply _ (AST.NestedPunnedFieldBinding sup1 sup2 names) = AST.NestedPunnedFieldBinding sup1 sup2 names
    translateDeeply _ (AST.PunnedFieldBinding sup name) = AST.PunnedFieldBinding sup name
 
 instance (WrapTranslation t, FullyTranslatable t AST.Pattern,
