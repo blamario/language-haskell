@@ -860,8 +860,7 @@ blockArgumentsMixin self super = super{
       lExpression = super.report.lExpression
          <|> wrap (Abstract.applyExpression <$> self.report.fExpression
                                             <*> wrap self.report.openBlockExpression),
-      dExpression = self.report.fExpression,
-      bareExpression = super.report.bareExpression <|> self.report.closedBlockExpression}}
+      argExpression = super.report.argExpression <|> wrap self.report.closedBlockExpression}}
 
 spaceSensitiveOperatorsMixin :: SpaceMonoid t => ExtensionOverlay l g t
 spaceSensitiveOperatorsMixin self super = super{

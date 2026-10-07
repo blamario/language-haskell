@@ -76,7 +76,7 @@ data HaskellGrammar l t f p = HaskellGrammar {
    guards, qualifiers :: p (NonEmpty (f (Abstract.Statement l l f f))),
    guard, qualifier :: p (Abstract.Statement l l f f),
    expression, infixExpression, leftInfixExpression :: p (f (Abstract.Expression l l f f)),
-   lExpression, dExpression, fExpression, aExpression :: p (f (Abstract.Expression l l f f)),
+   lExpression, dExpression, fExpression, argExpression, aExpression :: p (f (Abstract.Expression l l f f)),
    bareExpression, openBlockExpression, closedBlockExpression :: p (Abstract.Expression l l f f),
    prefixNegation :: p (Abstract.Expression l l f f),
    alternatives :: p [f (Abstract.CaseAlternative l l f f)],
@@ -478,7 +478,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    dExpression = wrap closedBlockExpression <|> fExpression,
    closedBlockExpression = Abstract.caseExpression <$ keyword "case" <*> expression <* keyword "of" <*> alternatives
                            <|> Abstract.doExpression <$ keyword "do" <*> wrap statements,
-   fExpression = wrap (Abstract.applyExpression <$> fExpression <*> aExpression) <|> aExpression,
+   fExpression = wrap (Abstract.applyExpression <$> fExpression <*> argExpression) <|> aExpression,
+   argExpression = aExpression,
    aExpression = wrap bareExpression <|> Reserializer.joinWrapped <$> wrap (parens expression),
    bareExpression = Abstract.referenceExpression <$> qualifiedVariable
                     <|> Abstract.constructorExpression <$> wrap generalConstructor
