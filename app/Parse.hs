@@ -54,6 +54,7 @@ import Options.Applicative
 import Text.Grampa (ParseResults, parseComplete, failureDescription)
 import Text.Parser.Input.Position (offset)
 import ReprTree (reprTreeString)
+import System.Exit (ExitCode(ExitFailure), exitWith)
 import System.IO (isEOF)
 
 import Prelude hiding (getLine, getContents, readFile)
@@ -312,10 +313,13 @@ main' Opts{..} = do
                 printTree = putStrLn . reprTreeString . unwrap
                    where unwrap :: w (g l l w w) -> [g l l [] []]
                          unwrap = (Rank2.Map toList Full.<$>)
-       report contents (Right l) =
+       report contents (Right l) = do
           putStrLn ("Ambiguous: " ++ show optsIndex ++ "/" ++ show (length l) ++ " parses")
-          >> report contents (Right [l !! optsIndex])
-       report contents (Left err) = Text.putStrLn (failureDescription contents (content <$> err) 4)
+          report contents (Right [l !! optsIndex])
+          exitWith (ExitFailure $ length l)
+       report contents (Left err) = do
+          Text.putStrLn (failureDescription contents (content <$> err) 4)
+          exitWith (ExitFailure 1)
        parseStdin = do
           eof <- isEOF
           when (not eof) $ do
