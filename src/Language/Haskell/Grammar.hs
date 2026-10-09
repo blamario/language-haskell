@@ -503,7 +503,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    qualifier = Abstract.bindStatement <$> wrap pattern <* leftArrow <*> expression
                <|> Abstract.letStatement <$ keyword "let" <*> declarations
                <|> Abstract.expressionStatement <$> expression,
-   alternatives = let blockOfAlternatives = blockWith oneExtendedLine alternativeTerminatorKeyword (wrap alternative)
+   alternatives = let blockOfAlternatives
+                        = blockWith oneExtendedLine alternativeTerminatorKeyword semi pure (wrap alternative)
                       alternativeTerminatorKeyword = (string "else" <|> string "in" <|> string "of")
                                                      *> notSatisfyChar isNameTailChar
                   in filter (not . null) blockOfAlternatives
@@ -958,19 +959,24 @@ expressionToStatement se = case unwrap se of
 blockOf :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
         => Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
         -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockOf = blockWith oneExtendedLine blockTerminatorKeyword
+blockOf = blockWith oneExtendedLine blockTerminatorKeyword semi pure
 
 -- | A more general form of 'blockOf'
-blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
-          => (Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool)
+blockWith :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node,
+              wrappedNode ~ NodeWrap t (node (NodeWrap t) (NodeWrap t)))
+          => (Int -> t -> wrappedNode -> Bool)
           -- ^ test if the indent, the line and the node parsed from it are a valid block item, 'oneExtendedLine' by default
           -> Parser g t ()
           -- ^ parser for a keyword that can't start a valid block item, 'blockTerminatorKeyword' by default
-          -> Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
+          -> Parser g t sep
+          -- ^ parser for the item separator in the middle of line or at optionally at the end of line, 'semi' by default
+          -> ([wrappedNode] -> Parser g t [wrappedNode])
+          -- ^ parser to finalize the block given the parsed items, 'pure' by default
+          -> Parser g t wrappedNode
           -- ^ parser for a single block item
-          -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
-blockWith lineFilter terminatorKeyword p =
-   braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional pure)
+          -> Parser g t [wrappedNode]
+blockWith lineFilter terminatorKeyword separator finalizer p =
+   braces (p `startSepEndBy` semi) <|> (inputColumn >>= alignedBlock optional finalizer)
    where alignedBlock opt cont indent =
             do rest <- getInput
                maybeItem <- opt (filter (lineFilter indent rest) p)
@@ -986,9 +992,9 @@ blockWith lineFilter terminatorKeyword p =
                      let cont' = cont . (item :)
                          restOfBlock = alignedBlock takeOptional cont' indent
                      if indent == indent'
-                        then many semi *> restOfBlock
+                        then many separator *> restOfBlock
                         else if indent < indent'
-                             then some semi *> restOfBlock <<|> cont' []
+                             then some separator *> restOfBlock <<|> cont' []
                              else cont' []
          terminators :: [Char]
          terminators = ",;)]}"
