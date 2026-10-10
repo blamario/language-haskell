@@ -33,7 +33,7 @@ data Extension = AllowAmbiguousTypes
                | ConstrainedClassMethods
                | ConstraintsAreTypes -- ^ active but nameless in GHC
                | ConstraintKinds
-               | Cpp
+               | CPP
                | DataKinds
                | DatatypeContexts
                | DeepSubsumption
@@ -335,7 +335,7 @@ byName = Map.fromList [
   ("CUSKs", CUSKs),
   ("ConstrainedClassMethods", ConstrainedClassMethods),
   ("ConstraintKinds", ConstraintKinds),
-  ("Cpp", Cpp),
+  ("CPP", CPP),
   ("DataKinds", DataKinds),
   ("DatatypeContexts", DatatypeContexts),
   ("DeepSubsumption", DeepSubsumption),
