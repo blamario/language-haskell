@@ -1532,7 +1532,7 @@ kindSignaturesMixin self super = super{
                    <*> wrap self.report.declarationLevel.newConstructor
                    <*> moptional self.report.declarationLevel.derivingClause},
       typeTerm = super.report.typeTerm <|>
-         Abstract.kindedType <$> wrap self.report.typeTerm <*> wrap self.extensions.kindSignature},
+         Abstract.kindedType <$> wrap self.extensions.arrowType <*> wrap self.extensions.kindSignature},
    extensions = super.extensions{
       optionallyKindedAndParenthesizedTypeVar =
          Abstract.typeVariable <$> self.extensions.optionallyParenthesizedTypeVar
