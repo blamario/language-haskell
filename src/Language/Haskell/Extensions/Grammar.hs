@@ -19,7 +19,7 @@ module Language.Haskell.Extensions.Grammar (
 where
 
 import Control.Applicative
-import Control.Monad (void)
+import Control.Monad (join, void)
 import qualified Data.Char as Char
 import Data.Bifunctor (first)
 import Data.Foldable (fold, toList)
@@ -240,7 +240,7 @@ extensionMixins =
      (Set.fromList [SpaceSensitiveOperators],        [(9, spaceSensitiveOperatorsMixin)])]
 
 languagePragmas :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t, LexicalParsing (Parser g t)) =>
-                   Parser g t [ExtensionSwitch]
+                   Parser g t [Either (Pos, t) ExtensionSwitch]
 languagePragmas = spaceChars
                  *> admit (string "{-#" *> whiteSpace *> filter isLanguagePragma (takeCharsWhile Char.isAlphaNum)
                            *> commit (whiteSpace
@@ -251,11 +251,8 @@ languagePragmas = spaceChars
                            <<|> commit (pure mempty))
    where spaceChars = takeCharsWhile Char.isSpace
          isLanguagePragma pragmaName = Text.toUpper (Textual.toText mempty pragmaName) == "LANGUAGE"
-         extension = do extensionName <- takeCharsWhile Char.isAlphaNum
-                        void whiteSpace
-                        case Map.lookup extensionName switchesByName of
-                           Just ext -> pure ext
-                           Nothing -> fail ("Unknown language extension " <> toString mempty extensionName)
+         extension = lookupExtension <$> getSourcePos <*> takeCharsWhile Char.isAlphaNum <* whiteSpace
+         lookupExtension pos extensionName = maybe (Left (pos, extensionName)) Right $ Map.lookup extensionName switchesByName
          comment = string "--" <* takeCharsWhile Report.isLineChar <|> blockComment
          blockComment = string "{-"
                         *> skipMany (blockComment
@@ -279,8 +276,15 @@ parseModule extensions source = case moduleExtensions of
            $ parseComplete (extendedGrammar $ positiveKeys $ withImplications $ extensionMap <> extensions) source
         else Left mempty{errorAlternatives= ["Contradictory extension switches " <> show (toList contradictions)]}
    Right extensionses -> error ("Ambiguous extensions: " <> show extensionses)
-   where moduleExtensions = parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
+   where moduleExtensions =
+           liftUnknownExtensions $ parseResults $ fmap snd $ getCompose $ simply parsePrefix languagePragmas source
          parseResults = getCompose . fmap snd . getCompose
+         liftUnknownExtensions :: Either (ParseFailure Pos t) [[Either (Pos, t) ExtensionSwitch]]
+                               -> Either (ParseFailure Pos t) [[ExtensionSwitch]]
+         liftUnknownExtensions = join . fmap (traverse $ traverse reportUnknownExtension)
+         reportUnknownExtension :: Either (Pos, t) ExtensionSwitch -> Either (ParseFailure Pos t) ExtensionSwitch
+         reportUnknownExtension = first $ \(pos, extensionName)->
+           ParseFailure pos (FailureDescription [] ["Unknown language extension " <> extensionName]) []
          positiveKeys = Map.keysSet . Map.filter id
 
 -- | Construct the Haskell grammar corresponding to the given set of language extensions
