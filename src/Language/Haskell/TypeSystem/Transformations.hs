@@ -28,10 +28,10 @@ instance Transformation (FreeVariableFold l f) where
   type Domain (FreeVariableFold l f) = f
   type Codomain (FreeVariableFold l f) = Const (Set (Abstract.Name l))
 
-freeVariables :: (Foldable f, Ord (Abstract.Name l),
-                   Deep.Foldable (FreeVariableFold l f) (AST.Type l l))
+freeVariables :: (Applicative f, Foldable f, Ord (Abstract.Name l),
+                   Full.Foldable (FreeVariableFold l f) (AST.Type l l))
               => AST.Type l l f f -> Set (Abstract.Name l)
-freeVariables = Deep.foldMap FreeVariableFold
+freeVariables = Full.foldMap FreeVariableFold . pure
 
 instance Full.Foldable (FreeVariableFold l f) (AST.Constructor l l) where
   foldMap _ _ = mempty

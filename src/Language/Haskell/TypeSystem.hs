@@ -365,7 +365,7 @@ instance (Abstract.Haskell l,
           ConstraintCollection con,
           Constraints.Language con ~ l,
           Constraints.Position con ~ pos,
-          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
          AG.At (TypeCheck l pos s con) (AST.Module l l) where
   attribution
     t@TypeCheck{}
@@ -463,7 +463,7 @@ instance (Abstract.Haskell l,
           ConstraintCollection con,
           Constraints.Language con ~ l,
           Constraints.Position con ~ pos,
-          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
     TypeCheck{}

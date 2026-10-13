@@ -21,7 +21,7 @@ import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Transformation.Deep qualified as Deep
+import Transformation.Full qualified as Full
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.Abstract qualified as Abstract
 import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariables)
@@ -88,7 +88,7 @@ instance (Show pos,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Type l ~ AST.Type l,
-          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
          ConstraintCollection (DefaultConstraints l pos) where
   type Language (DefaultConstraints l pos) = l
   type Position (DefaultConstraints l pos) = pos
@@ -181,7 +181,7 @@ splitFromType (AST.ConstrainedType (Identity context) (Identity t)) = first (fro
 splitFromType t = (mempty, t)
 
 filterDefaultRelevant :: (Abstract.Name l ~ AST.Name l,
-                          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l))
                       => Set (AST.Name l) -> DefaultConstraints l pos -> DefaultConstraints l pos
 filterDefaultRelevant vars con = DefaultConstraints{
   assignments = fold $ DJMap.fromSets $ filter relevantAssignment $ DJMap.toSets con.assignments,
@@ -196,13 +196,13 @@ filterDefaultRelevant vars con = DefaultConstraints{
     hasRelevant = not . Set.disjoint vars
 
 constraintRelatedTypeVarSetClosure :: (Abstract.Name l ~ AST.Name l,
-                                       Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                                       Full.Foldable (FreeVariableFold l Identity) (AST.Type l l))
                                    => DefaultConstraints l pos -> Set (AST.Name l) -> Set (AST.Name l)
 constraintRelatedTypeVarSetClosure DefaultConstraints{assignments, equations} =
   relatedSetClosure $ foldr unifyEquationVars (foldMap freeVariables <$> assignments) equations
   where
     unifyEquationVars :: (Abstract.Name l ~ AST.Name l,
-                          Deep.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l))
                       => (AST.Type l l Identity Identity, AST.Type l l Identity Identity)
                       -> DisjointMap (AST.Name l) (Set (AST.Name l))
                       -> DisjointMap (AST.Name l) (Set (AST.Name l))
