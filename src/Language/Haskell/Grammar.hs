@@ -10,7 +10,8 @@ module Language.Haskell.Grammar (Parser,
                                  HaskellGrammar(..), ModuleLevelGrammar(..), DeclarationGrammar(..),
                                  grammar, grammar2010,
                                  -- * Lexical layer
-                                 keyword, delimiter, terminator, moduleLexeme, moduleId, nameQualifier, nameToken,
+                                 keyword, delimiter, terminator,
+                                 moduleLexeme, moduleId, nameQualifier, qualifiedNamePrefix, nameToken,
                                  constructorSymbolLexeme, variableSymbolLexeme,
                                  whiteSpace, comment,
                                  reservedWords,
@@ -219,7 +220,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
 -- exports 	→ 	( export1 , … , exportn [ , ] ) 	    (n ≥ 0)
 -- export 	→ 	qvar
 -- 	| 	qtycon [(..) | ( cname1 , … , cnamen )] 	    (n ≥ 0)
--- 	| 	qtycls [(..) | ( qvar1 , … , qvarn )] 	    (n ≥ 0)
+-- 	| 	qtycls [(..) | ( var1 , … , varn )] 	    (n ≥ 0)
 -- 	| 	module modid
 --     
 -- impdecl 	→ 	import [qualified] modid [as modid] [impspec]
@@ -792,11 +793,13 @@ moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexem
 
 nameQualifier :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
               => Parser g t (Abstract.Name l -> Abstract.QualifiedName l)
-nameQualifier =
-   Abstract.qualifiedName
-   <$> takeOptional (storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
-                     <* notFollowedBy (constructorLexeme *> string "."
-                                       <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower)))
+nameQualifier = Abstract.qualifiedName <$> takeOptional qualifiedNamePrefix
+
+qualifiedNamePrefix :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
+                    => Parser g t (Abstract.ModuleName l)
+qualifiedNamePrefix = storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
+                      <* notFollowedBy (constructorLexeme *> string "."
+                                        <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower))
 
 asciiEscape, charEscape, controlEscape :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'

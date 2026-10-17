@@ -153,6 +153,7 @@ extensionMixins =
      (Set.fromList [ExtendedLiterals],               [(4, extendedLiteralsMixin)]),
      (Set.fromList [MultilineStrings],               [(4, multilineStringsMixin)]),
      (Set.fromList [OverloadedLabels],               [(4, overloadedLabelsMixin)]),
+     (Set.fromList [QualifiedExportImportMembers],   [(4, qualifiedExportImportMembersMixin)]),
      (Set.fromList [RecursiveDo],                    [(4, recursiveDoMixin)]),
      (Set.fromList [QualifiedDo],                    [(4, qualifiedDoMixin)]),
      (Set.fromList [QualifiedDo, RecursiveDo],       [(4, qualifiedRecursiveDoMixin)]),
@@ -822,6 +823,18 @@ namedDefaultsMixin self super = super{
             <|> Abstract.namedDefaultDeclaration Abstract.build <$ keyword "default"
                                <*> self.report.qualifiedConstructor
                                <*> parens (wrap self.report.typeTerm `sepBy` comma)}}}
+
+-- | Allows qualified names in export and import member lists. The qualifier gets discarded and doesn't persist in
+-- the AST.
+qualifiedExportImportMembersMixin :: forall g l t. Abstract.Haskell l => ExtensionOverlay l g t
+qualifiedExportImportMembersMixin self super = super{
+   report= super.report{
+      moduleLevel= super.report.moduleLevel{
+         cname = super.report.moduleLevel.cname
+           <|> token (Report.qualifiedNamePrefix @_ @l
+                      *> (self.report.variableIdentifier <|> self.report.constructorIdentifier))
+           <|> parens (token (Report.qualifiedNamePrefix @_ @l
+                              *> (self.report.variableSymbol <|> self.report.constructorSymbol)))}}}
 
 explicitNamespacesMixin :: Abstract.ExtendedWith '[ 'ExplicitNamespaces ] l => ExtensionOverlay l g t
 explicitNamespacesMixin self super = super{

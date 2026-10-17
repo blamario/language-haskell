@@ -126,6 +126,7 @@ data Extension = AllowAmbiguousTypes
                | PolyKinds
                | PostfixOperators
                | QualifiedDo
+               | QualifiedExportImportMembers  -- ^ active but nameless in GHC
                | QuantifiedConstraints
                | QuasiQuotes
                | RankNTypes
@@ -205,7 +206,7 @@ includedByDefault = Set.fromList [BangDataFields, ConstraintsAreTypes,
                                   FieldSelectors, ForeignFunctionInterface,
                                   GratuitouslyParenthesizedTypes, IdentifierSyntax, ListTuplePuns,
                                   MultiParameterConstraints, ParenthesizedTypeOperators, PatternGuards,
-                                  RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
+                                  QualifiedExportImportMembers, RelaxedPolyRec, SpaceSensitiveOperators, StarIsType,
                                   TraditionalRecordSyntax, TypeVariableConstraints]
 
 -- | Set of language version extensions, such as 'Haskell2010'
