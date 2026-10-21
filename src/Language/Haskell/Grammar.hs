@@ -799,7 +799,9 @@ qualifiedNamePrefix :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, Textua
                     => Parser g t (Abstract.ModuleName l)
 qualifiedNamePrefix = storeToken (Abstract.moduleName <$> moduleLexeme <* string ".")
                       <* notFollowedBy (constructorLexeme *> string "."
-                                        <|> filter (`elem` reservedWords) (takeCharsWhile1 Char.isLower))
+                                        <|> filter
+                                               (`elem` reservedWords)
+                                               (takeCharsWhile1 Char.isLower <* notSatisfyChar isNameTailChar))
 
 asciiEscape, charEscape, controlEscape :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t Char
 charEscape = '\a' <$ char 'a'
