@@ -1059,6 +1059,22 @@ gratuitouslyParenthesizedTypesMixin self super = super{
                 <$> wrap (self.report.declarationLevel.typeVarApplications
                           <|> parens self.report.declarationLevel.typeVarApplications)
                 <*> wrap self.extensions.optionallyKindedAndParenthesizedTypeVar,
+         topLevelDeclaration = super.report.declarationLevel.topLevelDeclaration
+            <|> uncurry Abstract.instanceDeclaration <$ keyword "instance"
+                <*> parens ((,) <$> wrap self.report.declarationLevel.optionalContext
+                            <*> wrap self.report.declarationLevel.instanceDesignator)
+                <*> (keyword "where" *> blockOf (wrap self.report.declarationLevel.inInstanceDeclaration) <|> pure [])
+            <|> Abstract.explicitlyScopedInstanceDeclaration <$ keyword "instance"
+                <* terminator "("
+                <* self.extensions.keywordForall
+                <*> many (wrap self.extensions.typeVarBinder)
+                <* delimiter "."
+                <*> wrap self.report.declarationLevel.optionalContext
+                <*> wrap self.report.declarationLevel.instanceDesignator
+                <* terminator ")"
+                <*> (keyword "where"
+                     *> blockOf (wrap self.report.declarationLevel.inInstanceDeclaration)
+                     <|> pure []),
          simpleType = super.report.declarationLevel.simpleType
             <|> parens self.report.declarationLevel.simpleType}},
    extensions = super.extensions{
