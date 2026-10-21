@@ -178,6 +178,7 @@ extensionMixins =
      (Set.fromList [BlockArguments],                 [(9, blockArgumentsMixin)]),
      (Set.fromList [ExistentialQuantification],      [(9, existentialQuantificationMixin)]),
      (Set.fromList [ExplicitForAll],                 [(9, explicitForAllMixin)]),
+     (Set.fromList [ExplicitForAll, UnicodeSyntax],  [(9, explicitForAllUnicodeSyntaxMixin)]),
      (Set.fromList [ScopedTypeVariables],            [(9, scopedTypeVariablesMixin)]),
      (Set.fromList [GADTSyntax],                     [(9, gadtSyntaxMixin)]),
      (Set.fromList [TypeFamilies],                   [(9, typeFamiliesMixin)]),
@@ -463,10 +464,13 @@ overloadedLabelsMixin self super = super{
                            <$> token (string "#" *> variableLexeme),
       variableSymbol = notFollowedBy (string "#" *> variableLexeme) *> super.report.variableSymbol}}
 
+explicitForAllUnicodeSyntaxMixin :: ExtensionOverlay l g t
+explicitForAllUnicodeSyntaxMixin self super = super{
+   extensions = super.extensions{
+      keywordForall = super.extensions.keywordForall <|> delimiter "∀"}}
+
 unicodeSyntaxMixin :: ExtensionOverlay l g t
 unicodeSyntaxMixin self super = super{
-   extensions = super.extensions{
-      keywordForall = super.extensions.keywordForall <|> delimiter "∀"},
    report= super.report{
       doubleColon = super.report.doubleColon <|> delimiter "∷",
       rightDoubleArrow = super.report.rightDoubleArrow <|> delimiter "⇒",
