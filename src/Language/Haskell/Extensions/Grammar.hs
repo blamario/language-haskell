@@ -846,11 +846,11 @@ explicitNamespacesMixin self super = super{
       moduleLevel= super.report.moduleLevel{
          export = super.report.moduleLevel.export
             <|> Abstract.exportClassOrType <$ keyword "type"
-                <*> parens self.report.qualifiedVariableSymbol
+                <*> (self.report.qualifiedVariable <|> self.report.qualifiedConstructor)
                 <*> optional self.report.moduleLevel.members,
          importItem = super.report.moduleLevel.importItem
             <|> Abstract.importClassOrType <$ keyword "type"
-                <*> parens (self.report.variableSymbol <|> self.report.constructorSymbol)
+                <*> (self.report.variable <|> self.report.constructor)
                 <*> optional self.report.moduleLevel.members,
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList Abstract.build
