@@ -6,6 +6,7 @@
 -- | Pretty-printing of AST via Template Haskell. That is, the AST is first transformed into corresponding
 -- Template Haskell AST, then printed using its pretty-printer.
 module Language.Haskell.Template (PrettyViaTH(..), CanTemplateLanguage, TemplateWrapper(..), CanTemplateDeclarations(..),
+                                  Reformable, reformulateViaTH,
                                   pprint, showViaTH,
                                   declarationTemplates, typeFamilyInstanceTemplate,
                                   prettyIdentifier,
@@ -57,25 +58,32 @@ import qualified Language.Haskell.TH as TH
 import qualified Language.Haskell.TH.PprLib as Ppr
 
 -- | Pretty-print the Haskell AST via Template Haskell prettyprinter
-pprint :: (PrettyViaTH a, a ~ f (node l l f f), f ~ Reformulator.Wrap l pos s,
-           Abstract.ExtendedHaskell l,
-           Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
-             pos s l l node,
-           Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
-             pos s l l node,
-           Reformulator.Reformable 'Extensions.OrPatterns
-             '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] pos s l l node,
-           FullyTranslatable
-              (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] l l pos s)
-              node) => a -> String
-pprint = showViaTH
-         . Reformulator.dropRecordWildCards
-         . Reformulator.dropNPlusKPatterns
+pprint :: (PrettyViaTH a, Reformable a f node l pos s) => a -> String
+pprint = showViaTH . reformulateViaTH
+
+-- | Everything required to 'reformulateViaTH' a tree of @node@ wrapped in @f@
+type Reformable a f node l pos s =
+   (a ~ f (node l l f f), f ~ Reformulator.Wrap l pos s,
+    Abstract.ExtendedHaskell l,
+    Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
+      pos s l l node,
+    Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
+      pos s l l node,
+    Reformulator.Reformable 'Extensions.OrPatterns
+      '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] pos s l l node,
+    FullyTranslatable
+       (Reformulator.ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] l l pos s)
+       node)
+
+-- | Reformulate the AST to eliminate the language extensions that Template Haskell can't represent
+reformulateViaTH :: Reformable a f node l pos s => a -> a
+reformulateViaTH = Reformulator.dropRecordWildCards
+                   . Reformulator.dropNPlusKPatterns
 #if MIN_VERSION_template_haskell(2,23,0)
 #else
-         . Reformulator.orToViewPatterns
+                   . Reformulator.orToViewPatterns
 #endif
-         . Reformulator.dropNoListTuplePuns
+                   . Reformulator.dropNoListTuplePuns
 
 showViaTH :: PrettyViaTH a => a -> String
 showViaTH = render . Ppr.to_HPJ_Doc . prettyViaTH

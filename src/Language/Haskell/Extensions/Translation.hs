@@ -66,15 +66,30 @@ translateFully t = (translateDeeply t <$>) . translateWrapped t
 
 type FullyTranslatable t node = (WrappedTranslation t node, DeeplyTranslatable t node)
 
+-- | The type of the declaration nodes of language @λ@ before it's applied to the language of its subtrees, /i.e./
+-- a language @λ@ must satisfy @'Abstract.Declaration' λ ~ DeclarationNode λ λ@. A language that extends Haskell
+-- with its own forms of declaration can be translated only if it declares this instance.
+type family DeclarationNode λ :: Abstract.TreeNodeKind
+
+type instance DeclarationNode AST.Language = AST.Declaration
+
+-- | The declarations of the origin language, which a language that extends Haskell may declare for itself, can be
+-- translated into the declarations of the target language. Every node type whose subtrees can contain a declaration
+-- requires this constraint instead of @'FullyTranslatable' t AST.Declaration@, because the declaration node type of
+-- the translated language need not be 'AST.Declaration'.
+type TranslatableDeclarations t =
+   (FullyTranslatable t (DeclarationNode (Origin t)),
+    Abstract.Declaration (Origin t) ~ DeclarationNode (Origin t) (Origin t),
+    Abstract.Declaration (Target t) ~ DeclarationNode (Origin t) (Target t))
+
 -- DeeplyTranslatable instances
 
 instance (WrapTranslation t, WrappedTranslation t AST.Module,
-          FullyTranslatable t AST.Export, FullyTranslatable t AST.Import, FullyTranslatable t AST.Declaration,
+          FullyTranslatable t AST.Export, FullyTranslatable t AST.Import, TranslatableDeclarations t,
           Abstract.Module (Origin t) ~ AST.Module (Origin t), Abstract.Module (Target t) ~ AST.Module (Target t),
           Abstract.Export (Origin t) ~ AST.Export (Origin t), Abstract.Export (Target t) ~ AST.Export (Target t),
-          Abstract.Import (Origin t) ~ AST.Import (Origin t), Abstract.Import (Target t) ~ AST.Import (Target t),
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t)) => DeeplyTranslatable t AST.Module where
+          Abstract.Import (Origin t) ~ AST.Import (Origin t),
+          Abstract.Import (Target t) ~ AST.Import (Target t)) => DeeplyTranslatable t AST.Module where
    translateDeeply t (AST.NamedModule modName exports imports declarations) =
       AST.NamedModule modName
          ((translateFully t <$>) <$> exports)
@@ -115,7 +130,7 @@ instance (WrapTranslation t, FullyTranslatable t AST.ImportSpecification,
    translateDeeply _ (AST.ImportVar name) = AST.ImportVar name
    translateDeeply _ (AST.ImportPattern name) = AST.ImportPattern name
 
-instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
+instance (WrapTranslation t, WrappedTranslation t AST.Declaration, TranslatableDeclarations t,
           FullyTranslatable t AST.Context, FullyTranslatable t AST.ClassInstanceLHS,
           FullyTranslatable t AST.FunctionalDependency,
           FullyTranslatable t AST.TypeLHS, FullyTranslatable t AST.Type, FullyTranslatable t AST.TypeVarBinding,
@@ -124,8 +139,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
           FullyTranslatable t AST.EquationLHS, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Expression,
           FullyTranslatable t AST.PatternEquationClause,
           FullyTranslatable t AST.PatternLHS, FullyTranslatable t AST.Pattern,
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
           Abstract.Context (Origin t) ~ AST.Context (Origin t),
           Abstract.Context (Target t) ~ AST.Context (Target t),
           Abstract.ClassInstanceLHS (Origin t) ~ AST.ClassInstanceLHS (Origin t),
@@ -262,13 +275,11 @@ instance (WrapTranslation t, WrappedTranslation t AST.Declaration,
 
 instance (WrapTranslation t,
           FullyTranslatable t AST.PatternEquationLHS, FullyTranslatable t AST.EquationRHS,
-          FullyTranslatable t AST.Declaration,
+          TranslatableDeclarations t,
           Abstract.PatternEquationLHS (Origin t) ~ AST.PatternEquationLHS (Origin t),
           Abstract.PatternEquationLHS (Target t) ~ AST.PatternEquationLHS (Target t),
           Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
-          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t)) =>
+          Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t)) =>
          DeeplyTranslatable t AST.PatternEquationClause where
    translateDeeply t (AST.PatternEquationClause support lhs rhs wheres) =
       AST.PatternEquationClause support (translateFully t lhs) (translateFully t rhs) (translateFully t <$> wheres)
@@ -585,7 +596,7 @@ instance (WrapTranslation t, WrappedTranslation t AST.Pattern,
 instance (WrapTranslation t, WrappedTranslation t AST.Expression,
           FullyTranslatable t AST.CaseAlternative, FullyTranslatable t AST.LambdaCasesAlternative,
           FullyTranslatable t AST.Constructor,
-          FullyTranslatable t AST.Declaration, FullyTranslatable t AST.FieldBinding,
+          TranslatableDeclarations t, FullyTranslatable t AST.FieldBinding,
           FullyTranslatable t AST.GuardedExpression, FullyTranslatable t AST.Pattern,
           FullyTranslatable t AST.Statement, FullyTranslatable t AST.Type, FullyTranslatable t AST.Value,
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
@@ -596,8 +607,6 @@ instance (WrapTranslation t, WrappedTranslation t AST.Expression,
           Abstract.LambdaCasesAlternative (Target t) ~ AST.LambdaCasesAlternative (Target t),
           Abstract.Constructor (Origin t) ~ AST.Constructor (Origin t),
           Abstract.Constructor (Target t) ~ AST.Constructor (Target t),
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
           Abstract.FieldBinding (Origin t) ~ AST.FieldBinding (Origin t),
           Abstract.FieldBinding (Target t) ~ AST.FieldBinding (Target t),
           Abstract.GuardedExpression (Origin t) ~ AST.GuardedExpression (Origin t),
@@ -691,11 +700,9 @@ instance (WrapTranslation t,
       AST.GuardedExpression (translateFully t <$> guards) (translateFully t result)
 
 instance (WrapTranslation t, WrappedTranslation t AST.Statement,
-          FullyTranslatable t AST.Declaration, FullyTranslatable t AST.Expression, FullyTranslatable t AST.Pattern,
+          TranslatableDeclarations t, FullyTranslatable t AST.Expression, FullyTranslatable t AST.Pattern,
           Abstract.Expression (Origin t) ~ AST.Expression (Origin t),
           Abstract.Expression (Target t) ~ AST.Expression (Target t),
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
           Abstract.Pattern (Target t) ~ AST.Pattern (Target t),
           Abstract.Statement (Origin t) ~ AST.Statement (Origin t),
@@ -707,11 +714,9 @@ instance (WrapTranslation t, WrappedTranslation t AST.Statement,
    translateDeeply t (AST.RecursiveStatement statements) = AST.RecursiveStatement (translateFully t <$> statements)
 
 instance (WrapTranslation t,
-          FullyTranslatable t AST.Declaration, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Pattern,
+          TranslatableDeclarations t, FullyTranslatable t AST.EquationRHS, FullyTranslatable t AST.Pattern,
           Abstract.CaseAlternative (Origin t) ~ AST.CaseAlternative (Origin t),
           Abstract.CaseAlternative (Target t) ~ AST.CaseAlternative (Target t),
-          Abstract.Declaration (Origin t) ~ AST.Declaration (Origin t),
-          Abstract.Declaration (Target t) ~ AST.Declaration (Target t),
           Abstract.EquationRHS (Origin t) ~ AST.EquationRHS (Origin t),
           Abstract.EquationRHS (Target t) ~ AST.EquationRHS (Target t),
           Abstract.Pattern (Origin t) ~ AST.Pattern (Origin t),
