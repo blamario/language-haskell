@@ -8,6 +8,7 @@
 module Language.Haskell.Extensions.Translation where
 
 import Data.Coerce (Coercible, coerce)
+import Data.List.NonEmpty (NonEmpty)
 import qualified Language.Haskell.Extensions.Abstract as Abstract
 import qualified Language.Haskell.Extensions.AST as AST
 import qualified Language.Haskell.Extensions as Extensions
@@ -839,3 +840,244 @@ instance {-# overlappable #-}
    translate _ (AST.StringLiteral l)   = AST.StringLiteral l
    translate t (AST.HashLiteral sup l) = AST.HashLiteral sup (translate t l)
    translate t (AST.ExtendedLiteral sup n ty) = AST.ExtendedLiteral sup n (translateName t ty)
+
+-- Translation instances for the remaining node types that carry a name. Without these the names of all but the
+-- node types above would be copied rather than translated. The constructors that carry no name are coerced, which
+-- is all the overlapped default instance would do for the whole node type.
+
+-- | The names of both the origin and the target language are the standard ones, so they can be translated.
+type TranslatableNames t =
+   (NameTranslation t, WrapTranslation t, Functor (Wrap t),
+    Abstract.Name (Origin t) ~ AST.Name (Origin t),
+    Abstract.Name (Target t) ~ AST.Name (Target t),
+    Abstract.ModuleName (Origin t) ~ AST.ModuleName (Origin t),
+    Abstract.ModuleName (Target t) ~ AST.ModuleName (Target t),
+    Abstract.QualifiedName (Origin t) ~ AST.QualifiedName (Origin t),
+    Abstract.QualifiedName (Target t) ~ AST.QualifiedName (Target t))
+
+-- | The node type is translated by coercion if it carries no name.
+type CoercibleNode t node =
+   Coercible (node (Origin t) (Origin t) (Wrap t) (Wrap t)) (node (Target t) (Origin t) (Wrap t) (Wrap t))
+
+translateMembers :: (TranslatableNames t,
+                     Abstract.SupportFor 'Extensions.ExplicitNamespaces (Origin t)
+                     ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t))
+                 => t -> AST.Members (Origin t) -> AST.Members (Target t)
+translateMembers _ AST.AllMembers = AST.AllMembers
+translateMembers t (AST.AllMembersPlus names) = AST.AllMembersPlus (translateName t <$> names)
+translateMembers t (AST.MemberList names) = AST.MemberList (translateName t <$> names)
+translateMembers t (AST.ExplicitlyNamespacedMemberList support members) =
+   AST.ExplicitlyNamespacedMemberList support (translateModuleMember t <$> members)
+
+translateModuleMember :: TranslatableNames t => t -> AST.ModuleMember (Origin t) -> AST.ModuleMember (Target t)
+translateModuleMember t (AST.DefaultMember name) = AST.DefaultMember (translateName t name)
+translateModuleMember t (AST.PatternMember name) = AST.PatternMember (translateName t name)
+translateModuleMember t (AST.TypeMember name) = AST.TypeMember (translateName t name)
+
+instance {-# overlappable #-}
+   (TranslatableNames t,
+    Abstract.Members (Origin t) ~ AST.Members (Origin t),
+    Abstract.Members (Target t) ~ AST.Members (Target t),
+    Abstract.SupportFor 'Extensions.ExplicitNamespaces (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t)) =>
+   Translation t AST.Export where
+   translate t (AST.ExportClassOrType name members) =
+      AST.ExportClassOrType (translateQualifiedName t name) (translateMembers t <$> members)
+   translate t (AST.ExportVar name) = AST.ExportVar (translateQualifiedName t name)
+   translate t (AST.ExportPattern name) = AST.ExportPattern (translateQualifiedName t name)
+   translate t (AST.ReExportModule name) = AST.ReExportModule (translateModuleName t name)
+
+instance {-# overlappable #-}
+   (TranslatableNames t,
+    Abstract.Members (Origin t) ~ AST.Members (Origin t),
+    Abstract.Members (Target t) ~ AST.Members (Target t),
+    Abstract.SupportFor 'Extensions.ExplicitNamespaces (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t)) =>
+   Translation t AST.ImportItem where
+   translate t (AST.ImportClassOrType name members) =
+      AST.ImportClassOrType (translateName t name) (translateMembers t <$> members)
+   translate t (AST.ImportVar name) = AST.ImportVar (translateName t name)
+   translate t (AST.ImportPattern name) = AST.ImportPattern (translateName t name)
+
+instance {-# overlappable #-}
+   (TranslatableNames t, CoercibleNode t AST.Declaration,
+    Abstract.SupportFor 'Extensions.DefaultSignatures (Origin t)
+    ~ Abstract.SupportFor 'Extensions.DefaultSignatures (Target t),
+    Abstract.SupportFor 'Extensions.ExplicitNamespaces (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t),
+    Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t),
+    Abstract.SupportFor 'Extensions.NamedDefaults (Origin t)
+    ~ Abstract.SupportFor 'Extensions.NamedDefaults (Target t),
+    Abstract.SupportFor 'Extensions.PatternSynonyms (Origin t)
+    ~ Abstract.SupportFor 'Extensions.PatternSynonyms (Target t),
+    Abstract.SupportFor 'Extensions.RoleAnnotations (Origin t)
+    ~ Abstract.SupportFor 'Extensions.RoleAnnotations (Target t),
+    Abstract.SupportFor 'Extensions.TypeFamilyDependencies (Origin t)
+    ~ Abstract.SupportFor 'Extensions.TypeFamilyDependencies (Target t),
+    Coercible (AST.Associativity (Origin t)) (AST.Associativity (Target t)),
+    Coercible (AST.CallingConvention (Origin t)) (AST.CallingConvention (Target t)),
+    Coercible (AST.CallSafety (Origin t)) (AST.CallSafety (Target t)),
+    Coercible (AST.TypeRole (Origin t)) (AST.TypeRole (Target t))) =>
+   Translation t AST.Declaration where
+   translate t (AST.FixityDeclaration associativity precedence names) =
+      AST.FixityDeclaration (coerce associativity) precedence (translateName t <$> names)
+   translate t (AST.ExplicitTypeFixityDeclaration support associativity precedence names) =
+      AST.ExplicitTypeFixityDeclaration support (coerce associativity) precedence (translateName t <$> names)
+   translate t (AST.ExplicitDataFixityDeclaration support associativity precedence names) =
+      AST.ExplicitDataFixityDeclaration support (coerce associativity) precedence (translateName t <$> names)
+   translate t (AST.ForeignExport convention identification name ty) =
+      AST.ForeignExport (coerce convention) identification (translateName t name) ty
+   translate t (AST.ForeignImport convention safety identification name ty) =
+      AST.ForeignImport (coerce convention) (coerce safety) identification (translateName t name) ty
+   translate t (AST.TypeSignature names context ty) = AST.TypeSignature (translateName t <$> names) context ty
+   translate t (AST.KindSignature name kind) = AST.KindSignature (translateName t name) kind
+   translate t (AST.DefaultMethodSignature support name context ty) =
+      AST.DefaultMethodSignature support (translateName t name) context ty
+   translate t (AST.NamedDefaultDeclaration support name types) =
+      AST.NamedDefaultDeclaration support (translateQualifiedName t name) types
+   translate t (AST.TypeRoleDeclaration support name roles) =
+      AST.TypeRoleDeclaration support (translateQualifiedName t name) (coerce <$> roles)
+   translate t (AST.ImplicitParameterDeclaration support name value) =
+      AST.ImplicitParameterDeclaration support (translateName t name) value
+   translate t (AST.PatternSynonymSignature support names vars1 context1 vars2 context2 args result) =
+      AST.PatternSynonymSignature support (translateName t <$> names) vars1 context1 vars2 context2 args result
+   translate t (AST.InjectiveOpenTypeFamilyDeclaration support lhs binding injectivity) =
+      AST.InjectiveOpenTypeFamilyDeclaration support lhs binding (translateInjectivity t <$> injectivity)
+   translate t (AST.InjectiveClosedTypeFamilyDeclaration support lhs binding injectivity constructors) =
+      AST.InjectiveClosedTypeFamilyDeclaration support lhs binding (translateInjectivity t <$> injectivity)
+                                              constructors
+   translate _ d = coerce d
+
+translateInjectivity :: TranslatableNames t
+                     => t -> (AST.Name (Origin t), NonEmpty (AST.Name (Origin t)))
+                     -> (AST.Name (Target t), NonEmpty (AST.Name (Target t)))
+translateInjectivity t (from, to) = (translateName t from, translateName t <$> to)
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.Constructor) =>
+   Translation t AST.Constructor where
+   translate t (AST.ConstructorReference name) = AST.ConstructorReference (translateQualifiedName t name)
+   translate _ c = coerce c
+
+instance {-# overlappable #-}
+   (TranslatableNames t, CoercibleNode t AST.Context,
+    Abstract.SupportFor 'Extensions.ImplicitParameters (Origin t)
+    ~ Abstract.SupportFor 'Extensions.ImplicitParameters (Target t)) =>
+   Translation t AST.Context where
+   translate t (AST.ClassConstraint cls ty) = AST.ClassConstraint (translateQualifiedName t cls) ty
+   translate t (AST.ImplicitParameterConstraint support name ty) =
+      AST.ImplicitParameterConstraint support (translateName t name) ty
+   translate _ c = coerce c
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.ClassInstanceLHS) =>
+   Translation t AST.ClassInstanceLHS where
+   translate t (AST.TypeClassInstanceLHS name ty) = AST.TypeClassInstanceLHS (translateQualifiedName t name) ty
+   translate t (AST.ClassReferenceInstanceLHS name) =
+      AST.ClassReferenceInstanceLHS (translateQualifiedName t name)
+   translate t (AST.InfixTypeClassInstanceLHS left name right) =
+      AST.InfixTypeClassInstanceLHS left (translateQualifiedName t name) right
+   translate _ lhs = coerce lhs
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.TypeLHS) =>
+   Translation t AST.TypeLHS where
+   translate t (AST.SimpleTypeLHS name vars) = AST.SimpleTypeLHS (translateName t name) (translateName t <$> vars)
+   translate t (AST.SimpleKindedTypeLHS name vars) = AST.SimpleKindedTypeLHS (translateName t name) vars
+   translate t (AST.InfixTypeLHSApplication left name right) =
+      AST.InfixTypeLHSApplication left (translateName t name) right
+   translate _ lhs = coerce lhs
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.DataConstructor) =>
+   Translation t AST.DataConstructor where
+   translate t (AST.Constructor name argTypes) = AST.Constructor (translateName t name) argTypes
+   translate t (AST.RecordConstructor name fields) = AST.RecordConstructor (translateName t name) fields
+   translate _ c = coerce c
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.GADTConstructor) =>
+   Translation t AST.GADTConstructor where
+   translate t (AST.GADTConstructors names vars context ty) =
+      AST.GADTConstructors (translateName t <$> names) vars context ty
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.DerivingClause) =>
+   Translation t AST.DerivingClause where
+   translate t (AST.SimpleDerive name) = AST.SimpleDerive (translateQualifiedName t name)
+   translate _ d = coerce d
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.EquationLHS) =>
+   Translation t AST.EquationLHS where
+   translate t (AST.InfixLHS left name right) = AST.InfixLHS left (translateName t name) right
+   translate t (AST.VariableLHS name) = AST.VariableLHS (translateName t name)
+   translate _ lhs = coerce lhs
+
+instance {-# overlappable #-} TranslatableNames t => Translation t AST.PatternLHS where
+   translate t (AST.PrefixPatternLHS name args) =
+      AST.PrefixPatternLHS (translateName t name) (translateName t <$> args)
+   translate t (AST.InfixPatternLHS left name right) =
+      AST.InfixPatternLHS (translateName t left) (translateName t name) (translateName t right)
+   translate t (AST.RecordPatternLHS name args) =
+      AST.RecordPatternLHS (translateName t name) (translateName t <$> args)
+
+instance {-# overlappable #-} TranslatableNames t => Translation t AST.PatternEquationLHS where
+   translate t (AST.PrefixPatternEquationLHS name args) =
+      AST.PrefixPatternEquationLHS (translateName t name) args
+   translate t (AST.InfixPatternEquationLHS left name right) =
+      AST.InfixPatternEquationLHS left (translateName t name) right
+
+instance {-# overlappable #-}
+   (TranslatableNames t, CoercibleNode t AST.Pattern,
+    Abstract.SupportFor 'Extensions.NPlusKPatterns (Origin t)
+    ~ Abstract.SupportFor 'Extensions.NPlusKPatterns (Target t),
+    Abstract.SupportFor 'Extensions.RecordWildCards (Origin t)
+    ~ Abstract.SupportFor 'Extensions.RecordWildCards (Target t)) =>
+   Translation t AST.Pattern where
+   translate t (AST.AsPattern name pattern') = AST.AsPattern (translateName t name) pattern'
+   translate t (AST.InfixPattern left name right) = AST.InfixPattern left (translateQualifiedName t name) right
+   translate t (AST.RecordPattern name fields) = AST.RecordPattern (translateQualifiedName t name) fields
+   translate t (AST.WildcardRecordPattern support name fields) =
+      AST.WildcardRecordPattern support (translateQualifiedName t name) fields
+   translate t (AST.NPlusKPattern support name n) = AST.NPlusKPattern support (translateName t name) n
+   translate t (AST.VariablePattern name) = AST.VariablePattern (translateName t name)
+   translate _ p = coerce p
+
+instance {-# overlappable #-}
+   (TranslatableNames t, CoercibleNode t AST.Type,
+    Abstract.SupportFor 'Extensions.DataKinds (Origin t)
+    ~ Abstract.SupportFor 'Extensions.DataKinds (Target t)) =>
+   Translation t AST.Type where
+   translate t (AST.InfixTypeApplication left name right) =
+      AST.InfixTypeApplication left (translateQualifiedName t name) right
+   translate t (AST.PromotedInfixTypeApplication support left name right) =
+      AST.PromotedInfixTypeApplication support left (translateQualifiedName t name) right
+   translate t (AST.TypeVariable name) = AST.TypeVariable (translateName t name)
+   translate _ ty = coerce ty
+
+instance {-# overlappable #-} (TranslatableNames t, CoercibleNode t AST.TypeVarBinding) =>
+   Translation t AST.TypeVarBinding where
+   translate t (AST.ExplicitlyKindedTypeVariable inferred name kind) =
+      AST.ExplicitlyKindedTypeVariable inferred (translateName t name) kind
+   translate t (AST.ImplicitlyKindedTypeVariable inferred name) =
+      AST.ImplicitlyKindedTypeVariable inferred (translateName t name)
+   translate _ binding = coerce binding
+
+instance {-# overlappable #-}
+   (TranslatableNames t,
+    Abstract.SupportFor 'Extensions.NamedFieldPuns (Origin t)
+    ~ Abstract.SupportFor 'Extensions.NamedFieldPuns (Target t),
+    Abstract.SupportFor 'Extensions.OverloadedRecordUpdate (Origin t)
+    ~ Abstract.SupportFor 'Extensions.OverloadedRecordUpdate (Target t)) =>
+   Translation t AST.FieldBinding where
+   translate t (AST.FieldBinding name value) = AST.FieldBinding (translateQualifiedName t name) value
+   translate t (AST.PunnedFieldBinding support name) =
+      AST.PunnedFieldBinding support (translateQualifiedName t name)
+   translate t (AST.NestedFieldBinding support names value) =
+      AST.NestedFieldBinding support (translateName t <$> names) value
+   translate t (AST.NestedPunnedFieldBinding support1 support2 names) =
+      AST.NestedPunnedFieldBinding support1 support2 (translateName t <$> names)
+
+instance {-# overlappable #-}
+   (TranslatableNames t,
+    Abstract.SupportFor 'Extensions.NamedFieldPuns (Origin t)
+    ~ Abstract.SupportFor 'Extensions.NamedFieldPuns (Target t)) =>
+   Translation t AST.FieldPattern where
+   translate t (AST.FieldPattern name pattern') = AST.FieldPattern (translateQualifiedName t name) pattern'
+   translate t (AST.PunnedFieldPattern support name) =
+      AST.PunnedFieldPattern support (translateQualifiedName t name)
