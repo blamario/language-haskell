@@ -176,6 +176,9 @@ instance TemplateWrapper Identity where
 instance PrettyViaTH a => PrettyViaTH (x, a) where
    prettyViaTH = prettyViaTH . snd
 
+instance PrettyViaTH a => PrettyViaTH (Identity a) where
+   prettyViaTH = prettyViaTH . runIdentity
+
 instance (Foldable f, PrettyViaTH a) => PrettyViaTH (Compose f ((,) x) a) where
    prettyViaTH = foldr ((<+>) . prettyViaTH) Ppr.empty . getCompose
 
