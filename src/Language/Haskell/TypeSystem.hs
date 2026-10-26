@@ -732,7 +732,6 @@ instance (Abstract.Haskell l,
             localBindings = mconcat $ prefixAtts.localBindings : argBindings,
             constraints = mconcat $ prefixAtts.constraints : argCons}
       tv = freshTV env
-      varType = AST.TypeVariable tv
   attribution
     TypeCheck{}
     (_, AST.InfixLHS{})

@@ -193,7 +193,9 @@ filterDefaultRelevant vars con = DefaultConstraints{
     relevantEquation (l, r) = isRelevantType l || isRelevantType r
     relevantClassParams = any isRelevantType
     isRelevantType = hasRelevant . freeVariables
-    hasRelevant = not . Set.disjoint vars
+    hasRelevant = not . Set.disjoint vars'
+    vars' = Set.union vars $ foldMap partsOf vars
+    partsOf var = foldMap freeVariables $ DJMap.lookup var con.assignments
 
 constraintRelatedTypeVarSetClosure :: (Abstract.Name l ~ AST.Name l,
                                        Full.Foldable (FreeVariableFold l Identity) (AST.Type l l))
