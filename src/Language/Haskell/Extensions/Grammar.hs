@@ -908,7 +908,8 @@ lexicalNegationMixin self super = super{
       bareExpression = super.report.bareExpression
          <|> Abstract.applyExpression <$> wrap (Abstract.negate <$ prefixMinus) <*> self.report.aExpression
          <|> parens (Abstract.rightSectionExpression
-                     <$> (notFollowedBy prefixMinus *> self.report.qualifiedOperator)
+                     <$> (notFollowedBy prefixMinus *> delimiter "-"
+                          *> pure (Abstract.qualifiedName Nothing $ Abstract.name "-"))
                      <*> self.report.infixExpression)}}
    where prefixMinus = void (filter precededByOpenSpace getInput
                              *> string "-"
