@@ -379,8 +379,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       foreignType = Abstract.functionType <$> wrap foreignArgType <* rightArrow <*> wrap foreignType
                     <|> foreignReturnType,
       foreignReturnType = foreignArgType
-                          <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor
-                                                                 <$ terminator "(" <* terminator ")"),
+                          <|> Abstract.constructorType <$> wrap (Abstract.unitConstructor <$ parens (pure ())),
       foreignArgType = Abstract.constructorType <$> wrap (Abstract.constructorReference <$> qualifiedTypeConstructor)
                        <|> Abstract.typeApplication
                            <$> wrap foreignArgType
@@ -580,8 +579,8 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    fieldPattern = Abstract.fieldPattern <$> qualifiedVariable <* delimiter "=" <*> wrap pPattern,
    pPattern = pattern,  -- parenthesized pattern
    generalConstructor = Abstract.constructorReference <$> qualifiedConstructor
-                        <|> Abstract.unitConstructor <$ terminator "(" <* terminator ")"
-                        <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
+                        <|> Abstract.unitConstructor <$ parens (pure ())
+                        <|> Abstract.emptyListConstructor <$ brackets (pure ())
                         <|> Abstract.tupleConstructor . succ . length <$> parens (some comma),
 
 -- pat 	→ 	lpat qconop pat 	    (infix constructor)

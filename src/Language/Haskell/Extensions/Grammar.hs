@@ -487,8 +487,8 @@ listTuplePunsMixin self super = super{
               <|> Abstract.listType <$> brackets (wrap self.report.typeTerm),
       generalTypeConstructor = super.report.generalTypeConstructor
                                <|> Abstract.constructorType
-                                   <$> wrap (Abstract.unitConstructor <$ terminator "(" <* terminator ")"
-                                             <|> Abstract.emptyListConstructor <$ terminator "[" <* terminator "]"
+                                   <$> wrap (Abstract.unitConstructor <$ parens (pure ())
+                                             <|> Abstract.emptyListConstructor <$ brackets (pure ())
                                              <|> Abstract.tupleConstructor . succ . length <$> parens (some comma))}}
 
 unboxedTuplesMixin :: forall l g t. Abstract.ExtendedWith '[ 'UnboxedTuples ] l => ExtensionOverlay l g t
