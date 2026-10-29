@@ -2017,15 +2017,23 @@ negationConstraintMixin prefixMinusFollow self super = super{
       prefixNegation = negationGuard *> super.report.prefixNegation}}
    where negationGuard = notFollowedBy (string "-" *> prefixMinusFollow)
 
-nondecreasingIndentationMixin :: (Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
+nondecreasingIndentationMixin :: (Deep.Foldable (Serialization (Down Int) t) (Abstract.Declaration l l),
+                                  Deep.Foldable (Serialization (Down Int) t) (Abstract.Expression l l),
                                   Deep.Foldable (Serialization (Down Int) t) (Abstract.Statement l l),
                                   OutlineMonoid t)
                               => ExtensionOverlay l g t
 nondecreasingIndentationMixin self super = super{
    report = super.report{
-      statements =
-          Report.blockWith nonDecreasingIndentLine Report.blockTerminatorKeyword semi pure self.report.statement
-          >>= Report.verifyStatements}}
+      statements = nondecreasingIndentationBlock self.report.statement >>= Report.verifyStatements,
+      declarationLevel = super.report.declarationLevel{
+         declarations = nondecreasingIndentationBlock (wrap self.report.declarationLevel.declaration)}}}
+  where
+    nondecreasingIndentationBlock
+      :: (Rank2.Apply g, Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
+      => Parser g t (NodeWrap t (node (NodeWrap t) (NodeWrap t)))
+      -> Parser g t [NodeWrap t (node (NodeWrap t) (NodeWrap t))]
+    nondecreasingIndentationBlock
+          = Report.blockWith nonDecreasingIndentLine Report.blockTerminatorKeyword semi pure
 
 variableLexeme, constructorLexeme, identifierTail :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t t
 variableLexeme = filter (`Set.notMember` Report.reservedWords) (satisfyCharInput varStart <> identifierTail)
