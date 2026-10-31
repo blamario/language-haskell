@@ -2087,17 +2087,19 @@ blockOf' p = braces (many (many semi *> p) <* many semi) <|> (inputColumn >>= al
 
 nonDecreasingIndentLine :: (Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
                         => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
-nonDecreasingIndentLine indent _input node = allIndented False (lexemes node) where
-   allIndented nested (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented nested rest
-   allIndented nested (WhiteSpace ws : rest@(Token _ tok : _))
-      | Textual.all Report.isLineChar ws = allIndented nested rest
+nonDecreasingIndentLine indent _input node = allIndented False False (lexemes node) where
+   allIndented opening nested (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented opening nested rest
+   allIndented opening nested (WhiteSpace ws : rest@(Token _ tok : _))
+      | Textual.all Report.isLineChar ws = allIndented opening nested rest
       | tokenIndent < indent = False
-      | tokenIndent == indent && not nested && tok `Set.notMember` Report.reservedWords
+      | opening = allIndented False (nested || tokenIndent == indent) rest
+      | tokenIndent == indent && not nested && tok `notElem` continuations
         && all (`notElem` terminators) (Textual.characterPrefix tok) = False
       where tokenIndent = Report.currentColumn (Factorial.dropWhile (const True) ws)
-   allIndented False (Token Keyword k : rest)
-      | k `elem` ["do", "of", "let", "where"] = allIndented True rest
-   allIndented nested (x : rest) = allIndented nested rest
-   allIndented _ [] = True
+   allIndented _ nested (Token Keyword k : rest)
+      | k `elem` ["do", "of", "let", "where"] = allIndented True nested rest
+   allIndented opening nested (_ : rest) = allIndented opening nested rest
+   allIndented _ _ [] = True
+   continuations = ["then", "else", "of", "in", "where", "deriving"]
    terminators :: [Char]
    terminators = ",;)]}"
