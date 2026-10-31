@@ -49,7 +49,7 @@ import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.TypeSystem.Constraints (
   ConstraintCollection, DefaultConstraints, TypeError(..), TypeErrors)
 import Language.Haskell.TypeSystem.Constraints qualified as Constraints
-import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariables)
+import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, TypeVariableSubstitution, freeVariables)
 
 checkModule :: forall l pos s con. (
   Abstract.Haskell l,
@@ -473,7 +473,8 @@ instance (Abstract.Haskell l,
           ConstraintCollection con,
           Constraints.Language con ~ l,
           Constraints.Position con ~ pos,
-          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l),
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l)) =>
          AG.At (TypeCheck l pos s con) (AST.Declaration l l) where
   attribution
     TypeCheck{}

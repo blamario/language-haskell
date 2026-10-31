@@ -24,7 +24,9 @@ import Data.Set qualified as Set
 import Transformation.Full qualified as Full
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.Abstract qualified as Abstract
-import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariables)
+import Language.Haskell.Extensions.Abstract qualified as Abstract (TypeVarBinding)
+import Language.Haskell.TypeSystem.Transformations (
+  FreeVariableFold, TypeVariableSubstitution, freeVariables, substituteTypeVariables)
 
 -- | Record of functions for handling constraints
 class Monoid con => ConstraintCollection con where
@@ -88,7 +90,9 @@ instance (Show pos,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Type l ~ AST.Type l,
-          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l)) =>
+          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+          Full.Foldable (FreeVariableFold l Identity) (AST.Type l l),
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l)) =>
          ConstraintCollection (DefaultConstraints l pos) where
   type Language (DefaultConstraints l pos) = l
   type Position (DefaultConstraints l pos) = pos
@@ -109,16 +113,7 @@ instance (Show pos,
       of [] -> (AST.NoContext, mempty)
          cons -> (AST.Constraints (ZipList $ Identity <$> cons), mempty)
   replaceVar = \from to DefaultConstraints{assignments, errors, equations, classes} ->
-      let replaceInType = \case
-            AST.TypeVariable name
-              | name == from -> AST.TypeVariable to
-              | otherwise -> AST.TypeVariable name
-            AST.FunctionType l r -> AST.FunctionType (replaceInType <$> l) (replaceInType <$> r)
-            AST.ListType t -> AST.ListType (replaceInType <$> t)
-            AST.StrictType t -> AST.StrictType (replaceInType <$> t)
-            AST.TupleType fields -> AST.TupleType (getCompose $ replaceInType <$> Compose fields)
-            AST.TypeApplication l r -> AST.TypeApplication (replaceInType <$> l) (replaceInType <$> r)
-            t -> t
+      let replaceInType = resolveTypeVariables (Map.singleton from $ AST.TypeVariable to)
       in DefaultConstraints{
         assignments = getCompose $ replaceInType <$> Compose assignments,
         errors = errors,
@@ -143,8 +138,11 @@ canonicalDefaultNameMap con = foldMap (canonicalMap . fst) $ DJMap.toLists con.a
   where canonicalMap names@(name:_)
           | Just canonical <- DJMap.representative name con.assignments
           = Map.fromList [(n, canonical) | n <- names]
+        canonicalMap _ = mempty
 
-renameTypeVariablesDefault :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l)
+renameTypeVariablesDefault :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                               Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                               Full.Functor (TypeVariableSubstitution l) (AST.Type l l))
                            => Map (AST.Name l) (AST.Name l) -> DefaultConstraints l pos -> DefaultConstraints l pos
 renameTypeVariablesDefault renamings con = DefaultConstraints{
   assignments = fold $ DJMap.fromSets $ renameAssignments <$> DJMap.toLists con.assignments,
@@ -152,7 +150,9 @@ renameTypeVariablesDefault renamings con = DefaultConstraints{
   equations = con.equations <&> \(l, r)-> (renameInType l, renameInType r),
   classes = getCompose $ renameInType <$> Compose con.classes}
   where
-    renameAssignments (name:_, types) = (foldMap Set.singleton $ Map.lookup name renamings, renameInType <$> types)
+    -- the name list is non-empty
+    renameAssignments (name:_, types) =
+      (Set.singleton $ Map.findWithDefault name name renamings, renameInType <$> types)
     renameInType = resolveTypeVariables typeRenamings
     typeRenamings = AST.TypeVariable <$> renamings
 
@@ -162,17 +162,18 @@ resolveAssignments :: Map (AST.Name l) (AST.Type l l Identity Identity)
                    -> Map (AST.Name l) (AST.Type l l Identity Identity)
 resolveAssignments assigned names types = case toList types of
   [] -> assigned
-  [t] -> foldr (`Map.insert` t) assigned names
+  -- TODO: two or more types assigned to the same variable have to be unified, and their mismatch reported as a
+  -- TypeMismatch. Until `simplify` can do that, the first assignment wins.
+  t:_ -> foldr (`Map.insert` t) assigned names
 
-resolveTypeVariables :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l)
+-- | Replaces the free occurrences of the bound type variables throughout the given type.
+resolveTypeVariables :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                         Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                         Full.Functor (TypeVariableSubstitution l) (AST.Type l l))
                      => Map (AST.Name l) (AST.Type l l Identity Identity)
                      -> AST.Type l l Identity Identity
                      -> AST.Type l l Identity Identity
-resolveTypeVariables bindings t@(AST.TypeVariable name) =
-  maybe t (resolveTypeVariables bindings) (Map.lookup name bindings)
-resolveTypeVariables bindings (AST.FunctionType l r) =
-  AST.FunctionType (resolveTypeVariables bindings <$> l) (resolveTypeVariables bindings <$> r)
-resolveTypeVariables _ t = t
+resolveTypeVariables = substituteTypeVariables
 
 splitFromType :: (Abstract.Context l ~ AST.Context l, Abstract.Type l ~ AST.Type l,
                   ConstraintCollection con, Language con ~ l)
