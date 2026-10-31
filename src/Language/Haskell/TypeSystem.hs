@@ -53,7 +53,6 @@ import Language.Haskell.TypeSystem.Transformations (FreeVariableFold, freeVariab
 
 checkModule :: forall l pos s con. (
   Abstract.Haskell l,
-  Binder.BindingMembers l,
   Abstract.Name l ~ AST.Name l,
   Abstract.ModuleName l ~ AST.ModuleName l,
   Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -220,6 +219,7 @@ type family InhAtts pos s con (g :: (Type -> Type) -> (Type -> Type) -> Type) wh
   InhAtts pos s con (AST.Import l l) = Map (AST.ModuleName l) (LocalTypeMap l Identity pos con)
   InhAtts pos s con (AST.ImportSpecification l l) = ()
   InhAtts pos s con (AST.ImportItem l l) = ()
+  InhAtts pos s con (Deep.Const2 (AST.Members l)) = ()
   InhAtts pos s con (AST.Declaration l l) = (TypeEnv l Identity pos con, DeclarationAttributes l pos s con)
   InhAtts pos s con (AST.DataConstructor l l) = (AST.Type l l Identity Identity, TypeEnv l Identity pos con)
   InhAtts pos s con (AST.GuardedExpression l l) = (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con)
@@ -232,6 +232,7 @@ type family SynAtts l pos s con g where
   SynAtts l pos s con (AST.Import l l) = TypeMap l Identity pos con
   SynAtts l pos s con (AST.ImportSpecification l l) = ()
   SynAtts l pos s con (AST.ImportItem l l) = ()
+  SynAtts l pos s con (Deep.Const2 (AST.Members l)) = ()
   SynAtts l pos s con (AST.Expression l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.Value l l) = Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
   SynAtts l pos s con (AST.FieldBinding l l) =
@@ -295,9 +296,11 @@ instance Monoid con => Monoid (DeclarationAttributes l pos s con) where
     constraints = mempty}
 
 instance {-# OVERLAPS #-} (
-  Abstract.Haskell l, Binder.BindingMembers l, Abstract.Name l ~ AST.Name l,
+  Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
   Abstract.ModuleName l ~ AST.ModuleName l,
   Abstract.QualifiedName l ~ AST.QualifiedName l,
+  Binder.OtherSynAtts l (AG.NodeConstructor (Abstract.Members l))
+    ~ (Binder.LocalEnvironment l -> Binder.LocalEnvironment l),
   ConstraintCollection con,
   Constraints.Language con ~ l
   ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
@@ -447,8 +450,15 @@ instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.ImportItem 
   attribution TypeCheck{} (_, AST.ImportSpecification hiding items) (AG.Inherited env, _) =
     (AG.Synthesized (), AST.ImportSpecification hiding $ AG.Inherited env <$ items)
 
-instance (Abstract.Haskell l, Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (AST.ImportItem l l) where
-  attribution TypeCheck{} (_, node) (AG.Inherited env, _) = (AG.Synthesized (), coerce node)
+instance (Abstract.Haskell l,
+          Abstract.Name l ~ AST.Name l,
+          Abstract.Members l ~ AST.Members l) => AG.At (TypeCheck l pos s con) (AST.ImportItem l l) where
+  attribution TypeCheck{} (_, AST.ImportVar name) (AG.Inherited env, _) = (AG.Synthesized (), AST.ImportVar name)
+  attribution TypeCheck{} (_, AST.ImportClassOrType con members) (AG.Inherited env, _) =
+     (AG.Synthesized (), AST.ImportClassOrType con $ AG.Inherited () <$ members)
+
+instance (Abstract.Name l ~ AST.Name l) => AG.At (TypeCheck l pos s con) (Deep.Const2 (AST.Members l)) where
+  attribution TypeCheck{} (_, node) _ = (AG.Synthesized (), coerce node)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,

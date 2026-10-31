@@ -847,11 +847,11 @@ explicitNamespacesMixin self super = super{
          export = super.report.moduleLevel.export
             <|> Abstract.exportClassOrType <$ keyword "type"
                 <*> (self.report.qualifiedVariable <|> self.report.qualifiedConstructor)
-                <*> optional self.report.moduleLevel.members,
+                <*> optional (wrap self.report.moduleLevel.members),
          importItem = super.report.moduleLevel.importItem
             <|> Abstract.importClassOrType <$ keyword "type"
                 <*> (self.report.variable <|> self.report.constructor)
-                <*> optional self.report.moduleLevel.members,
+                <*> optional (wrap self.report.moduleLevel.members),
          members = parens (Abstract.allMembers <$ delimiter ".."
                            <|> Abstract.explicitlyNamespacedMemberList Abstract.build
                             <$> (Abstract.defaultMember Abstract.build <$> self.report.moduleLevel.cname
@@ -981,7 +981,7 @@ parenthesizedTypeOperatorsMixin self super = super{
                 <*> pure Nothing
             <|> Abstract.exportClassOrType
                 <$> self.report.qualifiedTypeConstructor
-                <*> (Just <$> self.report.moduleLevel.members)
+                <*> (Just <$> wrap self.report.moduleLevel.members)
             <|> Abstract.reExportModule <$ keyword "module" <*> Report.moduleId},
       qualifiedTypeConstructor = self.report.qualifiedConstructorIdentifier <|> parens anyQualifiedOperator,
       generalTypeConstructor = super.report.generalTypeConstructor
@@ -1003,7 +1003,7 @@ typeOperatorsMixin self super = super{
                 <*> pure Nothing
             <|> Abstract.importClassOrType
                 <$> self.report.typeConstructor
-                <*> (Just <$> self.report.moduleLevel.members)},
+                <*> (Just <$> wrap self.report.moduleLevel.members)},
       declarationLevel= super.report.declarationLevel{
          typeClass = super.report.declarationLevel.typeClass <|> parens anyOperator,
          simpleType = super.report.declarationLevel.simpleType

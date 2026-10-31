@@ -193,6 +193,14 @@ instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Position pos,
                             adjustment + distance nodeEnd nodeEnd')
                where nodeEnd' = move (sourceLength root) nodeStart
 
+-- | A leaf node carries no children, so the parsed source is exactly its own lexemes.
+instance {-# OVERLAPPABLE #-} (Factorial s, Position pos) =>
+         PositionAdjustment pos s `Transformation.At` a where
+   PositionAdjustment $ ((nodeStart, lexemes, nodeEnd), node) = Compose (state f)
+      where f adjustment = (((move adjustment nodeStart, lexemes, move adjustment nodeEnd'), node),
+                            adjustment + distance nodeEnd nodeEnd')
+               where nodeEnd' = move (parsedLength lexemes) nodeStart
+
 instance (Factorial s, Rank2.Foldable (g (Const (Sum Int))), Rank2.Traversable (g (Wrapped pos s)), Position pos,
           Deep.Foldable (Full.Outward (Transformation.Rank2.Fold (Wrapped pos s) (Sum Int))) g,
           Deep.Traversable (PositionAdjustment pos s) g) => Full.Traversable (PositionAdjustment pos s) g where
@@ -212,6 +220,16 @@ instance (Factorial s, Traversable f, Rank2.Foldable (g (Const (Sum Int))), Posi
                (((move adjustment nodeStart, lexemes, move adjustment nodeEnd'), node),
                 adjustment + distance nodeEnd nodeEnd')
                where nodeEnd' = move (nestedSourceLength root) nodeStart
+
+-- | A leaf node carries no children, so the parsed source is exactly its own lexemes.
+instance {-# OVERLAPPABLE #-} (Factorial s, Traversable f, Position pos) =>
+         NestedPositionAdjustment f pos s `Transformation.At` a where
+   NestedPositionAdjustment $ root = Compose $ Compose <$> traverse (state . advance) (getCompose root)
+      where advance :: Wrapped pos s a -> Int -> (Wrapped pos s a, Int)
+            advance ((nodeStart, lexemes, nodeEnd), node) adjustment =
+               (((move adjustment nodeStart, lexemes, move adjustment nodeEnd'), node),
+                adjustment + distance nodeEnd nodeEnd')
+               where nodeEnd' = move (parsedLength lexemes) nodeStart
 
 instance (Factorial s, Position pos, Traversable f,
           Rank2.Foldable (g (Const (Sum Int))), Rank2.Traversable (g (Compose f (Wrapped pos s))),

@@ -57,8 +57,7 @@ instance Transformation.Transformation (Reorganization l pos s) where
     type Domain (Reorganization l pos s) = Wrap l pos s
     type Codomain (Reorganization l pos s) = Compose (Reorganized l (Wrap l pos s)) (Wrap l pos s)
 
-instance {-# overlappable #-} Reorganization l pos s
-         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+instance {-# overlappable #-} Reorganization l pos s `Transformation.At` x where
   Reorganization $ x = Compose (Success x)
 
 instance {-# overlaps #-} forall l pos s f.

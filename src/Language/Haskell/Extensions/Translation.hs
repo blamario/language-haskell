@@ -882,7 +882,7 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t)) =>
    Translation t AST.Export where
    translate t (AST.ExportClassOrType name members) =
-      AST.ExportClassOrType (translateQualifiedName t name) (translateMembers t <$> members)
+      AST.ExportClassOrType (translateQualifiedName t name) (fmap (translateMembers t) <$> members)
    translate t (AST.ExportVar name) = AST.ExportVar (translateQualifiedName t name)
    translate t (AST.ExportPattern name) = AST.ExportPattern (translateQualifiedName t name)
    translate t (AST.ReExportModule name) = AST.ReExportModule (translateModuleName t name)
@@ -895,7 +895,7 @@ instance {-# overlappable #-}
     ~ Abstract.SupportFor 'Extensions.ExplicitNamespaces (Target t)) =>
    Translation t AST.ImportItem where
    translate t (AST.ImportClassOrType name members) =
-      AST.ImportClassOrType (translateName t name) (translateMembers t <$> members)
+      AST.ImportClassOrType (translateName t name) (fmap (translateMembers t) <$> members)
    translate t (AST.ImportVar name) = AST.ImportVar (translateName t name)
    translate t (AST.ImportPattern name) = AST.ImportPattern (translateName t name)
 

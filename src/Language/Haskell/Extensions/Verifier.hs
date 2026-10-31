@@ -149,13 +149,10 @@ filterExtensions = Map.mapMaybeWithKey filterPatternGuards
          filterActive ((start, end) : rest) = filterActive rest
          filterActive [] = []
 
-instance {-# overlappable #-} Accounting l pos s
-         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+instance {-# overlappable #-} Accounting l pos s `Transformation.At` x where
    Accounting $ _ = mempty
 
-instance {-# overlappable #-}
-         Verification l pos s
-         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+instance {-# overlappable #-} Verification l pos s `Transformation.At` x where
    Verification $ _ = mempty
 
 instance (TextualMonoid s, Num pos, Ord pos, Abstract.DeeplyFoldable (Full.Outward (Accounting l pos s)) l,
@@ -224,6 +221,20 @@ instance (Eq s, IsString s) =>
    Accounting $ Compose (_, ((start, Trailing lexemes, end), ExtAST.ImportClassOrType{})) = Const $ UnionWith $
       if any (isKeyword "type") lexemes then Map.singleton Extensions.ExplicitNamespaces [(start, end)] else mempty
    Accounting $ _ = mempty
+
+instance (Eq s, TextualMonoid s) => Accounting l pos s `Transformation.At` AST.Members l where
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), AST.MemberList{})) = Const $ UnionWith $
+      if any (Textual.any (== '.') . lexemeText) lexemes
+      then Map.singleton Extensions.QualifiedExportImportMembers [(start, end)]
+      else mempty
+   Accounting $ _ = mempty
+
+instance (Eq s, TextualMonoid s) => Accounting l pos s `Transformation.At` ExtAST.Members l where
+   Accounting $ Compose (_, (_, ExtAST.AllMembers)) = mempty
+   Accounting $ Compose (_, ((start, Trailing lexemes, end), _)) = Const $ UnionWith $
+      if any (Textual.any (== '.') . lexemeText) lexemes
+      then Map.singleton Extensions.QualifiedExportImportMembers [(start, end)]
+      else mempty
 
 instance (Abstract.Context l ~ ExtAST.Context l, Eq s, IsString s,
           Abstract.DeeplyFoldable (Full.Outward (UnicodeSyntaxAccounting l pos s)) l,
@@ -619,9 +630,7 @@ instance {-# OVERLAPS #-}
 instance FlexibleInstanceTypeArgAccounting l pos s `Transformation.At` g l l (Wrap l pos s) (Wrap l pos s) where
   FlexibleInstanceTypeArgAccounting $ _ = mempty
 
-instance (Eq s, IsString s) =>
-         UnicodeSyntaxAccounting l pos s
-         `Transformation.At` g (Wrap l pos s) (Wrap l pos s) where
+instance (Eq s, IsString s) => UnicodeSyntaxAccounting l pos s `Transformation.At` x where
    UnicodeSyntaxAccounting $ Compose (_, ((start, Trailing lexemes, end), _))
       | any (`elem` unicodeDelimiters) lexemes =
         Const (UnionWith $ Map.singleton Extensions.UnicodeSyntax [(start, end)])

@@ -547,7 +547,7 @@ instance Abstract.Haskell Language where
    unsafeCall = UnsafeCall
 
 data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (Abstract.Members λ))
+   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (s (Abstract.Members λ)))
    | ExportVar (Abstract.QualifiedName λ)
    | ExportPattern (Abstract.QualifiedName λ)
    | ReExportModule (Abstract.ModuleName λ)
@@ -557,7 +557,7 @@ data Import λ l d s = Import Bool Bool (Maybe Text) (Abstract.ModuleName λ) (M
                              (Maybe (s (Abstract.ImportSpecification l l d d)))
 
 data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
+   ImportClassOrType (Abstract.Name λ) (Maybe (s (Abstract.Members λ)))
    | ImportVar (Abstract.Name λ)
    | ImportPattern (Abstract.Name λ)
 
@@ -912,11 +912,11 @@ data CallingConvention λ = CCall | CppCall | DotNetCall | JvmCall | StdCall
                          | CApiCall !(Abstract.SupportFor 'Extensions.CApiFFI λ)
 
 deriving instance Typeable (Export λ l d s)
-deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
+deriving instance (Data (s (Abstract.Members λ)), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Export λ l d s)
-deriving instance (Show (Abstract.Members λ),
+deriving instance (Show (s (Abstract.Members λ)),
                    Show (Abstract.ModuleName λ), Show (Abstract.QualifiedName λ)) => Show (Export λ l d s)
-deriving instance (Eq (Abstract.Members λ),
+deriving instance (Eq (s (Abstract.Members λ)),
                    Eq (Abstract.ModuleName λ), Eq (Abstract.QualifiedName λ)) => Eq (Export λ l d s)
 
 deriving instance Typeable (Import λ l d s)
@@ -928,10 +928,10 @@ deriving instance (Eq (s (Abstract.ImportSpecification l l d d)), Eq (Abstract.M
                   Eq (Import λ l d s)
 
 deriving instance Typeable (ImportItem λ l d s)
-deriving instance (Data (Abstract.Members λ), Data (Abstract.Name λ),
+deriving instance (Data (s (Abstract.Members λ)), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (ImportItem λ l d s)
-deriving instance (Show (Abstract.Members λ), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
-deriving instance (Eq (Abstract.Members λ), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
+deriving instance (Show (s (Abstract.Members λ)), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
+deriving instance (Eq (s (Abstract.Members λ)), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
 
 deriving instance (Data λ, Data (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Data (Members λ)
 deriving instance (Show (Abstract.SupportFor 'Extensions.ExplicitNamespaces λ)) => Show (Members λ)

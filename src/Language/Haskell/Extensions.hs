@@ -433,6 +433,7 @@ byName = Map.fromList [
   ("PolyKinds", PolyKinds),
   ("PostfixOperators", PostfixOperators),
   ("QualifiedDo", QualifiedDo),
+  ("QualifiedExportImportMembers", QualifiedExportImportMembers),
   ("QuantifiedConstraints", QuantifiedConstraints),
   ("QuasiQuotes", QuasiQuotes),
   ("Rank2Types", RankNTypes),

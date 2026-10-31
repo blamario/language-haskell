@@ -293,11 +293,11 @@ data Import λ l d s = Import Bool (Abstract.ModuleName λ) (Maybe (Abstract.Mod
 data ImportSpecification λ l d s = ImportSpecification Bool (ZipList (s (Abstract.ImportItem l l d d)))
 
 data ImportItem λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   ImportClassOrType (Abstract.Name λ) (Maybe (Abstract.Members λ))
+   ImportClassOrType (Abstract.Name λ) (Maybe (s (Abstract.Members λ)))
    | ImportVar (Abstract.Name λ)
 
 data Export λ l (d :: Kind.Type -> Kind.Type) (s :: Kind.Type -> Kind.Type) =
-   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (Abstract.Members λ))
+   ExportClassOrType (Abstract.QualifiedName λ) (Maybe (s (Abstract.Members λ)))
    | ExportVar (Abstract.QualifiedName λ)
    | ReExportModule (Abstract.ModuleName λ)
 
@@ -420,11 +420,11 @@ deriving instance (Eq (s (Abstract.Statement l l d d)), Eq (s (Abstract.Expressi
                   Eq (GuardedExpression λ l d s)
 
 deriving instance Typeable (Export λ l d s)
-deriving instance (Data (Abstract.Members λ), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
+deriving instance (Data (s (Abstract.Members λ)), Data (Abstract.ModuleName λ), Data (Abstract.QualifiedName λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (Export λ l d s)
-deriving instance (Show (Abstract.Members λ),
+deriving instance (Show (s (Abstract.Members λ)),
                    Show (Abstract.ModuleName λ), Show (Abstract.QualifiedName λ)) => Show (Export λ l d s)
-deriving instance (Eq (Abstract.Members λ),
+deriving instance (Eq (s (Abstract.Members λ)),
                    Eq (Abstract.ModuleName λ), Eq (Abstract.QualifiedName λ)) => Eq (Export λ l d s)
 
 deriving instance Typeable (DerivingClause λ l d s)
@@ -480,10 +480,10 @@ deriving instance (Show (s (Abstract.ImportItem l l d d))) => Show (ImportSpecif
 deriving instance (Eq (s (Abstract.ImportItem l l d d))) => Eq (ImportSpecification λ l d s)
 
 deriving instance Typeable (ImportItem λ l d s)
-deriving instance (Data (Abstract.Members λ), Data (Abstract.Name λ),
+deriving instance (Data (s (Abstract.Members λ)), Data (Abstract.Name λ),
                    Data λ, Typeable l, Typeable d, Typeable s) => Data (ImportItem λ l d s)
-deriving instance (Show (Abstract.Members λ), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
-deriving instance (Eq (Abstract.Members λ), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
+deriving instance (Show (s (Abstract.Members λ)), Show (Abstract.Name λ)) => Show (ImportItem λ l d s)
+deriving instance (Eq (s (Abstract.Members λ)), Eq (Abstract.Name λ)) => Eq (ImportItem λ l d s)
 
 deriving instance Typeable (Context λ l d s)
 deriving instance (Data (s (Abstract.Context l l d d)), Data (s (Abstract.Type l l d d)),

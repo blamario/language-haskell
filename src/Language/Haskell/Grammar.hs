@@ -203,7 +203,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    moduleLevel= ModuleLevelGrammar{
       exports = parens (wrap export `sepEndBy` comma),
       export = Abstract.exportVar <$> qualifiedVariable
-               <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional members
+               <|> Abstract.exportClassOrType <$> qualifiedTypeConstructor <*> optional (wrap members)
                <|> Abstract.reExportModule <$ keyword "module" <*> moduleId,
       importDeclaration = Abstract.importDeclaration <$ keyword "import"
                           <*> (True <$ keyword "qualified" <|> pure False) <*> moduleId
@@ -211,7 +211,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
       importSpecification = (pure Abstract.includedImports <|> Abstract.excludedImports <$ keyword "hiding")
                             <*> parens (wrap importItem `sepEndBy` comma),
       importItem = Abstract.importVar <$> variable
-                   <|> Abstract.importClassOrType <$> typeConstructor <*> optional members,
+                   <|> Abstract.importClassOrType <$> typeConstructor <*> optional (wrap members),
       members = parens (Abstract.allMembers <$ delimiter ".."
                         <|> Abstract.memberList <$> cname `sepEndBy` comma),
       cname = variable <|> constructor},

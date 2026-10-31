@@ -205,7 +205,8 @@ instance PrettyViaTH ExtensionSwitch where
    prettyViaTH (ExtensionSwitch (x, True)) = Ppr.text (show x)
    prettyViaTH (ExtensionSwitch (x, False)) = Ppr.text "No" Ppr.<> prettyViaTH (ExtensionSwitch (x, True))
 
-instance (Abstract.QualifiedName l ~ AST.QualifiedName l,
+instance (TemplateWrapper f,
+          Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Name l ~ AST.Name l,
           PrettyViaTH (Abstract.QualifiedName l),
           PrettyViaTH (Abstract.ModuleName l),
@@ -216,7 +217,7 @@ instance (Abstract.QualifiedName l ~ AST.QualifiedName l,
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
         Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
-      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH . extract) members
    prettyViaTH (ExportVar name@(AST.QualifiedName _ (AST.Name local)))
       | Text.all (\c-> not $ Char.isLetter c || c == '_') local = Ppr.parens (prettyViaTH name)
       | otherwise = prettyViaTH name
@@ -244,7 +245,8 @@ instance (TemplateWrapper f,
       (if inclusive then id else (Ppr.text "hiding" <+>))
       $ Ppr.parens (Ppr.sep $ Ppr.punctuate Ppr.comma $ prettyViaTH . extract <$> toList items)
 
-instance (Abstract.Name l ~ AST.Name l,
+instance (TemplateWrapper f,
+          Abstract.Name l ~ AST.Name l,
           PrettyViaTH (Abstract.Name l),
           PrettyViaTH (Abstract.Members l)) =>
          PrettyViaTH (ImportItem l l f f) where
@@ -253,7 +255,7 @@ instance (Abstract.Name l ~ AST.Name l,
         (if Text.take 1 local == ":" then id else (Ppr.text "type" <+>)) $
         Ppr.parens (prettyViaTH name) Ppr.<> prettyMembers
       | otherwise = prettyViaTH name Ppr.<> prettyMembers
-      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH) members
+      where prettyMembers = maybe Ppr.empty (Ppr.parens . prettyViaTH . extract) members
    prettyViaTH (ImportVar name@(AST.Name local)) = prettyIdentifier name
    prettyViaTH (ImportPattern name@(AST.Name local)) = Ppr.text "pattern" <+> prettyIdentifier name
 

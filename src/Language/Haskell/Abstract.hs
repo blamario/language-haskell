@@ -86,14 +86,14 @@ class Haskell λ where
                -> Module λ l d s
    withLanguagePragma :: [ExtensionSwitch] -> s (Module l l d d) -> Module λ l d s
 
-   exportClassOrType :: QualifiedName λ -> Maybe (Members λ) -> Export λ l d s
+   exportClassOrType :: QualifiedName λ -> Maybe (s (Members λ)) -> Export λ l d s
    exportVar :: QualifiedName λ -> Export λ l d s
    reExportModule :: ModuleName λ -> Export λ l d s
 
    importDeclaration :: Bool -> ModuleName λ -> Maybe (ModuleName λ) -> Maybe (s (ImportSpecification l l d d))
                      -> Import λ l d s
    excludedImports, includedImports :: [s (ImportItem l l d d)] -> ImportSpecification λ l d s
-   importClassOrType :: Name λ -> Maybe (Members λ) -> ImportItem λ l d s
+   importClassOrType :: Name λ -> Maybe (s (Members λ)) -> ImportItem λ l d s
    importVar :: Name λ -> ImportItem λ l d s
 
    allMembers :: Members λ

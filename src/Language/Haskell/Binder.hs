@@ -12,10 +12,10 @@ module Language.Haskell.Binder (
    -- * Node wrappers
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    -- * Binding types
-   BindingMembers(filterMembers),
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding, PatternBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
    TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
+   OtherSynAtts,
    Unbound(Unbound, types, values, constructors),
    -- * Utility functions
    builtinPreludeBindings, lookupType, lookupValue, onMap, baseName) where
@@ -229,6 +229,8 @@ type instance AG.Atts (AG.Synthesized (Binder l f)) g = (OtherSynAtts l g, Local
 type family OtherSynAtts l g where
   OtherSynAtts l (ExtAST.Export l l) = Environment l
   OtherSynAtts l (ExtAST.Import l l) = (Any, Environment l)
+  OtherSynAtts l (Deep.Const2 (AST.Members l)) = (LocalEnvironment l -> LocalEnvironment l)
+  OtherSynAtts l (Deep.Const2 (ExtAST.Members l)) = (LocalEnvironment l -> LocalEnvironment l)
   OtherSynAtts l (ExtAST.EquationLHS l l) = LocalEnvironment l
   OtherSynAtts l _ = ()
 
@@ -347,7 +349,6 @@ instance {-# OVERLAPS #-}
           Abstract.ImportSpecification l l ~ AST.ImportSpecification l l,
           Abstract.ImportItem l l ~ ExtAST.ImportItem l l,
           Monoid (OtherSynAtts l (Abstract.Declaration l l)),
-          BindingMembers l,
           Ord (Abstract.QualifiedName l), Foldable1 f) =>
          AG.At (AG.Auto (Binder l f)) (AST.Module l l)
          where
@@ -406,14 +407,15 @@ instance {-# OVERLAPS #-}
             preludeEnv = fold $ Map.lookup Abstract.preludeName modEnv
 
 instance {-# OVERLAPS #-}
-         (Abstract.Haskell l, BindingMembers l,
+         (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l, Abstract.Name l ~ AST.Name l,
+          OtherSynAtts l (AG.NodeConstructor (Abstract.Members l)) ~ (LocalEnvironment l -> LocalEnvironment l),
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.Export l l) where
-   synthesis _ node (_, moduleGlobalScope) _ = (allExports, onMap (Map.mapKeysMonotonic baseName) allExports) where
+   synthesis _ node (_, moduleGlobalScope) chSyn = (allExports, onMap (Map.mapKeysMonotonic baseName) allExports) where
       allExports :: Environment l
       allExports = foldMap itemExports node
       itemExports :: forall d. ExtAST.Export l l d d -> Environment l
@@ -421,9 +423,9 @@ instance {-# OVERLAPS #-}
       itemExports (ExtAST.ExportVar qn) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
       itemExports (ExtAST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
-      itemExports (ExtAST.ExportClassOrType parent (Just members)) =
-         (\(b, e)-> onMap (Map.insert parent b . Map.mapKeysMonotonic (qualifyAs parent))
-                    $ filterMembers members e) $
+      itemExports (ExtAST.ExportClassOrType parent (Just _members))
+         | ExtAST.ExportClassOrType _ (Just (AG.Synthesized (filterMembers, _))) <- chSyn
+         = (\(b, e)-> onMap (Map.insert parent b . Map.mapKeysMonotonic (qualifyAs parent)) $ filterMembers e) $
          case lookupEnv parent moduleGlobalScope
          of Just b@(TypeBinding (TypeClass env)) -> (b, env)
             Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
@@ -475,18 +477,20 @@ instance {-# OVERLAPS #-}
             available = onMap (Map.mapKeysMonotonic baseName) (snd i)
 
 instance {-# OVERLAPS #-}
-         (Abstract.Haskell l, BindingMembers l,
+         (Abstract.Haskell l,
           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
+          OtherSynAtts l (AG.NodeConstructor (Abstract.Members l)) ~ (LocalEnvironment l -> LocalEnvironment l),
           Ord (Abstract.ModuleName l), Ord (Abstract.Name l),
           Show (Abstract.ModuleName l), Show (Abstract.Name l),
           Foldable1 f) =>
          AG.Synthesizer (AG.Auto (Binder l f)) (ExtAST.ImportItem l l)
          where
-   synthesis _ node i _ = ((), foldMap itemImports node)
+   synthesis _ node i chSyn = ((), foldMap itemImports node)
       where itemImports :: forall d. ExtAST.ImportItem l l d d -> LocalEnvironment l
             itemImports (ExtAST.ImportClassOrType name Nothing) = nameImport name available
-            itemImports (ExtAST.ImportClassOrType parent (Just members)) =
-               (\(b, e)-> onMap (Map.insert parent b) (filterMembers members e)) $
+            itemImports (ExtAST.ImportClassOrType parent (Just _members))
+               | ExtAST.ImportClassOrType _ (Just (AG.Synthesized (filterMembers, _))) <- chSyn
+               = (\(b, e)-> onMap (Map.insert parent b) (filterMembers e)) $
                case lookupEnv parent available
                of Just b@(TypeBinding (TypeClass env)) -> (b, env)
                   Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
@@ -502,6 +506,29 @@ instance {-# OVERLAPS #-}
             available = onMap (Map.mapKeysMonotonic baseName) (snd i)
             nameImport :: AST.Name l -> LocalEnvironment l -> LocalEnvironment l
             nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
+
+instance (Abstract.Name l ~ AST.Name l, Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (Deep.Const2 (AST.Members l)) where
+  attribution _ node (_inh, _chSyn) = (AG.Synthesized (filterMembers members, mempty), Deep.Const2 members)
+     where members = Deep.getConst2 (Foldable1.head node)
+           filterMembers AST.AllMembers = id
+           filterMembers (AST.MemberList names) = onMap (`Map.restrictKeys` Set.fromList names)
+
+instance (Abstract.Name l ~ AST.Name l, Foldable1 f) =>
+         AG.At (AG.Auto (Binder l f)) (Deep.Const2 (ExtAST.Members l)) where
+  attribution _ node (_inh, _chSyn) = (AG.Synthesized (filterMembers members, mempty), Deep.Const2 members)
+     where members = Deep.getConst2 (Foldable1.head node)
+           filterMembers ExtAST.AllMembers = id
+           filterMembers ExtAST.AllMembersPlus{} = id
+           filterMembers (ExtAST.MemberList names) = onMap (`Map.restrictKeys` Set.fromList names)
+           filterMembers (ExtAST.ExplicitlyNamespacedMemberList _support names) = \env-> foldMap (memberImport env) names
+           memberImport env (ExtAST.DefaultMember name) = onMap (`Map.restrictKeys` Set.singleton name) env
+           memberImport env (ExtAST.PatternMember name) = onMap (Map.filterWithKey namedPattern) env
+              where namedPattern name' PatternBinding{} = name == name'
+                    namedPattern _ _ = False
+           memberImport env (ExtAST.TypeMember name) = onMap (Map.filterWithKey namedType) env
+              where namedType name' TypeBinding{} = name == name'
+                    namedType _ _ = False
 
 instance {-# OVERLAPS #-}
          (Abstract.Haskell l,
@@ -853,26 +880,6 @@ verifyValueName :: AST.QualifiedName l -> Environment l -> Const (Unbound l) b
 verifyValueName q env = case lookupValue q env of
    Nothing -> Const Unbound{types= mempty, constructors= mempty, values= Set.singleton q}
    _ -> mempty
-
-class Abstract.Haskell l => BindingMembers l where
-   filterMembers :: Abstract.Members l -> LocalEnvironment l -> LocalEnvironment l
-
-instance BindingMembers AST.Language where
-  filterMembers AST.AllMembers env = env
-  filterMembers (AST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
-
-instance BindingMembers ExtAST.Language where
-  filterMembers ExtAST.AllMembers env = env
-  filterMembers ExtAST.AllMembersPlus{} env = env
-  filterMembers (ExtAST.MemberList names) env = onMap (`Map.restrictKeys` Set.fromList names) env
-  filterMembers (ExtAST.ExplicitlyNamespacedMemberList _support members) env = foldMap memberImport members
-     where memberImport (ExtAST.DefaultMember name) = onMap (`Map.restrictKeys` Set.singleton name) env
-           memberImport (ExtAST.PatternMember name) = onMap (Map.filterWithKey namedPattern) env
-              where namedPattern name' PatternBinding{} = name == name'
-                    namedPattern _ _ = False
-           memberImport (ExtAST.TypeMember name) = onMap (Map.filterWithKey namedType) env
-              where namedType name' TypeBinding{} = name == name'
-                    namedType _ _ = False
 
 sameShape :: [a] -> [b] -> [b]
 sameShape [] _ = []
