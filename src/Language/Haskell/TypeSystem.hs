@@ -100,7 +100,7 @@ checkModule :: forall l pos s con. (
   -> Wrap l pos s (AST.Module l l (Wrap l pos s) (Wrap l pos s))
   -> (Either (TypeErrors l pos con) (LocalTypeMap l Identity pos con), Binder.LocalEnvironment l)
 checkModule extensions binderModuleEnv binderEnv moduleBindings bindings m =
-  bimap validationToEither snd $ AG.syn
+  bimap validationToEither Binder.localBindings $ AG.syn
   $ (transformation Full.<$> m) Rank2.$ AG.Inherited ((moduleBindings, env), (extensions, binderEnv))
   where env = TypeEnv{
           bindings,
@@ -299,15 +299,14 @@ instance {-# OVERLAPS #-} (
   Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
   Abstract.ModuleName l ~ AST.ModuleName l,
   Abstract.QualifiedName l ~ AST.QualifiedName l,
-  Binder.OtherSynAtts l (AG.NodeConstructor (Abstract.Members l))
-    ~ (Binder.LocalEnvironment l -> Binder.LocalEnvironment l),
   ConstraintCollection con,
   Constraints.Language con ~ l
   ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
   attribution (TypeCheck{}, b) node@(_, x) (AG.Inherited (TypeEnv{bindings}, binds), expSyn) =
     (AG.Synthesized (Map.foldMapWithKey replicate binderExports, binderSyn), error "AST.Export node has no children")
-    where (AG.Synthesized binderSyn@(UnionWith binderExports, _), _) =
+    where (AG.Synthesized binderSyn, _) =
             AG.attribution b node (AG.Inherited binds, AG.Synthesized . snd . AG.syn Rank2.<$> expSyn)
+          UnionWith binderExports = Binder.exportedNames binderSyn
           replicate name Binder.TypeBinding{} = LocalTypeMap{
             typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
             valueBindings = mempty,
@@ -336,7 +335,7 @@ instance {-# OVERLAPS #-} (
     where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
           (AG.Synthesized s2, i2') = AG.attribution t2 x (AG.Inherited i2, AG.Synthesized . snd . AG.syn Rank2.<$> s)
           pairInh (AG.Inherited inh1) (AG.Inherited inh2) = AG.Inherited (inh1, inh2)
-          crossSyn _ bsyn@((isPrelude, binderEnv), _) = (intersect (Map.findWithDefault mempty name i1) binderEnv, bsyn)
+          crossSyn _ bsyn = (intersect (Map.findWithDefault mempty name i1) (Binder.importedNames bsyn), bsyn)
           intersect LocalTypeMap{typeBindings, valueBindings} (UnionWith boundEnv) =
             Map.foldMapWithKey importBinding boundEnv
             where importBinding name Binder.TypeBinding{} = TypeMap{

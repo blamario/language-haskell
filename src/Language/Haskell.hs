@@ -86,8 +86,6 @@ parseModule extensions modEnv env verify source =
 -- offsets from the start of the given source text.
 resolvePositions :: (Full.Traversable (Full.Inward (Reorganizer.Reorganization AST.Language (Down Int) Input)) node,
                      AG.At (AG.Auto (Binder.Binder AST.Language Parsed)) node,
-                     AG.Atts (AG.Synthesized (Binder.Binder AST.Language Parsed)) node
-                     ~ (x, Binder.LocalEnvironment AST.Language),
                      Rank2.Functor (node Parsed),
                      Rank2.Apply (node (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed))))),
                      Rank2.Traversable (node (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed))))),
