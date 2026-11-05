@@ -35,7 +35,7 @@ import Rank2 qualified
 import Transformation qualified
 import Transformation (Transformation)
 import Transformation.AG qualified as AG
-import Transformation.AG.Generics qualified as AG (Auto(Auto), Synthesizer(synthesis), passDown)
+import Transformation.AG.Dimorphic qualified as Di
 import Transformation.Deep qualified as Deep
 import Transformation.Full qualified as Full
 import Transformation.Rank2 qualified
@@ -106,7 +106,7 @@ checkModule extensions binderModuleEnv binderEnv moduleBindings bindings m =
           bindings,
           freshVarPrefix = "",
           constraints = mempty :: DefaultConstraints l pos}
-        transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con, AG.Auto $ Binder binderModuleEnv)
+        transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con, Di.Auto $ Binder binderModuleEnv)
 
 checkExpression :: forall l pos s con. (
   Abstract.Haskell l,
@@ -301,7 +301,7 @@ instance {-# OVERLAPS #-} (
   Abstract.QualifiedName l ~ AST.QualifiedName l,
   ConstraintCollection con,
   Constraints.Language con ~ l
-  ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
+  ) => AG.At (TypeCheck l pos s con, Di.Auto (Binder l (Wrap l pos s))) (AST.Export l l) where
   attribution (TypeCheck{}, b) node@(_, x) (AG.Inherited (TypeEnv{bindings}, binds), expSyn) =
     (AG.Synthesized (Map.foldMapWithKey replicate binderExports, binderSyn), error "AST.Export node has no children")
     where (AG.Synthesized binderSyn, _) =
@@ -329,7 +329,7 @@ instance {-# OVERLAPS #-} (
   Abstract.Name l ~ AST.Name l, Abstract.ModuleName l ~ AST.ModuleName l,
   Abstract.QualifiedName l ~ AST.QualifiedName l,
   Abstract.ImportSpecification l ~ AST.ImportSpecification l
-  ) => AG.At (TypeCheck l pos s con, AG.Auto (Binder l (Wrap l pos s))) (AST.Import l l) where
+  ) => AG.At (TypeCheck l pos s con, Di.Auto (Binder l (Wrap l pos s))) (AST.Import l l) where
   attribution (t1, t2) x@(_, AST.Import safe qualified package name alias spec) (AG.Inherited (i1, i2), s) =
     (AG.Synthesized $ crossSyn s1 s2, Rank2.liftA2 pairInh i1' i2')
     where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)

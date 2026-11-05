@@ -36,7 +36,6 @@ import qualified Transformation
 import Transformation (Transformation)
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
-import qualified Transformation.AG.Generics as AG.Generics
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Rank2
@@ -361,7 +360,7 @@ instance (SameWrap λ l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.ModuleName l ~ AST.ModuleName l,
           Abstract.Name l ~ AST.Name l,
-          q ~ Binder.WithEnvironment l p, w ~ AG.Generics.Auto (Binder l p),
+          q ~ Binder.WithEnvironment l p, w ~ Di.Auto (Binder l p),
           p ~ Reserializer.Wrapped pos s, g ~ AST.Expression l l,
           AG.At w g,
           Deep.Functor (AG.Knit (AG.Keep w)) g,

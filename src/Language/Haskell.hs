@@ -29,7 +29,6 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
-import qualified Transformation.AG.Generics as AG (Auto)
 
 import Control.Arrow ((&&&), (>>>))
 import Control.Monad ((>=>))
@@ -85,15 +84,15 @@ parseModule extensions modEnv env verify source =
 -- | Resolve identifiers in the given parsed AST, and replace the stored positions in the entire tree with
 -- offsets from the start of the given source text.
 resolvePositions :: (Full.Traversable (Full.Inward (Reorganizer.Reorganization AST.Language (Down Int) Input)) node,
-                     AG.At (AG.Auto (Binder.Binder AST.Language Parsed)) node,
+                     AG.At (Di.Auto (Binder.Binder AST.Language Parsed)) node,
                      Rank2.Functor (node Parsed),
-                     Rank2.Apply (node (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed))))),
-                     Rank2.Traversable (node (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed))))),
-                     Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder AST.Language Parsed)))) node,
+                     Rank2.Apply (node (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder AST.Language Parsed))))),
+                     Rank2.Traversable (node (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder AST.Language Parsed))))),
+                     Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder AST.Language Parsed)))) node,
                      Deep.Functor
                         (Full.Outward
                            (Rank2.Map
-                              (AG.Kept (AG.Auto (Binder.Binder AST.Language Parsed)))
+                              (AG.Kept (Di.Auto (Binder.Binder AST.Language Parsed)))
                               (Binder.WithEnvironment AST.Language Parsed)))
                         node,
                      Deep.Functor

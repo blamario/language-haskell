@@ -27,7 +27,6 @@ import qualified Rank2
 import qualified Transformation
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Dimorphic as Di
-import qualified Transformation.AG.Generics as AG (Auto)
 import qualified Transformation.Rank2 as Rank2
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -153,13 +152,13 @@ main' Opts{..} = do
               Data (g l l [] []),
               Show (g Language Language e e), Show (g Language Language w w), Show (g Language Language Placed Placed),
               forall f. Rank2.Functor (g l l f),
-              Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
-              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+              Rank2.Apply (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
+              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
               Rank2.Foldable (g l l (Const (Sum Int))),
-              AG.At (AG.Auto (Binder.Binder l w)) (g l l),
-              Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
+              AG.At (Di.Auto (Binder.Binder l w)) (g l l),
+              Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder l w)))) (g l l),
               Deep.Functor
-                 (Full.Outward (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
+                 (Full.Outward (Rank2.Map (AG.Kept (Di.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
                  (g l l),
               Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
               Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
@@ -210,13 +209,13 @@ main' Opts{..} = do
                   Show (g Language Language e e), Show (g Language Language w w),
                   Show (g Language Language Placed Placed),
                   forall f. Rank2.Functor (g l l f),
-                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
-                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (AG.Auto (Binder.Binder l w))))),
+                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
+                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
                   Rank2.Foldable (g l l (Const (Sum Int))),
-                  AG.At (AG.Auto (Binder.Binder l w)) (g l l),
-                  Deep.Functor (AG.Knit (AG.Keep (AG.Auto (Binder.Binder l w)))) (g l l),
+                  AG.At (Di.Auto (Binder.Binder l w)) (g l l),
+                  Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder l w)))) (g l l),
                   Deep.Functor
-                     (Full.Outward (Rank2.Map (AG.Kept (AG.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
+                     (Full.Outward (Rank2.Map (AG.Kept (Di.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
                      (g l l),
                   Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
                   Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
