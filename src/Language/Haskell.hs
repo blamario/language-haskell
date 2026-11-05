@@ -137,7 +137,10 @@ predefinedModuleBindings =
 
 -- | All the @Prelude@ bindings available without any import statement
 preludeBindings :: IO (Binder.Environment AST.Language)
-preludeBindings = Binder.onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing) <$> unqualifiedPreludeBindings
+preludeBindings =
+   Binder.onMap (Map.mapKeysMonotonic $ Abstract.qualifiedName Nothing)
+   . Binder.inScopeFrom (Just Abstract.preludeName)
+   <$> unqualifiedPreludeBindings
 
 unqualifiedPreludeBindings :: IO (Binder.LocalEnvironment AST.Language)
 unqualifiedPreludeBindings = do

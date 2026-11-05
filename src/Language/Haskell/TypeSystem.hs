@@ -306,7 +306,7 @@ instance {-# OVERLAPS #-} (
     (AG.Synthesized (Map.foldMapWithKey replicate binderExports, binderSyn), error "AST.Export node has no children")
     where (AG.Synthesized binderSyn, _) =
             AG.attribution b node (AG.Inherited binds, AG.Synthesized . snd . AG.syn Rank2.<$> expSyn)
-          UnionWith binderExports = Binder.exportedNames binderSyn
+          UnionWith binderExports = Binder.boundNames (Binder.exportedNames binderSyn)
           replicate name Binder.TypeBinding{} = LocalTypeMap{
             typeBindings = foldMap (Map.singleton $ Binder.baseName name) (Map.lookup name bindings.typeBindings),
             valueBindings = mempty,
@@ -335,7 +335,8 @@ instance {-# OVERLAPS #-} (
     where (AG.Synthesized s1, i1') = AG.attribution t1 x (AG.Inherited i1, AG.Synthesized . fst . AG.syn Rank2.<$> s)
           (AG.Synthesized s2, i2') = AG.attribution t2 x (AG.Inherited i2, AG.Synthesized . snd . AG.syn Rank2.<$> s)
           pairInh (AG.Inherited inh1) (AG.Inherited inh2) = AG.Inherited (inh1, inh2)
-          crossSyn _ bsyn = (intersect (Map.findWithDefault mempty name i1) (Binder.importedNames bsyn), bsyn)
+          crossSyn _ bsyn =
+            (intersect (Map.findWithDefault mempty name i1) (Binder.boundNames $ Binder.importedNames bsyn), bsyn)
           intersect LocalTypeMap{typeBindings, valueBindings} (UnionWith boundEnv) =
             Map.foldMapWithKey importBinding boundEnv
             where importBinding name Binder.TypeBinding{} = TypeMap{

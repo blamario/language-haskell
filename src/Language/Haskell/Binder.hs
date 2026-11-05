@@ -12,13 +12,15 @@ module Language.Haskell.Binder (
    -- * Node wrappers
    Attributes, Environment, LocalEnvironment, ModuleEnvironment, WithEnvironment,
    -- * Binding types
+   InScope(InScope, bindingOf, moduleOf),
    Binding(ErroneousBinding, TypeBinding, ValueBinding, TypeAndValueBinding, PatternBinding),
    BindingError(ClashingBindings, DuplicateInfixDeclaration, DuplicateRecordField),
-   TypeBinding(TypeClass), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
+   TypeBinding(TypeClass, DataType), ValueBinding(InfixDeclaration, RecordConstructor, RecordField),
    SynAtts(SynAtts, localBindings, definedNames, exportedNames, importedNames, importsPrelude, memberFilter),
    Unbound(Unbound, types, values, constructors),
    -- * Utility functions
-   builtinPreludeBindings, lookupType, lookupValue, onMap, baseName) where
+   builtinPreludeBindings, boundNames, inScopeFrom, lookupModule, lookupType, lookupValue, onMap,
+   baseName) where
 
 import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)
@@ -57,8 +59,8 @@ import qualified Language.Haskell.Extensions.AST as ExtAST
 import qualified Language.Haskell.Extensions.AST as AST (Declaration(..))
 
 
--- | Bindings of all names in scope
-type Environment l = UnionWith (Map (AST.QualifiedName l)) (Binding l)
+-- | Bindings of all names in scope, each with the module it is in scope from
+type Environment l = UnionWith (Map (AST.QualifiedName l)) (InScope l)
 
 -- | Bindings of local names
 type LocalEnvironment l = UnionWith (Map (AST.Name l)) (Binding l)
@@ -105,6 +107,21 @@ data ValueBinding l = InfixDeclaration (AST.Associativity l) Int (Maybe (ValueBi
                     | RecordFieldAndValue
                     deriving (Typeable, Data, Eq, Show)
 
+-- | A name in scope: what it binds, and which module it came from.
+data InScope l = InScope {
+   -- | what the name binds
+   bindingOf :: Binding l,
+   -- | the module the name is in scope from
+   moduleOf :: Maybe (AST.ModuleName l)}
+   deriving (Typeable, Data, Eq, Show)
+
+instance Semigroup (InScope l) where
+   a <> b = InScope{bindingOf= bindingOf a <> bindingOf b,
+                    moduleOf= if moduleOf a == moduleOf b then moduleOf a else Nothing}
+
+instance Monoid (InScope l) where
+   mempty = InScope{bindingOf= mempty, moduleOf= Nothing}
+
 -- | The sets of erroneously unbound names
 data Unbound l = Unbound {types :: Set (AST.QualifiedName l),
                           values :: Set (AST.QualifiedName l),
@@ -126,7 +143,7 @@ unboundNames = Full.foldMap (Full.Outward BindingVerifier)
 
 -- | Look up a type name in the environment
 lookupType :: AST.QualifiedName l -> Environment l -> Maybe (TypeBinding l)
-lookupType name (UnionWith env) = Map.lookup name env >>= \case
+lookupType name (UnionWith env) = bindingOf <$> Map.lookup name env >>= \case
   TypeBinding t -> Just t
   TypeAndValueBinding t _ -> Just t
   TypeAndPatternBinding t -> Just t
@@ -134,10 +151,23 @@ lookupType name (UnionWith env) = Map.lookup name env >>= \case
 
 -- | Look up a value name in the environment
 lookupValue :: AST.QualifiedName l -> Environment l -> Maybe (ValueBinding l)
-lookupValue name (UnionWith env) = Map.lookup name env >>= \case
+lookupValue name (UnionWith env) = bindingOf <$> Map.lookup name env >>= \case
   ValueBinding v -> Just v
   TypeAndValueBinding _ v -> Just v
   _ -> Nothing
+
+-- | Look up the module a name in scope came from; 'Nothing' means the name is either not in scope or bound where it
+-- stands.
+lookupModule :: AST.QualifiedName l -> Environment l -> Maybe (AST.ModuleName l)
+lookupModule name (UnionWith env) = Map.lookup name env >>= moduleOf
+
+-- | Assign the environment bindings to the given module
+inScopeFrom :: Maybe (AST.ModuleName l) -> UnionWith (Map k) (Binding l) -> UnionWith (Map k) (InScope l)
+inScopeFrom moduleName = onMap ((`InScope` moduleName) <$>)
+
+-- | Drop the module provenance leaving only the bindings
+boundNames :: UnionWith (Map k) (InScope l) -> UnionWith (Map k) (Binding l)
+boundNames = onMap (bindingOf <$>)
 
 deriving instance (Ord k, Data k, Data v) => Data (UnionWith (Map k) v)
 deriving instance (Ord k, Eq v) => Eq (UnionWith (Map k) v)
@@ -320,7 +350,7 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Ab
             members :: LocalEnvironment l
             members = localBindings syn
             bequeath :: forall d. AST.Declaration l l d d -> InhAtts l
-            bequeath AST.EquationDeclaration{} = (unqualified members <>) <$> inh
+            bequeath AST.EquationDeclaration{} = (fromLocalEnv members <>) <$> inh
             bequeath _ = inh
             constructorOrField b@(ValueBinding DataConstructor{}) = Just b
             constructorOrField b@(ValueBinding RecordConstructor{}) = Just b
@@ -354,19 +384,21 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Ab
                      noFieldSelector x = Just x
             moduleAttribution AST.AnonymousModule{} =
                Di.Atts{Di.inh= (exts, moduleGlobalScope),
-                       Di.syn= bindingsOnly $ onMap (Map.mapKeysMonotonic baseName)
+                       Di.syn= bindingsOnly $ onMap (Map.mapKeysMonotonic baseName) $ boundNames
                                $ filterEnv (== mainName) moduleGlobalScope}
-               where moduleGlobalScope = importedScope <> unqualified declaredSyn
+               where moduleGlobalScope = importedScope <> unqualified declared
+                     declared = inScopeFrom (Just $ Abstract.moduleName $ Abstract.name "Main" :| []) declaredSyn
                      mainName = Abstract.qualifiedName Nothing (Abstract.name "main")
             moduleAttribution (AST.NamedModule moduleName exports _modImports _body) =
                Di.Atts{Di.inh= (exts, moduleGlobalScope),
                        Di.syn= bindingsOnly $ maybe declaredSyn (const exportedSyn) exports}
                where moduleGlobalScope = importedScope
-                                         <> qualifiedWith moduleName declaredSyn
-                                         <> unqualified declaredSyn
+                                         <> qualifiedWith moduleName declared
+                                         <> unqualified declared
+                     declared = inScopeFrom (Just moduleName) declaredSyn
                      -- 'Map.mapKeysMonotonic' would not do: 'baseName' is monotonic only within a single
                      -- export item, whose names all share the same qualifier
-                     exportedSyn = onMap (Map.mapKeysWith (<>) baseName) (exportedNames syn)
+                     exportedSyn = boundNames $ onMap (Map.mapKeysWith (<>) baseName) (exportedNames syn)
             -- the names declared by the module body; the imports and exports synthesize their own attributes
             declaredSyn :: LocalEnvironment l
             declaredSyn = localBindings syn
@@ -374,8 +406,9 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Ab
             importedScope =
                importedNames syn
                <> if not (getAny $ importsPrelude syn) && Map.findWithDefault True Extensions.ImplicitPrelude exts
-                  then qualifiedWith Abstract.preludeName preludeEnv <> unqualified preludeEnv
+                  then qualifiedWith Abstract.preludeName prelude <> unqualified prelude
                   else mempty
+            prelude = inScopeFrom (Just Abstract.preludeName) preludeEnv
             preludeEnv = fold $ Map.lookup Abstract.preludeName modEnv
 
 instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l,
@@ -389,9 +422,9 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l,
             itemExports (ExtAST.ExportPattern qn) = filterEnv (== qn) moduleGlobalScope
             itemExports (ExtAST.ExportClassOrType qn Nothing) = filterEnv (== qn) moduleGlobalScope
             itemExports (ExtAST.ExportClassOrType parent (Just _members)) =
-               (\(b, e)-> onMap (Map.insert parent b . Map.mapKeysMonotonic (qualifyAs parent))
-                          $ appEndo (memberFilter syn) e)
-               $ case lookupEnv parent moduleGlobalScope
+               (\(b, e)-> onMap (Map.insert parent (InScope b from) . Map.mapKeysMonotonic (qualifyAs parent))
+                          $ inScopeFrom from $ appEndo (memberFilter syn) e)
+               $ case bindingOf <$> lookupEnv parent moduleGlobalScope
                  of Just b@(TypeBinding (TypeClass env)) -> (b, env)
                     Just (TypeAndValueBinding b@(TypeClass env) _) -> (TypeBinding b, env)
                     Just (TypeAndPatternBinding b@(TypeClass env)) -> (TypeBinding b, env)
@@ -402,6 +435,7 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l,
                     Just (TypeAndPatternBinding b@(DataType env)) -> (TypeBinding b, env)
                     Just b -> (ErroneousBinding (NonExportableBinding b), mempty)
                     Nothing -> (ErroneousBinding (MissingBinding parent), mempty)
+               where from = moduleOf =<< lookupEnv parent moduleGlobalScope
             qualifyAs :: AST.QualifiedName l -> AST.Name l -> AST.QualifiedName l
             qualifyAs (AST.QualifiedName prefix _) name = AST.QualifiedName prefix name
             reexportModule modName = filterEnv (unqualifiedAndQualifiedWith modName) moduleGlobalScope
@@ -414,10 +448,10 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l,
          Di.At (Binder l f) (ExtAST.Import l l) where
    attribution (Binder modEnv) node Di.Atts{Di.inh= (exts, _), Di.syn} =
       Di.Atts{Di.syn= mempty{importsPrelude= Any (name == Abstract.preludeName), importedNames= scope},
-              Di.inh= (exts, unqualified available)}
+              Di.inh= (exts, unqualified (inScopeFrom (Just name) available))}
       where ExtAST.Import _ qualified _ name alias spec = Foldable1.head node
             available = fold $ Map.lookup name modEnv
-            used = maybe available (const $ localBindings syn) spec
+            used = inScopeFrom (Just name) (maybe available (const $ localBindings syn) spec)
             scope
                | qualified = qualifiedWith (fromMaybe name alias) used
                | otherwise = qualifiedWith (fromMaybe name alias) used <> unqualified used
@@ -429,7 +463,7 @@ instance (Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.
             imports (AST.ImportSpecification True _) = listed
             imports (AST.ImportSpecification False _) = onMaps Map.difference available listed
             listed = localBindings syn
-            available = onMap (Map.mapKeysMonotonic baseName) importedEnv
+            available = boundNames (onMap (Map.mapKeysMonotonic baseName) importedEnv)
 
 instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Name l ~ AST.Name l,
           Foldable f) =>
@@ -452,7 +486,7 @@ instance (Abstract.Haskell l, Abstract.QualifiedName l ~ AST.QualifiedName l, Ab
                     _ -> (ErroneousBinding (MissingBinding $ Abstract.unqualifiedName parent), mempty)
             itemImports (ExtAST.ImportPattern name) = nameImport name available
             itemImports (ExtAST.ImportVar name) = nameImport name available
-            available = onMap (Map.mapKeysMonotonic baseName) importedEnv
+            available = boundNames (onMap (Map.mapKeysMonotonic baseName) importedEnv)
             nameImport :: AST.Name l -> LocalEnvironment l -> LocalEnvironment l
             nameImport name imports = foldMap (UnionWith . Map.singleton name) (lookupEnv name imports)
 
@@ -565,7 +599,7 @@ instance {-# OVERLAPPING #-}
       where guardsInh = ZipList $ AG.Inherited <$> init allInh
             resultInh = AG.Inherited (List.last allInh)
             allInh = scanl acc i $ sameShape (getZipList guards) (getZipList guardsSyn)
-            acc old (AG.Synthesized SynAtts{localBindings= new}) = (unqualified new <>) <$> old
+            acc old (AG.Synthesized SynAtts{localBindings= new}) = (fromLocalEnv new <>) <$> old
             AST.GuardedExpression guards _result = Foldable1.head node
 
 instance {-# OVERLAPPING #-}
@@ -580,8 +614,8 @@ instance {-# OVERLAPPING #-}
             bequeath (AST.LambdaExpression lhs _rhs)
               | AST.LambdaExpression vars _ <- chSyn =
                   AST.LambdaExpression (AG.Inherited i <$ lhs)
-                  $ AG.Inherited $ (unqualified (foldMap (localBindings . AG.syn) vars) <>) <$> i
-            bequeath e = AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) e
+                  $ AG.Inherited $ (fromLocalEnv (foldMap (localBindings . AG.syn) vars) <>) <$> i
+            bequeath e = AG.passDown ((fromLocalEnv (foldMap bequest node) <>) <$> i) e
             bequest AST.LambdaExpression{} = Rank2.foldMap (localBindings . AG.syn) chSyn
             bequest AST.LetExpression{} = Rank2.foldMap (localBindings . AG.syn) chSyn
             bequest AST.ListComprehension{} = Rank2.foldMap (localBindings . AG.syn) chSyn
@@ -599,8 +633,8 @@ instance {-# OVERLAPPING #-}
             bequeath (ExtAST.LambdaExpression lhs _rhs)
               | ExtAST.LambdaExpression vars _ <- chSyn =
                   ExtAST.LambdaExpression (AG.Inherited i <$ lhs)
-                  $ AG.Inherited $ (unqualified (foldMap (localBindings . AG.syn) vars) <>) <$> i
-            bequeath e = AG.passDown ((unqualified (foldMap bequest node) <>) <$> i) e
+                  $ AG.Inherited $ (fromLocalEnv (foldMap (localBindings . AG.syn) vars) <>) <$> i
+            bequeath e = AG.passDown ((fromLocalEnv (foldMap bequest node) <>) <$> i) e
             bequest ExtAST.LetExpression{} = Rank2.foldMap (localBindings . AG.syn) chSyn
             bequest ExtAST.ListComprehension{} = Rank2.foldMap (localBindings . AG.syn) chSyn
             bequest ExtAST.ParallelListComprehension{} = Rank2.foldMap (localBindings . AG.syn) chSyn
@@ -775,6 +809,10 @@ qualifiedWith moduleName = onMap (Map.mapKeysMonotonic $ AST.QualifiedName $ Jus
 
 unqualified :: Abstract.Haskell l => UnionWith (Map (Abstract.Name l)) a -> UnionWith (Map (Abstract.QualifiedName l)) a
 unqualified = onMap (Map.mapKeysMonotonic Abstract.unqualifiedName)
+
+fromLocalEnv :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
+             => LocalEnvironment l -> Environment l
+fromLocalEnv = unqualified . inScopeFrom Nothing
 
 filterEnv :: (AST.QualifiedName l -> Bool) -> Environment l -> Environment l
 filterEnv f env = onMap (Map.filterWithKey (const . f)) env

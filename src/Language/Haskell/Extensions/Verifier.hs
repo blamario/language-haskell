@@ -362,7 +362,7 @@ instance (Abstract.Expression l ~ ExtAST.Expression l, Abstract.QualifiedName l 
           ExtAST.TupleSectionExpression{} -> Map.singleton Extensions.TupleSections
           ExtAST.OverloadedLabel{} -> Map.singleton Extensions.OverloadedLabels
           ExtAST.ReferenceExpression q
-             | Just (Binder.ValueBinding Binder.RecordField) <- Map.lookup q (getUnionWith $ AG.Di.inh bindings)
+             | Just Binder.RecordField <- Binder.lookupValue q (AG.Di.inh bindings)
                -> Map.singleton Extensions.FieldSelectors
           ExtAST.UnboxedSumExpression{} -> Map.singleton Extensions.UnboxedSums
           ExtAST.UnboxedTupleExpression{} -> Map.singleton Extensions.UnboxedTuples
