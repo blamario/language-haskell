@@ -13,7 +13,8 @@ import Data.Bifunctor (first)
 import Data.Foldable (fold, toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(Compose, getCompose))
-import Data.Functor.Identity (Identity(Identity))
+import Data.Functor.Identity (Identity(Identity), runIdentity)
+import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty)
 import Data.DisjointMap qualified as DJMap
 import Data.DisjointMap (DisjointMap)
@@ -39,10 +40,15 @@ class Monoid con => ConstraintCollection con where
   filterRelevant :: Set (AST.Name (Language con)) -> con -> con
   canonicalNameMap :: con -> Map (AST.Name (Language con)) (AST.Name (Language con))
   renameTypeVariables :: Map (AST.Name (Language con)) (AST.Name (Language con)) -> con -> con
+  -- | Solves the wanted constraints, relying on the given ones. Returns the constraints left unsolved, the bindings
+  -- of type variables to the types unification has determined, and the contradictions that make the wanted
+  -- constraints unsatisfiable.
   simplify :: con  -- ^ global constraints
            -> con  -- ^ given constraints to rely on
            -> con  -- ^ wanted constraints to simplify
-           -> (con, Map (AST.Name (Language con)) (AST.Type (Language con) (Language con) Identity Identity))
+           -> (con,
+               Map (AST.Name (Language con)) (AST.Type (Language con) (Language con) Identity Identity),
+               [TypeError (Language con) con])
   unify :: AST.Type (Language con) (Language con) Identity Identity
         -> AST.Type (Language con) (Language con) Identity Identity
         -> con
@@ -86,6 +92,7 @@ instance Monoid (DefaultConstraints l pos) where
 instance (Show pos,
           Show (AST.Context l l Identity Identity),
           Show (AST.Type l l Identity Identity),
+          Eq (AST.Type l l Identity Identity),
           Abstract.Name l ~ AST.Name l,
           Abstract.QualifiedName l ~ AST.QualifiedName l,
           Abstract.Context l ~ AST.Context l,
@@ -122,9 +129,17 @@ instance (Show pos,
   filterRelevant = filterDefaultRelevant
   canonicalNameMap = canonicalDefaultNameMap
   renameTypeVariables = renameTypeVariablesDefault
-  -- TODO: actually simplify wanted, report contradictions
-  simplify = \_ given wanted->
-    (given <> wanted{assignments= mempty}, DJMap.foldlWithKeys' resolveAssignments mempty wanted.assignments)
+  simplify = \_global given wanted->
+    let (bindings, mismatches) = solveConstraints (given <> wanted)
+        substituted = List.nub . map (resolveTypeVariables bindings)
+        -- a wanted class constraint is discharged by a given one for the same type; there is no instance nor
+        -- superclass reasoning yet
+        discharge wantedArgs givenArgs = Just (filter (`notElem` givenArgs) wantedArgs)
+        residual = mempty{
+          classes = Map.filter (not . null)
+                    $ Map.differenceWith discharge (substituted <$> wanted.classes) (substituted <$> given.classes),
+          errors = (given <> wanted).errors}
+    in (residual, bindings, mismatches)
   unify (AST.TypeVariable name) t = assignType name t
   unify t (AST.TypeVariable name) = assignType name t
   unify a b = mempty{equations= [(a, b)]}
@@ -156,15 +171,66 @@ renameTypeVariablesDefault renamings con = DefaultConstraints{
     renameInType = resolveTypeVariables typeRenamings
     typeRenamings = AST.TypeVariable <$> renamings
 
-resolveAssignments :: Map (AST.Name l) (AST.Type l l Identity Identity)
-                   -> Set (AST.Name l)
-                   -> [AST.Type l l Identity Identity]
-                   -> Map (AST.Name l) (AST.Type l l Identity Identity)
-resolveAssignments assigned names types = case toList types of
-  [] -> assigned
-  -- TODO: two or more types assigned to the same variable have to be unified, and their mismatch reported as a
-  -- TypeMismatch. Until `simplify` can do that, the first assignment wins.
-  t:_ -> foldr (`Map.insert` t) assigned names
+-- | Unifies all the equality constraints, both the type variable assignments and the type equations, and returns
+-- the bindings of type variables to types together with the contradictions it ran into. A contradiction is either a
+-- clash of two different type constructors or a variable bound to a type containing the variable itself, /i.e./ a
+-- failure of the occurs check.
+--
+-- The returned bindings are not idempotent, as one bound variable may be bound to a type mentioning another;
+-- 'resolveTypeVariables' follows the chains.
+solveConstraints :: forall l pos. (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                                   Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                                   Eq (AST.Type l l Identity Identity), Eq (Abstract.QualifiedName l),
+                                   Full.Foldable (FreeVariableFold l Identity) (AST.Type l l),
+                                   Full.Functor (TypeVariableSubstitution l) (AST.Type l l))
+                 => DefaultConstraints l pos
+                 -> (Map (AST.Name l) (AST.Type l l Identity Identity), [TypeError l (DefaultConstraints l pos)])
+solveConstraints con = unifyAll mempty (assignedEquations <> con.equations) []
+  where
+    -- every variable of an equivalence class is equal to its first variable, as is every type assigned to the class
+    assignedEquations =
+      [(AST.TypeVariable var, t)
+      | (var:vars, types) <- DJMap.toLists con.assignments,
+        t <- (AST.TypeVariable <$> vars) <> types]
+    -- the signature keeps the type variables tied to the ones above instead of generalizing this local binding,
+    -- which would make the constraints above inapplicable to it
+    unifyAll :: Map (AST.Name l) (AST.Type l l Identity Identity)
+             -> [(AST.Type l l Identity Identity, AST.Type l l Identity Identity)]
+             -> [TypeError l (DefaultConstraints l pos)]
+             -> (Map (AST.Name l) (AST.Type l l Identity Identity), [TypeError l (DefaultConstraints l pos)])
+    unifyAll bindings [] errs = (bindings, reverse errs)
+    unifyAll bindings ((left, right) : rest) errs = case (l, r) of
+      _ | l == r -> unifyAll bindings rest errs
+      -- of two variables the lesser name survives, so that the outcome does not depend on the order the
+      -- constraints were collected in; the fresh variable names grow with the depth of the node they belong to
+      (AST.TypeVariable lName, AST.TypeVariable rName)
+        | lName < rName -> unifyAll (Map.insert rName l bindings) rest errs
+        | otherwise -> unifyAll (Map.insert lName r bindings) rest errs
+      (AST.TypeVariable name, _) | not (occurs name r) -> unifyAll (Map.insert name r bindings) rest errs
+      (_, AST.TypeVariable name) | not (occurs name l) -> unifyAll (Map.insert name l bindings) rest errs
+      (AST.FunctionType (Identity l1) (Identity l2), AST.FunctionType (Identity r1) (Identity r2)) ->
+        unifyAll bindings ((l1, r1) : (l2, r2) : rest) errs
+      (AST.LinearFunctionType (Identity l1) (Identity l2), AST.LinearFunctionType (Identity r1) (Identity r2)) ->
+        unifyAll bindings ((l1, r1) : (l2, r2) : rest) errs
+      (AST.TypeApplication (Identity l1) (Identity l2), AST.TypeApplication (Identity r1) (Identity r2)) ->
+        unifyAll bindings ((l1, r1) : (l2, r2) : rest) errs
+      (AST.InfixTypeApplication (Identity l1) lName (Identity l2),
+       AST.InfixTypeApplication (Identity r1) rName (Identity r2))
+        | lName == rName -> unifyAll bindings ((l1, r1) : (l2, r2) : rest) errs
+      (AST.ListType (Identity l1), AST.ListType (Identity r1)) -> unifyAll bindings ((l1, r1) : rest) errs
+      (AST.StrictType (Identity l1), AST.StrictType (Identity r1)) -> unifyAll bindings ((l1, r1) : rest) errs
+      (AST.TupleType ls, AST.TupleType rs) -> unifyAllOf (toList ls) (toList rs)
+      (AST.UnboxedTupleType _ ls, AST.UnboxedTupleType _ rs) -> unifyAllOf (toList ls) (toList rs)
+      (AST.UnboxedSumType _ ls, AST.UnboxedSumType _ rs) -> unifyAllOf (toList ls) (toList rs)
+      _ -> mismatch
+      where l = resolveTypeVariables bindings left
+            r = resolveTypeVariables bindings right
+            occurs :: AST.Name l -> AST.Type l l Identity Identity -> Bool
+            occurs name t = name `Set.member` freeVariables t
+            mismatch = unifyAll bindings rest (TypeMismatch l r : errs)
+            unifyAllOf ls rs
+              | length ls == length rs = unifyAll bindings (zip (runIdentity <$> ls) (runIdentity <$> rs) <> rest) errs
+              | otherwise = mismatch
 
 -- | Replaces the free occurrences of the bound type variables throughout the given type.
 resolveTypeVariables :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,

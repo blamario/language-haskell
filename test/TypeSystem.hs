@@ -90,22 +90,18 @@ expressionTests infer = [
    testGroup "lambda" [
       expression infer "\\x -> x" "aa -> aa",
       expression infer "\\x -> \\y -> x" "aa -> axa -> aa",
-      brokenExpression "the occurs check is not performed, so the infinite type is accepted"
-         infer "\\x -> x x" typeError],
+      expression infer "\\x -> x x" typeError],
    testGroup "references" [
       expression infer "not" "Bool -> Bool",
       expression infer "undefinedName" typeError],
+   -- The type variables left in an inferred type are named after the path from the root of the expression to the
+   -- node they were generated for, so the names below are ugly but deterministic.
    testGroup "constraint solving" [
-      brokenExpression "the equality constraints collected by unification are never solved"
-         infer "not True" "Bool",
-      brokenExpression "the equality constraints collected by unification are never solved"
-         infer "\\x -> not x" "Bool -> Bool",
-      brokenExpression "the equality constraints collected by unification are never solved"
-         infer "[1, 2]" "Prelude.Num aa => [aa]",
-      brokenExpression "the equality constraints collected by unification are never solved"
-         infer "(\\x -> x) (\\y -> y)" "aa -> aa",
-      brokenExpression "the equality constraints collected by unification are never solved"
-         infer "let f x = x in f" "aa -> aa",
+      expression infer "not True" "Bool",
+      expression infer "\\x -> not x" "Bool -> Bool",
+      expression infer "[1, 2]" "Prelude.Num a => [a]",
+      expression infer "(\\x -> x) (\\y -> y)" "aaa -> aaa",
+      expression infer "let f x = x in f" "alawa -> alawa",
       expression infer "(1, \"a\")" "Prelude.Num aa => (aa, Prelude.String)"],
    testGroup "unimplemented syntax" [
       brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
@@ -119,10 +115,10 @@ expressionTests infer = [
       brokenExpression "AST.Expression attribution has no list comprehension case"
          infer "[x | x <- \"abc\"]" "Prelude.String"],
    testGroup "polymorphic environment" [
-      brokenExpression "instantiating a quantified type from the environment calls replaceTypeVar = undefined"
-         infer "id" "aa -> aa",
-      brokenExpression "instantiating a quantified type from the environment calls replaceTypeVar = undefined"
-         infer "id 'x'" "Prelude.Char"]]
+      -- the variable a quantified type is instantiated with is named after both the fresh variable prefix and the
+      -- variable bound by the forall
+      expression infer "id" "a_a -> a_a",
+      expression infer "id 'x'" "Prelude.Char"]]
 
 -- * The environment the test expressions are checked against
 

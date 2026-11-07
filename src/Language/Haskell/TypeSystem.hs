@@ -149,8 +149,8 @@ checkExpression :: forall l pos s con. (
   -> Map (AST.QualifiedName l) (AST.Type l l Identity Identity)
   -> Wrap l pos s (AST.Expression l l (Wrap l pos s) (Wrap l pos s))
   -> Either (TypeErrors l pos con) (AST.Type l l Identity Identity)
-checkExpression extensions typeBindings valueBindings e =
-  fmap constrainType $ validationToEither $ AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env
+checkExpression extensions typeBindings valueBindings e@((pos, _, _), _) =
+  validationToEither (AG.syn $ (transformation Full.<$> e) Rank2.$ AG.Inherited env) >>= solveType
   where env :: TypeEnv l Identity pos con
         env = TypeEnv{
           bindings = TypeMap{
@@ -160,7 +160,11 @@ checkExpression extensions typeBindings valueBindings e =
           freshVarPrefix = "a",
           constraints = mempty}
         transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con)
-        constrainType (t, con) = AST.ConstrainedType (Identity $ fst $ Constraints.toContext con) (Identity t)
+        solveType (t, con) = case Constraints.simplify mempty mempty con of
+          (con', bindings, [])
+            -> Right $ AST.ConstrainedType (Identity $ fst $ Constraints.toContext con')
+                                           (Identity $ Constraints.resolveTypeVariables bindings t)
+          (_, _, mismatch : mismatches) -> Left ((pos, mismatch) :| [(pos, m) | m <- mismatches])
 
 -- | Transformation for checking and inference of types. The @con@ parameter is for constraints.
 data TypeCheck l pos s con = TypeCheck{
@@ -542,23 +546,25 @@ instance (Abstract.Haskell l,
         Nothing -> simplifyUndeclared name t
         Just declaredType
           | AST.TypeVariable{} <- declaredType -> simplifyUndeclared name t
-          | let (con', t') = Constraints.splitFromType declaredType
-                (con'', bindings) = Constraints.simplify inheritance.constraints con' synConstraints
-            -> case fst $ Constraints.toContext con'' of
-                 AST.NoContext -> Success mempty
-                 context -> Failure [UndeclaredContext name context]
+          | let (con', _t) = Constraints.splitFromType declaredType
+                (con'', _bindings, mismatches) = Constraints.simplify inheritance.constraints con' synConstraints
+            -> if null mismatches
+               then case fst $ Constraints.toContext con'' of
+                      AST.NoContext -> Success mempty
+                      context -> Failure [UndeclaredContext name context]
+               else Failure mismatches
       simplifyUndeclared name t =
-        let (con', bindings) = Constraints.simplify inheritance.constraints mempty synConstraints
+        let (con', bindings, mismatches) = Constraints.simplify inheritance.constraints mempty synConstraints
             t' = Constraints.resolveTypeVariables bindings t
             renamings = Constraints.canonicalNameMap con'
             con'' = Constraints.renameTypeVariables renamings con'
             t'' = Constraints.resolveTypeVariables (AST.TypeVariable <$> renamings) t'
             con''' = Constraints.filterRelevant (freeVariables t'') con''
-        in Success
-           $ Map.singleton name
-           $ AST.ConstrainedType
-              (Identity $ fst $ Constraints.toContext con'')
-              (Identity t')
+        in if null mismatches
+           then Success
+                $ Map.singleton name
+                $ AST.ConstrainedType (Identity $ fst $ Constraints.toContext con'') (Identity t')
+           else Failure mismatches
       lhsEnv = extendWith inheritance.declared $ forkFresh 'l' env
       rhsEnv = forkFresh 'r' $ extendWith (whereBindings <> localBindings <> inheritance.declared) env
       ((whereBindings, whereCon), whereEnvs) =
@@ -877,6 +883,7 @@ instance (Abstract.Haskell l,
           Abstract.Pattern l ~ AST.Pattern l,
           Abstract.Type l ~ AST.Type l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Expression l l) where
@@ -1136,6 +1143,7 @@ instance (Abstract.Haskell l,
           Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
           Abstract.Expression l ~ AST.Expression l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
@@ -1202,6 +1210,7 @@ instance (Abstract.Haskell l,
           Abstract.Type l ~ AST.Type l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
           Abstract.Constructor l ~ AST.Constructor l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
@@ -1357,6 +1366,7 @@ typeReferenceAttribution, valueReferenceAttribution
       Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
       Abstract.Type l ~ AST.Type l,
       Abstract.Context l ~ AST.Context l,
+      Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
       ConstraintCollection con,
       Constraints.Language con ~ l)
   => TypeEnv l Identity pos con
@@ -1366,6 +1376,7 @@ referenceAttribution :: (Abstract.Name l ~ AST.Name l,
                          Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
                          Abstract.Type l ~ AST.Type l,
                          Abstract.Context l ~ AST.Context l,
+                         Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
                          ConstraintCollection con,
                          Constraints.Language con ~ l)
                      => Bool
@@ -1407,8 +1418,12 @@ extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{
                          valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values,
                          errors}}
 
-replaceTypeVar :: AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
-replaceTypeVar old new = undefined
+-- | Renames every free occurrence of the given type variable.
+replaceTypeVar :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                   Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                   Full.Functor (TypeVariableSubstitution l) (AST.Type l l))
+               => AST.Name l -> AST.Name l -> AST.Type l l Identity Identity -> AST.Type l l Identity Identity
+replaceTypeVar old new = Constraints.resolveTypeVariables (Map.singleton old $ AST.TypeVariable new)
 
 -- | Workaround for GHC-99339
 setLocalValues, setLocalTypes
@@ -1436,7 +1451,10 @@ kindName :: Abstract.Haskell l => Text -> Abstract.QualifiedName l
 kindName =
   Abstract.qualifiedName (Just $ Abstract.moduleName $ Abstract.name "Data" :| [Abstract.name "Kind"]) . Abstract.name
 
-replaceFresh :: (AST.Name l -> AST.Name l -> con -> con)
+replaceFresh :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                 Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                 Full.Functor (TypeVariableSubstitution l) (AST.Type l l))
+             => (AST.Name l -> AST.Name l -> con -> con)
              -> TypeEnv l f pos con
              -> AST.Name l
              -> (AST.Type l l Identity Identity, con)
