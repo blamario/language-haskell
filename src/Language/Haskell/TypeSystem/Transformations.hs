@@ -5,7 +5,7 @@
 -- | Folds and traversals of type expressions
 
 module Language.Haskell.TypeSystem.Transformations (
-  freeVariables, FreeVariableFold,
+  freeVariables, freeVariableList, FreeVariableFold,
   substituteTypeVariables, TypeVariableSubstitution) where
 
 import Data.Foldable (toList)
@@ -30,12 +30,18 @@ data FreeVariableFold l (f :: Type -> Type) = FreeVariableFold
 
 instance Transformation (FreeVariableFold l f) where
   type Domain (FreeVariableFold l f) = f
-  type Codomain (FreeVariableFold l f) = Const (Set (Abstract.Name l))
+  type Codomain (FreeVariableFold l f) = Const [Abstract.Name l]
 
+-- | The set of type variables free in the given type
 freeVariables :: (Applicative f, Foldable f, Ord (Abstract.Name l),
                    Full.Foldable (FreeVariableFold l f) (AST.Type l l))
               => AST.Type l l f f -> Set (Abstract.Name l)
-freeVariables = Full.foldMap FreeVariableFold . pure
+freeVariables = Set.fromList . freeVariableList
+
+-- | The list of type variables free in the given type, in the order of their first appearance and with repetitions
+freeVariableList :: (Applicative f, Foldable f, Full.Foldable (FreeVariableFold l f) (AST.Type l l))
+                 => AST.Type l l f f -> [Abstract.Name l]
+freeVariableList = Full.foldMap FreeVariableFold . pure
 
 instance Full.Foldable (FreeVariableFold l f) (AST.Constructor l l) where
   foldMap _ _ = mempty
@@ -65,13 +71,13 @@ instance (Foldable f, Ord (Abstract.Name l),
           Full.Foldable (FreeVariableFold l f) (Abstract.TypeVarBinding l l)) =>
          Full.Foldable (FreeVariableFold l f) (AST.Type l l) where
   foldMap t x = foldMap collectFrom x where
-    collectFrom (AST.ForallType bindings ty) = Full.foldMap t ty Set.\\ foldMap (Full.foldMap t) bindings
+    collectFrom (AST.ForallType bindings ty) = filter (`notElem` foldMap (Full.foldMap t) bindings) (Full.foldMap t ty)
     collectFrom _ = Full.foldMapUpDefault t x
 
 instance (Foldable f, Ord (Abstract.Name l)) =>
   FreeVariableFold l f `At` AST.Type l l f f where
   _ $ x = foldMap collectFrom x where
-    collectFrom (AST.TypeVariable x) = Const (Set.singleton x)
+    collectFrom (AST.TypeVariable x) = Const [x]
     collectFrom _ = mempty
 
 instance Ord (Abstract.Name l) => FreeVariableFold l f `At` AST.Context l l f f where
@@ -86,8 +92,8 @@ instance Ord (Abstract.Name l) => FreeVariableFold l f `At` AST.FieldDeclaration
 instance (Foldable f, Ord (Abstract.Name l)) =>
   FreeVariableFold l f `At` AST.TypeVarBinding l l f f where
   _ $ x = foldMap collectFrom x where
-    collectFrom (AST.ExplicitlyKindedTypeVariable _ x _) = Const (Set.singleton x)
-    collectFrom (AST.ImplicitlyKindedTypeVariable _ x) = Const (Set.singleton x)
+    collectFrom (AST.ExplicitlyKindedTypeVariable _ x _) = Const [x]
+    collectFrom (AST.ImplicitlyKindedTypeVariable _ x) = Const [x]
     collectFrom _ = mempty
 
 -- | Substitution of types for the free occurrences of type variables
