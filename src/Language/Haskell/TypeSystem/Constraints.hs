@@ -6,7 +6,7 @@
 
 module Language.Haskell.TypeSystem.Constraints (
   ConstraintCollection(..), DefaultConstraints, TypeError(..), TypeErrors,
-  resolveTypeVariables, splitFromType) where
+  canonicalRenaming, resolveTypeVariables, splitFromType) where
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Bifunctor (first)
@@ -22,12 +22,13 @@ import Data.Map.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Transformation.Full qualified as Full
 import Language.Haskell.Extensions.AST qualified as AST
 import Language.Haskell.Abstract qualified as Abstract
 import Language.Haskell.Extensions.Abstract qualified as Abstract (TypeVarBinding)
 import Language.Haskell.TypeSystem.Transformations (
-  FreeVariableFold, TypeVariableSubstitution, freeVariables, substituteTypeVariables)
+  FreeVariableFold, TypeVariableSubstitution, freeVariableList, freeVariables, substituteTypeVariables)
 
 -- | Record of functions for handling constraints
 class Monoid con => ConstraintCollection con where
@@ -231,6 +232,24 @@ solveConstraints con = unifyAll mempty (assignedEquations <> con.equations) []
             unifyAllOf ls rs
               | length ls == length rs = unifyAll bindings (zip (runIdentity <$> ls) (runIdentity <$> rs) <> rest) errs
               | otherwise = mismatch
+
+-- | Assigns a short name to every type variable free in the given type, in the order of their appearance: the first
+-- variable becomes @a@, the second @b@, and so on past @z@ with @a1@, @b1@, and the rest. Identity renamings are
+-- left out of the returned map, its domain and codomain are distinct.
+canonicalRenaming :: (Abstract.Name l ~ AST.Name l,
+                      Full.Foldable (FreeVariableFold l Identity) (AST.Type l l))
+                  => AST.Type l l Identity Identity -> Map (AST.Name l) (AST.Name l)
+canonicalRenaming t = Map.fromList (assign [] free)
+  where assign _ [] = []
+        assign assigned (var : rest) = case [name | name <- shortNames, name `notElem` assigned,
+                                                    name == var || name `notElem` free] of
+          name : _
+            | name == var -> assign (name : assigned) rest
+            | otherwise -> (var, name) : assign (name : assigned) rest
+          [] -> []
+        free = List.nub (freeVariableList t)
+        shortNames = [AST.Name (Text.pack $ letter : suffix)
+                     | suffix <- "" : map show [1 :: Int ..], letter <- ['a' .. 'z']]
 
 -- | Replaces the free occurrences of the bound type variables throughout the given type.
 resolveTypeVariables :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,

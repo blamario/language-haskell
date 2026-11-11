@@ -162,8 +162,12 @@ checkExpression extensions typeBindings valueBindings e@((pos, _, _), _) =
         transformation = AG.Knit (TypeCheck{extensions} :: TypeCheck l pos s con)
         solveType (t, con) = case Constraints.simplify mempty mempty con of
           (con', bindings, [])
-            -> Right $ AST.ConstrainedType (Identity $ fst $ Constraints.toContext con')
-                                           (Identity $ Constraints.resolveTypeVariables bindings t)
+            | solved <- Constraints.resolveTypeVariables bindings t,
+              renamings <- Constraints.canonicalRenaming solved
+            -> Right
+               $ AST.ConstrainedType
+                  (Identity $ fst $ Constraints.toContext $ Constraints.renameTypeVariables renamings con')
+                  (Identity $ Constraints.resolveTypeVariables (AST.TypeVariable <$> renamings) solved)
           (_, _, mismatch : mismatches) -> Left ((pos, mismatch) :| [(pos, m) | m <- mismatches])
 
 -- | Transformation for checking and inference of types. The @con@ parameter is for constraints.

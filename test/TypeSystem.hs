@@ -88,26 +88,26 @@ expressionTests infer = [
       expression infer "1" "Prelude.Num a => a",
       expression infer "1.5" "Prelude.Fractional a => a"],
    testGroup "lambda" [
-      expression infer "\\x -> x" "aa -> aa",
-      expression infer "\\x -> \\y -> x" "aa -> axa -> aa",
+      expression infer "\\x -> x" "a -> a",
+      expression infer "\\x -> \\y -> x" "a -> b -> a",
       expression infer "\\x -> x x" typeError],
    testGroup "references" [
       expression infer "not" "Bool -> Bool",
       expression infer "undefinedName" typeError],
-   -- The type variables left in an inferred type are named after the path from the root of the expression to the
-   -- node they were generated for, so the names below are ugly but deterministic.
+   -- The type variables generated during the inference are named after the node they belong to, but the ones that
+   -- survive the constraint solution are renamed to @a@, @b@, and so on in the order of their appearance.
    testGroup "constraint solving" [
       expression infer "not True" "Bool",
       expression infer "\\x -> not x" "Bool -> Bool",
       expression infer "[1, 2]" "Prelude.Num a => [a]",
-      expression infer "(\\x -> x) (\\y -> y)" "aaa -> aaa",
-      expression infer "let f x = x in f" "alawa -> alawa",
-      expression infer "(1, \"a\")" "Prelude.Num aa => (aa, Prelude.String)"],
+      expression infer "(\\x -> x) (\\y -> y)" "a -> a",
+      expression infer "let f x = x in f" "a -> a",
+      expression infer "(1, \"a\")" "Prelude.Num a => (a, Prelude.String)"],
    testGroup "unimplemented syntax" [
       brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
-         infer "\\(x, y) -> x" "(aa, ba) -> aa",
+         infer "\\(x, y) -> x" "(a, b) -> a",
       brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
-         infer "\\[x] -> x" "[aa] -> aa",
+         infer "\\[x] -> x" "[a] -> a",
       brokenExpression "AST.CaseAlternative attribution looks the scrutinee up under the wrong key"
          infer "case 'x' of c -> c" "Prelude.Char",
       brokenExpression "AST.Constructor attribution covers only references and the empty list"
@@ -115,9 +115,7 @@ expressionTests infer = [
       brokenExpression "AST.Expression attribution has no list comprehension case"
          infer "[x | x <- \"abc\"]" "Prelude.String"],
    testGroup "polymorphic environment" [
-      -- the variable a quantified type is instantiated with is named after both the fresh variable prefix and the
-      -- variable bound by the forall
-      expression infer "id" "a_a -> a_a",
+      expression infer "id" "a -> a",
       expression infer "id 'x'" "Prelude.Char"]]
 
 -- * The environment the test expressions are checked against
