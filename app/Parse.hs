@@ -35,7 +35,7 @@ import Control.Monad
 import Data.Data (Data)
 import qualified Data.Either.Validation as Validation
 import Data.Either.Validation (validationToEither)
-import Data.Foldable (toList)
+import Data.Foldable (foldlM, toList)
 import Data.Functor ((<&>))
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity)
@@ -73,7 +73,7 @@ data Opts = Opts
     , optsReformulate  :: [Extensions.Extension]
     , optsOutput       :: Output
     , optsStage        :: Stage
-    , optsInclude      :: Maybe FilePath
+    , optsInclude      :: [FilePath]
     , optsFile         :: Maybe FilePath
     } deriving Show
 
@@ -126,8 +126,7 @@ main = execParser opts >>= main'
              <|> flag' Resolved (long "resolved" <> help "show parse tree with all ambiguities resolved")
              <|> flag' Verified (long "verified" <> help "show resolved parse tree with all extensions verified")
              <|> pure Verified)
-        <*> optional (strOption (short 'i' <> long "include" <> metavar "DIRECTORY"
-                                 <> help "Where to look for imports"))
+        <*> many (strOption (short 'i' <> long "include" <> metavar "DIRECTORY" <> help "Where to look for imports"))
         <*> optional (strArgument
             ( metavar "FILE"
               <> help "Haskell file to parse"))
@@ -140,9 +139,9 @@ main' :: Opts -> IO ()
 main' Opts{..} = do
    (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
    (predefinedModules :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
-   includeModules <- traverse (Haskell.directoryModuleBindings preludeBindings predefinedModules) optsInclude
-   let importableModules = fromMaybe predefinedModules includeModules
-       go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
+   let addDirEnv env dir = (<> env) <$> Haskell.directoryModuleBindings preludeBindings env dir
+   importableModules <- foldlM addDirEnv predefinedModules optsInclude
+   let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
               a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
               e ~ Binder.WithEnvironment Language w,
               Abstract.ExtendedHaskell l,
