@@ -2085,9 +2085,13 @@ blockOf' p = braces (many (many semi *> p) <* many semi) <|> (inputColumn >>= al
          terminators :: [Char]
          terminators = ",;)]}"
 
+-- | A block item may run past its first line only if every later line is indented further, except that a block
+-- opened by a keyword may begin at the enclosing block's own indent and go on at that indent.
 nonDecreasingIndentLine :: (Ord t, Show t, OutlineMonoid t, Deep.Foldable (Serialization (Down Int) t) node)
                         => Int -> t -> NodeWrap t (node (NodeWrap t) (NodeWrap t)) -> Bool
 nonDecreasingIndentLine indent _input node = allIndented False False (lexemes node) where
+   -- the first flag holds between a block-opening keyword and the first token of the block it opens, the second
+   -- once such a block has been seen to begin at the enclosing indent
    allIndented opening nested (WhiteSpace _ : Token Delimiter _tok : rest) = allIndented opening nested rest
    allIndented opening nested (WhiteSpace ws : rest@(Token _ tok : _))
       | Textual.all Report.isLineChar ws = allIndented opening nested rest
@@ -2098,7 +2102,7 @@ nonDecreasingIndentLine indent _input node = allIndented False False (lexemes no
       where tokenIndent = Report.currentColumn (Factorial.dropWhile (const True) ws)
    allIndented _ nested (Token Keyword k : rest)
       | k `elem` ["do", "of", "let", "where"] = allIndented True nested rest
-   allIndented opening nested (_ : rest) = allIndented opening nested rest
+   allIndented _ nested (_ : rest) = allIndented False nested rest
    allIndented _ _ [] = True
    continuations = ["then", "else", "of", "in", "where", "deriving"]
    terminators :: [Char]
