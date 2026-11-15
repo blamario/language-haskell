@@ -20,7 +20,7 @@ module Language.Haskell.Binder (
    Unbound(Unbound, types, values, constructors),
    -- * Utility functions
    builtinPreludeBindings, boundNames, inScopeFrom, lookupModule, lookupType, lookupValue, onMap,
-   baseName) where
+   baseName, sameShape) where
 
 import Control.Applicative ((<|>), ZipList(ZipList, getZipList))
 import Control.Exception (assert)

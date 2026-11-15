@@ -9,7 +9,7 @@ module Language.Haskell.TypeSystem (
   checkExpression, checkModule,
   TypeMap(..), LocalTypeMap(..), TypeErrors) where
 
-import Control.Applicative (ZipList(ZipList), liftA3)
+import Control.Applicative (ZipList(ZipList, getZipList), liftA3)
 import Data.Bifunctor (bimap, first)
 import Data.Coerce (coerce)
 import Data.Either.Validation (Validation(Failure, Success), validationToEither)
@@ -855,9 +855,7 @@ instance (Abstract.Haskell l,
        (AG.Inherited $ forkFresh 'x' bodyEnv))
     where combine (bodyType, bodyCon) (Endo appGuardsCon) = (bodyType, appGuardsCon bodyCon)
           Ap guardsCon = foldMap (Ap . fmap (Endo . (<>) . snd) . AG.syn) guardSyns
-          bodyEnv :| guardEnvs = NonEmpty.reverse $ NonEmpty.scanl carry env guardSyns
-          carry prevEnv (AG.Synthesized (Success (guardBindings, _))) = extendWith guardBindings prevEnv
-          carry prevEnv _ = prevEnv
+          bodyEnv :| guardEnvs = statementAttribution env (getZipList guards) guardSyns
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1414,7 +1412,6 @@ firstError :: Validation (TypeErrors l pos con) a -> Validation (TypeError l con
 firstError (Failure ((_, err) :| _)) = Failure err
 firstError (Success a) = Success a
 
-
 extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
            => LocalTypeMap l Identity pos con -> TypeEnv l Identity pos con -> TypeEnv l Identity pos con
 extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{bindings = TypeMap{typeBindings, valueBindings, errors}} =
@@ -1422,6 +1419,23 @@ extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{
                          valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values,
                          errors}}
 
+
+sameNonEmptyShape :: NonEmpty a -> NonEmpty b -> NonEmpty b
+sameNonEmptyShape (_ :| xs) (y :| ys) = y :| Binder.sameShape xs ys
+
+-- | The environments for checking the given statements: the first is the full environment, the last is the original
+-- environment, the penultimate one includes only the first statement's bindings, etc.
+statementAttribution :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                          Abstract.QualifiedName l ~ AST.QualifiedName l, Foldable f)
+                      => TypeEnv l Identity pos con
+                      -> f a
+                      -> f (AG.Synthesized (TypeCheck l pos s con) (AST.Statement l l sem sem))
+                      -> NonEmpty (TypeEnv l Identity pos con)
+statementAttribution env statements statementSyns =
+  NonEmpty.reverse $ sameNonEmptyShape (undefined :| toList statements) scopes
+  where scopes = NonEmpty.scanl bindStatement env statementSyns
+        bindStatement scope (AG.Synthesized (Success (bindings, _))) = extendWith bindings scope
+        bindStatement scope _ = scope
 -- | Renames every free occurrence of the given type variable.
 replaceTypeVar :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
                    Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
