@@ -880,6 +880,7 @@ instance (Abstract.Haskell l,
           Abstract.Constructor l ~ AST.Constructor l,
           Abstract.Context l ~ AST.Context l,
           Abstract.GuardedExpression l ~ AST.GuardedExpression l,
+          Abstract.Statement l ~ AST.Statement l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Value l ~ AST.Value l,
           Abstract.Pattern l ~ AST.Pattern l,
@@ -939,14 +940,28 @@ instance (Abstract.Haskell l,
     TypeCheck{extensions}
     (_, AST.DoExpression{})
     (AG.Inherited env, AST.DoExpression (AG.Synthesized bodySyn))
-    = (AG.Synthesized $ constrainBodyType <$> bodySyn, AST.DoExpression $ AG.Inherited (statementCon, env))
-    where
-      constrainBodyType (ty, con) =
-        (ty,
-         con <> (Constraints.unify ty $ AST.TypeApplication mt $ Identity AST.TypeWildcard)
-         <> Constraints.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
-      statementCon _ mlt rt = Constraints.unify rt $ AST.TypeApplication mt $ Identity $ fromMaybe AST.TypeWildcard mlt
-      mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
+    = (AG.Synthesized syn, AST.DoExpression $ AG.Inherited inh)
+    where (syn, inh) = doAttribution extensions env bodySyn
+  attribution
+    TypeCheck{extensions}
+    (_, AST.MDoExpression{})
+    (AG.Inherited env, AST.MDoExpression (AG.Synthesized bodySyn))
+    -- the recursive bindings additionally call for a MonadFix instance, which is not in the Prelude to name
+    = (AG.Synthesized syn, AST.MDoExpression $ AG.Inherited inh)
+    where (syn, inh) = doAttribution extensions env bodySyn
+  attribution
+    TypeCheck{extensions}
+    (_, AST.QualifiedDoExpression sup modName _)
+    (AG.Inherited env, AST.QualifiedDoExpression _ _ (AG.Synthesized bodySyn))
+    -- the bind operators come from the named module rather than the Prelude, which this ignores
+    = (AG.Synthesized syn, AST.QualifiedDoExpression sup modName $ AG.Inherited inh)
+    where (syn, inh) = doAttribution extensions env bodySyn
+  attribution
+    TypeCheck{extensions}
+    (_, AST.MDoQualifiedExpression sup sup' modName _)
+    (AG.Inherited env, AST.MDoQualifiedExpression _ _ _ (AG.Synthesized bodySyn))
+    = (AG.Synthesized syn, AST.MDoQualifiedExpression sup sup' modName $ AG.Inherited inh)
+    where (syn, inh) = doAttribution extensions env bodySyn
   attribution
     TypeCheck{}
     (_, AST.InfixExpression{})
@@ -1419,6 +1434,10 @@ extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{
                          valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values,
                          errors}}
 
+-- | The character that prefixes the name of a type variable belonging to no child node, so that the name cannot
+-- clash with the name of a variable generated for a child
+internalPrefix :: Char
+internalPrefix = '#'
 
 sameNonEmptyShape :: NonEmpty a -> NonEmpty b -> NonEmpty b
 sameNonEmptyShape (_ :| xs) (y :| ys) = y :| Binder.sameShape xs ys
@@ -1436,6 +1455,31 @@ statementAttribution env statements statementSyns =
   where scopes = NonEmpty.scanl bindStatement env statementSyns
         bindStatement scope (AG.Synthesized (Success (bindings, _))) = extendWith bindings scope
         bindStatement scope _ = scope
+
+-- | The type synthesized by a @do@ expression of any flavour, and the attributes its body inherits: every statement
+-- is in the same monad, and so is the expression as a whole.
+doAttribution :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                  Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Type l ~ AST.Type l,
+                  Abstract.Context l ~ AST.Context l,
+                  ConstraintCollection con, Constraints.Language con ~ l)
+              => Map Extension Bool
+              -> TypeEnv l Identity pos con
+              -> Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
+              -> (Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con),
+                  (StatementConstraintBuilder l pos con, TypeEnv l Identity pos con))
+doAttribution extensions env bodySyn = (constrainBodyType <$> bodySyn, (statementCon, env))
+  where constrainBodyType (ty, con) =
+          (ty,
+           con <> Constraints.unify ty (AST.TypeApplication mt $ Identity resultType)
+           <> Constraints.fromContext (AST.ClassConstraint (preludeName extensions "Monad") mt))
+        -- A statement's type is the monad applied to what its pattern binds, or to a type of no further interest.
+        -- The latter still has to be a type variable rather than a wildcard, because a wildcard unified with the
+        -- type of the statement would swallow it.
+        statementCon statementEnv mlt rt =
+          Constraints.unify rt $ AST.TypeApplication mt $ Identity
+          $ fromMaybe (AST.TypeVariable $ freshTV $ forkFresh internalPrefix statementEnv) mlt
+        resultType = AST.TypeVariable $ freshTV (forkFresh internalPrefix env)
+        mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
 -- | Renames every free occurrence of the given type variable.
 replaceTypeVar :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
                    Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,

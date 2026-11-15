@@ -202,6 +202,9 @@ solveConstraints con = unifyAll mempty (assignedEquations <> con.equations) []
     unifyAll bindings [] errs = (bindings, reverse errs)
     unifyAll bindings ((left, right) : rest) errs = case (l, r) of
       _ | l == r -> unifyAll bindings rest errs
+      -- a wildcard stands for a type nobody is interested in, so it agrees with every type
+      (AST.TypeWildcard, _) -> unifyAll bindings rest errs
+      (_, AST.TypeWildcard) -> unifyAll bindings rest errs
       -- of two variables the lesser name survives, so that the outcome does not depend on the order the
       -- constraints were collected in; the fresh variable names grow with the depth of the node they belong to
       (AST.TypeVariable lName, AST.TypeVariable rName)
