@@ -110,10 +110,11 @@ expressionTests infer = [
          infer "\\[x] -> x" "[a] -> a",
       brokenExpression "AST.CaseAlternative attribution looks the scrutinee up under the wrong key"
          infer "case 'x' of c -> c" "Prelude.Char",
-      brokenExpression "AST.Constructor attribution covers only references and the empty list"
-         infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
       brokenExpression "AST.Expression attribution has no list comprehension case"
          infer "[x | x <- \"abc\"]" "Prelude.String"],
+   testGroup "constructors" [
+      expression infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
+      expression infer "()" "()"],
    testGroup "polymorphic environment" [
       expression infer "id" "a -> a",
       expression infer "id 'x'" "Prelude.Char"]]
@@ -132,7 +133,9 @@ testValueBindings = Map.fromList $ concat [
    binding "Bool" bool,
    binding "Char" char,
    binding "Int" int,
-   binding "id" (forAll ["a"] (var "a" --> var "a"))]
+   binding "id" (forAll ["a"] (var "a" --> var "a")),
+   binding "Just" (forAll ["a"] (var "a" --> maybeOf (var "a"))),
+   binding "Nothing" (forAll ["a"] (maybeOf (var "a")))]
 
 testTypeBindings :: Map (AST.QualifiedName Language) Ty
 testTypeBindings = Map.fromList $ concat [binding "Bool" bool, binding "Char" char, binding "Int" int]
@@ -154,6 +157,9 @@ var = AST.TypeVariable . Abstract.name
 
 listOf :: Ty -> Ty
 listOf = AST.ListType . Identity
+
+maybeOf :: Ty -> Ty
+maybeOf = applyTo (conType "Maybe")
 
 tupleOf :: [Ty] -> Ty
 tupleOf items = AST.TupleType (ZipNonEmpty $ Identity <$> NonEmpty.fromList items)

@@ -1118,7 +1118,9 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Pattern l ~ AST.Pattern l,
+          Abstract.Constructor l ~ AST.Constructor l,
           Abstract.Value l ~ AST.Value l,
+          Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
           ConstraintCollection con,
           Constraints.Language con ~ l,
           Constraints.Position con ~ pos) =>
@@ -1144,6 +1146,26 @@ instance (Abstract.Haskell l,
                         Success t -> Constraints.assignType tv t),
      AST.LiteralPattern $ AG.Inherited env)
     where tv = freshTV env
+  attribution TypeCheck{}
+    (_, AST.ConstructorPattern _ typeApps args)
+    (AG.Inherited env, AST.ConstructorPattern (AG.Synthesized consSyn) _ argSyns)
+    =
+    (AG.Synthesized (tv, patternBindings tv argSyns,
+                     foldMap (patternConstraints . AG.syn) argSyns <> constructed tv consSyn argSyns),
+     AST.ConstructorPattern
+      (AG.Inherited $ forkFresh internalPrefix env)
+      (AG.Inherited . (`forkFresh` env) <$> (ZipList ['A' ..] <* typeApps))
+      (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* args)))
+    where tv = freshTV env
+  attribution TypeCheck{}
+    (i, AST.InfixPattern{})
+    (AG.Inherited env, AST.InfixPattern leftSyn op rightSyn)
+    =
+    (AG.Synthesized (tv, patternBindings tv [leftSyn, rightSyn],
+                     patternConstraints (AG.syn leftSyn) <> patternConstraints (AG.syn rightSyn)
+                     <> constructed tv (placeError i $ valueReferenceAttribution env op) [leftSyn, rightSyn]),
+     AST.InfixPattern (AG.Inherited $ forkFresh 'l' env) op (AG.Inherited $ forkFresh 'r' env))
+    where tv = freshTV env
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1162,6 +1184,7 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
           Abstract.Expression l ~ AST.Expression l,
+          Abstract.Constructor l ~ AST.Constructor l,
           ConstraintCollection con,
           Constraints.Language con ~ l) =>
          AG.At (TypeCheck l pos s con) (AST.Constructor l l) where
@@ -1170,6 +1193,15 @@ instance (Abstract.Haskell l,
   attribution TypeCheck{} (i, AST.EmptyListConstructor) (AG.Inherited env, _) =
     (AG.Synthesized $ Success (AST.ListType $ Identity $ AST.TypeVariable $ freshTV env, mempty),
      AST.EmptyListConstructor)
+  attribution TypeCheck{} (i, AST.UnitConstructor) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (AST.ConstructorType $ Identity AST.UnitConstructor, mempty), AST.UnitConstructor)
+  attribution TypeCheck{} (i, AST.TupleConstructor n) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (foldr abstract (AST.TupleType $ Identity <$> components) components, mempty),
+     AST.TupleConstructor n)
+    where -- the constructor node has no children, so every letter is free to name a component type variable
+          components = ZipNonEmpty $ NonEmpty.fromList
+                       [AST.TypeVariable $ freshTV (forkFresh c env) | c <- take (max 1 n) ['a' ..]]
+          abstract component result = AST.FunctionType (Identity component) (Identity result)
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1480,6 +1512,44 @@ doAttribution extensions env bodySyn = (constrainBodyType <$> bodySyn, (statemen
           $ fromMaybe (AST.TypeVariable $ freshTV $ forkFresh internalPrefix statementEnv) mlt
         resultType = AST.TypeVariable $ freshTV (forkFresh internalPrefix env)
         mt = Identity $ AST.TypeVariable $ freshTV (forkFresh 'm' env)
+
+-- | The name of the type variable standing for the type a pattern matches
+patternTypeName :: (AST.Name l, LocalTypeMap l Identity pos con, con) -> AST.Name l
+patternTypeName (tv, _, _) = tv
+
+-- | The names a pattern binds, with their types
+patternBindings' :: (AST.Name l, LocalTypeMap l Identity pos con, con) -> LocalTypeMap l Identity pos con
+patternBindings' (_, bindings, _) = bindings
+
+-- | The constraints a pattern collects
+patternConstraints :: (AST.Name l, LocalTypeMap l Identity pos con, con) -> con
+patternConstraints (_, _, con) = con
+
+-- | Everything the given sub-patterns bind, together with the kind of the type variable of the pattern itself
+patternBindings :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                    Foldable f, Monoid con)
+                => AST.Name l
+                -> f (AG.Synthesized (TypeCheck l pos s con) (AST.Pattern l l sem sem))
+                -> LocalTypeMap l Identity pos con
+patternBindings tv subPatterns =
+  setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty <> foldMap (patternBindings' . AG.syn) subPatterns
+
+-- | Constrains the type variable of a constructor pattern: the constructor applied to the types of the argument
+-- patterns has to be the type the whole pattern matches.
+constructed :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
+                Foldable f, ConstraintCollection con, Constraints.Language con ~ l,
+                Constraints.Position con ~ pos)
+            => AST.Name l
+            -> Validation (TypeErrors l pos con) (AST.Type l l Identity Identity, con)
+            -> f (AG.Synthesized (TypeCheck l pos s con) (AST.Pattern l l sem sem))
+            -> con
+constructed tv constructorSyn argSyns = case constructorSyn of
+  Failure err -> Constraints.assignError tv err
+  Success (constructorType, constructorCon) -> constructorCon <> Constraints.unify constructorType applied
+  where applied = foldr abstract (AST.TypeVariable tv) argSyns
+        abstract arg result =
+          AST.FunctionType (Identity $ AST.TypeVariable $ patternTypeName $ AG.syn arg) (Identity result)
+
 -- | Renames every free occurrence of the given type variable.
 replaceTypeVar :: (Abstract.Name l ~ AST.Name l, Abstract.Type l ~ AST.Type l,
                    Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
