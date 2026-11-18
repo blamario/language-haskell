@@ -1042,6 +1042,23 @@ instance (Abstract.Haskell l,
       ((boundEnv, bindCon), bindEnvs) = whereAttribution t bindings env bindSyns
       env' = extendWith boundEnv env
       bodyEnv = forkFresh 'x' env'
+    TypeCheck{extensions}
+    (_, AST.ListComprehension _ qualifiers)
+    (AG.Inherited env, AST.ListComprehension (AG.Synthesized bodySyn) qualifierSyns)
+    =
+    (AG.Synthesized $ comprehend <$> bodySyn <*> qualifiersCon,
+     AST.ListComprehension
+      (AG.Inherited bodyEnv)
+      (AG.Inherited . (,) qualifierCon <$> liftA2 forkFresh (ZipNonEmpty $ 'a' :| ['b' ..]) qualifierEnvs))
+    where comprehend (bodyType, bodyCon) qualCon = (AST.ListType $ Identity bodyType, bodyCon <> qualCon)
+          Ap qualifiersCon = foldMap (Ap . (snd <$>) . AG.syn) qualifierSyns
+          -- a generator draws its bindings from a list, while a guard has to be a Bool
+          qualifierCon _ (Just lhsType) rhsType = Constraints.unify rhsType (AST.ListType $ Identity lhsType)
+          qualifierCon _ Nothing rhsType = Constraints.unify rhsType (preludeType extensions "Bool")
+          -- every qualifier is in the scope of the ones before it, and the body is in the scope of them all
+          bodyScope :| qualifierScopes  = statementAttribution env qualifiers qualifierSyns
+          qualifierEnvs = ZipNonEmpty $ NonEmpty.fromList $ reverse qualifierScopes
+          bodyEnv = forkFresh 'x' bodyScope
   attribution TypeCheck{} (i, AST.ListExpression items) (AG.Inherited env, AST.ListExpression itemSyns) =
     (AG.Synthesized unified, AST.ListExpression $ AG.Inherited <$> itemEnvs)
     where
@@ -1054,6 +1071,24 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
   attribution TypeCheck{} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ valueReferenceAttribution env var, AST.ReferenceExpression var)
+  attribution
+    TypeCheck{extensions}
+    (_, AST.SequenceExpression _ step to)
+    (AG.Inherited env, AST.SequenceExpression (AG.Synthesized fromSyn) stepSyn toSyn)
+    =
+    (AG.Synthesized $ enumerate <$> fromSyn <*> traverse AG.syn stepSyn <*> traverse AG.syn toSyn,
+     AST.SequenceExpression
+      (AG.Inherited $ forkFresh 'f' env)
+      (AG.Inherited (forkFresh 's' env) <$ step)
+      (AG.Inherited (forkFresh 't' env) <$ to))
+    where enumerate (fromType, fromCon) step to =
+            (AST.ListType $ Identity fromType,
+             mconcat [fromCon,
+                      foldMap (alignWith fromType) step,
+                      foldMap (alignWith fromType) to,
+                      Constraints.fromContext
+                      $ AST.ClassConstraint (preludeName extensions "Enum") (Identity fromType)])
+          alignWith fromType (t, con) = con <> Constraints.unify fromType t
   attribution
     TypeCheck{}
     (_, AST.TupleExpression items)
