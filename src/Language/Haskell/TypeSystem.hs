@@ -1221,11 +1221,48 @@ instance (Abstract.Haskell l,
     where tv = freshTV env
   attribution TypeCheck{} (_, AST.LiteralPattern{}) (AG.Inherited env, AST.LiteralPattern (AG.Synthesized valSyn)) =
     (AG.Synthesized (tv, setLocalTypes (Map.singleton tv AST.GroundTypeKind) mempty,
-                     case fst <$> valSyn of
+                     case valSyn of
                         Failure err -> Constraints.assignError tv err
-                        Success t -> Constraints.assignType tv t),
+                        -- the literal's own constraints, a Num or an IsString, apply to the matched type as well
+                        Success (t, valCon) -> valCon <> Constraints.assignType tv t),
      AST.LiteralPattern $ AG.Inherited env)
     where tv = freshTV env
+  attribution TypeCheck{} (_, AST.TuplePattern items) (AG.Inherited env, AST.TuplePattern itemSyns) =
+    (AG.Synthesized (tv, patternBindings tv itemSyns,
+                     Constraints.assignType tv tupleType <> foldMap (patternConstraints . AG.syn) itemSyns),
+     AST.TuplePattern (AG.Inherited . (`forkFresh` env) <$> (ZipNonEmpty ('a' :| ['b' ..]) <* items)))
+    where tv = freshTV env
+          tupleType = AST.TupleType (Identity . AST.TypeVariable . patternTypeName . AG.syn <$> itemSyns)
+  attribution TypeCheck{} (_, AST.ListPattern items) (AG.Inherited env, AST.ListPattern itemSyns) =
+    (AG.Synthesized (tv, patternBindings tv itemSyns,
+                     Constraints.assignType tv (AST.ListType $ Identity itemType)
+                     <> foldMap (Constraints.unify itemType . AST.TypeVariable . patternTypeName . AG.syn) itemSyns
+                     <> foldMap (patternConstraints . AG.syn) itemSyns),
+     AST.ListPattern (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* items)))
+    where tv = freshTV env
+          itemType = AST.TypeVariable $ freshTV (forkFresh internalPrefix env)
+  attribution TypeCheck{} (_, AST.AsPattern name _) (AG.Inherited env, AST.AsPattern _ patSyn) =
+    (AG.Synthesized (patternTypeName $ AG.syn patSyn,
+                     setLocalValues (Map.singleton name $ AST.TypeVariable $ patternTypeName $ AG.syn patSyn) mempty
+                     <> patternBindings' (AG.syn patSyn),
+                     patternConstraints $ AG.syn patSyn),
+     AST.AsPattern name $ AG.Inherited $ forkFresh 'a' env)
+  attribution TypeCheck{} (_, AST.IrrefutablePattern{}) (AG.Inherited env, AST.IrrefutablePattern patSyn) =
+    (AG.Synthesized $ AG.syn patSyn, AST.IrrefutablePattern $ AG.Inherited $ forkFresh 'a' env)
+  attribution TypeCheck{} (_, AST.BangPattern sup _) (AG.Inherited env, AST.BangPattern _ patSyn) =
+    (AG.Synthesized $ AG.syn patSyn, AST.BangPattern sup $ AG.Inherited $ forkFresh 'a' env)
+  attribution TypeCheck{} (_, AST.LazyPattern sup _) (AG.Inherited env, AST.LazyPattern _ patSyn) =
+    (AG.Synthesized $ AG.syn patSyn, AST.LazyPattern sup $ AG.Inherited $ forkFresh 'a' env)
+  attribution TypeCheck{}
+    (_, AST.TypedPattern{})
+    (AG.Inherited env, AST.TypedPattern patSyn (AG.Synthesized typeSyn))
+    =
+    (AG.Synthesized (patternTypeName $ AG.syn patSyn, patternBindings' (AG.syn patSyn),
+                     patternConstraints (AG.syn patSyn)
+                     <> case typeSyn of
+                          Failure err -> Constraints.assignError (patternTypeName $ AG.syn patSyn) err
+                          Success t -> Constraints.assignType (patternTypeName $ AG.syn patSyn) t),
+     AST.TypedPattern (AG.Inherited $ forkFresh 'p' env) (AG.Inherited $ forkFresh 't' env))
   attribution TypeCheck{}
     (_, AST.ConstructorPattern _ typeApps args)
     (AG.Inherited env, AST.ConstructorPattern (AG.Synthesized consSyn) _ argSyns)

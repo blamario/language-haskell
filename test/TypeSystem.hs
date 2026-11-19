@@ -103,11 +103,12 @@ expressionTests infer = [
       expression infer "(\\x -> x) (\\y -> y)" "a -> a",
       expression infer "let f x = x in f" "a -> a",
       expression infer "(1, \"a\")" "Prelude.Num a => (a, Prelude.String)"],
-   testGroup "unimplemented syntax" [
-      brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
-         infer "\\(x, y) -> x" "(a, b) -> a",
-      brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
-         infer "\\[x] -> x" "[a] -> a"],
+   testGroup "patterns" [
+      expression infer "\\(x, y) -> x" "(a, b) -> a",
+      expression infer "\\[x] -> x" "[a] -> a",
+      expression infer "\\(Just x) -> x" "Maybe a -> a",
+      expression infer "\\both@(x, y) -> both" "(a, b) -> (a, b)",
+      expression infer "case 'x' of c -> c" "Prelude.Char"],
    testGroup "constructors" [
       expression infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
       expression infer "()" "()"],
@@ -117,6 +118,7 @@ expressionTests infer = [
       expression infer "[1 .. 2]" "(Prelude.Enum a, Prelude.Num a) => [a]",
       expression infer "\\case 'x' -> True" "Prelude.Char -> Prelude.Bool",
       -- the constraint on the argument comes from the literal pattern
+      expression infer "\\case 1 -> 2" "(Prelude.Num a, Prelude.Num b) => a -> b",
       expression infer "if | True -> 'x' | False -> 'y'" "Prelude.Char",
       expression infer "do {x <- Just 'c'; Just x}" "Prelude.Monad Maybe => Maybe Prelude.Char",
       brokenExpression "the checker does not expand type synonyms, so String does not match [Char]"
