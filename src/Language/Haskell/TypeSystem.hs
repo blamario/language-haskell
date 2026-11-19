@@ -871,6 +871,20 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized $ addConstraints <$> bodySyn, AST.ExpressionStatement (AG.Inherited env))
     where addConstraints (t, con) = (mempty, con <> buildCon env Nothing t)
+  attribution TypeCheck{} (_, AST.BindStatement{})
+    (AG.Inherited (buildCon, env), AST.BindStatement patSyn (AG.Synthesized bodySyn))
+    =
+    (AG.Synthesized $ addConstraints <$> bodySyn,
+     AST.BindStatement (AG.Inherited $ forkFresh 'p' env) (AG.Inherited $ forkFresh 'e' env))
+    where addConstraints (t, con) =
+            (patternBindings' $ AG.syn patSyn,
+             con <> patternConstraints (AG.syn patSyn)
+             <> buildCon env (Just $ AST.TypeVariable $ patternTypeName $ AG.syn patSyn) t)
+  attribution t@TypeCheck{} (_, AST.LetStatement declarations)
+    (AG.Inherited (_buildCon, env), AST.LetStatement declSyns)
+    =
+    (AG.Synthesized $ Success (bindings, con), AST.LetStatement declEnvs)
+    where ((bindings, con), declEnvs) = whereAttribution t declarations env declSyns
 
 instance (Abstract.Haskell l,
           Abstract.Name l ~ AST.Name l,
@@ -1042,6 +1056,19 @@ instance (Abstract.Haskell l,
       ((boundEnv, bindCon), bindEnvs) = whereAttribution t bindings env bindSyns
       env' = extendWith boundEnv env
       bodyEnv = forkFresh 'x' env'
+  attribution
+    TypeCheck{}
+    (_, AST.LambdaCaseExpression sup alternatives)
+    (AG.Inherited env, AST.LambdaCaseExpression _ alternativeSyns)
+    =
+    (AG.Synthesized $ (,) (AST.FunctionType (Identity argType) (Identity resultType)) <$> alternativesCon,
+     AST.LambdaCaseExpression sup (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* alternatives)))
+    where argType = AST.TypeVariable $ freshTV env
+          resultType = AST.TypeVariable $ freshTV (forkFresh internalPrefix env)
+          Ap alternativesCon = foldMap (Ap . fmap constrain . AG.syn) alternativeSyns
+          constrain (lhsType, rhsType, alternativeCon) =
+            alternativeCon <> Constraints.unify argType lhsType <> Constraints.unify resultType rhsType
+  attribution
     TypeCheck{extensions}
     (_, AST.ListComprehension _ qualifiers)
     (AG.Inherited env, AST.ListComprehension (AG.Synthesized bodySyn) qualifierSyns)
@@ -1069,6 +1096,24 @@ instance (Abstract.Haskell l,
       unified = (,) (AST.ListType $ Identity itemType) . fold . (constrainItem <$>) <$> itemTypeCons
   attribution TypeCheck{} (_, AST.LiteralExpression{}) (AG.Inherited env, AST.LiteralExpression valueSyn) =
     (AG.Synthesized $ AG.syn valueSyn, AST.LiteralExpression $ AG.Inherited env)
+  attribution
+    TypeCheck{extensions}
+    (_, AST.MultiWayIfExpression branches)
+    (AG.Inherited env, AST.MultiWayIfExpression branchSyns)
+    =
+    (AG.Synthesized $ (,) resultType <$> branchesCon,
+     AST.MultiWayIfExpression
+      (AG.Inherited . (,) guardCon . (`forkFresh` env) <$> (ZipList ['a' ..] <* branches)))
+    where resultType = AST.TypeVariable $ freshTV env
+          Ap branchesCon = foldMap (Ap . (constrain <$>) . AG.syn) branchSyns
+          constrain (branchType, branchCon) = branchCon <> Constraints.unify resultType branchType
+          -- a pattern guard matches the type of its pattern, a boolean guard is a Bool
+          guardCon _ (Just lhsType) rhsType = Constraints.unify rhsType lhsType
+          guardCon _ Nothing rhsType = Constraints.unify rhsType (preludeType extensions "Bool")
+  attribution TypeCheck{extensions} (_, AST.Negate) (AG.Inherited env, _) =
+    (AG.Synthesized $ Success (AST.FunctionType (Identity ty) (Identity ty), con), AST.Negate)
+    where ty = AST.TypeVariable $ freshTV env
+          con = Constraints.fromContext $ AST.ClassConstraint (preludeName extensions "Num") (Identity ty)
   attribution TypeCheck{} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ valueReferenceAttribution env var, AST.ReferenceExpression var)
   attribution
@@ -1437,8 +1482,8 @@ instance (Abstract.Haskell l,
     =
     (AG.Synthesized $ combineSyn lhsSyn <$> rhsSyn,
      AST.CaseAlternative (AG.Inherited lhsEnv) (AG.Inherited rhsEnv) whereEnvs)
-    where combineSyn (lhsName, LocalTypeMap{valueBindings}, lhsCon) (rhsType, rhsCon) =
-            (valueBindings Map.! lhsName, rhsType, whereCon <> lhsCon <> rhsCon)
+    where combineSyn (lhsName, _lhsBindings, lhsCon) (rhsType, rhsCon) =
+            (AST.TypeVariable lhsName, rhsType, whereCon <> lhsCon <> rhsCon)
           lhsEnv = forkFresh 'x' env
           lhsBindings = (\(_, env, _)-> env) lhsSyn
           rhsEnv = forkFresh 'y' $ extendWith (lhsBindings <> whereBindings) env

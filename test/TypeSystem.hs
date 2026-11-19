@@ -92,13 +92,13 @@ expressionTests infer = [
       expression infer "\\x -> \\y -> x" "a -> b -> a",
       expression infer "\\x -> x x" typeError],
    testGroup "references" [
-      expression infer "not" "Bool -> Bool",
+      expression infer "not" "Prelude.Bool -> Prelude.Bool",
       expression infer "undefinedName" typeError],
    -- The type variables generated during the inference are named after the node they belong to, but the ones that
    -- survive the constraint solution are renamed to @a@, @b@, and so on in the order of their appearance.
    testGroup "constraint solving" [
-      expression infer "not True" "Bool",
-      expression infer "\\x -> not x" "Bool -> Bool",
+      expression infer "not True" "Prelude.Bool",
+      expression infer "\\x -> not x" "Prelude.Bool -> Prelude.Bool",
       expression infer "[1, 2]" "Prelude.Num a => [a]",
       expression infer "(\\x -> x) (\\y -> y)" "a -> a",
       expression infer "let f x = x in f" "a -> a",
@@ -107,14 +107,20 @@ expressionTests infer = [
       brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
          infer "\\(x, y) -> x" "(a, b) -> a",
       brokenExpression "AST.Pattern attribution covers only variable, wildcard, and literal patterns"
-         infer "\\[x] -> x" "[a] -> a",
-      brokenExpression "AST.CaseAlternative attribution looks the scrutinee up under the wrong key"
-         infer "case 'x' of c -> c" "Prelude.Char",
-      brokenExpression "AST.Expression attribution has no list comprehension case"
-         infer "[x | x <- \"abc\"]" "Prelude.String"],
+         infer "\\[x] -> x" "[a] -> a"],
    testGroup "constructors" [
       expression infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
       expression infer "()" "()"],
+   testGroup "more expression forms" [
+      expression infer "[x | x <- [1, 2]]" "Prelude.Num a => [a]",
+      expression infer "[x | x <- [1, 2], True]" "Prelude.Num a => [a]",
+      expression infer "[1 .. 2]" "(Prelude.Enum a, Prelude.Num a) => [a]",
+      expression infer "\\case 'x' -> True" "Prelude.Char -> Prelude.Bool",
+      -- the constraint on the argument comes from the literal pattern
+      expression infer "if | True -> 'x' | False -> 'y'" "Prelude.Char",
+      expression infer "do {x <- Just 'c'; Just x}" "Prelude.Monad Maybe => Maybe Prelude.Char",
+      brokenExpression "the checker does not expand type synonyms, so String does not match [Char]"
+         infer "[x | x <- \"abc\"]" "Prelude.String"],
    testGroup "polymorphic environment" [
       expression infer "id" "a -> a",
       expression infer "id 'x'" "Prelude.Char"]]
@@ -180,13 +186,20 @@ forAll vars body =
    where bind v = AST.ImplicitlyKindedTypeVariable False (Abstract.name v)
 
 bool, char, int :: Ty
-bool = conType "Bool"
+-- | The checker constrains conditions and guards to the @Prelude@-qualified 'Bool', so the stand-in environment
+-- has to name the type the same way for the two to unify.
+bool = preludeConType "Bool"
 char = conType "Char"
 int = conType "Int"
 
 conType :: Text -> Ty
 conType =
    AST.ConstructorType . Identity . Abstract.constructorReference . Abstract.qualifiedName Nothing . Abstract.name
+
+preludeConType :: Text -> Ty
+preludeConType =
+   AST.ConstructorType . Identity . Abstract.constructorReference
+   . Abstract.qualifiedName (Just Abstract.preludeName) . Abstract.name
 
 -- * The test harness
 
