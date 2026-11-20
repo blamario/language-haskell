@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
              NamedFieldPuns, NoMonomorphismRestriction,
              OverloadedRecordDot, QuantifiedConstraints, RankNTypes, RecordWildCards,
              ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
@@ -135,122 +135,72 @@ main = execParser opts >>= main'
     mode = ModuleMode          <$ switch (long "module")
        <|> ExpressionMode      <$ switch (long "expression")
 
+type RequiredConstraints g l a e w = (
+  Data a, Show a, Template.PrettyViaTH a, Typeable g,
+  a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
+  e ~ Binder.WithEnvironment Language w,
+  Abstract.ExtendedHaskell l,
+  TypeCheckable g Language,
+  Abstract.QualifiedName l ~ AST.QualifiedName l,
+  Show (Binder.Attributes Language),
+  Data (g l l [] []),
+  Show (g Language Language e e), Show (g Language Language w w),
+  Show (g Language Language Placed Placed),
+  Rank2.Apply (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
+  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
+  Rank2.Foldable (g l l (Const (Sum Int))),
+  AG.At (Di.Auto (Binder.Binder l w)) (g l l),
+  Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder l w)))) (g l l),
+  Deep.Functor
+     (Full.Outward (Rank2.Map (AG.Kept (Di.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
+     (g l l),
+  Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
+  Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
+     Int Text l l g,
+  Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
+     Int Text l l g,
+  Reformulator.Reformable 'Extensions.OrPatterns
+    '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] Int Text l l g,
+  FullyTranslatable
+     (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
+     g,
+  FullyTranslatable
+     (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
+     g,
+  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
+  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
+  Deep.Functor (Full.Outward (Rank2.Map Bound Placed)) (g l l),
+  Deep.Functor
+     (Full.Outward (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed))
+     (g l l),
+  Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
+  Deep.Functor (Full.Inward (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
+                                       (Reserializer.Wrapped (Down Int) Text))) (g l l),
+  Deep.Functor
+     (Full.Outward
+        (Transformation.Mapped
+           ((,) (Binder.Attributes l))
+           (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed)))
+     (g l l),
+  Full.Foldable (Full.Outward (Binder.BindingVerifier l Placed)) (g l l),
+  Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
+  Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
+  Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
+  Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
+  Full.Foldable (Full.Outward (Verifier.Verification l Int Text)) (g l l),
+  Deep.Foldable (Reserializer.NestedSerialization ((,) (Binder.Attributes l)) Int Text) (g l l))
+
 main' :: Opts -> IO ()
 main' Opts{..} = do
    (preludeBindings :: Binder.Environment Language) <- Haskell.preludeBindings
    (predefinedModules :: Binder.ModuleEnvironment Language) <- Haskell.predefinedModuleBindings
    let addDirEnv env dir = (<> env) <$> Haskell.directoryModuleBindings preludeBindings env dir
    importableModules <- foldlM addDirEnv predefinedModules optsInclude
-   let go :: (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-              a ~ g l l Bound Bound, l ~ Language, w ~ Grammar.NodeWrap Input,
-              e ~ Binder.WithEnvironment Language w,
-              Abstract.ExtendedHaskell l,
-              TypeCheckable g Language,
-              Abstract.QualifiedName l ~ AST.QualifiedName l,
-              Show (Binder.Attributes Language),
-              Data (g l l [] []),
-              Show (g Language Language e e), Show (g Language Language w w), Show (g Language Language Placed Placed),
-              forall f. Rank2.Functor (g l l f),
-              Rank2.Apply (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
-              Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
-              Rank2.Foldable (g l l (Const (Sum Int))),
-              AG.At (Di.Auto (Binder.Binder l w)) (g l l),
-              Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder l w)))) (g l l),
-              Deep.Functor
-                 (Full.Outward (Rank2.Map (AG.Kept (Di.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
-                 (g l l),
-              Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
-              Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
-                 Int Text l l g,
-              Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
-                 Int Text l l g,
-              Reformulator.Reformable 'Extensions.OrPatterns
-                '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] Int Text l l g,
-              FullyTranslatable
-                 (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
-                 g,
-              FullyTranslatable
-                 (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
-                 g,
-              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
-              Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
-              Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
-              Deep.Functor (Full.Outward (Rank2.Map Bound Placed)) (g l l),
-              Deep.Functor (Full.Outward (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed)) (g l l),
-              Deep.Functor (Full.Inward (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
-                                                   (Reserializer.Wrapped (Down Int) Text))) (g l l),
-              Deep.Functor
-                 (Full.Outward
-                    (Transformation.Mapped
-                       ((,) (Binder.Attributes l))
-                       (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed)))
-                 (g l l),
-              Full.Foldable (Full.Outward (Binder.BindingVerifier l Placed)) (g l l),
-              Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-              Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
-              Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
-              Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
-              Full.Foldable (Full.Outward (Verifier.Accounting l Int Text)) (g l l),
-              Full.Foldable (Full.Outward (Verifier.Verification l Int Text)) (g l l),
-              Deep.Foldable (Reserializer.NestedSerialization ((,) (Binder.Attributes l)) Int Text) (g l l))
+   let go :: forall g l a e w. (RequiredConstraints g l a e w, forall f. Rank2.Functor (g Language Language f))
           => (Input -> ParseResults Input [w (g l l w w)])
           -> String -> Text -> IO ()
        go parser _filename contents = report contents (parser $ fromText contents)
-       report :: forall g l a e w.
-                 (Data a, Show a, Template.PrettyViaTH a, Typeable g,
-                  a ~ Bound (g l l Bound Bound), l ~ Language, w ~ Grammar.NodeWrap Input,
-                  e ~ Binder.WithEnvironment Language w,
-                  Abstract.ExtendedHaskell l,
-                  TypeCheckable g Language,
-                  Abstract.QualifiedName l ~ AST.QualifiedName l,
-                  Show (Binder.Attributes Language),
-                  Data (g l l [] []),
-                  Show (g Language Language e e), Show (g Language Language w w),
-                  Show (g Language Language Placed Placed),
-                  forall f. Rank2.Functor (g l l f),
-                  Rank2.Apply (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
-                  Rank2.Traversable (g l l (AG.Semantics (AG.Keep (Di.Auto (Binder.Binder l w))))),
-                  Rank2.Foldable (g l l (Const (Sum Int))),
-                  AG.At (Di.Auto (Binder.Binder l w)) (g l l),
-                  Deep.Functor (AG.Knit (AG.Keep (Di.Auto (Binder.Binder l w)))) (g l l),
-                  Deep.Functor
-                     (Full.Outward (Rank2.Map (AG.Kept (Di.Auto (Binder.Binder l w))) (Binder.WithEnvironment l w)))
-                     (g l l),
-                  Full.Traversable (Full.Inward (Reorganizer.Reorganization l (Down Int) Input)) (g l l),
-                  Reformulator.Reformable 'Extensions.RecordWildCards '[ Extensions.On 'Extensions.NamedFieldPuns ]
-                     Int Text l l g,
-                  Reformulator.Reformable 'Extensions.NPlusKPatterns '[ Extensions.On 'Extensions.ViewPatterns ]
-                     Int Text l l g,
-                  Reformulator.Reformable 'Extensions.OrPatterns
-                    '[ Extensions.On 'Extensions.ViewPatterns, Extensions.On 'Extensions.LambdaCase ] Int Text l l g,
-                  FullyTranslatable
-                     (ReformulationOf (Extensions.Off 'Extensions.ListTuplePuns) '[ ] Language Language Int Text)
-                     g,
-                  FullyTranslatable
-                     (ReformulationOf (Extensions.On 'Extensions.TupleSections) '[ ] Language Language Int Text)
-                     g,
-                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) Placed) []) (g l l),
-                  Deep.Functor (Rank2.Map (Compose ((,) (Binder.Attributes Language)) (Grammar.NodeWrap Input)) []) (g l l),
-                  Deep.Functor (Full.Outward (Rank2.Map Bound Placed)) (g l l),
-                  Deep.Functor
-                     (Full.Outward (Rank2.Map (Binder.WithEnvironment l Haskell.Parsed) Haskell.Parsed))
-                     (g l l),
-                  Deep.Functor (Rank2.Map ((,) (Down Int, Reserializer.ParsedLexemes Input, Down Int)) []) (g l l),
-                  Deep.Functor (Full.Inward (Rank2.Map (Reserializer.Wrapped (Down Int) Input)
-                                                       (Reserializer.Wrapped (Down Int) Text))) (g l l),
-                  Deep.Functor
-                     (Full.Outward
-                        (Transformation.Mapped
-                           ((,) (Binder.Attributes l))
-                           (Rank2.Map (Reserializer.Wrapped (Down Int) Input) Placed)))
-                     (g l l),
-                  Full.Foldable (Full.Outward (Binder.BindingVerifier l Placed)) (g l l),
-                  Deep.Foldable (Reserializer.Serialization Int Text) (g l l),
-                  Deep.Foldable (Reserializer.Serialization (Down Int) Input) (g l l),
-                  Deep.Foldable (Full.Outward (Rank2.Fold (Reformulator.Wrap l Int Text) (Sum Int))) (g l l),
-                  Deep.Traversable (Reserializer.NestedPositionAdjustment ((,) (Binder.Attributes l)) Int Text) (g l l),
-                  Full.Foldable (Full.Outward (Verifier.Verification l Int Text)) (g l l),
-                  Deep.Foldable (Reserializer.NestedSerialization ((,) (Binder.Attributes l)) Int Text) (g l l))
+       report :: forall g l a e w. (RequiredConstraints g l a e w, forall f. Rank2.Functor (g l l f))
               => Text -> ParseResults Input [w (g l l w w)] -> IO ()
        report contents (Right [parsed]) = case optsOutput of
           Original -> case optsStage of
