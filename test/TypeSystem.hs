@@ -109,6 +109,10 @@ expressionTests infer = [
       expression infer "\\(Just x) -> x" "Maybe a -> a",
       expression infer "\\both@(x, y) -> both" "(a, b) -> (a, b)",
       expression infer "case 'x' of c -> c" "Prelude.Char"],
+   testGroup "records" [
+      expression infer "MkPair {left = True}" "Pair",
+      expression infer "MkPair {left = True, right = 'b'}" typeError,
+      expression infer "\\p -> p {left = True}" "Pair -> Pair"],
    testGroup "constructors" [
       expression infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
       expression infer "()" "()"],
@@ -143,7 +147,10 @@ testValueBindings = Map.fromList $ concat [
    binding "Int" int,
    binding "id" (forAll ["a"] (var "a" --> var "a")),
    binding "Just" (forAll ["a"] (var "a" --> maybeOf (var "a"))),
-   binding "Nothing" (forAll ["a"] (maybeOf (var "a")))]
+   binding "Nothing" (forAll ["a"] (maybeOf (var "a"))),
+   binding "MkPair" (bool --> int --> pair),
+   binding "left" (pair --> bool),
+   binding "right" (pair --> int)]
 
 testTypeBindings :: Map (AST.QualifiedName Language) Ty
 testTypeBindings = Map.fromList $ concat [binding "Bool" bool, binding "Char" char, binding "Int" int]
@@ -187,7 +194,8 @@ forAll vars body =
    AST.ForallType (ZipList $ Identity . bind <$> vars) (Identity $ AST.ConstrainedType (Identity AST.NoContext) (Identity body))
    where bind v = AST.ImplicitlyKindedTypeVariable False (Abstract.name v)
 
-bool, char, int :: Ty
+bool, char, int, pair :: Ty
+pair = conType "Pair"
 -- | The checker constrains conditions and guards to the @Prelude@-qualified 'Bool', so the stand-in environment
 -- has to name the type the same way for the two to unify.
 bool = preludeConType "Bool"

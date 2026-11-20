@@ -895,6 +895,7 @@ instance (Abstract.Haskell l,
           Abstract.Context l ~ AST.Context l,
           Abstract.GuardedExpression l ~ AST.GuardedExpression l,
           Abstract.Statement l ~ AST.Statement l,
+          Abstract.FieldBinding l ~ AST.FieldBinding l,
           Abstract.Expression l ~ AST.Expression l,
           Abstract.Value l ~ AST.Value l,
           Abstract.Pattern l ~ AST.Pattern l,
@@ -1114,6 +1115,19 @@ instance (Abstract.Haskell l,
     (AG.Synthesized $ Success (AST.FunctionType (Identity ty) (Identity ty), con), AST.Negate)
     where ty = AST.TypeVariable $ freshTV env
           con = Constraints.fromContext $ AST.ClassConstraint (preludeName extensions "Num") (Identity ty)
+  attribution
+    TypeCheck{}
+    (i, AST.RecordExpression _ fields)
+    (AG.Inherited env, AST.RecordExpression (AG.Synthesized headSyn) fieldSyns)
+    =
+    (AG.Synthesized $ (,) recordType <$> (mappend <$> headCon <*> fieldsCon),
+     AST.RecordExpression
+      (AG.Inherited $ forkFresh internalPrefix env)
+      (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* fields)))
+    where recordType = AST.TypeVariable $ freshTV env
+          headCon = headSyn <&> \(headType, con)->
+            con <> Constraints.unify recordType (recordResultType headType)
+          fieldsCon = recordFieldsConstraint env i recordType fieldSyns
   attribution TypeCheck{} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ valueReferenceAttribution env var, AST.ReferenceExpression var)
   attribution
@@ -1590,6 +1604,51 @@ internalPrefix = '#'
 
 sameNonEmptyShape :: NonEmpty a -> NonEmpty b -> NonEmpty b
 sameNonEmptyShape (_ :| xs) (y :| ys) = y :| Binder.sameShape xs ys
+
+-- | Extracts the type of the result of a record expression from the type of its head. The head of a record update is
+-- the record itself, the head of a record construction is the constructor. The latter's arrows must be stripped down
+-- to the type it constructs.
+recordResultType :: (Abstract.Type l ~ AST.Type l)
+                 => AST.Type l l Identity Identity -> AST.Type l l Identity Identity
+recordResultType (AST.FunctionType _ (Identity result)) = recordResultType result
+recordResultType t = t
+
+-- | Constrains a record type and the type bound to one of its fields by the type of the field's selector function:
+-- a field of a record of type @r@ holding a value of type @v@ is selected by a function of type @r -> v@.
+recordFieldConstraint :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                          Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Type l ~ AST.Type l,
+                          Abstract.Context l ~ AST.Context l, Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                          Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
+                          ConstraintCollection con, Constraints.Language con ~ l)
+                      => TypeEnv l Identity pos con
+                      -> AST.Type l l Identity Identity
+                      -> AST.QualifiedName l
+                      -> AST.Type l l Identity Identity
+                      -> Validation (TypeError l con) con
+recordFieldConstraint env recordType fieldName valueType =
+  valueReferenceAttribution env fieldName <&> \(selectorType, selectorCon)->
+    selectorCon <> Constraints.unify selectorType (AST.FunctionType (Identity recordType) (Identity valueType))
+
+-- | Constrains the record type against every field bound in a record expression, and collects what the bound
+-- values themselves constrain.
+recordFieldsConstraint :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
+                           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Type l ~ AST.Type l,
+                           Abstract.Context l ~ AST.Context l, Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
+                           Full.Functor (TypeVariableSubstitution l) (AST.Type l l),
+                           Foldable f, ConstraintCollection con, Constraints.Language con ~ l,
+                           SynAtts l pos s con (AST.FieldBinding l l)
+                           ~ Validation (TypeErrors l pos con)
+                                        (AST.QualifiedName l, AST.Type l l Identity Identity, con))
+                       => TypeEnv l Identity pos con
+                       -> (pos, lexemes, pos)
+                       -> AST.Type l l Identity Identity
+                       -> f (AG.Synthesized (TypeCheck l pos s con) (AST.FieldBinding l l sem sem))
+                       -> Validation (TypeErrors l pos con) con
+recordFieldsConstraint env input recordType fieldSyns = fieldsCon
+  where Ap fieldsCon = foldMap (Ap . constrainField . AG.syn) fieldSyns
+        constrainField (Failure err) = Failure err
+        constrainField (Success (fieldName, valueType, valueCon)) =
+          (valueCon <>) <$> placeError input (recordFieldConstraint env recordType fieldName valueType)
 
 -- | The environments for checking the given statements: the first is the full environment, the last is the original
 -- environment, the penultimate one includes only the first statement's bindings, etc.
