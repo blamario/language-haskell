@@ -1128,6 +1128,40 @@ instance (Abstract.Haskell l,
           headCon = headSyn <&> \(headType, con)->
             con <> Constraints.unify recordType (recordResultType headType)
           fieldsCon = recordFieldsConstraint env i recordType fieldSyns
+  attribution
+    TypeCheck{}
+    (i, AST.WildcardRecordExpression sup constructor fields)
+    (AG.Inherited env, AST.WildcardRecordExpression _ _ fieldSyns)
+    =
+    -- TODO: check the fields the wildcard stands for
+    (AG.Synthesized $ (,) recordType <$> (mappend <$> constructorCon <*> fieldsCon),
+     AST.WildcardRecordExpression sup constructor
+      (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* fields)))
+    where recordType = AST.TypeVariable $ freshTV env
+          constructorCon = placeError i (valueReferenceAttribution env constructor) <&> \(headType, con)->
+            con <> Constraints.unify recordType (recordResultType headType)
+          fieldsCon = recordFieldsConstraint env i recordType fieldSyns
+  attribution
+    TypeCheck{}
+    (i, AST.GetField _ fieldName)
+    (AG.Inherited env, AST.GetField (AG.Synthesized recordSyn) _)
+    =
+    (AG.Synthesized $ select <$> recordSyn <*> placeError i (fieldSelector fieldName),
+     AST.GetField (AG.Inherited $ forkFresh 'r' env) fieldName)
+    where fieldType = AST.TypeVariable $ freshTV env
+          fieldSelector = valueReferenceAttribution env . Abstract.unqualifiedName
+          select (recordType, recordCon) (selectorType, selectorCon) =
+            (fieldType,
+             recordCon <> selectorCon
+             <> Constraints.unify selectorType (AST.FunctionType (Identity recordType) (Identity fieldType)))
+  attribution TypeCheck{} (i, AST.FieldProjection fieldNames) (AG.Inherited env, _) =
+    (AG.Synthesized $ (,) (AST.FunctionType (Identity $ head steps) (Identity $ last steps)) <$> projectionCon,
+     AST.FieldProjection fieldNames)
+    where -- the node has no children, so every letter is free to name the type of one step of the projection
+          steps = [AST.TypeVariable $ freshTV (forkFresh c env) | c <- take (length fieldNames + 1) ['a' ..]]
+          Ap projectionCon = foldMap Ap (zipWith3 project (toList fieldNames) steps (tail steps))
+          project fieldName from to =
+            placeError i $ recordFieldConstraint env from (Abstract.unqualifiedName fieldName) to
   attribution TypeCheck{} (i, AST.ReferenceExpression var) (AG.Inherited env, _) =
     (AG.Synthesized $ placeError i $ valueReferenceAttribution env var, AST.ReferenceExpression var)
   attribution

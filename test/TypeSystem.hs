@@ -112,7 +112,16 @@ expressionTests infer = [
    testGroup "records" [
       expression infer "MkPair {left = True}" "Pair",
       expression infer "MkPair {left = True, right = 'b'}" typeError,
-      expression infer "\\p -> p {left = True}" "Pair -> Pair"],
+      expression infer "\\p -> p {left = True}" "Pair -> Pair",
+      expression infer "\\p -> p.left" "Pair -> Prelude.Bool",
+      expression infer "(.left)" "Pair -> Prelude.Bool",
+      expression infer "MkPair {missingField = True}" typeError,
+      -- the head of an update has to be the record, and the head of a construction its constructor
+      expression infer "'c' {left = True}" typeError,
+      expression infer "Just {left = True}" typeError,
+      -- the fields the wildcard stands for go unchecked, the explicit ones do not
+      expression infer "MkPair {left = True, ..}" "Pair",
+      expression infer "MkPair {left = 'a', ..}" typeError],
    testGroup "constructors" [
       expression infer "(,) 'a' 'b'" "(Prelude.Char, Prelude.Char)",
       expression infer "()" "()"],
