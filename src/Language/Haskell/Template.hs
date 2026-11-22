@@ -189,8 +189,13 @@ instance (TemplateWrapper f,
           PrettyViaTH (Abstract.Export l l f f),
           PrettyViaTH (Abstract.Declaration l l f f)) =>
          PrettyViaTH (AST.Module l l f f) where
+   -- A blank line between the imports and what follows them, where there is something on each
+   -- side: the imports are a preamble rather than the first declarations, and run together with
+   -- them they do not read as one.
    prettyViaTH (AnonymousModule imports declarations) =
-      Ppr.vcat ((prettyViaTH . extract <$> toList imports) ++ (prettyViaTH . extract <$> toList declarations))
+      Ppr.vcat (imported <> (if null imported || null declared then [] else [Ppr.text ""]) <> declared)
+      where imported = prettyViaTH . extract <$> toList imports
+            declared = prettyViaTH . extract <$> toList declarations
    prettyViaTH (NamedModule name exports imports declarations) =
       Ppr.text "module" <+> prettyViaTH name <+> maybe Ppr.empty showExports exports <+> Ppr.text "where"
       $$ prettyViaTH (AnonymousModule imports declarations :: Module l l f f)
