@@ -1627,8 +1627,8 @@ firstError (Success a) = Success a
 extendWith :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
            => LocalTypeMap l Identity pos con -> TypeEnv l Identity pos con -> TypeEnv l Identity pos con
 extendWith LocalTypeMap{typeBindings= types, valueBindings= values} env@TypeEnv{bindings = TypeMap{typeBindings, valueBindings, errors}} =
-  env{bindings = TypeMap{typeBindings = typeBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName types,
-                         valueBindings = valueBindings <> Map.mapKeysMonotonic Abstract.unqualifiedName values,
+  env{bindings = TypeMap{typeBindings = Map.mapKeysMonotonic Abstract.unqualifiedName types <> typeBindings,
+                         valueBindings = Map.mapKeysMonotonic Abstract.unqualifiedName values <> valueBindings,
                          errors}}
 
 -- | The character that prefixes the name of a type variable belonging to no child node, so that the name cannot
