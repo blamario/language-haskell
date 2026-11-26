@@ -22,6 +22,7 @@ import qualified Language.Haskell.Reorganizer as Reorganizer
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
 import qualified Language.Haskell.TypeSystem as TypeSystem
+import qualified Language.Haskell.TypeSystem.Type as Type
 
 import qualified Rank2
 import qualified Transformation
@@ -94,8 +95,8 @@ instance TypeCheckable AST.Module Language where
              Map.foldMapWithKey showType typeBindings,
              Map.foldMapWithKey showValueType valueBindings,
              show <$> errors]
-           showType k v = ["type " <> AST.nameString k <> " :: " <> Template.showViaTH v]
-           showValueType k v = [AST.nameString k <> " :: " <> Template.showViaTH v]
+           showType k v = ["type " <> AST.nameString k <> " :: " <> Template.showViaTH (Type.toSyntax v)]
+           showValueType k v = [AST.nameString k <> " :: " <> Template.showViaTH (Type.toSyntax v)]
 
 main :: IO ()
 main = execParser opts >>= main'

@@ -30,6 +30,7 @@ library
                        Language.Haskell.Grammar, Language.Haskell.Reorganizer,
                        Language.Haskell.Template, Language.Haskell.TypeSystem,
                        Language.Haskell.TypeSystem.Transformations,
+                       Language.Haskell.TypeSystem.Type,
                        Language.Haskell.Extensions,
                        Language.Haskell.Extensions.Abstract, Language.Haskell.Extensions.AST,
                        Language.Haskell.Extensions.Grammar,

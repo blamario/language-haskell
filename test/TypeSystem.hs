@@ -42,7 +42,8 @@ import qualified Language.Haskell.Grammar as Report (HaskellGrammar(expression))
 import qualified Language.Haskell.Reserializer as Reserializer
 import qualified Language.Haskell.Template as Template
 import qualified Language.Haskell.TypeSystem as TypeSystem
-import Language.Haskell.TypeSystem.Transformations (substituteTypeVariables)
+import qualified Language.Haskell.TypeSystem.Type as Type
+import Language.Haskell.TypeSystem.Type (substituteTypeVariables)
 
 main :: IO ()
 main = do
@@ -73,7 +74,7 @@ substitutionTests = [
 
 substitution :: String -> [(Text, Ty)] -> Ty -> Expectation -> TestTree
 substitution name bindings subject expected = testCase name $ do
-   let substituted = Template.showViaTH
+   let substituted = Template.showViaTH $ Type.toSyntax
                      $ substituteTypeVariables (Map.fromList [(Abstract.name v, t) | (v, t) <- bindings]) subject
    if substituted == expected then pure ()
    else assertFailure ("expected " <> show expected <> ", substituted into " <> show substituted)
@@ -164,7 +165,7 @@ testValueBindings = Map.fromList $ concat [
 testTypeBindings :: Map (AST.QualifiedName Language) Ty
 testTypeBindings = Map.fromList $ concat [binding "Bool" bool, binding "Char" char, binding "Int" int]
 
-type Ty = AST.Type Language Language Identity Identity
+type Ty = Type.Ty Language
 
 -- | Binds the name both unqualified and qualified by @Prelude@, as the checker looks names up as they are written.
 binding :: Text -> Ty -> [(AST.QualifiedName Language, Ty)]
@@ -174,34 +175,34 @@ binding n t = [(Abstract.qualifiedName Nothing name, t),
 
 infixr 1 -->
 (-->) :: Ty -> Ty -> Ty
-a --> b = AST.FunctionType (Identity a) (Identity b)
+a --> b = Type.FunctionType a b
 
 var :: Text -> Ty
-var = AST.TypeVariable . Abstract.name
+var = Type.TypeVariable . Abstract.name
 
 listOf :: Ty -> Ty
-listOf = AST.ListType . Identity
+listOf = Type.ListType
 
 maybeOf :: Ty -> Ty
 maybeOf = applyTo (conType "Maybe")
 
 tupleOf :: [Ty] -> Ty
-tupleOf items = AST.TupleType (ZipNonEmpty $ Identity <$> NonEmpty.fromList items)
+tupleOf items = Type.TupleType (NonEmpty.fromList items)
 
 applyTo :: Ty -> Ty -> Ty
-applyTo f a = AST.TypeApplication (Identity f) (Identity a)
+applyTo = Type.ApplyType
 
 -- | Quantifies the type without the context 'forAll' adds.
 quantify :: [Text] -> Ty -> Ty
-quantify vars body = AST.ForallType (ZipList $ Identity . bind <$> vars) (Identity body)
-   where bind v = AST.ImplicitlyKindedTypeVariable False (Abstract.name v)
+quantify vars body = Type.ForallType (bind <$> vars) body
+   where bind v = Type.TyVarBinding False (Abstract.name v) Nothing
 
 -- | Quantifies the type the way 'Language.Haskell.TypeSystem.checkModule' does, with an explicit context, so that
 -- the checker recognizes it as a type to instantiate.
 forAll :: [Text] -> Ty -> Ty
 forAll vars body =
-   AST.ForallType (ZipList $ Identity . bind <$> vars) (Identity $ AST.ConstrainedType (Identity AST.NoContext) (Identity body))
-   where bind v = AST.ImplicitlyKindedTypeVariable False (Abstract.name v)
+   Type.ForallType (bind <$> vars) (Type.ConstrainedType [] body)
+   where bind v = Type.TyVarBinding False (Abstract.name v) Nothing
 
 bool, char, int, pair :: Ty
 pair = conType "Pair"
@@ -212,13 +213,10 @@ char = conType "Char"
 int = conType "Int"
 
 conType :: Text -> Ty
-conType =
-   AST.ConstructorType . Identity . Abstract.constructorReference . Abstract.qualifiedName Nothing . Abstract.name
+conType = Type.ConstructorType . Abstract.qualifiedName Nothing . Abstract.name
 
 preludeConType :: Text -> Ty
-preludeConType =
-   AST.ConstructorType . Identity . Abstract.constructorReference
-   . Abstract.qualifiedName (Just Abstract.preludeName) . Abstract.name
+preludeConType = Type.ConstructorType . Abstract.qualifiedName (Just Abstract.preludeName) . Abstract.name
 
 -- * The test harness
 
