@@ -558,6 +558,12 @@ newtype ModuleName λ = ModuleName (NonEmpty (Name λ)) deriving (Data, Eq, Ord,
 nameText :: Name λ -> Text
 nameText (Name s) = s
 
+moduleNameText :: ModuleName λ -> Text
+moduleNameText (ModuleName names) = Text.intercalate "." $ nameText <$> NonEmpty.toList names
+
+qualifiedNameText :: QualifiedName λ -> Text
+qualifiedNameText (QualifiedName modName name) = foldMap ((<> ".") . moduleNameText) modName <> nameText name
+
 nameString :: Name λ -> String
 nameString = Text.unpack . nameText
 

@@ -35,7 +35,7 @@ import Language.Haskell.AST (Module(..), EquationLHS(..), EquationRHS(..), Guard
                              Associativity(..),
                              Name(..), ModuleName(..), QualifiedName(..),
                              ImportSpecification(..),
-                             nameString, nameText)
+                             moduleNameText, nameString, nameText, qualifiedNameText)
 import qualified Rank2.TH
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Deep.TH
