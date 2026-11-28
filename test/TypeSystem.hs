@@ -117,6 +117,12 @@ expressionTests infer = [
       expression infer "\\p -> p.left" "Pair -> Prelude.Bool",
       expression infer "(.left)" "Pair -> Prelude.Bool",
       expression infer "MkPair {missingField = True}" typeError,
+      -- a function of the right type is still not a field of the record
+      expression infer "MkPair {leftish = True}" typeError,
+      expression infer "(MkPair {left = True}).left" "Prelude.Bool",
+      expression infer "(MkPair {left = True}).leftish" typeError,
+      brokenExpression "the checker can tell a field from a function only once it knows the record type"
+         infer "\\p -> p {leftish = True}" typeError,
       -- the head of an update has to be the record, and the head of a construction its constructor
       expression infer "'c' {left = True}" typeError,
       expression infer "Just {left = True}" typeError,
@@ -160,10 +166,19 @@ testValueBindings = Map.fromList $ concat [
    binding "Nothing" (forAll ["a"] (maybeOf (var "a"))),
    binding "MkPair" (bool --> int --> pair),
    binding "left" (pair --> bool),
-   binding "right" (pair --> int)]
+   binding "right" (pair --> int),
+   -- an ordinary function with the type of a field selector of 'pair', but not a field of it
+   binding "leftish" (pair --> bool)]
 
 testTypeBindings :: Map (AST.QualifiedName Language) Ty
-testTypeBindings = Map.fromList $ concat [binding "Bool" bool, binding "Char" char, binding "Int" int]
+testTypeBindings = Map.fromList $ concat [
+   binding "Bool" bool, binding "Char" char, binding "Int" int, binding "Pair" pairRecord]
+
+-- | The record the name @Pair@ is bound to, as opposed to 'pair' which only names it.
+pairRecord :: Ty
+pairRecord = Type.RecordType
+               (Abstract.qualifiedName Nothing $ Abstract.name "Pair")
+               [(Abstract.name "left", bool), (Abstract.name "right", int)]
 
 type Ty = Type.Ty Language
 

@@ -57,7 +57,7 @@ data TypeError l con
   | UnknownTypeVariable (AST.QualifiedName l)
   | UnknownValue (AST.QualifiedName l)
   | UntypedValue (AST.QualifiedName l)
-  -- | a type the checker has no representation for, /e.g./ an unboxed tuple in a signature
+  | NotARecordField (AST.QualifiedName l) (AST.QualifiedName l)
   | UnsupportedType
 
 deriving instance (Show (Abstract.Name l), Show (Abstract.QualifiedName l), Show con) => Show (TypeError l con)
@@ -190,6 +190,9 @@ solveConstraints con = unifyAll mempty (assignedEquations <> con.equations) []
       (TypeVariable lName, TypeVariable rName)
         | lName < rName -> unifyAll (Map.insert rName l bindings) rest errs
         | otherwise -> unifyAll (Map.insert lName r bindings) rest errs
+      (RecordType lName _, RecordType rName _) | lName == rName -> unifyAll bindings rest errs
+      (RecordType lName _, ConstructorType rName) | lName == rName -> unifyAll bindings rest errs
+      (ConstructorType lName, RecordType rName _) | lName == rName -> unifyAll bindings rest errs
       (TypeVariable name, _) | not (occurs name r) -> unifyAll (Map.insert name r bindings) rest errs
       (_, TypeVariable name) | not (occurs name l) -> unifyAll (Map.insert name l bindings) rest errs
       (FunctionType l1 l2, FunctionType r1 r2) -> unifyAll bindings ((l1, r1) : (l2, r2) : rest) errs

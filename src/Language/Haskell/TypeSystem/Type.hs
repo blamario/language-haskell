@@ -15,6 +15,7 @@ module Language.Haskell.TypeSystem.Type (
 
 import Control.Applicative (ZipList(ZipList))
 import Data.Foldable (toList)
+import Data.Functor.Compose (Compose (Compose, getCompose))
 import Data.Functor.Identity (Identity(Identity, runIdentity))
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty)
@@ -39,6 +40,7 @@ data Ty l =
    | ListType (Ty l)
    | TupleType (NonEmpty (Ty l))
    | UnitType
+   | RecordType (Abstract.QualifiedName l) [(Abstract.Name l, Ty l)]
    | StrictType (Ty l)                       -- ^ a strict field's type, @!t@
    | ForallType [TyVarBinding l] (Ty l)
    | ConstrainedType [TyConstraint l] (Ty l) -- ^ a type with constrained context, @con => t@ 
@@ -146,6 +148,7 @@ toSyntax = \case
   ListType item -> AST.ListType (Identity $ toSyntax item)
   TupleType items -> AST.TupleType (ZipNonEmpty $ Identity . toSyntax <$> items)
   UnitType -> AST.ConstructorType (Identity AST.UnitConstructor)
+  RecordType name _fields -> constructorType name
   StrictType t -> AST.StrictType (Identity $ toSyntax t)
   ForallType bindings body ->
     AST.ForallType (ZipList $ Identity . bindingToSyntax <$> bindings) (Identity $ toSyntax body)
@@ -193,6 +196,7 @@ freeVariableList = \case
   ListType item -> freeVariableList item
   TupleType items -> foldMap freeVariableList items
   UnitType -> []
+  RecordType _ fields -> foldMap freeVariableList (Compose fields)
   StrictType t -> freeVariableList t
   ForallType bindings body ->
     filter (`notElem` boundVariables bindings) (foldMap bindingKindVariables bindings <> freeVariableList body)
@@ -219,6 +223,7 @@ substituteTypeVariables substitution = substitute
         substitute (FunctionType from to) = FunctionType (substitute from) (substitute to)
         substitute (ListType item) = ListType (substitute item)
         substitute (TupleType items) = TupleType (substitute <$> items)
+        substitute (RecordType name fields) = RecordType name (getCompose $ substitute <$> Compose fields)
         substitute (StrictType t) = StrictType (substitute t)
         substitute (ForallType bindings body) =
           -- the bound variables shadow the substitution inside the quantified type

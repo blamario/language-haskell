@@ -1116,40 +1116,36 @@ instance (Abstract.Haskell l,
     (i, AST.RecordExpression _ fields)
     (AG.Inherited env, AST.RecordExpression (AG.Synthesized headSyn) fieldSyns)
     =
-    (AG.Synthesized $ (,) recordType <$> (mappend <$> headCon <*> fieldsCon),
+    (AG.Synthesized checked,
      AST.RecordExpression
       (AG.Inherited $ forkFresh internalPrefix env)
       (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* fields)))
-    where recordType = TypeVariable $ freshTV env
-          headCon = headSyn <&> \(headType, con)->
-            con <> Constraints.unify recordType (recordResultType headType)
-          fieldsCon = recordFieldsConstraint env i recordType fieldSyns
+    where -- the type of the whole expression is the type of its head, which may be a known record type
+          checked = headSyn `bindValidation` \(headType, con)->
+            let recordType = recordResultType headType
+            in (,) recordType . (con <>) <$> recordFieldsConstraint env i recordType fieldSyns
   attribution
     TypeCheck{}
     (i, AST.WildcardRecordExpression sup constructor fields)
     (AG.Inherited env, AST.WildcardRecordExpression _ _ fieldSyns)
     =
     -- TODO: check the fields the wildcard stands for
-    (AG.Synthesized $ (,) recordType <$> (mappend <$> constructorCon <*> fieldsCon),
+    (AG.Synthesized checked,
      AST.WildcardRecordExpression sup constructor
       (AG.Inherited . (`forkFresh` env) <$> (ZipList ['a' ..] <* fields)))
-    where recordType = TypeVariable $ freshTV env
-          constructorCon = placeError i (valueReferenceAttribution env constructor) <&> \(headType, con)->
-            con <> Constraints.unify recordType (recordResultType headType)
-          fieldsCon = recordFieldsConstraint env i recordType fieldSyns
+    where checked = placeError i (valueReferenceAttribution env constructor) `bindValidation` \(headType, con)->
+            let recordType = recordResultType headType
+            in (,) recordType . (con <>) <$> recordFieldsConstraint env i recordType fieldSyns
   attribution
     TypeCheck{}
     (i, AST.GetField _ fieldName)
     (AG.Inherited env, AST.GetField (AG.Synthesized recordSyn) _)
     =
-    (AG.Synthesized $ select <$> recordSyn <*> placeError i (fieldSelector fieldName),
+    (AG.Synthesized $ recordSyn `bindValidation` \(recordType, recordCon)->
+        (,) fieldType . (recordCon <>)
+        <$> placeError i (recordFieldConstraint env recordType (Abstract.unqualifiedName fieldName) fieldType),
      AST.GetField (AG.Inherited $ forkFresh 'r' env) fieldName)
     where fieldType = TypeVariable $ freshTV env
-          fieldSelector = valueReferenceAttribution env . Abstract.unqualifiedName
-          select (recordType, recordCon) (selectorType, selectorCon) =
-            (fieldType,
-             recordCon <> selectorCon
-             <> Constraints.unify selectorType (FunctionType (recordType) (fieldType)))
   attribution TypeCheck{} (i, AST.FieldProjection fieldNames) (AG.Inherited env, _) =
     (AG.Synthesized $ (,) (FunctionType (head steps) (last steps)) <$> projectionCon,
      AST.FieldProjection fieldNames)
@@ -1606,6 +1602,12 @@ placeError :: (pos, s, pos) -> Validation (TypeError l con) a -> Validation (Typ
 placeError (pos, _, _) (Failure err) = Failure $ (pos, err) :| []
 placeError _ (Success a) = Success a
 
+-- | Feeds the result of a successful validation on, leaving a failure as it is. Unlike '<*>' this cannot
+-- accumulate the errors of both sides, but it lets the latter depend on the result of the former.
+bindValidation :: Validation e a -> (a -> Validation e b) -> Validation e b
+bindValidation (Failure err) _ = Failure err
+bindValidation (Success a) f = f a
+
 firstError :: Validation (TypeErrors l pos con) a -> Validation (TypeError l con) a
 firstError (Failure ((_, err) :| _)) = Failure err
 firstError (Success a) = Success a
@@ -1637,8 +1639,25 @@ recordResultType :: (Abstract.Type l ~ AST.Type l)
 recordResultType (FunctionType _ (result)) = recordResultType result
 recordResultType t = t
 
--- | Constrains a record type and the type bound to one of its fields by the type of the field's selector function:
--- a field of a record of type @r@ holding a value of type @v@ is selected by a function of type @r -> v@.
+-- | The name and the fields of the given record type, if it is a record type the environment knows.
+recordTypeFields :: (Abstract.Name l ~ AST.Name l, Abstract.QualifiedName l ~ AST.QualifiedName l)
+                 => TypeEnv l pos con
+                 -> Ty l
+                 -> Maybe (AST.QualifiedName l, [(AST.Name l, Ty l)])
+recordTypeFields env = resolve
+  where resolve (RecordType name fields) = Just (name, fields)
+        -- a record type may be parameterized, but its arguments say nothing about which fields it has
+        resolve (ApplyType t _) = resolve t
+        resolve (ConstructorType name) = case Map.lookup name env.bindings.typeBindings of
+          Just (RecordType recordName fields) -> Just (recordName, fields)
+          _ -> Nothing
+        resolve _ = Nothing
+
+-- | Constrains the type bound to one of a record's fields. If the record type is known, the field must be one of
+-- its own and the value must have the type the field is declared to hold. If it's not, the field is treated as
+-- any other function in scope: a field of a record of type @r@ holding a value of type @v@ is selected by a
+-- function of type @r -> v@. Such a function need not be a field of the record at all, which is the one case this
+-- fallback gets wrong.
 recordFieldConstraint :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
                           Abstract.QualifiedName l ~ AST.QualifiedName l, Abstract.Type l ~ AST.Type l,
                           Abstract.Context l ~ AST.Context l, Abstract.TypeVarBinding l ~ AST.TypeVarBinding l,
@@ -1648,9 +1667,14 @@ recordFieldConstraint :: (Abstract.Haskell l, Abstract.Name l ~ AST.Name l,
                       -> AST.QualifiedName l
                       -> Ty l
                       -> Validation (TypeError l con) con
-recordFieldConstraint env recordType fieldName valueType =
-  valueReferenceAttribution env fieldName <&> \(selectorType, selectorCon)->
-    selectorCon <> Constraints.unify selectorType (FunctionType (recordType) (valueType))
+recordFieldConstraint env recordType fieldName valueType = case recordTypeFields env recordType of
+  Just (recordName, fields)
+    | Just fieldType <- List.lookup (Binder.baseName fieldName) fields
+    -> Success (Constraints.unify fieldType valueType)
+    | otherwise -> Failure (NotARecordField recordName fieldName)
+  Nothing ->
+    valueReferenceAttribution env fieldName <&> \(selectorType, selectorCon)->
+      selectorCon <> Constraints.unify selectorType (FunctionType (recordType) (valueType))
 
 -- | Constrains the record type against every field bound in a record expression, and collects what the bound
 -- values themselves constrain.
