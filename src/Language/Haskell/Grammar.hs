@@ -620,7 +620,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
    qualifiedTypeConstructor = qualifiedConstructorIdentifier,
    qualifiedVariableSymbol = token (nameQualifier <*> variableSymbol),
    qualifiedConstructorSymbol = token (nameQualifier <*> constructorSymbol
-                                       <|> Abstract.qualifiedName Nothing . Abstract.name . Text.pack . toString mempty
+                                       <|> Abstract.qualifiedName Nothing . Abstract.name . Textual.toText mempty
                                            <$> string ":" <* notSatisfyChar isSymbol),
 
    typeVar = variableIdentifier,
@@ -684,7 +684,7 @@ grammar HaskellGrammar{moduleLevel= ModuleLevelGrammar{..},
                     <|> escape)
                 <* char '\'',
    stringLiteral = token stringLexeme <?> "string literal",
-   stringLexeme = Text.pack . toString mempty <$>
+   stringLexeme = Textual.toText mempty <$>
                   (char '"'
                    *> concatMany (takeCharsWhile1 (\c-> c /= '"' && c /= '\\')
                                   <|> Textual.singleton <$> escape
@@ -787,7 +787,7 @@ moduleId = Abstract.moduleName <$> token moduleLexeme
 
 moduleLexeme :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t) =>
                 Parser g t (NonEmpty (Abstract.Name l))
-moduleLexeme = (Abstract.name . Text.pack . toString mempty <$> constructorLexeme <?> "module name")
+moduleLexeme = (Abstract.name . Textual.toText mempty <$> constructorLexeme <?> "module name")
                `sepByNonEmpty` string "."
 
 nameQualifier :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t)
@@ -919,7 +919,7 @@ terminator s = void (lexicalToken $ string s <* lift ([[Token Delimiter s]], ())
 
 nameToken :: (Rank2.Apply g, Abstract.Haskell l, Ord t, Show t, TextualMonoid t) =>
              Parser g t t -> Parser g t (Abstract.Name l)
-nameToken p = token (Abstract.name . Text.pack . toString mempty <$> p)
+nameToken p = token (Abstract.name . Textual.toText mempty <$> p)
 
 whiteSpace :: (Rank2.Apply g, Ord t, Show t, TextualMonoid t) => Parser g t ()
 whiteSpace = spaceChars *> skipAll (lexicalComment *> spaceChars) <?> "whitespace"
